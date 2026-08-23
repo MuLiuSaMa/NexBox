@@ -617,7 +617,7 @@ fn is_hdr_enabled() -> bool { false }
 #[derive(serde::Serialize, Clone, Copy, PartialEq)]
 pub enum FilterMode {
     Normal = 0, Vivid = 1, Movie = 2, Highlight = 3, Soft = 4,
-    Gaming = 5, Reading = 6, DeExposure = 7, ShadowBoost = 8,
+    Gaming = 5, Reading = 6, DeExposure = 7, ShadowBoost = 8, BenQ = 9,
 }
 
 impl FilterMode {
@@ -625,7 +625,7 @@ impl FilterMode {
         match value {
             1 => FilterMode::Vivid, 2 => FilterMode::Movie, 3 => FilterMode::Highlight,
             4 => FilterMode::Soft, 5 => FilterMode::Gaming, 6 => FilterMode::Reading,
-            7 => FilterMode::DeExposure, 8 => FilterMode::ShadowBoost,
+            7 => FilterMode::DeExposure, 8 => FilterMode::ShadowBoost, 9 => FilterMode::BenQ,
             _ => FilterMode::Normal,
         }
     }
@@ -635,6 +635,7 @@ impl FilterMode {
 pub struct FilterSettings {
     pub temperature: i32, pub brightness: i32, pub contrast: i32, pub saturation: i32,
     pub r_gamma: f64, pub g_gamma: f64, pub b_gamma: f64,
+    pub s_curve: f64, pub r_boost: f64, pub g_boost: f64, pub b_boost: f64,
     pub mode: i32, pub is_active: bool,
     pub icc_active: bool, pub active_icc_id: Option<String>,
     pub preview_filter_icc: Option<String>,
@@ -652,10 +653,26 @@ impl FilterSettings {
                 } else { (None, None, None) }
             } else { (None, None, None) };
 
+        // ICC 激活时从真实 ramp 反推显示数值（温度/亮度/对比度/饱和度/gamma/S曲线/RGB增强），
+        // 避免显示预设卡片上的硬编码参数。非 ICC 时使用 state 中已保存的参数。
+        let (temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, s_curve, r_boost, g_boost, b_boost) =
+            if state.icc_active {
+                if let Some(ref ramp) = state.icc_ramp {
+                    let (t, b, c, s, g, sc, rb, gb, bb) = derive_params_from_icc_ramp(ramp);
+                    (t, b, c, s, g, g, g, sc, rb, gb, bb)
+                } else {
+                    (state.temperature, state.brightness, state.contrast, state.saturation,
+                     state.r_gamma, state.g_gamma, state.b_gamma, 0.0, 1.0, 1.0, 1.0)
+                }
+            } else {
+                (state.temperature, state.brightness, state.contrast, state.saturation,
+                 state.r_gamma, state.g_gamma, state.b_gamma, 0.0, 1.0, 1.0, 1.0)
+            };
+
         FilterSettings {
-            temperature: state.temperature, brightness: state.brightness,
-            contrast: state.contrast, saturation: state.saturation,
-            r_gamma: state.r_gamma, g_gamma: state.g_gamma, b_gamma: state.b_gamma,
+            temperature, brightness, contrast, saturation,
+            r_gamma, g_gamma, b_gamma,
+            s_curve, r_boost, g_boost, b_boost,
             mode: state.mode, is_active: state.filter_active,
             icc_active: state.icc_active, active_icc_id: state.active_icc_id.clone(),
             preview_filter_icc, preview_tint_color_icc, preview_tint_opacity_icc,
@@ -901,6 +918,7 @@ fn build_gamma_ramp(
         FilterMode::Reading => (1.0, 0.0, 1.0, 0.99, 0.97),
         FilterMode::DeExposure => (0.96, -0.05, 1.0, 1.0, 1.0),
         FilterMode::ShadowBoost => (1.12, 0.03, 1.0, 1.0, 1.0),
+        FilterMode::BenQ => (1.12, 0.08, 1.0, 1.0, 1.02),
     };
 
     let use_per_channel = custom_gamma.is_some()
@@ -994,6 +1012,73 @@ fn compute_icc_preview(ramp: &[[u16; 256]; 3]) -> (String, Option<String>, Optio
         let opacity = (max_drift * 1.5).min(0.4);
         (filter_str, Some(format!("#{:02X}{:02X}{:02X}", r, g, b)), Some(opacity))
     } else { (filter_str, None, None) }
+}
+
+/// 从 ICC gamma ramp 反推近似显示参数（温度/亮度/对比度/饱和度/gamma）。
+/// 用于让右侧「当前设置」面板显示真实生效的数值，而不是预设卡片的硬编码参数。
+/// 返回 (temperature, brightness, contrast, saturation, gamma, s_curve, r_boost, g_boost, b_boost)。
+fn derive_params_from_icc_ramp(ramp: &[[u16; 256]; 3]) -> (i32, i32, i32, i32, f64, f64, f64, f64, f64) {
+    // 每通道平均增益（32..224 区间，与 compute_icc_preview 一致）
+    let mut ch_brightness = [1.0f64; 3];
+    for c in 0..3 {
+        let mut sum = 0.0; let mut count = 0u32;
+        for i in 32..224 {
+            let identity = (i as u32 * 256) as u16;
+            if identity > 0 { sum += ramp[c][i as usize] as f64 / identity as f64; count += 1; }
+        }
+        if count > 0 { ch_brightness[c] = sum / count as f64; }
+    }
+    let avg_brightness = (ch_brightness[0] + ch_brightness[1] + ch_brightness[2]) / 3.0;
+
+    // 亮度 = 平均增益 × 100
+    let brightness = (avg_brightness * 100.0).round().clamp(50.0, 150.0) as i32;
+
+    // 饱和度 = 各通道相对平均的偏移程度（偏移越大越饱和）
+    let spread = (ch_brightness[0] - avg_brightness).abs()
+        .max((ch_brightness[1] - avg_brightness).abs())
+        .max((ch_brightness[2] - avg_brightness).abs());
+    let saturation = (100.0 + spread * 120.0).round().clamp(50.0, 150.0) as i32;
+
+    // 色温：红/蓝通道相对强弱 → 偏暖(红强)温度低，偏冷(蓝强)温度高
+    let red_blue_ratio = if ch_brightness[2] > 0.001 { ch_brightness[0] / ch_brightness[2] } else { 1.0 };
+    let temperature = (6500.0 - (red_blue_ratio - 1.0) * 2500.0).round().clamp(1000.0, 10000.0) as i32;
+
+    // 对比度：暗部(32..96)与亮部(160..224)增益之比，比值越大对比度越高
+    let mut dark_sum = 0.0; let mut dark_count = 0u32;
+    let mut light_sum = 0.0; let mut light_count = 0u32;
+    for c in 0..3 {
+        for i in 32..96 {
+            let identity = (i as u32 * 256) as u16;
+            if identity > 0 { dark_sum += ramp[c][i as usize] as f64 / identity as f64; dark_count += 1; }
+        }
+        for i in 160..224 {
+            let identity = (i as u32 * 256) as u16;
+            if identity > 0 { light_sum += ramp[c][i as usize] as f64 / identity as f64; light_count += 1; }
+        }
+    }
+    let dark_avg = if dark_count > 0 { dark_sum / dark_count as f64 } else { 1.0 };
+    let light_avg = if light_count > 0 { light_sum / light_count as f64 } else { 1.0 };
+    let contrast = (100.0 + (light_avg - dark_avg) * 120.0).round().clamp(50.0, 150.0) as i32;
+
+    // gamma：用中间调(128)反推，output = input^(1/gamma) → gamma = ln(input)/ln(output)
+    let input_mid: f64 = 128.0 / 255.0;
+    let output_mid = ramp[0][128] as f64 / 65535.0;
+    let gamma = if output_mid > 0.001 {
+        (input_mid.ln() / output_mid.ln()).clamp(0.5, 2.0)
+    } else { 1.0 };
+
+    // S-Curve：暗部压暗 + 亮部提亮 的程度（相对于中性），与对比度方向一致
+    // 用 暗部增益与 1 的偏差、亮部增益与 1 的偏差 平均来近似 S 曲线强度
+    let dark_dev = 1.0 - dark_avg;      // >0 表示暗部被压暗
+    let light_dev = light_avg - 1.0;    // >0 表示亮部被提亮
+    let s_curve = ((dark_dev + light_dev) * 0.5).clamp(-0.5, 0.5);
+
+    // RGB Boost：各通道增益相对平均的比值（>1 表示该通道被加强）
+    let r_boost = if avg_brightness > 0.001 { ch_brightness[0] / avg_brightness } else { 1.0 };
+    let g_boost = if avg_brightness > 0.001 { ch_brightness[1] / avg_brightness } else { 1.0 };
+    let b_boost = if avg_brightness > 0.001 { ch_brightness[2] / avg_brightness } else { 1.0 };
+
+    (temperature, brightness, contrast, saturation, gamma, s_curve, r_boost, g_boost, b_boost)
 }
 
 // ─── ICC parsing (复用) ───
@@ -1556,7 +1641,7 @@ pub async fn set_filter_settings(
         let brightness = brightness.clamp(50, 150);
         let contrast = contrast.clamp(50, 150);
         let saturation = saturation.clamp(50, 150);
-        let mode = mode.clamp(0, 8);
+        let mode = mode.clamp(0, 9);
         let r_gamma = r_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
         let g_gamma = g_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
         let b_gamma = b_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
@@ -1588,6 +1673,7 @@ pub async fn set_filter_settings(
             success: true, message: "滤镜设置已更新".to_string(),
             settings: Some(FilterSettings {
                 temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma,
+                s_curve: 0.0, r_boost: 1.0, g_boost: 1.0, b_boost: 1.0,
                 mode, is_active: actually_active, icc_active: false, active_icc_id: None,
                 preview_filter_icc: None, preview_tint_color_icc: None, preview_tint_opacity_icc: None,
             }),
@@ -1724,6 +1810,7 @@ pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
         FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
         FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
         FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
+        FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
     ])
 }
 

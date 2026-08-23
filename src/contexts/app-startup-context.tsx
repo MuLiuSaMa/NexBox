@@ -112,6 +112,20 @@ interface AppStartupContextType {
   saveLyricsBtnHotkey: (shortcut: string) => Promise<string | null>;
   hotkeysEnabled: boolean;
   saveHotkeysEnabled: (enabled: boolean) => Promise<void>;
+  overlayHotkeyEnabled: boolean;
+  saveOverlayHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  crosshairHotkeyEnabled: boolean;
+  saveCrosshairHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  filterHotkeyEnabled: boolean;
+  saveFilterHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  autoclickerHotkeyEnabled: boolean;
+  saveAutoclickerHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  musicPrevHotkeyEnabled: boolean;
+  saveMusicPrevHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  musicNextHotkeyEnabled: boolean;
+  saveMusicNextHotkeyEnabled: (enabled: boolean) => Promise<void>;
+  musicPlayPauseHotkeyEnabled: boolean;
+  saveMusicPlayPauseHotkeyEnabled: (enabled: boolean) => Promise<void>;
 }
 
 const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
@@ -196,6 +210,20 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveLyricsBtnHotkey: async () => null,
   hotkeysEnabled: true,
   saveHotkeysEnabled: async () => {},
+  overlayHotkeyEnabled: true,
+  saveOverlayHotkeyEnabled: async () => {},
+  crosshairHotkeyEnabled: true,
+  saveCrosshairHotkeyEnabled: async () => {},
+  filterHotkeyEnabled: true,
+  saveFilterHotkeyEnabled: async () => {},
+  autoclickerHotkeyEnabled: true,
+  saveAutoclickerHotkeyEnabled: async () => {},
+  musicPrevHotkeyEnabled: true,
+  saveMusicPrevHotkeyEnabled: async () => {},
+  musicNextHotkeyEnabled: true,
+  saveMusicNextHotkeyEnabled: async () => {},
+  musicPlayPauseHotkeyEnabled: true,
+  saveMusicPlayPauseHotkeyEnabled: async () => {},
 });
 
 export function useAppStartup() {
@@ -218,6 +246,13 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [musicPlayPauseHotkey, setMusicPlayPauseHotkey] = useState(DEFAULT_MUSIC_PLAYPAUSE_HOTKEY);
   const [lyricsBtnHotkey, setLyricsBtnHotkey] = useState("");
   const [hotkeysEnabled, setHotkeysEnabled] = useState(true);
+  const [overlayHotkeyEnabled, setOverlayHotkeyEnabled] = useState(true);
+  const [crosshairHotkeyEnabled, setCrosshairHotkeyEnabled] = useState(true);
+  const [filterHotkeyEnabled, setFilterHotkeyEnabled] = useState(true);
+  const [autoclickerHotkeyEnabled, setAutoclickerHotkeyEnabled] = useState(true);
+  const [musicPrevHotkeyEnabled, setMusicPrevHotkeyEnabled] = useState(true);
+  const [musicNextHotkeyEnabled, setMusicNextHotkeyEnabled] = useState(true);
+  const [musicPlayPauseHotkeyEnabled, setMusicPlayPauseHotkeyEnabled] = useState(true);
   const hasStarted = useRef(false);
   // 最新的 overlay 设置（供事件监听器读取，避免闭包过期）
   const overlaySettingsRef = useRef<OverlaySettings | null>(null);
@@ -612,8 +647,146 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
     try {
       // Rust 端负责设置并写入 settings.json
       await invoke("set_hotkeys_enabled_cmd", { enabled });
+      // 同步 LazyStore 内存缓存，避免后续 store.save() 整文件写回时用旧缓存覆盖该值，
+      // 否则总开关会表现为重启后不持久化
+      await store.set("hotkeys-enabled", enabled);
     } catch (error) {
       console.error("Failed to save hotkeys enabled:", error);
+    }
+  };
+
+  // ==================== 单个热键独立开关（加载/保存） ====================
+
+  const loadOverlayHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_overlay_hotkey_enabled");
+      setOverlayHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load overlay hotkey enabled:", error);
+    }
+  };
+
+  const saveOverlayHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_overlay_hotkey_enabled", { enabled });
+      await store.set("overlay-hotkey-enabled", enabled);
+      setOverlayHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save overlay hotkey enabled:", error);
+    }
+  };
+
+  const loadCrosshairHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_crosshair_hotkey_enabled");
+      setCrosshairHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load crosshair hotkey enabled:", error);
+    }
+  };
+
+  const saveCrosshairHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_crosshair_hotkey_enabled", { enabled });
+      await store.set("crosshair-hotkey-enabled", enabled);
+      setCrosshairHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save crosshair hotkey enabled:", error);
+    }
+  };
+
+  const loadFilterHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_filter_hotkey_enabled");
+      setFilterHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load filter hotkey enabled:", error);
+    }
+  };
+
+  const saveFilterHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_filter_hotkey_enabled", { enabled });
+      await store.set("filter-hotkey-enabled", enabled);
+      setFilterHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save filter hotkey enabled:", error);
+    }
+  };
+
+  const loadAutoclickerHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_autoclicker_hotkey_enabled");
+      setAutoclickerHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load autoclicker hotkey enabled:", error);
+    }
+  };
+
+  const saveAutoclickerHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_autoclicker_hotkey_enabled", { enabled });
+      await store.set("autoclicker-hotkey-enabled", enabled);
+      setAutoclickerHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save autoclicker hotkey enabled:", error);
+    }
+  };
+
+  const loadMusicPrevHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_music_prev_hotkey_enabled");
+      setMusicPrevHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load music prev hotkey enabled:", error);
+    }
+  };
+
+  const saveMusicPrevHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_music_prev_hotkey_enabled", { enabled });
+      await store.set("music-prev-hotkey-enabled", enabled);
+      setMusicPrevHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save music prev hotkey enabled:", error);
+    }
+  };
+
+  const loadMusicNextHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_music_next_hotkey_enabled");
+      setMusicNextHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load music next hotkey enabled:", error);
+    }
+  };
+
+  const saveMusicNextHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_music_next_hotkey_enabled", { enabled });
+      await store.set("music-next-hotkey-enabled", enabled);
+      setMusicNextHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save music next hotkey enabled:", error);
+    }
+  };
+
+  const loadMusicPlayPauseHotkeyEnabled = async () => {
+    try {
+      const saved = await invoke<boolean>("get_music_playpause_hotkey_enabled");
+      setMusicPlayPauseHotkeyEnabled(saved);
+    } catch (error) {
+      console.error("Failed to load music play/pause hotkey enabled:", error);
+    }
+  };
+
+  const saveMusicPlayPauseHotkeyEnabled = async (enabled: boolean) => {
+    try {
+      await invoke("set_music_playpause_hotkey_enabled", { enabled });
+      await store.set("music-playpause-hotkey-enabled", enabled);
+      setMusicPlayPauseHotkeyEnabled(enabled);
+    } catch (error) {
+      console.error("Failed to save music play/pause hotkey enabled:", error);
     }
   };
 
@@ -721,6 +894,13 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         { name: "music-playpause-hotkey", fn: loadMusicPlayPauseHotkey, weight: 1 },
         { name: "lyrics-btn-hotkey", fn: loadLyricsBtnHotkey, weight: 1 },
         { name: "hotkeys-enabled", fn: loadHotkeysEnabled, weight: 1 },
+        { name: "overlay-hotkey-enabled", fn: loadOverlayHotkeyEnabled, weight: 1 },
+        { name: "crosshair-hotkey-enabled", fn: loadCrosshairHotkeyEnabled, weight: 1 },
+        { name: "filter-hotkey-enabled", fn: loadFilterHotkeyEnabled, weight: 1 },
+        { name: "autoclicker-hotkey-enabled", fn: loadAutoclickerHotkeyEnabled, weight: 1 },
+        { name: "music-prev-hotkey-enabled", fn: loadMusicPrevHotkeyEnabled, weight: 1 },
+        { name: "music-next-hotkey-enabled", fn: loadMusicNextHotkeyEnabled, weight: 1 },
+        { name: "music-playpause-hotkey-enabled", fn: loadMusicPlayPauseHotkeyEnabled, weight: 1 },
         {
           name: "filter-restore",
           fn: async () => {
@@ -804,6 +984,20 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
         saveLyricsBtnHotkey,
         hotkeysEnabled,
         saveHotkeysEnabled,
+        overlayHotkeyEnabled,
+        saveOverlayHotkeyEnabled,
+        crosshairHotkeyEnabled,
+        saveCrosshairHotkeyEnabled,
+        filterHotkeyEnabled,
+        saveFilterHotkeyEnabled,
+        autoclickerHotkeyEnabled,
+        saveAutoclickerHotkeyEnabled,
+        musicPrevHotkeyEnabled,
+        saveMusicPrevHotkeyEnabled,
+        musicNextHotkeyEnabled,
+        saveMusicNextHotkeyEnabled,
+        musicPlayPauseHotkeyEnabled,
+        saveMusicPlayPauseHotkeyEnabled,
       }}
     >
       {children}

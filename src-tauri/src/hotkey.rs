@@ -13,56 +13,107 @@ pub fn is_hotkeys_enabled() -> bool {
     HOTKEYS_ENABLED.load(Ordering::SeqCst)
 }
 
-/// 根据总开关状态实际注册或注销所有全局热键。
-/// 仅切换开关标志并不会释放被操作系统拦截的按键：例如单独绑定 "P" 后，
-/// RegisterHotKey 仍会在系统层面全局拦截 P 键，导致总开关关闭后依然无法打字。
-/// 因此开关关闭时必须注销热键释放按键，开启时重新注册。
-pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
+// ==================== 每个热键的独立开关（默认开启） ====================
+// 单热键实际生效 = 总开关 && 该热键独立开关。
+
+macro_rules! define_hotkey_enabled {
+    ($static_name:ident, $get_name:ident, $set_name:ident) => {
+        static $static_name: AtomicBool = AtomicBool::new(true);
+        pub fn $get_name() -> bool {
+            $static_name.load(Ordering::SeqCst)
+        }
+        pub fn $set_name(enabled: bool) {
+            $static_name.store(enabled, Ordering::SeqCst);
+        }
+    };
+}
+
+define_hotkey_enabled!(OVERLAY_ENABLED, is_overlay_enabled, set_overlay_enabled);
+define_hotkey_enabled!(CROSSHAIR_ENABLED, is_crosshair_enabled, set_crosshair_enabled);
+define_hotkey_enabled!(FILTER_ENABLED, is_filter_enabled, set_filter_enabled);
+define_hotkey_enabled!(AUTOCLICKER_ENABLED, is_autoclicker_enabled, set_autoclicker_enabled);
+define_hotkey_enabled!(MUSIC_PREV_ENABLED, is_music_prev_enabled, set_music_prev_enabled);
+define_hotkey_enabled!(MUSIC_NEXT_ENABLED, is_music_next_enabled, set_music_next_enabled);
+define_hotkey_enabled!(MUSIC_PLAYPAUSE_ENABLED, is_music_playpause_enabled, set_music_playpause_enabled);
+define_hotkey_enabled!(LYRIC_BTN_ENABLED, is_lyric_btn_enabled, set_lyric_btn_enabled);
+
+/// 应用单个热键的注册/注销（以总开关与独立开关共同决定生效与否）。
+/// - shortcut 为空直接返回。
+/// - 生效 = 总开关开启 && feature_enabled。
+/// - 键盘热键走 global_shortcut；鼠标键（autoclicker 的 Mouse 前缀）走低级轮询线程。
+pub fn apply_single_hotkey(app_handle: &tauri::AppHandle, shortcut: &str, feature_enabled: bool) {
+    if shortcut.is_empty() {
+        return;
+    }
+    let effective = is_hotkeys_enabled() && feature_enabled;
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-        let autoclicker = get_autoclicker_shortcut();
-        let autoclicker_is_mouse = is_mouse_key(&autoclicker);
-
-        let keyboard_shortcuts = [
-            get_overlay_shortcut(),
-            get_crosshair_shortcut(),
-            get_filter_shortcut(),
-            get_music_prev_shortcut(),
-            get_music_next_shortcut(),
-            get_music_playpause_shortcut(),
-            get_lyrics_btn_toggle_shortcut(),
-        ];
-
-        for s in keyboard_shortcuts {
-            if s.is_empty() {
-                continue;
-            }
-            if enabled {
-                let _ = app_handle.global_shortcut().register(s.as_str());
-            } else {
-                let _ = app_handle.global_shortcut().unregister(s.as_str());
-            }
-        }
-
-        // 鼠标键热键走低级轮询线程，开关关闭时清除、开启时恢复
-        if autoclicker_is_mouse {
+        if is_mouse_key(shortcut) {
             crate::autoclicker::set_mouse_hotkey(
                 app_handle,
-                if enabled { Some(&autoclicker) } else { None },
+                if effective { Some(shortcut) } else { None },
             );
-        } else if !autoclicker.is_empty() {
-            if enabled {
-                let _ = app_handle.global_shortcut().register(autoclicker.as_str());
-            } else {
-                let _ = app_handle.global_shortcut().unregister(autoclicker.as_str());
-            }
+        } else if effective {
+            let _ = app_handle.global_shortcut().register(shortcut);
+        } else {
+            let _ = app_handle.global_shortcut().unregister(shortcut);
         }
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (app_handle, enabled);
+        let _ = (app_handle, shortcut, feature_enabled);
+    }
+}
+
+/// 根据总开关状态实际注册或注销所有全局热键。
+/// 仅切换开关标志并不会释放被操作系统拦截的按键：例如单独绑定 "P" 后，
+/// RegisterHotKey 仍会在系统层面全局拦截 P 键，导致总开关关闭后依然无法打字。
+/// 因此开关关闭时必须注销热键释放按键，开启时重新注册（仅注册独立开关为开的热键）。
+pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
+    if enabled {
+        // 总开关开启：逐个按独立开关处理（help 内部以总开关 = true）。
+        apply_single_hotkey(app_handle, &get_overlay_shortcut(), is_overlay_enabled());
+        apply_single_hotkey(app_handle, &get_crosshair_shortcut(), is_crosshair_enabled());
+        apply_single_hotkey(app_handle, &get_filter_shortcut(), is_filter_enabled());
+        apply_single_hotkey(app_handle, &get_autoclicker_shortcut(), is_autoclicker_enabled());
+        apply_single_hotkey(app_handle, &get_music_prev_shortcut(), is_music_prev_enabled());
+        apply_single_hotkey(app_handle, &get_music_next_shortcut(), is_music_next_enabled());
+        apply_single_hotkey(app_handle, &get_music_playpause_shortcut(), is_music_playpause_enabled());
+        apply_single_hotkey(app_handle, &get_lyrics_btn_toggle_shortcut(), is_lyric_btn_enabled());
+    } else {
+        // 总开关关闭：注销全部快捷键（含鼠标键）。
+        #[cfg(target_os = "windows")]
+        {
+            use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+            let shortcuts = [
+                get_overlay_shortcut(),
+                get_crosshair_shortcut(),
+                get_filter_shortcut(),
+                get_autoclicker_shortcut(),
+                get_music_prev_shortcut(),
+                get_music_next_shortcut(),
+                get_music_playpause_shortcut(),
+                get_lyrics_btn_toggle_shortcut(),
+            ];
+            for s in shortcuts {
+                if s.is_empty() {
+                    continue;
+                }
+                if is_mouse_key(&s) {
+                    crate::autoclicker::set_mouse_hotkey(app_handle, None);
+                } else {
+                    let _ = app_handle.global_shortcut().unregister(s.as_str());
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = app_handle;
+        }
     }
 }
 
@@ -92,6 +143,12 @@ static LYRIC_BTN_TOGGLE_SHORTCUT_ID: AtomicU32 = AtomicU32::new(0);
 
 pub fn init_overlay(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_overlay_shortcut(shortcut);
+
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_overlay_enabled() {
+        log::info!("悬浮框热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -160,6 +217,12 @@ fn set_overlay_shortcut(shortcut: &str) {
 pub fn init_crosshair(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_crosshair_shortcut(shortcut);
 
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_crosshair_enabled() {
+        log::info!("准心热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -226,6 +289,12 @@ fn set_crosshair_shortcut(shortcut: &str) {
 
 pub fn init_filter(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_filter_shortcut(shortcut);
+
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_filter_enabled() {
+        log::info!("滤镜热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -328,6 +397,12 @@ fn hotkey_register_error(action: &str, shortcut: &str, err: impl std::fmt::Displ
 pub fn init_autoclicker(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_autoclicker_shortcut(shortcut);
 
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_autoclicker_enabled() {
+        log::info!("连点器热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -421,6 +496,12 @@ fn emit_music_action(app_handle: &tauri::AppHandle, action: &str) {
 pub fn init_music_prev(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_music_prev_shortcut(shortcut);
 
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_music_prev_enabled() {
+        log::info!("上一曲热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -486,6 +567,12 @@ fn set_music_prev_shortcut(shortcut: &str) {
 pub fn init_music_next(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_music_next_shortcut(shortcut);
 
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_music_next_enabled() {
+        log::info!("下一曲热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -550,6 +637,12 @@ fn set_music_next_shortcut(shortcut: &str) {
 
 pub fn init_music_playpause(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_music_playpause_shortcut(shortcut);
+
+    // 独立开关关闭时不注册（即使总开关开启也不生效）
+    if !is_music_playpause_enabled() {
+        log::info!("播放/暂停热键独立开关关闭，跳过注册: {}", shortcut);
+        return Ok(());
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -618,8 +711,9 @@ fn set_music_playpause_shortcut(shortcut: &str) {
 pub fn init_lyrics_btn_toggle(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(), String> {
     set_lyrics_btn_toggle_shortcut(shortcut);
 
-    // 留空（未设置）时跳过注册，避免注册空串失败
-    if shortcut.is_empty() {
+    // 留空（未设置）或独立开关关闭时跳过注册，避免注册空串失败或无效注册
+    if shortcut.is_empty() || !is_lyric_btn_enabled() {
+        log::info!("解锁按钮热键跳过注册: {}", shortcut);
         return Ok(());
     }
 
@@ -897,6 +991,121 @@ pub fn get_hotkeys_enabled_cmd() -> bool {
     is_hotkeys_enabled()
 }
 
+// ==================== 单个热键独立开关命令 ====================
+// 每个热键一组 get/set：get 返回当前独立开关，set 写入设置并在总开关开启时按新状态注册/注销该热键。
+
+#[tauri::command]
+pub fn set_overlay_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_overlay_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_overlay_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "overlay-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("悬浮框热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_overlay_hotkey_enabled() -> bool {
+    is_overlay_enabled()
+}
+
+#[tauri::command]
+pub fn set_crosshair_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_crosshair_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_crosshair_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "crosshair-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("准心热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_crosshair_hotkey_enabled() -> bool {
+    is_crosshair_enabled()
+}
+
+#[tauri::command]
+pub fn set_filter_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_filter_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_filter_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "filter-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("滤镜热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_filter_hotkey_enabled() -> bool {
+    is_filter_enabled()
+}
+
+#[tauri::command]
+pub fn set_autoclicker_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_autoclicker_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_autoclicker_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "autoclicker-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("连点器热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_autoclicker_hotkey_enabled() -> bool {
+    is_autoclicker_enabled()
+}
+
+#[tauri::command]
+pub fn set_music_prev_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_music_prev_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_music_prev_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "music-prev-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("上一曲热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_music_prev_hotkey_enabled() -> bool {
+    is_music_prev_enabled()
+}
+
+#[tauri::command]
+pub fn set_music_next_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_music_next_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_music_next_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "music-next-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("下一曲热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_music_next_hotkey_enabled() -> bool {
+    is_music_next_enabled()
+}
+
+#[tauri::command]
+pub fn set_music_playpause_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    set_music_playpause_enabled(enabled);
+    if is_hotkeys_enabled() {
+        apply_single_hotkey(&app_handle, &get_music_playpause_shortcut(), enabled);
+    }
+    save_settings_value(&app_handle, "music-playpause-hotkey-enabled", serde_json::Value::Bool(enabled));
+    log::info!("播放/暂停热键开关: {}", if enabled { "开启" } else { "关闭" });
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_music_playpause_hotkey_enabled() -> bool {
+    is_music_playpause_enabled()
+}
+
 // ==================== 配置持久化 ====================
 
 /// 串行化 settings.json 写入，避免多个热键并发保存时互相覆盖
@@ -958,6 +1167,14 @@ pub fn load_saved_hotkey(app: &tauri::AppHandle, key: &str, default: &str) -> St
 /// 读取热键总开关，未保存时默认开启
 pub fn load_saved_hotkeys_enabled(app: &tauri::AppHandle) -> bool {
     match read_settings_value(app, "hotkeys-enabled") {
+        Some(serde_json::Value::Bool(b)) => b,
+        _ => true,
+    }
+}
+
+/// 读取单个热键的独立开关，未保存时默认开启
+pub fn load_saved_hotkey_enabled(app: &tauri::AppHandle, key: &str) -> bool {
+    match read_settings_value(app, key) {
         Some(serde_json::Value::Bool(b)) => b,
         _ => true,
     }

@@ -573,19 +573,22 @@ fn parse_nvme_temperature(raw: &[u8; 512]) -> Option<i32> {
     }
 }
 
-/// 解析 ATA 通电小时数（属性 0x09 的 RawValue 小端 48 位）
+/// 解析 ATA 通电小时数（属性 0x09）。
+/// 与 CrystalDiskInfo 默认一致：仅取 RawValue 低 4 字节小端（高位 2 字节常为厂商冗余数据，
+/// 若一并读入会导致数值被天文级放大）。
 fn parse_ata_power_on_hours(attrs: &[SmartAttribute]) -> Option<u64> {
     let attr = find_attribute(attrs, 0x09)?;
     let mut bytes = [0u8; 8];
-    bytes[..6].copy_from_slice(&attr.raw_value);
+    bytes[..4].copy_from_slice(&attr.raw_value[..4]);
     Some(u64::from_le_bytes(bytes))
 }
 
-/// 解析 ATA 通电次数（属性 0x0C Power Cycle Count 的 RawValue 小端 48 位）
+/// 解析 ATA 通电次数（属性 0x0C Power Cycle Count）。
+/// 与 0x09 同源同隐患，同样仅取低 4 字节小端。
 fn parse_ata_power_cycles(attrs: &[SmartAttribute]) -> Option<u64> {
     let attr = find_attribute(attrs, 0x0C)?;
     let mut bytes = [0u8; 8];
-    bytes[..6].copy_from_slice(&attr.raw_value);
+    bytes[..4].copy_from_slice(&attr.raw_value[..4]);
     Some(u64::from_le_bytes(bytes))
 }
 

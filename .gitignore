@@ -134,3 +134,6 @@ src-tauri/reg_test.rs
 # 社区工具插件独立仓库（单独推送到 gitcode.com/MuLiuSaMa/NexBox-Tools，不随主程序提交）
 NexBox-Tools/
 
+# FreeBuff 内部工具工作副本（含完整仓库嵌套，不随主程序提交）
+.freebuff/
+

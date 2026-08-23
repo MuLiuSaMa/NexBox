@@ -20,7 +20,7 @@ import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v8.6.7";
+const CURRENT_VERSION = "v8.8.2";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";

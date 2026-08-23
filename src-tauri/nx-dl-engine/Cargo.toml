@@ -1,0 +1,39 @@
+[package]
+name = "nx-dl-engine"
+version = "0.1.0"
+description = "NexBox 多线程下载加速引擎（核心算法源自 FluxDown, AGPL-3.0）"
+license = "AGPL-3.0"
+edition = "2024"
+rust-version = "1.85"
+
+[dependencies]
+# 与上游 fluxdown_engine 同为 0.12（测试依赖 From<http::Response> 转换）；
+# 主工程仍用 0.11，两版本共存互不影响
+reqwest = { version = "0.12", features = ["stream", "cookies", "socks"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "sync", "fs", "io-util", "net"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+async-compression = { version = "0.4", features = ["tokio", "gzip", "brotli", "deflate", "zstd"] }
+bytes = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+base64 = "0.22"
+encoding_rs = "0.8"
+urlencoding = "2.1"
+url = "2"
+log = "0.4"
+uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+# 段预分配 SetFileInformationByHandle(FileAllocationInfo)，与上游同特性集
+windows-sys = { version = "0.59", features = [
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+] }
+
+[dev-dependencies]
+# 协调器单元测试构造 mock 206 响应用（与上游一致）
+http = "1"

@@ -63,7 +63,8 @@
     "runtimeRepair": "运行库修复",
     "vtxVirtualization": "VT-X 虚拟化修复",
     "hiddenFeatures": "Windows 隐藏功能",
-    "contextMenu": "右键菜单管理"
+    "contextMenu": "右键菜单管理",
+    "downloadAccelerator": "下载器"
   },
   "customPage": {
     "title": "自定义页面",
@@ -101,9 +102,9 @@
     "noSearchResults": "未找到匹配的游戏",
     "games": "个游戏",
     "launch": "启动",
-"launching": "启动中...",
-"diskUsage": "磁盘占用",
-"free": "可用",
+    "launching": "启动中...",
+    "diskUsage": "磁盘占用",
+    "free": "可用",
     "openFolder": "打开目录",
     "storePage": "商店页面",
     "uninstall": "卸载",
@@ -378,7 +379,6 @@
       "laptopUnlockFailed": "解锁失败",
       "laptopUnlockRestartHint": "已写入解锁配置，请重启电脑后再重新导入电源计划"
     },
-
     "memoryCleanup": {
       "title": "内存清理",
       "description": "查看内存详情并释放内存",
@@ -1071,7 +1071,6 @@
       "ropz": "Ropz",
       "mmw20": "MMW2.0",
       "sscj": "SSCJ",
-
       "tShape": "T字形"
     },
     "styles": {
@@ -1164,17 +1163,50 @@
     "dlssNote": "需要NVIDIA Profile Inspector支持，应用后重启游戏生效",
     "back": "返回",
     "dlssModels": {
-      "A": { "name": "A模型", "description": "早期模型" },
-      "B": { "name": "B模型", "description": "早期模型" },
-      "C": { "name": "C模型", "description": "早期模型" },
-      "D": { "name": "D模型", "description": "稳定模型" },
-      "E": { "name": "E模型", "description": "实验性模型" },
-      "F": { "name": "F模型", "description": "改进模型" },
-      "G": { "name": "G模型", "description": "改进模型" },
-      "J": { "name": "J模型", "description": "较新模型，画质优先" },
-      "K": { "name": "K模型", "description": "推荐模型，大多数DLSS模式" },
-      "L": { "name": "L模型", "description": "优化Ultra Performance模式" },
-      "M": { "name": "M模型", "description": "优化Performance模式" }
+      "A": {
+        "name": "A模型",
+        "description": "早期模型"
+      },
+      "B": {
+        "name": "B模型",
+        "description": "早期模型"
+      },
+      "C": {
+        "name": "C模型",
+        "description": "早期模型"
+      },
+      "D": {
+        "name": "D模型",
+        "description": "稳定模型"
+      },
+      "E": {
+        "name": "E模型",
+        "description": "实验性模型"
+      },
+      "F": {
+        "name": "F模型",
+        "description": "改进模型"
+      },
+      "G": {
+        "name": "G模型",
+        "description": "改进模型"
+      },
+      "J": {
+        "name": "J模型",
+        "description": "较新模型，画质优先"
+      },
+      "K": {
+        "name": "K模型",
+        "description": "推荐模型，大多数DLSS模式"
+      },
+      "L": {
+        "name": "L模型",
+        "description": "优化Ultra Performance模式"
+      },
+      "M": {
+        "name": "M模型",
+        "description": "优化Performance模式"
+      }
     },
     "weaponCodePlatformNames": {
       "maqt": "码枪堂",
@@ -1239,6 +1271,22 @@
         "name": "小涛查",
         "description": "小涛查改枪码平台"
       }
+    },
+    "roulette": {
+      "title": "随机装备",
+      "desc": "为下次任务随机生成完整装备配置",
+      "generate": "生成随机装备",
+      "onlyClassified": "只玩绝密",
+      "skipAnimation": "跳过动画",
+      "noPistol": "不要手枪",
+      "generating": "正在生成装备配置...",
+      "map": "地图",
+      "operator": "干员",
+      "weapon": "主武器",
+      "helmet": "头盔",
+      "armor": "护甲",
+      "specialTask": "特殊任务",
+      "ammoGrade": "弹药等级"
     }
   },
   "dlssPreset": {
@@ -1355,7 +1403,8 @@
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
     "applyResolution": "应用分辨率",
-    "resolutionApplied": "分辨率已应用"
+    "resolutionApplied": "分辨率已应用",
+    "downloadAcceleratorDesc": "多线程动态分段下载，充分跑满带宽"
   },
   "contextMenu": {
     "title": "右键菜单 & 此电脑",
@@ -1640,7 +1689,7 @@
       "clearDataConfirmTitle": "确认清除数据",
       "clearDataConfirm": "将清除全部数据并重置所有设置，此操作不可撤销。确认重置？",
       "confirmReset": "确认重置",
-      "gameListTitle": "滤镜游戏名单",
+      "gameListTitle": "游戏名单",
       "builtinCount": "内置 {{count}} 款",
       "addGame": "添加游戏",
       "removeGame": "删除",
@@ -1691,7 +1740,7 @@
       "gameImeLockLabel": "锁定输入法卡片",
       "gameImeLockDesc": "在主页显示游戏时锁定输入法卡片",
       "gameModeLabel": "游戏模式",
-      "gameModeDesc": "在顶栏显示游戏模式切换条，一键切换默认/常规/竞技压制",
+      "gameModeDesc": "在顶栏显示游戏模式开关，一键开启/关闭常规压制",
       "randomImageLabel": "随机图片",
       "randomImageDesc": "在主页显示随机图片卡片",
       "searchBarLabel": "搜索框",
@@ -2699,10 +2748,10 @@
     "reset": "重置",
     "presetApplied": "预设已应用",
     "usageGuide": "使用指南",
-    "step1": "点击\u201C安装声卡\u201D按钮安装 FxSound 虚拟音频驱动（需要管理员权限）",
-    "step2": "安装成功后，点击\u201C启动引擎\u201D按钮启动 EQ 音频处理引擎",
+    "step1": "点击“安装声卡”按钮安装 FxSound 虚拟音频驱动（需要管理员权限）",
+    "step2": "安装成功后，点击“启动引擎”按钮启动 EQ 音频处理引擎",
     "step3": "选择预设或拖动频段滑块调整 EQ 参数，频率响应曲线将实时更新",
-    "step4": "使用完毕后，点击\u201C停止引擎\u201D关闭音频处理，可随时卸载声卡驱动",
+    "step4": "使用完毕后，点击“停止引擎”关闭音频处理，可随时卸载声卡驱动",
     "import": "导入",
     "importDesc": "导入 .fac 预设文件，将显示在导入列表中。",
     "chooseFacFile": "选择 .fac 文件",
@@ -2737,5 +2786,37 @@
     "unknown": "未知",
     "openFailed": "打开链接失败",
     "latest": "最新"
+  },
+  "downloadAccel": {
+    "urlLabel": "下载链接",
+    "fileNamePlaceholder": "文件名（可选，留空自动识别）",
+    "segmentsLabel": "最大连接数",
+    "segmentsAuto": "自动",
+    "start": "开始下载",
+    "pause": "暂停",
+    "resume": "继续",
+    "cancel": "移除任务",
+    "segmentsDone": "段完成",
+    "status": {
+      "downloading": "下载中",
+      "completed": "已完成",
+      "error": "失败",
+      "preparing": "准备中",
+      "paused": "已暂停"
+    },
+    "resetLearned": "重置站点学习",
+    "resetLearnedTip": "清除已学习的各域名最优连接数缓存（服务器行为变化后使用）",
+    "resetLearnedDone": "已重置",
+    "speedLimitLabel": "限速",
+    "speedUnlimited": "不限速",
+    "openFile": "打开文件",
+    "openFolder": "打开所在目录",
+    "activeConnections": "活跃连接",
+    "eta": "剩余",
+    "expandAll": "展开全部",
+    "collapseAll": "收起",
+    "islandDownloading": "下载中",
+    "islandComplete": "下载完成",
+    "islandFailed": "下载失败"
   }
 }

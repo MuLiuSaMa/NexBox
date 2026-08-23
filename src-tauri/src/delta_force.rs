@@ -1,8 +1,11 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::os::windows::process::CommandExt;
 use std::process::Command;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
+use tauri::Manager;
 
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -700,6 +703,48 @@ pub async fn open_platform_window(
         .map_err(|e| format!("创建窗口失败: {}", e))?;
 
     Ok(())
+}
+
+/// 下载远程图片到应用缓存目录（本地缓存），返回本地文件路径（前端用 convertFileSrc 使用）。
+/// 复用 QQ 群图标的缓存范式：按 URL hash 存文件，二次访问走本地缓存。
+#[tauri::command]
+pub async fn cache_delta_image(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    if url.trim().is_empty() {
+        return Ok(String::new());
+    }
+
+    let dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("roulette_icons");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let mut hasher = DefaultHasher::new();
+    url.hash(&mut hasher);
+    let file = dir.join(format!("{}.img", hasher.finish()));
+
+    if !file.exists() {
+        let client = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(8))
+            .timeout(Duration::from_secs(20))
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 NexBox")
+            .build()
+            .map_err(|e| format!("client error: {e}"))?;
+
+        let resp = client
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| format!("network error: {e}"))?;
+        if !resp.status().is_success() {
+            return Err(format!("image http {}", resp.status()));
+        }
+        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+        std::fs::write(&file, &bytes).map_err(|e| e.to_string())?;
+    }
+
+    Ok(file.to_string_lossy().to_string())
 }
 
 #[cfg(test)]

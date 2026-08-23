@@ -15,6 +15,7 @@ mod spectrum;
 mod display_cache;
 mod display_filter;
 mod downloader;
+mod download_accelerator;
 mod smtc;
 mod anticheat;
 mod game_fps;
@@ -76,6 +77,11 @@ static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(true);
 
 /// 是否以开机自启(--autostart)方式启动（供前端判断加载完成后是否自隐藏到托盘）
 static AUTOSTART_MODE: AtomicBool = AtomicBool::new(false);
+
+/// 开机自启(--autostart)模式下前端(WebView2)是否已成功加载就绪。
+/// 由 tray::minimize_to_tray（前端 App.tsx 挂载后必然调用）置位，
+/// 供启动诊断判断“是否只启动后端、前端未起来”。
+pub(crate) static AUTOSTART_FRONTEND_READY: AtomicBool = AtomicBool::new(false);
 
 /// 按需创建竖排悬浮框窗口（不常驻，启用时创建、关闭时销毁）。
 /// 创建后 visible(false)，前端渲染完成后调用 `vertical_overlay_ready` 命令 show，避免白屏闪烁。
@@ -410,6 +416,17 @@ pub fn run() {
                     ));
                     let _ = main_window.show();
                     log::info!("开机自启模式：主窗口离屏预热，前端初始化后隐藏到托盘");
+
+                    // 开机自启诊断（只记日志，不自愈）：若一段时间后前端(WebView2)仍未就绪，
+                    // 说明出现“只启动后端、前端未起来”的情况，便于从 %LOCALAPPDATA%/NexBox/nexbox.log 定位。
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                        if !AUTOSTART_FRONTEND_READY.load(Ordering::SeqCst) {
+                            log::warn!(
+                                "[autostart] 前端 10 秒内未就绪：疑似只启动了后端、前端(WebView2)未加载，请检查该机 WebView2 运行时/GPU/登录时序"
+                            );
+                        }
+                    });
                 } else {
                     // 正常启动：确保非跳过任务栏、恢复上次位置（无记录则居中）、正常显示
                     let _ = main_window.set_skip_taskbar(false);
@@ -434,6 +451,16 @@ pub fn run() {
             let music_playpause_hotkey = hotkey::load_saved_hotkey(app.handle(), "music-playpause-hotkey", "Alt+Space");
             let lyrics_btn_hotkey = hotkey::load_saved_hotkey(app.handle(), "lyrics-btn-hotkey", "");
             hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
+
+            // 恢复每个热键的独立开关（在注册热键前设置，使 apply_hotkeys_enabled 能正确判断）
+            hotkey::set_overlay_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "overlay-hotkey-enabled"));
+            hotkey::set_crosshair_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "crosshair-hotkey-enabled"));
+            hotkey::set_filter_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "filter-hotkey-enabled"));
+            hotkey::set_autoclicker_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "autoclicker-hotkey-enabled"));
+            hotkey::set_music_prev_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-prev-hotkey-enabled"));
+            hotkey::set_music_next_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-next-hotkey-enabled"));
+            hotkey::set_music_playpause_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-playpause-hotkey-enabled"));
+            hotkey::set_lyric_btn_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "lyrics-btn-hotkey-enabled"));
 
             let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
             let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
@@ -474,6 +501,8 @@ pub fn run() {
         music::import_local_music,
         music::import_local_music_folder,
         music::get_local_lyric,
+        music::verify_local_covers,
+        music::delete_cover_cache_files,
         // === 音乐播放器 API ===
         music_api::music_search,
         music_api::music_song_url,
@@ -562,6 +591,17 @@ pub fn run() {
         downloader::clear_pending_install,
         downloader::cancel_download,
         downloader::reset_download_cancel,
+        // === 下载加速器（FluxDown 引擎移植） ===
+        download_accelerator::accel_start,
+        download_accelerator::accel_pause,
+        download_accelerator::accel_resume,
+        download_accelerator::accel_cancel,
+        download_accelerator::accel_list,
+        download_accelerator::accel_clear_learned,
+        download_accelerator::accel_set_speed_limit,
+        download_accelerator::accel_scan_unfinished,
+        download_accelerator::accel_open_file,
+        download_accelerator::accel_reveal_file,
         optimization::optimize_memory,
         optimization::get_memory_status,
         optimization::kill_wallpaper_engine,
@@ -825,6 +865,20 @@ pub fn run() {
         hotkey::set_lyrics_btn_hotkey,
         hotkey::set_hotkeys_enabled_cmd,
         hotkey::get_hotkeys_enabled_cmd,
+        hotkey::get_overlay_hotkey_enabled,
+        hotkey::set_overlay_hotkey_enabled,
+        hotkey::get_crosshair_hotkey_enabled,
+        hotkey::set_crosshair_hotkey_enabled,
+        hotkey::get_filter_hotkey_enabled,
+        hotkey::set_filter_hotkey_enabled,
+        hotkey::get_autoclicker_hotkey_enabled,
+        hotkey::set_autoclicker_hotkey_enabled,
+        hotkey::get_music_prev_hotkey_enabled,
+        hotkey::set_music_prev_hotkey_enabled,
+        hotkey::get_music_next_hotkey_enabled,
+        hotkey::set_music_next_hotkey_enabled,
+        hotkey::get_music_playpause_hotkey_enabled,
+        hotkey::set_music_playpause_hotkey_enabled,
         autoclicker::autoclicker_start,
         autoclicker::autoclicker_stop,
         autoclicker::autoclicker_toggle,
@@ -839,6 +893,7 @@ pub fn run() {
         crosshair::get_crosshair_presets,
 
         delta_force::get_delta_passwords,
+        delta_force::cache_delta_image,
         delta_force::get_weapon_codes,
         delta_force::get_dlss_model_presets,
         delta_force::apply_dlss_model_preset,

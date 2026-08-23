@@ -60,7 +60,8 @@
     "runtimeRepair": "Runtime Repair",
     "vtxVirtualization": "VT-X Virtualization Fix",
     "hiddenFeatures": "Windows Hidden Features",
-    "contextMenu": "Context Menu Manager"
+    "contextMenu": "Context Menu Manager",
+    "downloadAccelerator": "Downloader"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -98,9 +99,9 @@
     "noSearchResults": "No matching games found",
     "games": "games",
     "launch": "Launch",
-"launching": "Launching...",
-"diskUsage": "Disk Usage",
-"free": "Free",
+    "launching": "Launching...",
+    "diskUsage": "Disk Usage",
+    "free": "Free",
     "openFolder": "Open Folder",
     "storePage": "Store Page",
     "uninstall": "Uninstall",
@@ -573,7 +574,6 @@
       "laptopUnlockFailed": "Failed to unlock",
       "laptopUnlockRestartHint": "Unlock configuration has been written. Please restart your PC and try importing power plans again."
     },
-
     "memoryCleanup": {
       "title": "Memory Cleanup",
       "description": "View memory details and free up memory",
@@ -1258,7 +1258,6 @@
       "ropz": "Ropz",
       "mmw20": "MMW2.0",
       "sscj": "SSCJ",
-
       "tShape": "T-Shape"
     },
     "styles": {
@@ -1351,17 +1350,50 @@
     "dlssNote": "Requires NVIDIA Profile Inspector, restart game to take effect",
     "back": "Back",
     "dlssModels": {
-      "A": { "name": "Model A", "description": "Early model" },
-      "B": { "name": "Model B", "description": "Early model" },
-      "C": { "name": "Model C", "description": "Early model" },
-      "D": { "name": "Model D", "description": "Stable model" },
-      "E": { "name": "Model E", "description": "Experimental model" },
-      "F": { "name": "Model F", "description": "Improved model" },
-      "G": { "name": "Model G", "description": "Improved model" },
-      "J": { "name": "Model J", "description": "Newer model, quality priority" },
-      "K": { "name": "Model K", "description": "Recommended model, for most DLSS modes" },
-      "L": { "name": "Model L", "description": "Optimized for Ultra Performance mode" },
-      "M": { "name": "Model M", "description": "Optimized for Performance mode" }
+      "A": {
+        "name": "Model A",
+        "description": "Early model"
+      },
+      "B": {
+        "name": "Model B",
+        "description": "Early model"
+      },
+      "C": {
+        "name": "Model C",
+        "description": "Early model"
+      },
+      "D": {
+        "name": "Model D",
+        "description": "Stable model"
+      },
+      "E": {
+        "name": "Model E",
+        "description": "Experimental model"
+      },
+      "F": {
+        "name": "Model F",
+        "description": "Improved model"
+      },
+      "G": {
+        "name": "Model G",
+        "description": "Improved model"
+      },
+      "J": {
+        "name": "Model J",
+        "description": "Newer model, quality priority"
+      },
+      "K": {
+        "name": "Model K",
+        "description": "Recommended model, for most DLSS modes"
+      },
+      "L": {
+        "name": "Model L",
+        "description": "Optimized for Ultra Performance mode"
+      },
+      "M": {
+        "name": "Model M",
+        "description": "Optimized for Performance mode"
+      }
     },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
@@ -1426,6 +1458,22 @@
         "name": "XiaoTao",
         "description": "XiaoTao gun code platform"
       }
+    },
+    "roulette": {
+      "title": "Random Gear",
+      "desc": "Generate a full random loadout for your next mission",
+      "generate": "Generate Random Gear",
+      "onlyClassified": "Classified Only",
+      "skipAnimation": "Skip Animation",
+      "noPistol": "No Pistol",
+      "generating": "Generating loadout...",
+      "map": "Map",
+      "operator": "Operator",
+      "weapon": "Primary",
+      "helmet": "Helmet",
+      "armor": "Armor",
+      "specialTask": "Special Task",
+      "ammoGrade": "Ammo Grade"
     }
   },
   "dlssPreset": {
@@ -1508,7 +1556,8 @@
     "runtimeRepairDesc": "Detect and repair missing VC++ / .NET / DirectX runtime libraries",
     "vtxVirtualizationDesc": "Disable/restore Memory Integrity & Hyper-V to fix virtualization popups",
     "hiddenFeaturesDesc": "Query, enable or disable hidden Windows A/B experimental feature flags",
-    "contextMenuDesc": "Manage system context menu items and extra drives/cloud drives in This PC"
+    "contextMenuDesc": "Manage system context menu items and extra drives/cloud drives in This PC",
+    "downloadAcceleratorDesc": "Multi-threaded segmented downloads to saturate your bandwidth"
   },
   "contextMenu": {
     "title": "Context Menu & This PC",
@@ -2314,7 +2363,7 @@
     "disableError": "Disable failed",
     "enableError": "Restore failed",
     "checking": "Checking status...",
-    "warningTitle": "\u26a0\ufe0f Warning",
+    "warningTitle": "⚠️ Warning",
     "warningDesc": "After disabling Windows Update, you will no longer receive security patches and feature updates. It is recommended to manually check for updates periodically or re-enable when needed.",
     "pauseCard": {
       "title": "Pause Windows Update (1000 Weeks)",
@@ -2738,5 +2787,37 @@
       "note1": "• Items requiring admin privileges will request them automatically during cleanup",
       "note2": "• In-use files are skipped automatically and will not affect system operation"
     }
+  },
+  "downloadAccel": {
+    "urlLabel": "Download URL",
+    "fileNamePlaceholder": "File name (optional, auto-detected if empty)",
+    "segmentsLabel": "Max connections",
+    "segmentsAuto": "Auto",
+    "start": "Start",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Remove task",
+    "segmentsDone": "segments done",
+    "status": {
+      "downloading": "Downloading",
+      "completed": "Completed",
+      "error": "Failed",
+      "preparing": "Preparing",
+      "paused": "Paused"
+    },
+    "resetLearned": "Reset learned caps",
+    "resetLearnedTip": "Clear the learned per-domain optimal connection cache (use after server behavior changes)",
+    "resetLearnedDone": "Reset done",
+    "speedLimitLabel": "Speed limit",
+    "speedUnlimited": "Unlimited",
+    "openFile": "Open file",
+    "openFolder": "Show in folder",
+    "activeConnections": "Active connections",
+    "eta": "ETA",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse",
+    "islandDownloading": "Downloading",
+    "islandComplete": "Download complete",
+    "islandFailed": "Download failed"
   }
 }

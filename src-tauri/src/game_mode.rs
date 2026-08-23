@@ -6,6 +6,14 @@
 //! - 常规：将明显占资源的后台进程压制到 `Eco`（省电）级，保留后台可用。
 //! - 竞技：将除豁免外的所有后台进程压制到 `Isolated`（隔离）级，只放行前台全屏游戏家族。
 //!
+//! 豁免（永不压制）：
+//! - 核心系统/系统 UI 进程（内核、DWM、explorer、输入法宿主、WSL 等，对齐 Pavise 预设白名单）
+//! - 输入/外设/音频软件、平台壳（Steam/Epic/EA/育碧/暴雪/GOG/Xbox 等）、网游加速器
+//! - 反作弊进程、性能监控叠加层（Afterburner/RTSS）
+//! - 笔记本厂商控制台（联想 Vantage、Armoury Crate、OMEN Hub、AWCC 等，风扇/功耗管理）
+//! - 滤镜名单内正在运行的游戏进程家族
+//! - 当前前台窗口的进程及其后代家族：用户正在交互的对象绝不压制
+//!
 //! 生效档位（以用户选择为准）：
 //! - 顶栏手动选择「常规/竞技/默认」：生效档位即为所选档位（手动优先）。
 //! - 弹窗可设「游戏启动时自动切换」档位（默认=关）：游戏运行时且用户未手动覆盖时，
@@ -192,9 +200,21 @@ fn apply_config(app: &tauri::AppHandle, config: GameModeConfig) {
 // ─── 豁免判定 ───
 
 const CORE_SYSTEM_PROCESSES: &[&str] = &[
-    "smss", "csrss", "wininit", "winlogon", "services", "lsass", "svchost", "dwm", "audiodg",
-    "fontdrvhost",
+    // 内核与系统服务（Pavise PresetWhitelist 同款）
+    "system", "secure system", "registry", "memory compression",
+    "smss", "csrss", "wininit", "winlogon", "services", "lsass", "svchost",
+    "dwm", "fontdrvhost", "audiodg", "wudfhost", "wmiprvse",
+    // 外壳与系统 UI：被压会直接导致桌面/任务栏/输入法卡顿
+    "explorer", "ctfmon", "textinputhost", "sihost", "taskhostw",
+    "conhost", "dllhost", "runtimebroker", "applicationframehost",
+    "shellexperiencehost", "startmenuexperiencehost", "searchhost",
+    "lockapp", "logonui", "securityhealthsystray",
+    // 虚拟化（WSL / Hyper-V）
+    "vmmem", "vmmemwsl", "wslservice",
 ];
+
+/// 性能监控/叠加层：自身被压制会导致监控采样变慢、OSD 卡顿，永不压制
+const PERF_MONITOR_PROCESSES: &[&str] = &["msiafterburner", "rtss"];
 
 const INPUT_AUDIO_KEYWORDS: &[&str] = &[
     "keyboard", "mouse", "hotkey", "keymap", "macro", "autohotkey", "hid", "input", "ime",
@@ -205,8 +225,48 @@ const INPUT_AUDIO_KEYWORDS: &[&str] = &[
 ];
 
 const PLATFORM_SHELL_KEYWORDS: &[&str] = &[
-    "steam", "steamwebhelper", "epicgameslauncher", "wegame", "wegame_env", "battle.net", "agent",
-    "galaxyclient", "ubisoftconnect", "leagueclient", "riotclient",
+    "steam", "epic", "wegame", "battle.net", "blizzard", "agent", "galaxy", "ubisoft",
+    "uplay", "leagueclient", "riotclient", "eadesktop", "origin", "xbox", "gamebar",
+];
+
+/// 网游加速器（Pavise NetAcceleratorCatalog 同款）：被压制会直接恶化游戏延迟，永不压制
+const ACCELERATOR_PROCESSES: &[&str] = &[
+    "uu", "uu_ball", "xunyou", "leigod", "leigod_launcher", "leishensdk", "qiyou",
+    "biubiu", "bbservice", "dolphinq", "wtfast",
+];
+
+const ACCELERATOR_KEYWORDS: &[&str] = &[
+    "accelerat", "booster", "加速器", "xunyou", "leigod", "leishen", "qiyou", "biubiu",
+    "dolphinq", "wtfast", "exitlag", "noping", "mudfish",
+];
+
+/// 笔记本厂商控制台/整机管家：负责风扇曲线、性能/功耗模式、灯效与驱动管理。
+/// 被压制（EcoQoS+小核）会导致风扇失控、性能模式切换失效 → 热节流降频，永不压制。
+const OEM_CONSOLE_KEYWORDS: &[&str] = &[
+    // 联想 / 拯救者（Vantage、Legion Zone、联想电脑管家）
+    "lenovo", "vantage", "legion",
+    // 惠普 / 暗影精灵（OMEN Gaming Hub、HP Support Assistant）
+    "omen", "hpsupport",
+    // 戴尔 / 外星人（Alienware Command Center、Dell Optimizer、MyDell）
+    "alienware", "awcc", "delloptimizer", "mydell",
+    // 华硕 / ROG（Armoury Crate、MyASUS、奥创中心）
+    "asus", "armoury", "ghelper",
+    // 微星（MSI Center / Dragon Center / Creator Center）
+    "msicenter", "msi center", "dragoncenter", "creatorcenter",
+    // 宏碁（PredatorSense、NitroSense、Acer Care Center）
+    "acer", "predator", "nitrosense",
+    // 机械革命 / 神舟 / 炫龙 / 雷神等 Clevo 系（Control Center）
+    "mechrevo", "controlcenter", "machenike", "thunderobot",
+    // 七彩虹（iGame Center）
+    "igamecenter",
+    // 技嘉 / AORUS（Gigabyte Control Center、AORUS Engine）
+    "gigabyte", "aorus",
+    // 华为 / 荣耀（电脑管家、荣耀智慧互联）
+    "huawei", "honor", "magicbook",
+    // 小米 / Redmi（小米笔记本管家等）
+    "xiaomi", "redmi",
+    // 三星（Samsung Settings / Update）
+    "samsung",
 ];
 
 fn process_matches(process_name: &str, entry: &str) -> bool {
@@ -222,6 +282,14 @@ fn process_matches(process_name: &str, entry: &str) -> bool {
     norm(process_name) == norm(entry)
 }
 
+/// 剥离 ".exe" 后缀（sysinfo 在 Windows 上返回的进程名带后缀）
+fn strip_exe_suffix(name: &str) -> &str {
+    match name.strip_suffix(".exe").or_else(|| name.strip_suffix(".EXE")) {
+        Some(s) => s,
+        None => name,
+    }
+}
+
 fn is_anticheat(name: &str) -> bool {
     for g in anticheat::GROUPS {
         for p in g.processes {
@@ -234,12 +302,17 @@ fn is_anticheat(name: &str) -> bool {
 }
 
 fn is_core_system(name: &str) -> bool {
-    let low = name.to_ascii_lowercase();
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
     CORE_SYSTEM_PROCESSES.iter().any(|&s| low == s)
 }
 
+fn is_perf_monitor(name: &str) -> bool {
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
+    PERF_MONITOR_PROCESSES.iter().any(|&s| low == s)
+}
+
 fn is_input_audio(name: &str) -> bool {
-    let low = name.to_ascii_lowercase();
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
     INPUT_AUDIO_KEYWORDS.iter().any(|&k| low.contains(k))
 }
 
@@ -248,7 +321,40 @@ fn is_platform_shell(name: &str) -> bool {
     PLATFORM_SHELL_KEYWORDS.iter().any(|&k| low.contains(k))
 }
 
+fn is_net_accelerator(name: &str) -> bool {
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
+    if ACCELERATOR_PROCESSES.iter().any(|&s| low == s) {
+        return true;
+    }
+    ACCELERATOR_KEYWORDS.iter().any(|&k| low.contains(k))
+}
+
+fn is_oem_console(name: &str) -> bool {
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
+    OEM_CONSOLE_KEYWORDS.iter().any(|&k| low.contains(k))
+}
+
 // ─── 收集 pid 及其所有后代进程（用于竞技档只放行游戏家族） ───
+
+/// 当前前台窗口所属进程 PID（用户正在交互的对象，永不压制）
+fn foreground_pid() -> Option<u32> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetWindowThreadProcessId,
+    };
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_null() {
+            return None;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            None
+        } else {
+            Some(pid)
+        }
+    }
+}
 
 fn collect_family(root: u32, system: &System) -> HashSet<u32> {
     let mut family = HashSet::new();
@@ -464,6 +570,11 @@ fn sweep_loop(app: tauri::AppHandle, generation: u64) {
             }
         }
 
+        // 前台窗口进程家族：无论档位与名单，用户正在交互的对象一律放行
+        let fg_family = foreground_pid()
+            .map(|pid| collect_family(pid, &system))
+            .unwrap_or_default();
+
         let self_session = system
             .process(Pid::from_u32(self_pid))
             .and_then(|p| p.session_id());
@@ -486,11 +597,16 @@ fn sweep_loop(app: tauri::AppHandle, generation: u64) {
                 }
             }
             if is_anticheat(&name) || is_core_system(&name) || is_input_audio(&name)
-                || is_platform_shell(&name)
+                || is_platform_shell(&name) || is_perf_monitor(&name) || is_net_accelerator(&name)
+                || is_oem_console(&name)
             {
                 continue;
             }
             if game_family.contains(&pid) {
+                continue;
+            }
+            // 前台窗口进程家族：绝不压制
+            if fg_family.contains(&pid) {
                 continue;
             }
             // 本会话免压名单

@@ -119,15 +119,19 @@ pub async fn get_storage_sizes(app: tauri::AppHandle) -> Result<StorageSizes, St
     })
 }
 
-/// 清除缓存目录（图标等缓存文件，不含 WebView2 数据），返回释放字节数
+/// 清除缓存目录（图标等缓存文件，不含 WebView2 数据），返回释放字节数。
+/// 封面缓存（covers）不在此列：它无法自动重建，删除后需整库重新解析音频才能恢复，
+/// 因此跳过保护（若被外部工具误删，启动时的封面自愈仍可从音频重新提取）。
 #[tauri::command]
-pub async fn clear_cache(_app: tauri::AppHandle) -> Result<u64, String> {
+pub async fn clear_cache(app: tauri::AppHandle) -> Result<u64, String> {
     let Some(root) = cache_root_dir() else {
         return Err("无法定位缓存目录".to_string());
     };
     if !root.exists() {
         return Ok(0);
     }
+    // 封面缓存目录：%LOCALAPPDATA%\NexBox\cache\covers
+    let covers_dir = app.path().app_cache_dir().ok().map(|p| p.join("covers"));
     let read_dir = fs::read_dir(&root).map_err(|e| format!("无法读取缓存目录 {}: {}", root.display(), e))?;
     let mut freed: u64 = 0;
     for entry in read_dir.flatten() {
@@ -135,9 +139,23 @@ pub async fn clear_cache(_app: tauri::AppHandle) -> Result<u64, String> {
         if is_webview_dir(&p) {
             continue; // 跳过 WebView2 数据，不纳入应用缓存
         }
+        if covers_dir.as_deref().map(|c| p.starts_with(c)).unwrap_or(false) {
+            continue; // 跳过受保护的封面缓存
+        }
         let size = if p.is_dir() { get_dir_size(&p) } else { 0 };
         let result = if p.is_dir() {
-            fs::remove_dir_all(&p)
+            // 目录内包含封面缓存的祖先目录（如 cache\）：递归清理并剪枝，保留 covers 子树
+            let contains_protected = covers_dir
+                .as_deref()
+                .map(|c| c.starts_with(&p))
+                .unwrap_or(false);
+            if contains_protected {
+                freed += clear_dir_prune(&p, covers_dir.as_deref().unwrap_or(&p));
+                let _ = fs::remove_dir(&p); // 子项已清空，兜底移除空目录本身
+                Ok(())
+            } else {
+                fs::remove_dir_all(&p)
+            }
         } else {
             fs::remove_file(&p)
         };
@@ -147,6 +165,30 @@ pub async fn clear_cache(_app: tauri::AppHandle) -> Result<u64, String> {
         }
     }
     Ok(freed)
+}
+
+/// 递归删除目录内容，但剪枝跳过 `exclude` 子树（不删除、不计入释放量）。
+fn clear_dir_prune(dir: &Path, exclude: &Path) -> u64 {
+    let mut freed: u64 = 0;
+    let Ok(read_dir) = fs::read_dir(dir) else {
+        return 0;
+    };
+    for entry in read_dir.flatten() {
+        let p = entry.path();
+        if p.starts_with(exclude) {
+            continue;
+        }
+        if p.is_dir() {
+            freed += clear_dir_prune(&p, exclude);
+            let _ = fs::remove_dir(&p); // 子项已清空，移除空目录本身
+        } else {
+            let size = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+            if fs::remove_file(&p).is_ok() {
+                freed += size;
+            }
+        }
+    }
+    freed
 }
 
 /// 清除数据（彻底重置）：删除 Roaming（`%APPDATA%\NexBox`）与 Local（`%LOCALAPPDATA%\NexBox`）下可删除的内容。

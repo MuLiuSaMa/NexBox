@@ -35,10 +35,10 @@ export default function HomePage() {
   const adaptiveTextColor = useAdaptiveTextColor();
   const [greetingText, setGreetingText] = useState("");
   const usernameRef = useRef("");
-  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(false);
-  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(false);
-  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(false);
-  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(false);
+  const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
+  const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
+  const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
+  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(true);
   const [homeCardsReady, setHomeCardsReady] = useState(false);
 
   const computeGreeting = () => {
@@ -243,7 +243,7 @@ export default function HomePage() {
           <VStack spacing={2} align="stretch">
             {randomImageReady && randomImageEnabled && <RandomImageCard />}
             {(gameWinKeyCardEnabled || gameImeLockCardEnabled) && (
-              <HStack spacing={2} align="stretch" w="full" justify="space-between">
+              <HStack spacing={2} align="stretch" w="full" justify="flex-start">
                 {gameWinKeyCardEnabled && <GameWinKeyCard />}
                 {gameImeLockCardEnabled && <GameImeLockCard />}
               </HStack>

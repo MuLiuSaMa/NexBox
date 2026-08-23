@@ -58,15 +58,26 @@ fn stable_hash(s: &str) -> u64 {
 }
 
 /// 把压缩后的封面数据写入缓存目录，返回文件绝对路径。
-/// 文件已存在时跳过写入直接返回路径，支持重复导入去重。
+/// 文件已存在且长度一致时跳过写入直接返回路径，支持重复导入去重；
+/// 长度不一致视为半截/损坏文件，覆盖重写以自修复。
 fn save_cover_file(cache_dir: &Path, id: &str, data: &[u8], mime: &str) -> String {
     if data.is_empty() {
         return String::new();
     }
-    let ext = if mime == "image/png" { "png" } else { "jpg" };
+    let ext = match mime {
+        "image/png" => "png",
+        "image/gif" => "gif",
+        "image/bmp" => "bmp",
+        "image/webp" => "webp",
+        "image/avif" => "avif",
+        _ => "jpg",
+    };
     let name = format!("{:016x}.{}", stable_hash(id), ext);
     let file_path = cache_dir.join(&name);
-    if !file_path.exists() {
+    let intact = std::fs::metadata(&file_path)
+        .map(|meta| meta.len() == data.len() as u64)
+        .unwrap_or(false);
+    if !intact {
         let _ = std::fs::write(&file_path, data);
     }
     file_path.to_string_lossy().to_string()
@@ -95,54 +106,40 @@ fn find_folder_generic_cover(dir: &Path, cache_dir: &Path) -> String {
     String::new()
 }
 
-/// 读取单个音频文件的内嵌元数据（标题/艺术家/专辑/时长/封面）
-/// 返回 (title, artist, album, duration_ms, cover_path, cover_source)
+/// 从音频文件提取封面并写入缓存目录：内嵌封面优先，回退同目录图片。
+/// 返回 (cover_path, cover_source)。
 ///
 /// `folder_cover_cache`：同目录通用封面缓存（目录 → 封面缓存文件路径），避免对同一目录下
 /// 的每首歌重复做磁盘探测与写入，大幅减少大文件夹导入时的重复 I/O。
-/// `cache_dir`：封面缓存目录；为 None 时降级为不提取封面（不阻塞导入主流程）。
-fn read_audio_metadata(
+/// `cache_dir`：封面缓存目录；为 None 时降级为不提取封面（不阻塞主流程）。
+fn extract_song_cover(
     path: &Path,
     folder_cover_cache: &mut HashMap<PathBuf, String>,
     cache_dir: Option<&Path>,
     id: &str,
-) -> (String, String, String, u64, String, String) {
-    let (mut title, mut artist, mut album) = (String::new(), String::new(), String::new());
-    let mut duration_ms: u64 = 0;
+) -> (String, String) {
     let mut cover_path = String::new();
     let mut cover_source = "none".to_string();
 
+    // 1. 内嵌封面：遍历所有标签中的所有内嵌图片，取第一张压缩后写入封面缓存。
+    // 注意：必须先压缩再判结果——高清内嵌封面（无损 FLAC 常见 >1MB）压缩后仅数十 KB，
+    // 若先按原始字节拦截会导致大封面全部丢失（历史上 >1MB 封面不显示即此因）。
     if let Ok(tagged_file) = lofty::read_from_path(path) {
-        // 时长（秒 → 毫秒）
-        let secs = tagged_file.properties().duration().as_secs();
-        duration_ms = secs.saturating_mul(1000);
-
-        // 标签字段：优先主标签，回退到第一个标签
-        let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
-        if let Some(tag) = tag {
-            title = tag.title().map(|v| v.to_string()).unwrap_or_default();
-            artist = tag.artist().map(|v| v.to_string()).unwrap_or_default();
-            album = tag.album().map(|v| v.to_string()).unwrap_or_default();
-        }
-
-        // 封面：遍历所有标签中的所有内嵌图片，取第一张压缩后写入封面缓存
         for t in tagged_file.tags() {
             for pic in t.pictures() {
                 let data = pic.data();
-                // 限制封面大小（原始数据 ≤ 1MB），避免超大封面拖慢解析与缓存；
-                // 超过阈值的大封面会先压缩再写入
-                if !data.is_empty() && data.len() <= 1024 * 1024 {
-                    let mime = detect_image_mime(data);
-                    let (data, mime) = downscale_cover(data, mime);
-                    if !data.is_empty() {
-                        if let Some(cache_dir) = cache_dir {
-                            cover_path = save_cover_file(cache_dir, id, &data, &mime);
-                        }
-                        if !cover_path.is_empty() {
-                            cover_source = "embedded".to_string();
-                        }
-                        break;
-                    }
+                // 仅拦截空数据与极端异常的巨型 blob（防御损坏数据拖垮解码器），正常高清封面放行
+                if data.is_empty() || data.len() > COVER_INPUT_MAX_BYTES {
+                    continue;
+                }
+                let mime = detect_image_mime(data);
+                let (data, mime) = downscale_cover(data, mime);
+                if let Some(cache_dir) = cache_dir {
+                    cover_path = save_cover_file(cache_dir, id, &data, &mime);
+                }
+                if !cover_path.is_empty() {
+                    cover_source = "embedded".to_string();
+                    break;
                 }
             }
             if !cover_path.is_empty() {
@@ -151,11 +148,11 @@ fn read_audio_metadata(
         }
     }
 
-    // 兜底：音频没有内嵌封面时，尝试读取同目录的封面图片文件
+    // 2. 兜底：音频没有内嵌封面时，尝试读取同目录的封面图片文件
     // 顺序：固定封面名（cover/folder/album/front）→ 与音频同名的图片
     if cover_path.is_empty() {
         if let (Some(dir), Some(cache_dir)) = (path.parent(), cache_dir) {
-            // 1. 通用固定封面：先查缓存，未命中才探测并写入缓存
+            // 2.1 通用固定封面：先查缓存，未命中才探测并写入缓存
             if !folder_cover_cache.contains_key(dir) {
                 let cached = find_folder_generic_cover(dir, cache_dir);
                 folder_cover_cache.insert(dir.to_path_buf(), cached);
@@ -165,7 +162,7 @@ fn read_audio_metadata(
                 cover_path = generic;
                 cover_source = "folder".to_string();
             } else {
-                // 2. 与音频同名的图片（每首歌不同，用完整路径做缓存 key）
+                // 2.2 与音频同名的图片（每首歌不同，用完整路径做缓存 key）
                 if let Some(stem) = path.file_stem().and_then(|v| v.to_str()) {
                     for ext in ["jpg", "png", "jpeg", "webp", "bmp"] {
                         let candidate = dir.join(format!("{stem}.{ext}"));
@@ -181,6 +178,36 @@ fn read_audio_metadata(
             }
         }
     }
+
+    (cover_path, cover_source)
+}
+
+/// 读取单个音频文件的内嵌元数据（标题/艺术家/专辑/时长/封面）
+/// 返回 (title, artist, album, duration_ms, cover_path, cover_source)
+fn read_audio_metadata(
+    path: &Path,
+    folder_cover_cache: &mut HashMap<PathBuf, String>,
+    cache_dir: Option<&Path>,
+    id: &str,
+) -> (String, String, String, u64, String, String) {
+    let (mut title, mut artist, mut album) = (String::new(), String::new(), String::new());
+    let mut duration_ms: u64 = 0;
+
+    if let Ok(tagged_file) = lofty::read_from_path(path) {
+        // 时长（秒 → 毫秒）
+        let secs = tagged_file.properties().duration().as_secs();
+        duration_ms = secs.saturating_mul(1000);
+
+        // 标签字段：优先主标签，回退到第一个标签
+        let tag = tagged_file.primary_tag().or_else(|| tagged_file.first_tag());
+        if let Some(tag) = tag {
+            title = tag.title().map(|v| v.to_string()).unwrap_or_default();
+            artist = tag.artist().map(|v| v.to_string()).unwrap_or_default();
+            album = tag.album().map(|v| v.to_string()).unwrap_or_default();
+        }
+    }
+
+    let (cover_path, cover_source) = extract_song_cover(path, folder_cover_cache, cache_dir, id);
 
     log::debug!(
         "local music metadata: title={title:?} artist={artist:?} album={album:?} dur={duration_ms}ms cover_source={cover_source} cover_path={cover_path:?}",
@@ -224,6 +251,9 @@ fn detect_image_mime(data: &[u8]) -> &'static str {
 /// 返回压缩后的 (数据, mime)。
 const COVER_MAX_PX: u32 = 256;
 const COVER_MIN_BYTES: usize = 64 * 1024;
+/// 封面进入解码前的硬上限：仅防御极端异常数据（如损坏的超大图片），
+/// 正常高清内嵌封面（通常 ≤ 几 MB）不受影响。
+const COVER_INPUT_MAX_BYTES: usize = 16 * 1024 * 1024;
 
 fn downscale_cover(data: &[u8], mime: &str) -> (Vec<u8>, String) {
     if data.len() <= COVER_MIN_BYTES {
@@ -282,13 +312,10 @@ fn save_cover_from_file(cache_dir: &Path, cache_key: &str, path: &Path) -> Strin
         _ => "image/jpeg",
     };
     match std::fs::read(path) {
-        Ok(data) if !data.is_empty() => {
+        // 先压缩再写入（与内嵌封面一致）；仅拦截空文件与极端异常的巨型图片
+        Ok(data) if !data.is_empty() && data.len() <= COVER_INPUT_MAX_BYTES => {
             let (data, mime) = downscale_cover(&data, mime);
-            if !data.is_empty() && data.len() <= 1024 * 1024 {
-                save_cover_file(cache_dir, cache_key, &data, &mime)
-            } else {
-                String::new()
-            }
+            save_cover_file(cache_dir, cache_key, &data, &mime)
         }
         _ => String::new(),
     }
@@ -529,4 +556,186 @@ pub async fn get_local_lyric(path: String) -> Result<String, String> {
     }
 
     Ok(String::new())
+}
+
+/// 封面自愈检查请求项：id 为歌曲唯一标识（决定缓存文件名），path 为音频绝对路径，
+/// cover_path 为当前持久化的封面缓存路径（可能为空或已失效）。
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct LocalCoverCheckItem {
+    pub id: String,
+    pub path: String,
+    #[serde(default)]
+    pub cover_path: String,
+}
+
+/// 封面自愈结果：返回需要更新的歌曲及其重新提取后的封面信息
+#[derive(Debug, Clone, Serialize)]
+pub struct CoverRepairInfo {
+    pub id: String,
+    pub cover_path: String,
+    pub cover_source: String,
+}
+
+/// 校验本地歌曲封面缓存完整性并自愈：封面缓存文件被清除（清缓存/存储感知/磁盘清理工具等）
+/// 后，歌库里持久化的封面路径会指向不存在的文件；本命令对失效的歌曲从音频文件重新提取封面
+/// 并回填缓存。仅返回发生变化的条目（缓存完好或音频本体已丢失的歌曲不会出现在结果中）。
+#[tauri::command]
+pub async fn verify_local_covers(
+    app: AppHandle,
+    songs: Vec<LocalCoverCheckItem>,
+) -> Result<Vec<CoverRepairInfo>, String> {
+    if songs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let cache_dir = cover_cache_dir(&app).ok();
+
+    // 过滤出真正需要处理的：无封面路径，或缓存文件已不存在
+    let pending: Vec<&LocalCoverCheckItem> = songs
+        .iter()
+        .filter(|item| item.cover_path.is_empty() || !Path::new(&item.cover_path).is_file())
+        .collect();
+    let total = pending.len();
+    if total == 0 {
+        return Ok(Vec::new());
+    }
+
+    // 与导入一致的多线程并行解析，避免大歌库修复时长时间阻塞
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    let folder_cover_cache: Arc<Mutex<HashMap<PathBuf, String>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    let repairs: Vec<CoverRepairInfo> = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel::<CoverRepairInfo>();
+        let chunk_size = (total + workers - 1) / workers;
+        for chunk in pending.chunks(chunk_size) {
+            let tx = tx.clone();
+            let folder_cover_cache = Arc::clone(&folder_cover_cache);
+            let cache_dir = cache_dir.as_deref();
+            scope.spawn(move || {
+                let mut local_cache = HashMap::new();
+                for item in chunk {
+                    let path = Path::new(&item.path);
+                    // 音频本体不在（移动盘未挂载/文件被删）：跳过，保留原状待下次检查
+                    if !path.is_file() {
+                        continue;
+                    }
+                    let extension = path
+                        .extension()
+                        .and_then(|v| v.to_str())
+                        .map(|v| v.to_lowercase())
+                        .unwrap_or_default();
+                    if !is_supported_extension(&extension) {
+                        continue;
+                    }
+                    let (cover_path, cover_source) =
+                        extract_song_cover(path, &mut local_cache, cache_dir, &item.id);
+                    let _ = tx.send(CoverRepairInfo {
+                        id: item.id.clone(),
+                        cover_path,
+                        cover_source,
+                    });
+                }
+                // 合并该 worker 的同目录封面缓存
+                {
+                    let mut cache = folder_cover_cache.lock().unwrap();
+                    for (dir, cover) in local_cache {
+                        if !cover.is_empty() {
+                            cache.entry(dir).or_insert(cover);
+                        }
+                    }
+                }
+            });
+        }
+        drop(tx); // 释放本线程的发送端，当所有 worker 结束后 rx 结束
+
+        rx.iter().collect()
+    });
+
+    log::info!(
+        "[Music] 封面自愈完成：失效 {} 首，成功重提取 {} 首",
+        total,
+        repairs.iter().filter(|r| !r.cover_path.is_empty()).count()
+    );
+    Ok(repairs)
+}
+
+/// 删除指定的封面缓存文件（移除歌曲/清空歌库时同步清理孤儿封面）。
+/// 仅允许删除封面缓存目录内的文件，防止误删其他路径。
+#[tauri::command]
+pub async fn delete_cover_cache_files(app: AppHandle, paths: Vec<String>) -> Result<(), String> {
+    let cache_dir = cover_cache_dir(&app)?;
+    for raw in paths {
+        let path = Path::new(&raw);
+        if path.parent().map(|p| p == cache_dir).unwrap_or(false) && path.is_file() {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// >1MB 的高清内嵌封面：修复前被 1MiB 预判直接丢弃，现在应压缩后正常写入缓存
+    #[test]
+    fn large_embedded_cover_is_downscaled_and_saved() {
+        let dir = std::env::temp_dir().join("nexbox_cover_test");
+        let _ = std::fs::create_dir_all(&dir);
+        // 生成一张 2048x2048 的噪声 PNG（随机纹理不可压缩，编码后必然 >1MB）
+        let mut pixels = vec![0u8; 2048 * 2048 * 3];
+        let mut seed = 0x12345678u64;
+        for chunk in pixels.chunks_mut(3) {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            chunk[0] = (seed >> 33) as u8;
+            chunk[1] = (seed >> 41) as u8;
+            chunk[2] = (seed >> 49) as u8;
+        }
+        let img = image::RgbImage::from_raw(2048, 2048, pixels).unwrap();
+        let img = image::DynamicImage::ImageRgb8(img);
+        let mut raw = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut std::io::Cursor::new(&mut raw))
+            .write_image(img.as_bytes(), img.width(), img.height(), img.color().into())
+            .unwrap();
+        assert!(raw.len() > 1024 * 1024, "测试前置条件：原始封面应大于 1MB");
+
+        assert!(raw.len() <= COVER_INPUT_MAX_BYTES);
+        let mime = detect_image_mime(&raw);
+        let (out, out_mime) = downscale_cover(&raw, mime);
+        assert!(!out.is_empty());
+        assert!(out.len() < raw.len(), "压缩后体积应显著缩小");
+        let path = save_cover_file(&dir, "test-id", &out, &out_mime);
+        assert!(!path.is_empty());
+        let meta = std::fs::metadata(&path).unwrap();
+        assert_eq!(meta.len() as usize, out.len(), "缓存文件应完整写入");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 损坏的半截缓存文件（长度不一致）应被覆盖重写而非跳过
+    #[test]
+    fn corrupt_cache_file_is_repaired() {
+        let dir = std::env::temp_dir().join("nexbox_cover_test2");
+        let _ = std::fs::create_dir_all(&dir);
+        let data = vec![7u8; 1000];
+        let first = save_cover_file(&dir, "repair-id", &data, "image/jpeg");
+        std::fs::write(&first, &data[..500]).unwrap(); // 模拟半截写入
+        let second = save_cover_file(&dir, "repair-id", &data, "image/jpeg");
+        assert_eq!(first, second);
+        let meta = std::fs::metadata(&second).unwrap();
+        assert_eq!(meta.len(), 1000, "损坏文件应被重写为完整数据");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// detect_image_mime 对各格式魔数的识别
+    #[test]
+    fn mime_detection() {
+        assert_eq!(
+            detect_image_mime(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            "image/png"
+        );
+        assert_eq!(detect_image_mime(&[0xFF, 0xD8, 0xFF, 0xE0]), "image/jpeg");
+        assert_eq!(detect_image_mime(b"GIF89a...."), "image/gif");
+    }
 }

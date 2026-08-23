@@ -32,42 +32,43 @@
     }
   },
   "sidebar": {
-        "home": "首頁",
-        "tools": "工具",
-        "hardware": "硬體",
-        "optimization": "優化",
-        "displayFilter": "濾鏡",
-        "floatingNav": "懸浮框",
-        "crosshair": "準心",
-        "overlayPanel": "懸浮框",
-        "builtinTools": "內建工具",
-        "deltaForce": "三角洲",
-        "music": "音樂",
-        "mood": "心境",
-        "settings": "設定",
-        "gpuRename": "顯卡改寫",
-        "resolutionConverter": "解析度換算",
-        "dlssPreset": "三角洲DLSS設定",
-        "epicFree": "喜加一",
+    "home": "首頁",
+    "tools": "工具",
+    "hardware": "硬體",
+    "optimization": "優化",
+    "displayFilter": "濾鏡",
+    "floatingNav": "懸浮框",
+    "crosshair": "準心",
+    "overlayPanel": "懸浮框",
+    "builtinTools": "內建工具",
+    "deltaForce": "三角洲",
+    "music": "音樂",
+    "mood": "心境",
+    "settings": "設定",
+    "gpuRename": "顯卡改寫",
+    "resolutionConverter": "解析度換算",
+    "dlssPreset": "三角洲DLSS設定",
+    "epicFree": "喜加一",
     "diskHealth": "磁碟健康",
-"screenRecord": "螢幕錄製",
+    "screenRecord": "螢幕錄製",
     "audioEq": "EQ調音",
     "custom": "自訂",
     "runtimeRepair": "執行庫修復",
-    "hiddenFeatures": "Windows 隱藏功能"
+    "hiddenFeatures": "Windows 隱藏功能",
+    "downloadAccelerator": "下載器"
   },
-"customPage": {
-"title": "自訂頁面",
-"addTool": "新增工具",
-"emptyHint": "點擊右上角新增按鈕，新增你常用的工具",
-"searchTools": "搜尋工具...",
-"borderRadius": "圓角",
-"clearAll": "清空全部",
-"clearAllConfirm": "確定要清空所有卡片嗎？",
-"editMode": "編輯模式",
-"enterEdit": "編輯佈局",
-"exitEdit": "退出編輯"
-},
+  "customPage": {
+    "title": "自訂頁面",
+    "addTool": "新增工具",
+    "emptyHint": "點擊右上角新增按鈕，新增你常用的工具",
+    "searchTools": "搜尋工具...",
+    "borderRadius": "圓角",
+    "clearAll": "清空全部",
+    "clearAllConfirm": "確定要清空所有卡片嗎？",
+    "editMode": "編輯模式",
+    "enterEdit": "編輯佈局",
+    "exitEdit": "退出編輯"
+  },
   "powerAdvanced": {
     "title": "處理器進階設定",
     "description": "調整 CPU 效能、散熱與功耗相關的進階電源選項",
@@ -402,17 +403,17 @@
       "warningText": "設定記憶體限制需要管理員權限，且需要重啟系統才能生效",
       "adminRequired": "需要管理員權限",
       "options": {
-            "7.9gb": "7.9 GB",
-            "11.9gb": "11.9 GB",
-            "13.9gb": "13.9 GB",
-            "15.9gb": "15.9 GB"
-        },
-        "presetTab": "預設限制",
-        "customTab": "自訂限制",
-        "customPlaceholder": "輸入限制值 (GB)",
-        "selectPreset": "選擇預設限制值",
-        "invalidInput": "請輸入有效的記憶體限制值",
-        "outOfRange": "限制值必須在 0.1 到實體記憶體之間"
+        "7.9gb": "7.9 GB",
+        "11.9gb": "11.9 GB",
+        "13.9gb": "13.9 GB",
+        "15.9gb": "15.9 GB"
+      },
+      "presetTab": "預設限制",
+      "customTab": "自訂限制",
+      "customPlaceholder": "輸入限制值 (GB)",
+      "selectPreset": "選擇預設限制值",
+      "invalidInput": "請輸入有效的記憶體限制值",
+      "outOfRange": "限制值必須在 0.1 到實體記憶體之間"
     },
     "powerManagement": {
       "title": "電源管理",
@@ -458,80 +459,80 @@
       "laptopUnlockRestartHint": "已寫入解鎖配置，請重啟電腦後再重新匯入電源計劃"
     },
     "memoryCleanup": {
-        "title": "記憶體清理",
-        "description": "檢視記憶體詳情並釋放記憶體",
-        "physicalMemory": "物理記憶體",
-        "virtualMemory": "虛擬記憶體",
-        "workingSet": "系統工作集",
-        "used": "已使用",
-        "available": "可用",
-        "total": "總共",
-        "cleanAll": "全部清理",
-        "cleanStandby": "清理待機記憶體",
-        "trimWorkingSet": "收緊系統工作集",
-        "loading": "載入中...",
-        "cleaning": "清理中...",
-        "freedMemory": "已釋放 {{size}} MB 記憶體",
-        "noMemoryFreed": "目前無需清理",
-        "error": "清理失敗"
+      "title": "記憶體清理",
+      "description": "檢視記憶體詳情並釋放記憶體",
+      "physicalMemory": "物理記憶體",
+      "virtualMemory": "虛擬記憶體",
+      "workingSet": "系統工作集",
+      "used": "已使用",
+      "available": "可用",
+      "total": "總共",
+      "cleanAll": "全部清理",
+      "cleanStandby": "清理待機記憶體",
+      "trimWorkingSet": "收緊系統工作集",
+      "loading": "載入中...",
+      "cleaning": "清理中...",
+      "freedMemory": "已釋放 {{size}} MB 記憶體",
+      "noMemoryFreed": "目前無需清理",
+      "error": "清理失敗"
     },
     "aceOptimize": {
       "title": "反作弊最佳化",
       "description": "限制反作弊程序的資源佔用，釋放更多效能給遊戲",
-        "deltaBoost": {
-            "title": "三角洲優先順序提升",
-            "description": "提升 DeltaForceClient-Win64-Shipping.exe 程序優先順序為「即時」，提升遊戲流暢度",
-            "button": "最佳化三角洲",
-            "optimizing": "最佳化中...",
-            "success": "三角洲程序優先順序已提升",
-            "notRunning": "三角洲遊戲未執行，請先啟動遊戲",
-            "affinitySuccess": "三角洲核心分配已最佳化"
-        },
-        "aceLimit": {
-            "title": "ACE 程序限制",
-            "description": "將 ACE-Tray、SGuard64、SGuardSvc64 等反作弊程序優先順序降為「低」，並限制使用單核心 CPU",
-            "button": "限制 ACE",
-            "limiting": "限制中...",
-            "success": "已限制 {{count}} 個 ACE 程序",
-            "notRunning": "未找到執行中的 ACE 程序",
-            "affinitySuccess": "已限制 {{count}} 個 ACE 程序使用單核心"
-        },
-        "optimizeAll": {
-            "button": "一鍵全部最佳化",
-            "optimizing": "最佳化中...",
-            "success": "全部最佳化完成",
-            "partial": "部分最佳化完成，請檢視詳情"
-        },
-        "aceRegistry": {
-            "title": "註冊表強制限制",
-            "description": "透過系統 IFEO 註冊表強制限制三角洲與 SGuard 進程的 CPU/I/O 優先級（進程啟動時即生效，無法被反作弊改回；需重啟相關進程後生效，有一定風險）",
-            "badge": "可能有風險",
-            "success": "註冊表強制限制已套用",
-            "restored": "註冊表強制限制已恢復"
-        },
-        "autoDetect": {
-            "title": "自動偵測並優化 ACE 進程",
-            "description": "背景持續監測，發現 ACE-Tray/SGuard 進程自動限制優先級和核心親和性（每 5 秒檢測一次）",
-            "status": {
-                "running": "自動偵測運行中",
-                "stopped": "自動偵測已停止"
-            },
-            "lastCheck": "上次偵測",
-            "never": "從未偵測",
-            "optimizing": "正在優化 {{count}} 個進程",
-            "enabled": "自動偵測已啟用",
-            "disabled": "自動偵測已禁用"
-        },
+      "deltaBoost": {
+        "title": "三角洲優先順序提升",
+        "description": "提升 DeltaForceClient-Win64-Shipping.exe 程序優先順序為「即時」，提升遊戲流暢度",
+        "button": "最佳化三角洲",
+        "optimizing": "最佳化中...",
+        "success": "三角洲程序優先順序已提升",
+        "notRunning": "三角洲遊戲未執行，請先啟動遊戲",
+        "affinitySuccess": "三角洲核心分配已最佳化"
+      },
+      "aceLimit": {
+        "title": "ACE 程序限制",
+        "description": "將 ACE-Tray、SGuard64、SGuardSvc64 等反作弊程序優先順序降為「低」，並限制使用單核心 CPU",
+        "button": "限制 ACE",
+        "limiting": "限制中...",
+        "success": "已限制 {{count}} 個 ACE 程序",
+        "notRunning": "未找到執行中的 ACE 程序",
+        "affinitySuccess": "已限制 {{count}} 個 ACE 程序使用單核心"
+      },
+      "optimizeAll": {
+        "button": "一鍵全部最佳化",
+        "optimizing": "最佳化中...",
+        "success": "全部最佳化完成",
+        "partial": "部分最佳化完成，請檢視詳情"
+      },
+      "aceRegistry": {
+        "title": "註冊表強制限制",
+        "description": "透過系統 IFEO 註冊表強制限制三角洲與 SGuard 進程的 CPU/I/O 優先級（進程啟動時即生效，無法被反作弊改回；需重啟相關進程後生效，有一定風險）",
+        "badge": "可能有風險",
+        "success": "註冊表強制限制已套用",
+        "restored": "註冊表強制限制已恢復"
+      },
+      "autoDetect": {
+        "title": "自動偵測並優化 ACE 進程",
+        "description": "背景持續監測，發現 ACE-Tray/SGuard 進程自動限制優先級和核心親和性（每 5 秒檢測一次）",
         "status": {
-            "optimized": "已最佳化",
-            "notRunning": "未執行",
-            "notOptimized": "待最佳化",
-            "processRunning": "進程運行中",
-            "processNotRunning": "進程未運行",
-            "needsAdmin": "需管理員權限"
+          "running": "自動偵測運行中",
+          "stopped": "自動偵測已停止"
         },
-        "restore": "恢復",
-        "error": "最佳化失敗"
+        "lastCheck": "上次偵測",
+        "never": "從未偵測",
+        "optimizing": "正在優化 {{count}} 個進程",
+        "enabled": "自動偵測已啟用",
+        "disabled": "自動偵測已禁用"
+      },
+      "status": {
+        "optimized": "已最佳化",
+        "notRunning": "未執行",
+        "notOptimized": "待最佳化",
+        "processRunning": "進程運行中",
+        "processNotRunning": "進程未運行",
+        "needsAdmin": "需管理員權限"
+      },
+      "restore": "恢復",
+      "error": "最佳化失敗"
     },
     "gameProcessOptimize": {
       "title": "遊戲進程最佳化",
@@ -882,7 +883,7 @@
     "gameFilterSupportedTitle": "已支援的遊戲",
     "gameFilterError": "操作失敗"
   },
-"floatingNav": {
+  "floatingNav": {
     "title": "懸浮導航框",
     "enable": "啟用懸浮框",
     "settings": "設定",
@@ -1002,17 +1003,50 @@
     "dlssNote": "需要NVIDIA Profile Inspector支援，套用後重新啟動遊戲生效",
     "back": "返回",
     "dlssModels": {
-      "A": { "name": "A模型", "description": "早期模型" },
-      "B": { "name": "B模型", "description": "早期模型" },
-      "C": { "name": "C模型", "description": "早期模型" },
-      "D": { "name": "D模型", "description": "穩定模型" },
-      "E": { "name": "E模型", "description": "實驗性模型" },
-      "F": { "name": "F模型", "description": "改進模型" },
-      "G": { "name": "G模型", "description": "改進模型" },
-      "J": { "name": "J模型", "description": "較新模型，畫質優先" },
-      "K": { "name": "K模型", "description": "推薦模型，大多數DLSS模式" },
-      "L": { "name": "L模型", "description": "優化Ultra Performance模式" },
-      "M": { "name": "M模型", "description": "優化Performance模式" }
+      "A": {
+        "name": "A模型",
+        "description": "早期模型"
+      },
+      "B": {
+        "name": "B模型",
+        "description": "早期模型"
+      },
+      "C": {
+        "name": "C模型",
+        "description": "早期模型"
+      },
+      "D": {
+        "name": "D模型",
+        "description": "穩定模型"
+      },
+      "E": {
+        "name": "E模型",
+        "description": "實驗性模型"
+      },
+      "F": {
+        "name": "F模型",
+        "description": "改進模型"
+      },
+      "G": {
+        "name": "G模型",
+        "description": "改進模型"
+      },
+      "J": {
+        "name": "J模型",
+        "description": "較新模型，畫質優先"
+      },
+      "K": {
+        "name": "K模型",
+        "description": "推薦模型，大多數DLSS模式"
+      },
+      "L": {
+        "name": "L模型",
+        "description": "優化Ultra Performance模式"
+      },
+      "M": {
+        "name": "M模型",
+        "description": "優化Performance模式"
+      }
     },
     "weaponCodePlatformNames": {
       "maqt": "碼槍堂",
@@ -1153,9 +1187,10 @@
     "shaderCacheDesc": "清理 NVIDIA/AMD 著色器快取釋放磁碟空間",
     "dlssPresetDesc": "切換DLSS模型預設以優化遊戲畫質",
     "diskHealthDesc": "檢測硬碟健康狀態與SMART資訊",
-"screenRecordDesc": "高效能螢幕錄製（硬體編碼）",
+    "screenRecordDesc": "高效能螢幕錄製（硬體編碼）",
     "audioEqDesc": "系統級音訊等化器調音",
-    "runtimeRepairDesc": "偵測並修復缺失的 VC++ / .NET / DirectX 執行庫"
+    "runtimeRepairDesc": "偵測並修復缺失的 VC++ / .NET / DirectX 執行庫",
+    "downloadAcceleratorDesc": "多執行緒動態分段下載，充分跑滿頻寬"
   },
   "gameProcessOptimize": {
     "title": "遊戲進程最佳化",
@@ -1278,16 +1313,16 @@
     "vendorTitle": "顯卡廠商",
     "vendorSubtitle": "按廠商組織清理項，預設僅選 NVIDIA。",
     "nvidia": {
-        "name": "NVIDIA",
-        "description": "按 NVIDIA 官方路徑清理 DXCache、GLCache、NV_Cache。",
-        "selected": "已選擇",
-        "selectable": "可選擇"
+      "name": "NVIDIA",
+      "description": "按 NVIDIA 官方路徑清理 DXCache、GLCache、NV_Cache。",
+      "selected": "已選擇",
+      "selectable": "可選擇"
     },
     "amd": {
-        "name": "AMD",
-        "description": "清理 AMD Software Reset Shader Cache 對應的使用者級快取目錄。",
-        "selected": "已選擇",
-        "selectable": "點擊選擇"
+      "name": "AMD",
+      "description": "清理 AMD Software Reset Shader Cache 對應的使用者級快取目錄。",
+      "selected": "已選擇",
+      "selectable": "點擊選擇"
     },
     "detected": "已偵測到",
     "notDetected": "未偵測到",
@@ -1296,11 +1331,11 @@
     "cleaning": "清理中...",
     "scanButton": "重新掃描",
     "officialTip": {
-        "title": "NVIDIA 官方建議",
-        "description": "建議先按下列步驟處理，再回到本頁執行清理。",
-        "step1": "1. 開啟 NVIDIA 控制面板，將 3D 設定裡的著色器快取大小改成停用。",
-        "step2": "2. 重新啟動電腦後回到本頁，執行「清理 NVIDIA」。",
-        "step3": "3. 清理完成後再將著色器快取開啟，選擇多少取決於您的 C 槽容量。"
+      "title": "NVIDIA 官方建議",
+      "description": "建議先按下列步驟處理，再回到本頁執行清理。",
+      "step1": "1. 開啟 NVIDIA 控制面板，將 3D 設定裡的著色器快取大小改成停用。",
+      "step2": "2. 重新啟動電腦後回到本頁，執行「清理 NVIDIA」。",
+      "step3": "3. 清理完成後再將著色器快取開啟，選擇多少取決於您的 C 槽容量。"
     },
     "cleanSuccess": "清理完成，已釋放 {{size}}",
     "cleanError": "清理失敗",
@@ -1450,15 +1485,14 @@
       "themeColorDesc": "設定導航列、按鈕、功能表等元素的主題顏色",
       "presets": "預設顏色",
       "customColor": "自訂顏色",
-        "advancedSettings": "進階設定",
-        "hoverOpacity": "懸停透明度",
-        "activeOpacity": "啟用透明度",
-        "borderOpacity": "邊框透明度",
-        "backgroundBlurLabel": "背景模糊",
-        "backgroundBlurHint": "對所有背景模式生效（預設 / 圖片 / 影片）",
-        "resetToDefault": "重置為預設",
-        "uploadVideo": "上傳影片",
-        "presetColors": {
+      "advancedSettings": "進階設定",
+      "hoverOpacity": "懸停透明度",
+      "activeOpacity": "啟用透明度",
+      "borderOpacity": "邊框透明度",
+      "backgroundBlurLabel": "背景模糊",
+      "backgroundBlurHint": "對所有背景模式生效（預設 / 圖片 / 影片）",
+      "resetToDefault": "重置為預設",
+      "presetColors": {
         "cyan": "青色",
         "blue": "藍色",
         "purple": "紫色",
@@ -1786,6 +1820,37 @@
     "namedOnly": "只顯示有名稱的功能",
     "namedOnlyHint": "無名稱條目是 Windows 內部 servicing 設定，字典無法識別，通常無需修改；關閉後顯示全部條目",
     "numbersExplain": "帶名稱的條目來自社群功能字典；顯示為純數字的功能沒有公開名稱，其含義 Microsoft 未公開。可切換上方開關檢視全部，或用名稱搜尋 17000+ 個已知功能。"
+  },
+  "downloadAccel": {
+    "urlLabel": "下載連結",
+    "fileNamePlaceholder": "檔案名稱（可選，留空自動識別）",
+    "segmentsLabel": "最大連線數",
+    "segmentsAuto": "自動",
+    "start": "開始下載",
+    "pause": "暫停",
+    "resume": "繼續",
+    "cancel": "移除任務",
+    "segmentsDone": "段完成",
+    "status": {
+      "downloading": "下載中",
+      "completed": "已完成",
+      "error": "失敗",
+      "preparing": "準備中",
+      "paused": "已暫停"
+    },
+    "resetLearned": "重置站點學習",
+    "resetLearnedTip": "清除已學習的各網域最優連線數快取（伺服器行為變化後使用）",
+    "resetLearnedDone": "已重置",
+    "speedLimitLabel": "限速",
+    "speedUnlimited": "不限速",
+    "openFile": "開啟檔案",
+    "openFolder": "開啟所在目錄",
+    "activeConnections": "活躍連線",
+    "eta": "剩餘",
+    "expandAll": "展開全部",
+    "collapseAll": "收起",
+    "islandDownloading": "下載中",
+    "islandComplete": "下載完成",
+    "islandFailed": "下載失敗"
   }
 }
-

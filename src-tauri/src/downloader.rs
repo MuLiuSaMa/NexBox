@@ -79,12 +79,37 @@ pub fn open_system_browser(url: String) -> Result<(), String> {
     Ok(())
 }
 
+/// 等待文件完全落盘且可访问后再启动安装向导。
+/// 刚下载完成后立刻打开可能被安全软件扫描占用或尚未完全刷入磁盘，
+/// 这里轮询等待文件可被打开（闲放多轮重试），确保"点击重启"时一定按在真实安装包上。
+pub fn wait_until_file_ready(file_path: &str) {
+    const MAX_ATTEMPTS: u32 = 10;
+    const RETRY_DELAY_MS: u64 = 300;
+    for _ in 0..MAX_ATTEMPTS {
+        // 尝试以读写方式独占打开以探测句柄是否已释放；成功后立即关闭
+        match std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(file_path)
+        {
+            Ok(f) => {
+                drop(f);
+                return;
+            }
+            Err(_) => std::thread::sleep(std::time::Duration::from_millis(RETRY_DELAY_MS)),
+        }
+    }
+}
+
 /// 以 SW_SHOWNORMAL 方式异步启动安装向导，立即返回（不等待安装完成）
 pub fn launch_installer_sync(file_path: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+        // 先确保文件已落盘且句柄释放，避免启动时文件仍在被占用导致失败
+        wait_until_file_ready(file_path);
 
         let file_path_wide: Vec<u16> = file_path
             .encode_utf16()
@@ -120,7 +145,7 @@ pub fn launch_installer_sync(file_path: &str) -> Result<(), String> {
 /// 在当前网络环境不可达的 CDN 域名上。统一替换为主站域名 gitcode.com，
 /// 由其 302 重定向到可达的 file-cdn.gitcode.com 并生成签名链接。
 /// reqwest 默认自动跟随重定向，因此替换后即可正常下载。
-fn normalize_gitcode_url(url: &str) -> String {
+pub(crate) fn normalize_gitcode_url(url: &str) -> String {
     const GITCODE_CDN_HOSTS: [&str; 2] = ["test.gitcode.net", "download.gitcode.net"];
     let mut normalized = url.to_string();
     for host in GITCODE_CDN_HOSTS {
@@ -160,48 +185,73 @@ pub async fn download_file(
         }
     };
 
-    let mut file = File::create(&download_path).map_err(|e| e.to_string())?;
+    // 先检查 HTTP 状态码：非 2xx（限流 429 / 认证 401 / 5xx 等）直接失败，
+    // 避免把 GitCode 返回的错误页/提示页当作安装包写盘导致 1KB 坏文件
+    if !response.status().is_success() {
+        return Err(format!(
+            "Download failed (HTTP {}): {}",
+            response.status().as_u16(),
+            url
+        ));
+    }
 
-    let mut stream = response.bytes_stream();
-    let mut downloaded: u64 = 0;
-    let mut last_emit = std::time::Instant::now();
-    let mut last_emitted: u64 = 0;
+    // 作用域内写文件：结束即 drop，确保返回给前端前句柄已关闭
+    {
+        let mut file = File::create(&download_path).map_err(|e| e.to_string())?;
 
-    while let Some(chunk) = stream.next().await {
-        // 检查取消标志：关闭静默更新后中止下载
-        if CANCEL_DOWNLOAD.load(Ordering::SeqCst) {
-            return Err("Download cancelled".to_string());
-        }
-        let chunk = chunk.map_err(|e| e.to_string())?;
-        file.write_all(&chunk).map_err(|e| e.to_string())?;
-        downloaded += chunk.len() as u64;
+        let mut stream = response.bytes_stream();
+        let mut downloaded: u64 = 0;
+        let mut last_emit = std::time::Instant::now();
+        let mut last_emitted: u64 = 0;
 
-        let progress = if total_size > 0 {
-            (downloaded * 100) / total_size
-        } else {
-            0
-        };
+        while let Some(chunk) = stream.next().await {
+            // 检查取消标志：关闭静默更新后中止下载
+            if CANCEL_DOWNLOAD.load(Ordering::SeqCst) {
+                return Err("Download cancelled".to_string());
+            }
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            file.write_all(&chunk).map_err(|e| e.to_string())?;
+            downloaded += chunk.len() as u64;
 
-        // 节流：至少间隔 200ms 且进度前进时才向前端推送，避免高频事件导致 UI 数字跳闪
-        if progress != last_emitted && last_emit.elapsed().as_millis() >= 200 {
-            last_emit = std::time::Instant::now();
-            last_emitted = progress;
-            match window.emit(
-                "download-progress",
-                DownloadProgress {
-                    progress,
-                    total: total_size,
-                },
-            ) {
-                Ok(_) => {},
-                Err(e) => {
-                    eprintln!("Failed to emit progress: {}", e);
+            let progress = if total_size > 0 {
+                (downloaded * 100) / total_size
+            } else {
+                0
+            };
+
+            // 节流：至少间隔 200ms 且进度前进时才向前端推送，避免高频事件导致 UI 数字跳闪
+            if progress != last_emitted && last_emit.elapsed().as_millis() >= 200 {
+                last_emit = std::time::Instant::now();
+                last_emitted = progress;
+                match window.emit(
+                    "download-progress",
+                    DownloadProgress {
+                        progress,
+                        total: total_size,
+                    },
+                ) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        eprintln!("Failed to emit progress: {}", e);
+                    }
                 }
             }
         }
-    }
 
-    file.flush().map_err(|e| e.to_string())?;
+        // sync_all 强制刷入磁盘；flush 只写内核缓冲，无法保证真正落盘
+        file.sync_all().map_err(|e| e.to_string())?;
+
+        // 完整性校验：若服务端声明了 Content-Length，实际写入字节必须一致，
+        // 不一致说明下载中断/被截断，删除坏文件并报错，避免生成残缺安装包
+        if total_size > 0 && downloaded != total_size {
+            drop(file);
+            let _ = std::fs::remove_file(&download_path);
+            return Err(format!(
+                "Download incomplete: expected {total_size} bytes, got {downloaded}"
+            ));
+        }
+        // 作用域结束，file 在此 drop，句柄关闭、完全落盘后才会返回路径
+    }
 
     Ok(download_path.to_string_lossy().into_owned())
 }

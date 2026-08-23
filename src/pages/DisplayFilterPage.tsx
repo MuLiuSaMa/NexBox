@@ -63,6 +63,10 @@ interface FilterSettings {
   r_gamma: number;
   g_gamma: number;
   b_gamma: number;
+  s_curve: number;
+  r_boost: number;
+  g_boost: number;
+  b_boost: number;
   mode: number;
   is_active: boolean;
   icc_active: boolean;
@@ -148,6 +152,7 @@ const presetIcons: Record<string, React.ElementType> = {
   "soft": Heart,
   "gaming": Gamepad2,
   "reading": BookOpen,
+  "benq": Monitor,
   "dam-contrast": RotateCcw,
   "aerospace": Sparkles,
   "whiter": Sun,
@@ -164,6 +169,7 @@ const presetColors: Record<string, string> = {
   "soft": "#E8B4B8",
   "gaming": "#00D9FF",
   "reading": "#DEB887",
+  "benq": "#00A862",
   "dam-contrast": "#7A8B99",
   "aerospace": "#6C8EFF",
   "whiter": "#E8E8EC",
@@ -180,6 +186,9 @@ const modeParams: Record<number, { gamma: number; sCurve: number; rBoost: number
   4: { gamma: 1.08, sCurve: -0.08, rBoost: 0.98, gBoost: 1.0, bBoost: 1.02 },
   5: { gamma: 0.96, sCurve: 0.1, rBoost: 1.0, gBoost: 1.0, bBoost: 1.02 },
   6: { gamma: 1.0, sCurve: 0.0, rBoost: 1.0, gBoost: 0.99, bBoost: 0.97 },
+  7: { gamma: 0.96, sCurve: -0.05, rBoost: 1.0, gBoost: 1.0, bBoost: 1.0 },
+  8: { gamma: 1.12, sCurve: 0.03, rBoost: 1.0, gBoost: 1.0, bBoost: 1.0 },
+  9: { gamma: 1.12, sCurve: 0.08, rBoost: 1.0, gBoost: 1.0, bBoost: 1.02 },
 };
 
 export default function DisplayFilterPage() {
@@ -194,6 +203,10 @@ export default function DisplayFilterPage() {
     r_gamma: 1.0,
     g_gamma: 1.0,
     b_gamma: 1.0,
+    s_curve: 0.0,
+    r_boost: 1.0,
+    g_boost: 1.0,
+    b_boost: 1.0,
     mode: 0,
     is_active: false,
     icc_active: false,
@@ -591,6 +604,10 @@ export default function DisplayFilterPage() {
           r_gamma: s?.r_gamma ?? 1.0,
           g_gamma: s?.g_gamma ?? 1.0,
           b_gamma: s?.b_gamma ?? 1.0,
+          s_curve: s?.s_curve ?? 0.0,
+          r_boost: s?.r_boost ?? 1.0,
+          g_boost: s?.g_boost ?? 1.0,
+          b_boost: s?.b_boost ?? 1.0,
           mode: s?.mode ?? preset.mode,
           is_active: s?.is_active ?? settings.is_active,
           icc_active: s?.icc_active ?? false,
@@ -683,6 +700,10 @@ export default function DisplayFilterPage() {
             r_gamma: savedCustom.r_gamma ?? 1.0,
             g_gamma: savedCustom.g_gamma ?? 1.0,
             b_gamma: savedCustom.b_gamma ?? 1.0,
+            s_curve: 0.0,
+            r_boost: 1.0,
+            g_boost: 1.0,
+            b_boost: 1.0,
             mode: 0,
             is_active: prev.is_active,
             icc_active: false,
@@ -774,6 +795,10 @@ export default function DisplayFilterPage() {
           r_gamma: r_gamma,
           g_gamma: g_gamma,
           b_gamma: b_gamma,
+          s_curve: 0.0,
+          r_boost: 1.0,
+          g_boost: 1.0,
+          b_boost: 1.0,
           mode: 0,
           is_active: prev.is_active,
           icc_active: false,
@@ -896,6 +921,10 @@ export default function DisplayFilterPage() {
           r_gamma: preset.r_gamma,
           g_gamma: preset.g_gamma,
           b_gamma: preset.b_gamma,
+          s_curve: 0.0,
+          r_boost: 1.0,
+          g_boost: 1.0,
+          b_boost: 1.0,
           mode: 0,
           is_active: settings.is_active,
           icc_active: false,
@@ -964,21 +993,26 @@ export default function DisplayFilterPage() {
       // Apply the 去曝光Pro ICC as display baseline
       const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_去曝光Pro", isActive: settings.is_active });
       if (result.success) {
+        const rs = result.settings;
         setSettings(prev => ({
-          temperature: 6500,
-          brightness: 100,
-          contrast: 100,
-          saturation: 100,
-          r_gamma: 1.0,
-          g_gamma: 1.0,
-          b_gamma: 1.0,
+          temperature: rs?.temperature ?? 6500,
+          brightness: rs?.brightness ?? 100,
+          contrast: rs?.contrast ?? 100,
+          saturation: rs?.saturation ?? 100,
+          r_gamma: rs?.r_gamma ?? 1.0,
+          g_gamma: rs?.g_gamma ?? 1.0,
+          b_gamma: rs?.b_gamma ?? 1.0,
+          s_curve: rs?.s_curve ?? 0.0,
+          r_boost: rs?.r_boost ?? 1.0,
+          g_boost: rs?.g_boost ?? 1.0,
+          b_boost: rs?.b_boost ?? 1.0,
           mode: 0,
           is_active: prev.is_active,
-          icc_active: result.settings?.icc_active ?? false,
-          active_icc_id: result.settings?.active_icc_id ?? null,
-          preview_filter_icc: result.settings?.preview_filter_icc ?? null,
-          preview_tint_color_icc: result.settings?.preview_tint_color_icc ?? null,
-          preview_tint_opacity_icc: result.settings?.preview_tint_opacity_icc ?? null,
+          icc_active: rs?.icc_active ?? false,
+          active_icc_id: rs?.active_icc_id ?? null,
+          preview_filter_icc: rs?.preview_filter_icc ?? null,
+          preview_tint_color_icc: rs?.preview_tint_color_icc ?? null,
+          preview_tint_opacity_icc: rs?.preview_tint_opacity_icc ?? null,
         }));
         const normal = {
           temperature: 6500,
@@ -2417,8 +2451,7 @@ export default function DisplayFilterPage() {
             </Box>
           )}
 
-          {!activeIccId && (
-            <VStack spacing={1} align="stretch" flex={1} justify="center">
+          <VStack spacing={1} align="stretch" flex={1} justify="center">
               {activePresetId === "custom" ? (
                 <>
                   <SliderInputItem
@@ -2534,17 +2567,29 @@ export default function DisplayFilterPage() {
                       {presets.find(p => p.id === activePresetId)?.name || "Mode"}
                     </Text>
                     <Box fontSize="11px" color={subTextColor} lineHeight="1.6">
-                      <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>
-                      <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{currentModeParams.sCurve.toFixed(2)}</Text></Flex>
-                      <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(currentModeParams.rBoost * 100).toFixed(0)}%</Text></Flex>
-                      <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(currentModeParams.gBoost * 100).toFixed(0)}%</Text></Flex>
-                      <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(currentModeParams.bBoost * 100).toFixed(0)}%</Text></Flex>
+                      {activeIccId ? (
+                        // ICC 预设：显示从真实 ramp 反推的 gamma / S-Curve / RGB Boost
+                        <>
+                          <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{settings.r_gamma.toFixed(2)}</Text></Flex>
+                          <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{settings.s_curve.toFixed(2)}</Text></Flex>
+                          <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(settings.r_boost * 100).toFixed(0)}%</Text></Flex>
+                          <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(settings.g_boost * 100).toFixed(0)}%</Text></Flex>
+                          <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(settings.b_boost * 100).toFixed(0)}%</Text></Flex>
+                        </>
+                      ) : (
+                        <>
+                          <Flex justify="space-between"><Text>Gamma</Text><Text color={textColor}>{currentModeParams.gamma.toFixed(2)}</Text></Flex>
+                          <Flex justify="space-between"><Text>S-Curve</Text><Text color={textColor}>{currentModeParams.sCurve.toFixed(2)}</Text></Flex>
+                          <Flex justify="space-between"><Text>R Boost</Text><Text color={textColor}>{(currentModeParams.rBoost * 100).toFixed(0)}%</Text></Flex>
+                          <Flex justify="space-between"><Text>G Boost</Text><Text color={textColor}>{(currentModeParams.gBoost * 100).toFixed(0)}%</Text></Flex>
+                          <Flex justify="space-between"><Text>B Boost</Text><Text color={textColor}>{(currentModeParams.bBoost * 100).toFixed(0)}%</Text></Flex>
+                        </>
+                      )}
                     </Box>
                   </Box>
                 </>
               )}
             </VStack>
-          )}
         </VStack>
       </Flex>
 

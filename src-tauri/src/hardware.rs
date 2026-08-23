@@ -1224,11 +1224,19 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_disk = errors.clone();
     let disk_handle = thread::spawn(move || {
-        match wmi_query::wmi_query("SELECT Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID FROM Win32_DiskDrive") {
+        match wmi_query::wmi_query("SELECT Model, Size, InterfaceType, SerialNumber, FirmwareRevision, MediaType, BytesPerSector, Partitions, Status, PNPDeviceID, Index FROM Win32_DiskDrive") {
             Ok(results) => {
                 log::info!("获取到{}个硬盘信息", results.len());
+                // 卷 → 物理盘号映射，用于获取每个硬盘的准确分区容量
+                let volume_map = enumerate_volumes_by_disk();
                 results.into_iter().map(|row| {
-                    let size_gb = row.get("Size").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64 / (1024.0 * 1024.0 * 1024.0);
+                    let index = row.get("Index").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0);
+                    let partition_total_gb =
+                        volume_map.get(&index).map(|ps| ps.iter().map(|p| p.total_gb).sum());
+                    let size_gb = resolve_disk_size_gb(
+                        row.get("Size").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0),
+                        partition_total_gb,
+                    );
                     let media_type = row.get("MediaType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
                     let is_ssd = media_type.to_lowercase().contains("ssd") || media_type.to_lowercase().contains("solid state");
                     DiskDetailInfo {
@@ -1967,6 +1975,27 @@ fn enumerate_volumes_by_disk() -> std::collections::HashMap<u32, Vec<PartitionIn
     map
 }
 
+/// 合理硬盘容量上限（64 TB），超过视为异常（防止 WMI Size 虚高值如 800TB 展示）
+const MAX_REASONABLE_DISK_GB: f64 = 65536.0;
+
+/// 计算某物理盘的准确容量：
+/// 1) 优先用已挂载分区容量之和（GetDiskFreeSpaceExW，与资源管理器一致）；
+/// 2) 无分区信息时回退 WMI Size；
+/// 3) 对回退的 WMI 值做 64TB 上限钳制，明显异常返回 0。
+fn resolve_disk_size_gb(wmi_size_bytes: u64, partition_total_gb: Option<f64>) -> f64 {
+    if let Some(part) = partition_total_gb {
+        if part > 0.0 {
+            return part;
+        }
+    }
+    let wmi_gb = wmi_size_bytes as f64 / 1_073_741_824.0;
+    if wmi_gb > 0.0 && wmi_gb <= MAX_REASONABLE_DISK_GB {
+        wmi_gb
+    } else {
+        0.0
+    }
+}
+
 fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
     use crate::wmi_query::{self, v_str, v_u32, v_u64};
 
@@ -2024,7 +2053,7 @@ fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
         let index = row.get("Index").and_then(|v| v_u32(v)).unwrap_or(i as u32);
         let model = row.get("Model").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
         let media_type = row.get("MediaType").and_then(|v| v_str(v)).unwrap_or_default();
-        let size_gb = row.get("Size").and_then(|v| v_u64(v)).unwrap_or(0) as f64 / 1_073_741_824.0;
+        let wmi_size_gb = row.get("Size").and_then(|v| v_u64(v)).unwrap_or(0) as f64 / 1_073_741_824.0;
         let interface_type = row.get("InterfaceType").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
         let serial = row.get("SerialNumber").and_then(|v| v_str(v)).unwrap_or_default();
         let status = row.get("Status").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
@@ -2079,6 +2108,14 @@ fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
         let partition_count = partitions.len() as u32;
         let total_capacity_gb: f64 = partitions.iter().map(|p| p.total_gb).sum();
         let total_usage_gb: f64 = partitions.iter().map(|p| p.used_gb).sum();
+        // 容量优先取分区容量之和（准确，与资源管理器一致），回退 WMI Size 并做上限钳制
+        let size_gb = if total_capacity_gb > 0.0 {
+            total_capacity_gb
+        } else if wmi_size_gb > 0.0 && wmi_size_gb <= MAX_REASONABLE_DISK_GB {
+            wmi_size_gb
+        } else {
+            0.0
+        };
 
         let (is_gpt, is_boot) = part_meta.get(&index).copied().unwrap_or((false, false));
         let partition_style = if is_gpt {

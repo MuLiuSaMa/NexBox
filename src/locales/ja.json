@@ -32,43 +32,44 @@
     }
   },
   "sidebar": {
-        "home": "ホーム",
-        "tools": "ツール",
-        "hardware": "ハードウェア",
-        "optimization": "最適化",
-        "displayFilter": "フィルター",
-        "floatingNav": "フローティングナビ",
-        "crosshair": "クロスヘア",
-        "overlayPanel": "オーバーレイパネル",
-        "builtinTools": "内蔵ツール",
-        "deltaForce": "デルタフォース",
-        "music": "音楽",
-        "mood": "ムード",
-        "settings": "設定",
-        "gpuRename": "GPU名前変更",
-        "resolutionConverter": "解像度変換",
-        "dlssPreset": "デルタフォースDLSS設定",
-        "epicFree": "Epic 無料ゲーム",
+    "home": "ホーム",
+    "tools": "ツール",
+    "hardware": "ハードウェア",
+    "optimization": "最適化",
+    "displayFilter": "フィルター",
+    "floatingNav": "フローティングナビ",
+    "crosshair": "クロスヘア",
+    "overlayPanel": "オーバーレイパネル",
+    "builtinTools": "内蔵ツール",
+    "deltaForce": "デルタフォース",
+    "music": "音楽",
+    "mood": "ムード",
+    "settings": "設定",
+    "gpuRename": "GPU名前変更",
+    "resolutionConverter": "解像度変換",
+    "dlssPreset": "デルタフォースDLSS設定",
+    "epicFree": "Epic 無料ゲーム",
     "diskHealth": "ディスク健全性",
-"screenRecord": "画面録画",
+    "screenRecord": "画面録画",
     "audioEq": "EQチューニング",
     "custom": "カスタム",
     "runtimeRepair": "ランタイム修復",
     "vtxVirtualization": "VT-X 仮想化修復",
-    "hiddenFeatures": "Windows 隠し機能"
+    "hiddenFeatures": "Windows 隠し機能",
+    "downloadAccelerator": "ダウンロード"
   },
-"customPage": {
-"title": "カスタムページ",
-"addTool": "ツール追加",
-"emptyHint": "右上の追加ボタンをクリックして、よく使うツールを追加してください",
-"searchTools": "ツールを検索...",
-"borderRadius": "角の丸み",
-"clearAll": "すべて削除",
-"clearAllConfirm": "すべてのカードを削除しますか？",
-"editMode": "編集モード",
-"enterEdit": "レイアウト編集",
-"exitEdit": "編集終了"
-},
+  "customPage": {
+    "title": "カスタムページ",
+    "addTool": "ツール追加",
+    "emptyHint": "右上の追加ボタンをクリックして、よく使うツールを追加してください",
+    "searchTools": "ツールを検索...",
+    "borderRadius": "角の丸み",
+    "clearAll": "すべて削除",
+    "clearAllConfirm": "すべてのカードを削除しますか？",
+    "editMode": "編集モード",
+    "enterEdit": "レイアウト編集",
+    "exitEdit": "編集終了"
+  },
   "powerAdvanced": {
     "title": "プロセッサー詳細設定",
     "description": "CPUの性能・冷却・消費電力に関わる詳細な電源オプションを調整します",
@@ -403,17 +404,17 @@
       "warningText": "メモリ制限の設定には管理者権限が必要で、システムの再起動が必要です",
       "adminRequired": "管理者権限が必要",
       "options": {
-            "7.9gb": "7.9 GB",
-            "11.9gb": "11.9 GB",
-            "13.9gb": "13.9 GB",
-            "15.9gb": "15.9 GB"
-        },
-        "presetTab": "プリセット制限",
-        "customTab": "カスタム制限",
-        "customPlaceholder": "制限値を入力 (GB)",
-        "selectPreset": "プリセット制限値を選択",
-        "invalidInput": "有効なメモリ制限値を入力してください",
-        "outOfRange": "制限値は0.1から物理メモリの間である必要があります"
+        "7.9gb": "7.9 GB",
+        "11.9gb": "11.9 GB",
+        "13.9gb": "13.9 GB",
+        "15.9gb": "15.9 GB"
+      },
+      "presetTab": "プリセット制限",
+      "customTab": "カスタム制限",
+      "customPlaceholder": "制限値を入力 (GB)",
+      "selectPreset": "プリセット制限値を選択",
+      "invalidInput": "有効なメモリ制限値を入力してください",
+      "outOfRange": "制限値は0.1から物理メモリの間である必要があります"
     },
     "powerManagement": {
       "title": "電源管理",
@@ -459,96 +460,96 @@
       "laptopUnlockRestartHint": "解放設定を書き込みました。PCを再起動してから電源プランのインポートをやり直してください。"
     },
     "memoryCleanup": {
-        "title": "メモリクリーンアップ",
-        "description": "メモリの詳細を表示して空間を解放",
-        "physicalMemory": "物理メモリ",
-        "virtualMemory": "仮想メモリ",
-        "workingSet": "ワーキングセット",
-        "used": "使用中",
-        "available": "利用可能",
-        "total": "合計",
-        "cleanAll": "すべてクリーン",
-        "cleanStandby": "スタンバイメモリをクリーン",
-        "trimWorkingSet": "ワーキングセットを削減",
-        "loading": "読み込み中...",
-        "cleaning": "クリーニング中...",
-        "freedMemory": "{{size}} MB 解放しました",
-        "noMemoryFreed": "現在クリーンアップの必要はありません",
-        "error": "クリーニングに失敗しました"
+      "title": "メモリクリーンアップ",
+      "description": "メモリの詳細を表示して空間を解放",
+      "physicalMemory": "物理メモリ",
+      "virtualMemory": "仮想メモリ",
+      "workingSet": "ワーキングセット",
+      "used": "使用中",
+      "available": "利用可能",
+      "total": "合計",
+      "cleanAll": "すべてクリーン",
+      "cleanStandby": "スタンバイメモリをクリーン",
+      "trimWorkingSet": "ワーキングセットを削減",
+      "loading": "読み込み中...",
+      "cleaning": "クリーニング中...",
+      "freedMemory": "{{size}} MB 解放しました",
+      "noMemoryFreed": "現在クリーンアップの必要はありません",
+      "error": "クリーニングに失敗しました"
     },
     "aceOptimize": {
-        "title": "アンチチート最適化",
-        "description": "アンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放",
-        "deltaSection": {
-            "title": "デルタフォース最適化",
-            "subtitle": "デルタフォースのゲームパフォーマンスを向上"
-        },
-        "deltaBoost": {
-            "title": "プロセス優先度ブースト",
-            "description": "DeltaForceClient-Win64-Shipping.exe の優先度を「リアルタイム」に設定し、CPUリソースを優先的に割り当ててゲームをよりスムーズに",
-            "affinityTitle": "コア親和性最適化",
-            "affinityDescription": "デルタフォースプロセスをCPU0以外のすべてのコアに割り当て、マルチコアパフォーマンスを最大化しつつ、コア0をシステム用に確保",
-            "success": "デルタフォースの優先度がリアルタイムに向上しました",
-            "notRunning": "デルタフォースは実行されていません",
-            "affinitySuccess": "デルタフォースのコア割り当てを最適化しました"
-        },
-        "aceSection": {
-            "title": "ACEアンチチート最適化",
-            "subtitle": "アンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放"
-        },
-        "aceLimit": {
-            "title": "プロセス優先度制限",
-            "description": "ACE-Tray、SGuard64、SGuardSvc64の優先度を「低」に下げ、CPU競合を削減",
-            "affinityTitle": "コア親和性制限",
-            "affinityDescription": "ACEアンチチートプロセスをシングルコア（CPU0）のみに制限し、ゲームの重要なCPUリソースを占有しないようにする",
-            "success": "{{count}} 個のACEプロセスの優先度を制限しました",
-            "notRunning": "実行中のACEプロセスが見つかりません",
-            "affinitySuccess": "{{count}} 個のACEプロセスをシングルコアに制限しました"
-        },
-        "aceEfficiency": {
-            "title": "Windows効率モード",
-            "description": "ACEプロセスにタスクマネージャー形式の効率モードを有効化：優先度をIdleに設定し、電源スロットリング（EcoQoS）を有効にしてバックグラウンドリソース使用を大幅に削減"
-        },
-        "optimizeAll": {
-            "button": "一括最適化",
-            "optimizing": "最適化中...",
-            "title": "すべてを一度に最適化",
-            "description": "デルタフォースの優先度ブーストとACEの優先度/コア制限を同時に実行",
-            "success": "すべての最適化が完了しました",
-            "partial": "一部の最適化が完了しました。詳細を確認してください"
-        },
-        "aceRegistry": {
-            "title": "レジストリ強制制限",
-            "description": "システムのIFEOレジストリでDelta ForceとSGuardプロセスのCPU/I/O優先度を強制的に制限（プロセス起動時に即適用、アンチチートによる変更不可；プロセス再起動後に有効、リスクあり）",
-            "badge": "リスクの可能性",
-            "success": "レジストリ強制制限を適用しました",
-            "restored": "レジストリ強制制限を復元しました"
-        },
-        "autoDetect": {
-            "title": "ACEプロセスの自動検出と最適化",
-            "description": "バックグラウンドで継続的に監視 - ACE-Tray/SGuardプロセス検出時に自動的に優先度とコア親和性を制限（5秒ごとにチェック）",
-            "status": {
-                "running": "自動検出実行中",
-                "stopped": "自動検出停止中"
-            },
-            "lastCheck": "前回チェック",
-            "never": "チェックされたことなし",
-            "optimizing": "{{count}} 個のプロセスを最適化中",
-            "enabled": "自動検出が有効になりました",
-            "disabled": "自動検出が無効になりました"
-        },
+      "title": "アンチチート最適化",
+      "description": "アンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放",
+      "deltaSection": {
+        "title": "デルタフォース最適化",
+        "subtitle": "デルタフォースのゲームパフォーマンスを向上"
+      },
+      "deltaBoost": {
+        "title": "プロセス優先度ブースト",
+        "description": "DeltaForceClient-Win64-Shipping.exe の優先度を「リアルタイム」に設定し、CPUリソースを優先的に割り当ててゲームをよりスムーズに",
+        "affinityTitle": "コア親和性最適化",
+        "affinityDescription": "デルタフォースプロセスをCPU0以外のすべてのコアに割り当て、マルチコアパフォーマンスを最大化しつつ、コア0をシステム用に確保",
+        "success": "デルタフォースの優先度がリアルタイムに向上しました",
+        "notRunning": "デルタフォースは実行されていません",
+        "affinitySuccess": "デルタフォースのコア割り当てを最適化しました"
+      },
+      "aceSection": {
+        "title": "ACEアンチチート最適化",
+        "subtitle": "アンチチートプロセスのリソース使用を制限し、ゲームにより多くのパフォーマンスを解放"
+      },
+      "aceLimit": {
+        "title": "プロセス優先度制限",
+        "description": "ACE-Tray、SGuard64、SGuardSvc64の優先度を「低」に下げ、CPU競合を削減",
+        "affinityTitle": "コア親和性制限",
+        "affinityDescription": "ACEアンチチートプロセスをシングルコア（CPU0）のみに制限し、ゲームの重要なCPUリソースを占有しないようにする",
+        "success": "{{count}} 個のACEプロセスの優先度を制限しました",
+        "notRunning": "実行中のACEプロセスが見つかりません",
+        "affinitySuccess": "{{count}} 個のACEプロセスをシングルコアに制限しました"
+      },
+      "aceEfficiency": {
+        "title": "Windows効率モード",
+        "description": "ACEプロセスにタスクマネージャー形式の効率モードを有効化：優先度をIdleに設定し、電源スロットリング（EcoQoS）を有効にしてバックグラウンドリソース使用を大幅に削減"
+      },
+      "optimizeAll": {
+        "button": "一括最適化",
+        "optimizing": "最適化中...",
+        "title": "すべてを一度に最適化",
+        "description": "デルタフォースの優先度ブーストとACEの優先度/コア制限を同時に実行",
+        "success": "すべての最適化が完了しました",
+        "partial": "一部の最適化が完了しました。詳細を確認してください"
+      },
+      "aceRegistry": {
+        "title": "レジストリ強制制限",
+        "description": "システムのIFEOレジストリでDelta ForceとSGuardプロセスのCPU/I/O優先度を強制的に制限（プロセス起動時に即適用、アンチチートによる変更不可；プロセス再起動後に有効、リスクあり）",
+        "badge": "リスクの可能性",
+        "success": "レジストリ強制制限を適用しました",
+        "restored": "レジストリ強制制限を復元しました"
+      },
+      "autoDetect": {
+        "title": "ACEプロセスの自動検出と最適化",
+        "description": "バックグラウンドで継続的に監視 - ACE-Tray/SGuardプロセス検出時に自動的に優先度とコア親和性を制限（5秒ごとにチェック）",
         "status": {
-            "optimized": "最適化済み",
-            "notRunning": "実行中ではありません",
-            "notOptimized": "最適化待ち",
-            "processRunning": "プロセス実行中",
-            "processNotRunning": "プロセス未実行",
-            "needsAdmin": "管理者権限が必要"
+          "running": "自動検出実行中",
+          "stopped": "自動検出停止中"
         },
-        "apply": "適用",
-        "applied": "適用済み",
-        "restore": "復元",
-        "error": "最適化に失敗しました"
+        "lastCheck": "前回チェック",
+        "never": "チェックされたことなし",
+        "optimizing": "{{count}} 個のプロセスを最適化中",
+        "enabled": "自動検出が有効になりました",
+        "disabled": "自動検出が無効になりました"
+      },
+      "status": {
+        "optimized": "最適化済み",
+        "notRunning": "実行中ではありません",
+        "notOptimized": "最適化待ち",
+        "processRunning": "プロセス実行中",
+        "processNotRunning": "プロセス未実行",
+        "needsAdmin": "管理者権限が必要"
+      },
+      "apply": "適用",
+      "applied": "適用済み",
+      "restore": "復元",
+      "error": "最適化に失敗しました"
     },
     "gameProcessOptimize": {
       "title": "ゲームプロセス最適化",
@@ -937,7 +938,7 @@
     "gameFilterSupportedTitle": "対応しているゲーム",
     "gameFilterError": "操作に失敗しました"
   },
-"floatingNav": {
+  "floatingNav": {
     "title": "フローティングナビゲーションボックス",
     "enable": "フローティングボックスを有効化",
     "settings": "設定",
@@ -1057,17 +1058,50 @@
     "dlssNote": "NVIDIA Profile Inspectorが必要です。変更を有効にするにはゲームを再起動してください",
     "back": "戻る",
     "dlssModels": {
-      "A": { "name": "モデルA", "description": "初期モデル" },
-      "B": { "name": "モデルB", "description": "初期モデル" },
-      "C": { "name": "モデルC", "description": "初期モデル" },
-      "D": { "name": "モデルD", "description": "安定モデル" },
-      "E": { "name": "モデルE", "description": "実験モデル" },
-      "F": { "name": "モデルF", "description": "改善モデル" },
-      "G": { "name": "モデルG", "description": "改善モデル" },
-      "J": { "name": "モデルJ", "description": "新しいモデル、品質優先" },
-      "K": { "name": "モデルK", "description": "推奨モデル、ほとんどのDLSSモード向け" },
-      "L": { "name": "モデルL", "description": "Ultra Performanceモード向けに最適化" },
-      "M": { "name": "モデルM", "description": "Performanceモード向けに最適化" }
+      "A": {
+        "name": "モデルA",
+        "description": "初期モデル"
+      },
+      "B": {
+        "name": "モデルB",
+        "description": "初期モデル"
+      },
+      "C": {
+        "name": "モデルC",
+        "description": "初期モデル"
+      },
+      "D": {
+        "name": "モデルD",
+        "description": "安定モデル"
+      },
+      "E": {
+        "name": "モデルE",
+        "description": "実験モデル"
+      },
+      "F": {
+        "name": "モデルF",
+        "description": "改善モデル"
+      },
+      "G": {
+        "name": "モデルG",
+        "description": "改善モデル"
+      },
+      "J": {
+        "name": "モデルJ",
+        "description": "新しいモデル、品質優先"
+      },
+      "K": {
+        "name": "モデルK",
+        "description": "推奨モデル、ほとんどのDLSSモード向け"
+      },
+      "L": {
+        "name": "モデルL",
+        "description": "Ultra Performanceモード向けに最適化"
+      },
+      "M": {
+        "name": "モデルM",
+        "description": "Performanceモード向けに最適化"
+      }
     },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
@@ -1207,11 +1241,12 @@
     "shaderCacheDesc": "NVIDIA/AMDのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "dlssPresetDesc": "DLSSモデルプリセットを切り替えてゲームグラフィックを最適化",
     "diskHealthDesc": "ディスクの健全性とSMART情報を確認",
-"screenRecordDesc": "高性能画面録画（ハードウェアエンコード）",
+    "screenRecordDesc": "高性能画面録画（ハードウェアエンコード）",
     "audioEqDesc": "システムレベルのオーディオイコライザー調整",
     "runtimeRepairDesc": "不足している VC++ / .NET / DirectX ランタイムを検出・修復",
     "vtxVirtualizationDesc": "メモリ整合性とHyper-Vを無効/復元して仮想化ポップアップを修正",
-    "hiddenFeaturesDesc": "Windows の隠し A/B 実験機能フラグの確認・有効化・無効化"
+    "hiddenFeaturesDesc": "Windows の隠し A/B 実験機能フラグの確認・有効化・無効化",
+    "downloadAcceleratorDesc": "マルチスレッド分割ダウンロードで帯域を最大限に活用"
   },
   "vtxVirtualization": {
     "title": "VT-X 仮想化修復",
@@ -1297,7 +1332,6 @@
     "namedOnlyHint": "名称のないエントリは Windows 内部の servicing 構成で、辞書に登録されておらず、通常は変更不要です。オフにするとすべて表示されます",
     "numbersExplain": "名称付きのエントリはコミュニティの機能辞書由来です。数字のみで表示される機能には公開名称がなく、Microsoft はその意味を公開していません。上のスイッチで全表示に切り替えるか、名称で 17,000 以上の既知機能を検索できます。"
   },
-
   "gameProcessOptimize": {
     "title": "ゲームプロセス最適化",
     "subtitle": "ゲーム単位でプロセス最適化とCPUコア割り当てを管理。プロセス自動最適化とコア自動最適化は個別に有効化可能",
@@ -1640,16 +1674,16 @@
     "vendorTitle": "GPUベンダー",
     "vendorSubtitle": "ベンダーごとにクリーンアップ項目を整理し、デフォルトでNVIDIAを選択します。",
     "nvidia": {
-        "name": "NVIDIA",
-        "description": "NVIDIAの公式パスに従ってDXCache、GLCache、NV_Cacheをクリーンアップします。",
-        "selected": "選択済み",
-        "selectable": "選択可能"
+      "name": "NVIDIA",
+      "description": "NVIDIAの公式パスに従ってDXCache、GLCache、NV_Cacheをクリーンアップします。",
+      "selected": "選択済み",
+      "selectable": "選択可能"
     },
     "amd": {
-        "name": "AMD",
-        "description": "AMD Software Reset Shader Cacheに対応するユーザーレベルのキャッシュディレクトリをクリーンアップします。",
-        "selected": "選択済み",
-        "selectable": "クリックして選択"
+      "name": "AMD",
+      "description": "AMD Software Reset Shader Cacheに対応するユーザーレベルのキャッシュディレクトリをクリーンアップします。",
+      "selected": "選択済み",
+      "selectable": "クリックして選択"
     },
     "detected": "検出済み",
     "notDetected": "未検出",
@@ -1658,11 +1692,11 @@
     "cleaning": "クリーニング中...",
     "scanButton": "再スキャン",
     "officialTip": {
-        "title": "NVIDIA公式推奨",
-        "description": "このページでクリーンアップを実行する前に、以下の手順に従うことをお勧めします。",
-        "step1": "1. NVIDIAコントロールパネルを開き、3D設定でシェーダーキャッシュサイズを「無効」に設定します。",
-        "step2": "2. コンピュータを再起動してからこのページに戻り、「NVIDIAをクリーン」を実行します。",
-        "step3": "3. クリーンアップが完了したら、シェーダーキャッシュを再度有効にします。サイズはCドライブの容量に依存します。"
+      "title": "NVIDIA公式推奨",
+      "description": "このページでクリーンアップを実行する前に、以下の手順に従うことをお勧めします。",
+      "step1": "1. NVIDIAコントロールパネルを開き、3D設定でシェーダーキャッシュサイズを「無効」に設定します。",
+      "step2": "2. コンピュータを再起動してからこのページに戻り、「NVIDIAをクリーン」を実行します。",
+      "step3": "3. クリーンアップが完了したら、シェーダーキャッシュを再度有効にします。サイズはCドライブの容量に依存します。"
     },
     "cleanSuccess": "クリーンアップ完了、{{size}} 解放しました",
     "cleanError": "クリーニングに失敗しました",
@@ -1810,15 +1844,14 @@
       "themeColorDesc": "ナビゲーションバー、ボタン、メニューなどの要素のテーマカラーを設定",
       "presets": "プリセットカラー",
       "customColor": "カスタムカラー",
-        "advancedSettings": "詳細設定",
-        "hoverOpacity": "ホバー時の不透明度",
-        "activeOpacity": "アクティブ時の不透明度",
-        "borderOpacity": "ボーダーの不透明度",
-        "backgroundBlurLabel": "背景ぼかし",
-        "backgroundBlurHint": "すべての背景モードに適用（プリセット / 画像 / 動画）",
-        "resetToDefault": "デフォルトにリセット",
-        "uploadVideo": "動画をアップロード",
-        "presetColors": {
+      "advancedSettings": "詳細設定",
+      "hoverOpacity": "ホバー時の不透明度",
+      "activeOpacity": "アクティブ時の不透明度",
+      "borderOpacity": "ボーダーの不透明度",
+      "backgroundBlurLabel": "背景ぼかし",
+      "backgroundBlurHint": "すべての背景モードに適用（プリセット / 画像 / 動画）",
+      "resetToDefault": "デフォルトにリセット",
+      "presetColors": {
         "cyan": "シアン",
         "blue": "ブルー",
         "purple": "パープル",
@@ -2221,6 +2254,37 @@
       "note1": "• 管理者権限が必要な項目はクリーンアップ時に自動的に権限を要求します",
       "note2": "• 使用中のファイルは自動的にスキップされ、システムに影響しません"
     }
+  },
+  "downloadAccel": {
+    "urlLabel": "ダウンロードURL",
+    "fileNamePlaceholder": "ファイル名（任意、空欄で自動判定）",
+    "segmentsLabel": "最大接続数",
+    "segmentsAuto": "自動",
+    "start": "開始",
+    "pause": "一時停止",
+    "resume": "再開",
+    "cancel": "タスクを削除",
+    "segmentsDone": "セグメント完了",
+    "status": {
+      "downloading": "ダウンロード中",
+      "completed": "完了",
+      "error": "失敗",
+      "preparing": "準備中",
+      "paused": "一時停止中"
+    },
+    "resetLearned": "学習データをリセット",
+    "resetLearnedTip": "ドメインごとに学習した最適接続数のキャッシュをクリアします（サーバー挙動が変わった後に使用）",
+    "resetLearnedDone": "リセット完了",
+    "speedLimitLabel": "速度制限",
+    "speedUnlimited": "無制限",
+    "openFile": "ファイルを開く",
+    "openFolder": "フォルダを表示",
+    "activeConnections": "アクティブ接続",
+    "eta": "残り",
+    "expandAll": "すべて展開",
+    "collapseAll": "折りたたむ",
+    "islandDownloading": "ダウンロード中",
+    "islandComplete": "ダウンロード完了",
+    "islandFailed": "ダウンロード失敗"
   }
 }
-

@@ -31,7 +31,21 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Search, Heart, Copy, Check, MapPin, Plus, ChevronLeft, ChevronRight, Globe, Flag, Map, Image } from "lucide-react";
+import {
+  Search,
+  Heart,
+  Copy,
+  Check,
+  MapPin,
+  Plus,
+  ChevronLeft,
+  ChevronRight,
+  Globe,
+  Flag,
+  Map,
+  Image,
+  Dices,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -39,7 +53,6 @@ import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
-
 
 // ── Types ──
 interface DeltaPasswordItem {
@@ -167,17 +180,23 @@ function PasswordCard() {
       {isLoading ? (
         <HStack justify="center" py={4}>
           <Spinner size="sm" color={primaryColor} />
-          <Text color={subTextColor} fontSize="sm">{t("deltaForce.loading")}</Text>
+          <Text color={subTextColor} fontSize="sm">
+            {t("deltaForce.loading")}
+          </Text>
         </HStack>
       ) : passwords.length === 0 ? (
-        <Text color={subTextColor} fontSize="sm">{t("deltaForce.noPassword")}</Text>
+        <Text color={subTextColor} fontSize="sm">
+          {t("deltaForce.noPassword")}
+        </Text>
       ) : (
         <HStack spacing={3} align="stretch" wrap="wrap">
           {passwords.map((item, index) => {
             const passwordCard = (
               <VStack spacing={2} align="center">
                 <MapPin size={18} color={primaryColor} />
-                <Text color={subTextColor} fontSize="sm" fontWeight="medium">{item.name}</Text>
+                <Text color={subTextColor} fontSize="sm" fontWeight="medium">
+                  {item.name}
+                </Text>
                 <Text color={primaryColor} fontWeight="bold" fontSize="xl" letterSpacing="wider">
                   {item.password}
                 </Text>
@@ -191,7 +210,13 @@ function PasswordCard() {
 
             if (liquidGlassEnabled) {
               return (
-                <Box key={index} flex="1" minW="140px" cursor="pointer" onClick={() => copyToClipboard(item.password, index)}>
+                <Box
+                  key={index}
+                  flex="1"
+                  minW="140px"
+                  cursor="pointer"
+                  onClick={() => copyToClipboard(item.password, index)}
+                >
                   <LiquidGlassCard p={4}>{passwordCard}</LiquidGlassCard>
                 </Box>
               );
@@ -223,7 +248,13 @@ function PasswordCard() {
     return <LiquidGlassCard p={5}>{content}</LiquidGlassCard>;
   }
   return (
-    <Box bg={useColorModeValue("white", "#111111")} borderRadius="xl" p={5} border="1px solid" borderColor={useColorModeValue("gray.200", "#333333")}>
+    <Box
+      bg={useColorModeValue("white", "#111111")}
+      borderRadius="xl"
+      p={5}
+      border="1px solid"
+      borderColor={useColorModeValue("gray.200", "#333333")}
+    >
       {content}
     </Box>
   );
@@ -276,6 +307,60 @@ function MoreGunCodesCard() {
       transition="background-color 0.2s"
       as={Link}
       to="/delta-force/other-platforms"
+      style={{ textDecoration: "none" }}
+    >
+      {content}
+    </Box>
+  );
+}
+
+// ── RouletteCard ──
+function RouletteCard() {
+  const { t } = useTranslation();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
+  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardHoverBg = useColorModeValue("gray.100", "#222222");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
+  const textColor = useColorModeValue("#000000", "#ffffff");
+
+  const content = (
+    <VStack align="center" spacing={3} py={2} justify="center" h="100%">
+      <Dices size={28} color={primaryColor} />
+      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
+        {t("deltaForce.roulette.title", "随机装备")}
+      </Text>
+      <Text color={subTextColor} fontSize="xs" textAlign="center">
+        {t("deltaForce.roulette.desc", "为下次任务随机生成完整装备配置")}
+      </Text>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <Box flex={1} as={Link} to="/delta-force/random-equipment" style={{ textDecoration: "none" }}>
+        <LiquidGlassCard p={4} h="100%" cursor="pointer">
+          {content}
+        </LiquidGlassCard>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      flex={1}
+      bg={cardBg}
+      borderRadius="xl"
+      p={4}
+      border="1px solid"
+      borderColor={borderColor}
+      cursor="pointer"
+      _hover={{ bg: cardHoverBg }}
+      transition="background-color 0.2s"
+      as={Link}
+      to="/delta-force/random-equipment"
       style={{ textDecoration: "none" }}
     >
       {content}
@@ -472,7 +557,13 @@ const LoadoutCard = memo(function LoadoutCard({
           <Text fontWeight="bold" fontSize="md" color={textColor} noOfLines={1}>
             {item.weapon_name}
           </Text>
-          <Badge variant="subtle" bg={`${primaryColor}20`} color={primaryColor} fontSize="xs" flexShrink={0}>
+          <Badge
+            variant="subtle"
+            bg={`${primaryColor}20`}
+            color={primaryColor}
+            fontSize="xs"
+            flexShrink={0}
+          >
             {item.category_name}
           </Badge>
         </HStack>
@@ -706,30 +797,31 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
     try {
       const result = await apiPost<{ id: number; likes: number }>(`/api/loadouts/${id}/like`);
       setLikedIds((prev) => new Set(prev).add(id));
-      setLoadouts((prev) =>
-        prev.map((l) => (l.id === id ? { ...l, likes: result.likes } : l))
-      );
+      setLoadouts((prev) => prev.map((l) => (l.id === id ? { ...l, likes: result.likes } : l)));
     } catch {
       // silent
     }
   }, []);
 
   // ── Report ──
-  const handleReport = useCallback(async (id: number) => {
-    if (reportedIds.has(id)) return;
-    try {
-      await apiPost(`/api/loadouts/${id}/report`);
-      setReportedIds((prev) => new Set(prev).add(id));
-      toast({
-        title: t("deltaForce.reported", "已报告管理员"),
-        status: "success",
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch {
-      // silent
-    }
-  }, [reportedIds, toast, t]);
+  const handleReport = useCallback(
+    async (id: number) => {
+      if (reportedIds.has(id)) return;
+      try {
+        await apiPost(`/api/loadouts/${id}/report`);
+        setReportedIds((prev) => new Set(prev).add(id));
+        toast({
+          title: t("deltaForce.reported", "已报告管理员"),
+          status: "success",
+          duration: 2000,
+          isClosable: true,
+        });
+      } catch {
+        // silent
+      }
+    },
+    [reportedIds, toast, t],
+  );
 
   // ── Upload state ──
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -769,11 +861,14 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
     setIsUploadOpen(true);
   }, [categories, loadUploadWeapons]);
 
-  const handleUploadCategoryChange = useCallback((catId: string) => {
-    setUploadCategory(catId);
-    setUploadWeapon("");
-    loadUploadWeapons(catId);
-  }, [loadUploadWeapons]);
+  const handleUploadCategoryChange = useCallback(
+    (catId: string) => {
+      setUploadCategory(catId);
+      setUploadWeapon("");
+      loadUploadWeapons(catId);
+    },
+    [loadUploadWeapons],
+  );
 
   const handleUploadSubmit = useCallback(async () => {
     setUploadError("");
@@ -822,29 +917,10 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   }, [uploadCategory, uploadWeapon, uploadCode, uploadCost, uploadDesc, uploadAuthor, toast, t]);
 
   // ── Memoized category pills ──
-  const categoryPills = useMemo(() => (
-    <Wrap spacing={2} mb={1}>
-      <WrapItem>
-        <Box
-          as="button"
-          px={4}
-          py={2}
-          borderRadius="full"
-          fontSize="sm"
-          fontWeight="medium"
-          bg={selectedCategoryId === "all" ? primaryColor : "transparent"}
-          color={selectedCategoryId === "all" ? "white" : subTextColor}
-          border="1px solid"
-          borderColor={selectedCategoryId === "all" ? primaryColor : borderColor}
-          _hover={{ bg: selectedCategoryId === "all" ? primaryColor : cardHoverBg }}
-          transition="all 0.15s"
-          onClick={() => { setSelectedCategoryId("all"); setPage(1); }}
-        >
-          {t("deltaForce.allCategories")}
-        </Box>
-      </WrapItem>
-      {categories.map((cat) => (
-        <WrapItem key={cat.id}>
+  const categoryPills = useMemo(
+    () => (
+      <Wrap spacing={2} mb={1}>
+        <WrapItem>
           <Box
             as="button"
             px={4}
@@ -852,21 +928,73 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
             borderRadius="full"
             fontSize="sm"
             fontWeight="medium"
-            bg={selectedCategoryId === cat.id && selectedWeapon === "" ? primaryColor : "transparent"}
-            color={selectedCategoryId === cat.id && selectedWeapon === "" ? "white" : subTextColor}
+            bg={selectedCategoryId === "all" ? primaryColor : "transparent"}
+            color={selectedCategoryId === "all" ? "white" : subTextColor}
             border="1px solid"
-            borderColor={selectedCategoryId === cat.id && selectedWeapon === "" ? primaryColor : borderColor}
-            _hover={{ bg: selectedCategoryId === cat.id && selectedWeapon === "" ? primaryColor : cardHoverBg }}
+            borderColor={selectedCategoryId === "all" ? primaryColor : borderColor}
+            _hover={{ bg: selectedCategoryId === "all" ? primaryColor : cardHoverBg }}
             transition="all 0.15s"
-            onClick={() => { setSelectedCategoryId(cat.id); setPage(1); }}
+            onClick={() => {
+              setSelectedCategoryId("all");
+              setPage(1);
+            }}
           >
-            {cat.name}
-            <Text as="span" ml={1} fontSize="xs" opacity={0.7}>{cat.loadout_count}</Text>
+            {t("deltaForce.allCategories")}
           </Box>
         </WrapItem>
-      ))}
-    </Wrap>
-  ), [categories, selectedCategoryId, selectedWeapon, primaryColor, subTextColor, borderColor, cardHoverBg, t]);
+        {categories.map((cat) => (
+          <WrapItem key={cat.id}>
+            <Box
+              as="button"
+              px={4}
+              py={2}
+              borderRadius="full"
+              fontSize="sm"
+              fontWeight="medium"
+              bg={
+                selectedCategoryId === cat.id && selectedWeapon === ""
+                  ? primaryColor
+                  : "transparent"
+              }
+              color={
+                selectedCategoryId === cat.id && selectedWeapon === "" ? "white" : subTextColor
+              }
+              border="1px solid"
+              borderColor={
+                selectedCategoryId === cat.id && selectedWeapon === "" ? primaryColor : borderColor
+              }
+              _hover={{
+                bg:
+                  selectedCategoryId === cat.id && selectedWeapon === ""
+                    ? primaryColor
+                    : cardHoverBg,
+              }}
+              transition="all 0.15s"
+              onClick={() => {
+                setSelectedCategoryId(cat.id);
+                setPage(1);
+              }}
+            >
+              {cat.name}
+              <Text as="span" ml={1} fontSize="xs" opacity={0.7}>
+                {cat.loadout_count}
+              </Text>
+            </Box>
+          </WrapItem>
+        ))}
+      </Wrap>
+    ),
+    [
+      categories,
+      selectedCategoryId,
+      selectedWeapon,
+      primaryColor,
+      subTextColor,
+      borderColor,
+      cardHoverBg,
+      t,
+    ],
+  );
 
   const showEmpty = !isInitialLoading && loadouts.length === 0;
   const showCards = loadouts.length > 0;
@@ -875,8 +1003,12 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
     <>
       <HStack justify="space-between" align="center" mb={1}>
         <HStack spacing={3}>
-          <Heading size="md" color={textColor}>{t("deltaForce.weaponCodes")}</Heading>
-          <Text fontSize="sm" color={subTextColor}>{total} 条</Text>
+          <Heading size="md" color={textColor}>
+            {t("deltaForce.weaponCodes")}
+          </Heading>
+          <Text fontSize="sm" color={subTextColor}>
+            {total} 条
+          </Text>
         </HStack>
         <LiquidGlassButton size="sm" leftIcon={<Plus size={16} />} onClick={openUpload}>
           {t("deltaForce.upload")}
@@ -887,27 +1019,35 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
 
       <HStack spacing={3} wrap="wrap">
         <InputGroup maxW="280px" size="sm">
-          <InputLeftElement><Search size={14} /></InputLeftElement>
-          <Input placeholder={t("deltaForce.searchPlaceholder")} value={searchQuery} onChange={handleSearchChange} borderRadius="full" />
+          <InputLeftElement>
+            <Search size={14} />
+          </InputLeftElement>
+          <Input
+            placeholder={t("deltaForce.searchPlaceholder")}
+            value={searchQuery}
+            onChange={handleSearchChange}
+            borderRadius="full"
+          />
         </InputGroup>
 
         {selectedCategoryId !== "all" && weaponsMap[selectedCategoryId]?.length > 0 && (
           <CustomSelect
             value={selectedWeapon}
-            onChange={(val) => { setSelectedWeapon(val); setPage(1); }}
+            onChange={(val) => {
+              setSelectedWeapon(val);
+              setPage(1);
+            }}
             options={[
               { value: "", label: t("deltaForce.allWeapons") },
               ...weaponsMap[selectedCategoryId].map((w) => ({
                 value: w.weapon_name,
-                label: `${w.weapon_name} (${w.count})`
-              }))
+                label: `${w.weapon_name} (${w.count})`,
+              })),
             ]}
             width="180px"
             placeholder={t("deltaForce.allWeapons")}
           />
         )}
-
-
       </HStack>
 
       <Divider my={2} />
@@ -918,8 +1058,12 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
         </HStack>
       ) : showEmpty ? (
         <VStack py={10} spacing={2}>
-          <Text color={subTextColor} fontSize="sm">{t("deltaForce.noLoadouts")}</Text>
-          <Text color={subTextColor} fontSize="xs">{t("deltaForce.noLoadoutsHint")}</Text>
+          <Text color={subTextColor} fontSize="sm">
+            {t("deltaForce.noLoadouts")}
+          </Text>
+          <Text color={subTextColor} fontSize="xs">
+            {t("deltaForce.noLoadoutsHint")}
+          </Text>
         </VStack>
       ) : null}
 
@@ -949,22 +1093,46 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
 
       {showCards && totalPages > 1 && (
         <HStack justify="center" spacing={4} pt={4}>
-          <Button size="sm" variant="outline" leftIcon={<ChevronLeft size={14} />} isDisabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+          <Button
+            size="sm"
+            variant="outline"
+            leftIcon={<ChevronLeft size={14} />}
+            isDisabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
             {t("deltaForce.previousPage")}
           </Button>
-          <Text fontSize="sm" color={subTextColor}>{t("deltaForce.pageInfo", { page, totalPages })}</Text>
-          <Button size="sm" variant="outline" rightIcon={<ChevronRight size={14} />} isDisabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+          <Text fontSize="sm" color={subTextColor}>
+            {t("deltaForce.pageInfo", { page, totalPages })}
+          </Text>
+          <Button
+            size="sm"
+            variant="outline"
+            rightIcon={<ChevronRight size={14} />}
+            isDisabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
             {t("deltaForce.nextPage")}
           </Button>
         </HStack>
       )}
 
       <Modal isOpen={isUploadOpen} onClose={() => setIsUploadOpen(false)} isCentered size="md">
-        <ModalOverlay backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : "blur(4px)"} />
+        <ModalOverlay
+          backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : "blur(4px)"}
+        />
         <ModalContent
-          bg={liquidGlassEnabled ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(0,0,0,0.25)") : useColorModeValue("white", "#1a1a1a")}
+          bg={
+            liquidGlassEnabled
+              ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(0,0,0,0.25)")
+              : useColorModeValue("white", "#1a1a1a")
+          }
           backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : undefined}
-          borderColor={liquidGlassEnabled ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.08)") : undefined}
+          borderColor={
+            liquidGlassEnabled
+              ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.08)")
+              : undefined
+          }
           color={useColorModeValue("#000", "#fff")}
         >
           <ModalHeader>{t("deltaForce.upload")}</ModalHeader>
@@ -989,8 +1157,8 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
                     { value: "", label: t("deltaForce.selectWeapon") },
                     ...uploadWeapons.map((w) => ({
                       value: w.weapon_name,
-                      label: `${w.weapon_name} (${w.count})`
-                    }))
+                      label: `${w.weapon_name} (${w.count})`,
+                    })),
                   ]}
                   width="100%"
                   placeholder={t("deltaForce.selectWeapon")}
@@ -998,26 +1166,64 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
               </FormControl>
               <FormControl>
                 <FormLabel fontSize="sm">{t("deltaForce.code")}</FormLabel>
-                <Textarea value={uploadCode} onChange={(e) => setUploadCode(e.target.value)} placeholder={t("deltaForce.codePlaceholder")} rows={3} maxLength={500} _placeholder={{ color: useColorModeValue("#000", "#ccc") }} />
+                <Textarea
+                  value={uploadCode}
+                  onChange={(e) => setUploadCode(e.target.value)}
+                  placeholder={t("deltaForce.codePlaceholder")}
+                  rows={3}
+                  maxLength={500}
+                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                />
               </FormControl>
               <FormControl>
                 <FormLabel fontSize="sm">{t("deltaForce.description")}</FormLabel>
-                <Input value={uploadDesc} onChange={(e) => setUploadDesc(e.target.value)} placeholder={t("deltaForce.descriptionPlaceholder")} maxLength={200} _placeholder={{ color: useColorModeValue("#000", "#ccc") }} />
+                <Input
+                  value={uploadDesc}
+                  onChange={(e) => setUploadDesc(e.target.value)}
+                  placeholder={t("deltaForce.descriptionPlaceholder")}
+                  maxLength={200}
+                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                />
               </FormControl>
               <FormControl>
                 <FormLabel fontSize="sm">{t("deltaForce.cost")}</FormLabel>
-                <Input type="number" value={uploadCost} onChange={(e) => setUploadCost(e.target.value)} placeholder="0" min={0} _placeholder={{ color: useColorModeValue("#000", "#ccc") }} />
+                <Input
+                  type="number"
+                  value={uploadCost}
+                  onChange={(e) => setUploadCost(e.target.value)}
+                  placeholder="0"
+                  min={0}
+                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                />
               </FormControl>
               <FormControl>
                 <FormLabel fontSize="sm">{t("deltaForce.author")}</FormLabel>
-                <Input value={uploadAuthor} onChange={(e) => setUploadAuthor(e.target.value)} placeholder={t("deltaForce.nicknamePlaceholder")} maxLength={20} _placeholder={{ color: useColorModeValue("#000", "#ccc") }} />
+                <Input
+                  value={uploadAuthor}
+                  onChange={(e) => setUploadAuthor(e.target.value)}
+                  placeholder={t("deltaForce.nicknamePlaceholder")}
+                  maxLength={20}
+                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                />
               </FormControl>
-              {uploadError && <Text fontSize="sm" color="red.400">{uploadError}</Text>}
+              {uploadError && (
+                <Text fontSize="sm" color="red.400">
+                  {uploadError}
+                </Text>
+              )}
             </VStack>
           </ModalBody>
           <ModalFooter gap={3}>
-            <Button variant="ghost" onClick={() => setIsUploadOpen(false)}>{t("deltaForce.cancel")}</Button>
-            <LiquidGlassButton onClick={handleUploadSubmit} isLoading={isUploading} loadingText="提交中...">{t("deltaForce.submit")}</LiquidGlassButton>
+            <Button variant="ghost" onClick={() => setIsUploadOpen(false)}>
+              {t("deltaForce.cancel")}
+            </Button>
+            <LiquidGlassButton
+              onClick={handleUploadSubmit}
+              isLoading={isUploading}
+              loadingText="提交中..."
+            >
+              {t("deltaForce.submit")}
+            </LiquidGlassButton>
           </ModalFooter>
         </ModalContent>
       </Modal>
@@ -1027,7 +1233,13 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const codesWrapper = liquidGlassEnabled ? (
     <LiquidGlassCard p={5}>{weaponCodesContent}</LiquidGlassCard>
   ) : (
-    <Box bg={useColorModeValue("white", "#111111")} borderRadius="xl" p={5} border="1px solid" borderColor={useColorModeValue("gray.200", "#333333")}>
+    <Box
+      bg={useColorModeValue("white", "#111111")}
+      borderRadius="xl"
+      p={5}
+      border="1px solid"
+      borderColor={useColorModeValue("gray.200", "#333333")}
+    >
       {weaponCodesContent}
     </Box>
   );
@@ -1052,8 +1264,9 @@ export default function DeltaForcePage() {
         <PasswordCard />
       </Box>
 
-      {/* 更多改枪码 / 官方地图 / 官方壁纸 */}
-      <HStack align="stretch" spacing={6} mb={6}>
+      {/* 随机装备 / 更多改枪码 / 官方地图 / 官方壁纸 */}
+      <HStack align="stretch" spacing={6} mb={6} wrap="wrap">
+        <RouletteCard />
         <MoreGunCodesCard />
         <OfficialMapCard />
         <OfficialWallpaperCard />

@@ -44,12 +44,17 @@ fn create_scheduled_task(exe_path: &str, minimized_start: bool) -> Result<(), St
         format!("\"{}\"", exe_path)
     };
 
+    // /delay 增加约 5 秒启动延迟：登录瞬间桌面合成器/GPU 驱动尚未就绪时，
+    // 若立刻以最高权限拉起 WebView2 主窗口，个别机器会出现前端初始化失败、
+    // 界面打不开（只启动后端）、托盘无响应的问题。延迟 5 秒待桌面就绪后再启动，
+    // 从根源规避该时序脆弱点，同时基本不影响开机可用感。
     let output = exec_hidden("schtasks", &[
         "/create",
         "/tn", TASK_NAME,
         "/tr", &run_cmd,
         "/sc", "onlogon",
         "/rl", "highest",
+        "/delay", "0000:00:05",
         "/f",
     ])?;
 

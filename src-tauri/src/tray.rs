@@ -247,6 +247,12 @@ fn stop_tray_hover_tooltip<R: Runtime>(tray: &TrayIcon<R>) {
 
 #[tauri::command]
 pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), String> {
+    // 前端在此被调用，说明前端(WebView2)已成功加载 → 标记开机自启模式下前端就绪，
+    // 供启动诊断区分“正常最小化启动”与“只启动后端、前端未起来”。
+    crate::AUTOSTART_FRONTEND_READY.store(true, std::sync::atomic::Ordering::SeqCst);
+    if crate::AUTOSTART_MODE.load(std::sync::atomic::Ordering::SeqCst) {
+        log::info!("[autostart] 前端已就绪，正常进入最小化启动");
+    }
     window.hide().map_err(|e| e.to_string())?;
     crate::emit_main_visibility(&window.app_handle(), false);
     Ok(())

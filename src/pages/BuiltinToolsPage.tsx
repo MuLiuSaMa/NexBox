@@ -21,6 +21,7 @@ import {
   Braces,
   ShieldCheck,
   FlaskConical,
+  DownloadCloud,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -170,6 +171,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.contextMenu",
     descriptionKey: "builtinTools.contextMenuDesc",
     color: "#3B82F6",
+  },
+  {
+    id: "download-accelerator",
+    path: "/download-accelerator",
+    icon: DownloadCloud,
+    titleKey: "sidebar.downloadAccelerator",
+    descriptionKey: "builtinTools.downloadAcceleratorDesc",
+    color: "#00C896",
   },
 ];
 

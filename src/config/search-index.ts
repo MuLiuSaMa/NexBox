@@ -379,6 +379,14 @@ export const searchIndex: SearchItem[] = [
     category: "optimization",
     keywords: ["CPU", "核心", "调度", "P核", "E核", "亲和性", "affinity", "core", "scheduler", "逻辑处理器", "进程分配"],
   },
+  {
+    id: "download-accelerator",
+    nameKey: "sidebar.downloadAccelerator",
+    path: "/download-accelerator",
+    icon: Download,
+    category: "builtin-tool",
+    keywords: ["下载加速", "多线程下载", "下载器", "分段下载", "满速", "下载", "download", "accelerator", "idm", "多线程"],
+  },
 ];
 
 export const thirdPartyToolIcons: Record<string, ComponentType<{ size?: number; strokeWidth?: number }>> = {

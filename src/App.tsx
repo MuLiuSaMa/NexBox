@@ -2,7 +2,11 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { Box } from "@chakra-ui/react";
 import { MainLayout } from "./components/ui/main-layout";
-import { AnimatedPage, type TransitionMode, readTransitionMode } from "./components/ui/animated-page";
+import {
+  AnimatedPage,
+  type TransitionMode,
+  readTransitionMode,
+} from "./components/ui/animated-page";
 import HomePage from "./pages/HomePage";
 import HardwarePage from "./pages/HardwarePage";
 import ToolsPage from "./pages/ToolsPage";
@@ -17,6 +21,7 @@ import DiskHealthPage from "./pages/DiskHealthPage";
 import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
+import DeltaForceRoulettePage from "./pages/DeltaForceRoulettePage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
@@ -26,6 +31,7 @@ import PowerManagementPage from "./pages/PowerManagementPage";
 import StorageCleanPage from "./pages/StorageCleanPage";
 import StartupManagerPage from "./pages/StartupManagerPage";
 import ContextMenuManagerPage from "./pages/ContextMenuManagerPage";
+import DownloadAcceleratorPage from "./pages/DownloadAcceleratorPage";
 import SystemOptimizerPage from "./pages/SystemOptimizerPage";
 import NetworkOptimizerPage from "./pages/NetworkOptimizerPage";
 import PeripheralOptimizePage from "./pages/PeripheralOptimizePage";
@@ -59,6 +65,7 @@ import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
+import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
 
 function App() {
   const { isStartupComplete } = useAppStartup();
@@ -119,113 +126,734 @@ function App() {
         {!isStartupComplete && <SplashScreen />}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
-        {/* 主页常驻挂载：路由切换只隐藏、不卸载，避免每次回到主页重新加载硬件信息与快捷启动 */}
-        <Box display={location.pathname === "/" ? "block" : "none"}>
-          <AnimatedPage><HomePage /></AnimatedPage>
-        </Box>
-        {location.pathname !== "/" &&
-          (pageTransitionMode !== "off" ? (
-            <AnimatePresence mode="wait" initial={false}>
-            <Routes location={location} key={location.pathname}>
-              <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
-              <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
-              <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
-              <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
-              <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
-              <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/game-process-optimize" element={<AnimatedPage><GameProcessOptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
-              <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
-              <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
-              <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
-              <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
-              <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
-              <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
-              <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
-              <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
-              <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
-              <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
-              <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
-              <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
-              <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
-              <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
-              <Route path="/optimize/startup-manager" element={<AnimatedPage><StartupManagerPage /></AnimatedPage>} />
-              <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
-              <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
-              <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-              <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-              <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
-              <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
-              <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
-              <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
-              <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
-              <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
-              <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-              <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
-              <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
-              <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
-              <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
-              <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
-              <Route path="/hidden-features" element={<AnimatedPage><HiddenFeaturesPage /></AnimatedPage>} />
-              <Route path="/context-menu" element={<AnimatedPage><ContextMenuManagerPage /></AnimatedPage>} />
-        </Routes>
-      </AnimatePresence>
-    ) : (
-      <Routes location={location}>
-            <Route path="/hardware" element={<AnimatedPage><HardwarePage /></AnimatedPage>} />
-            <Route path="/tools" element={<AnimatedPage><ToolsPage /></AnimatedPage>} />
-            <Route path="/builtin-tools" element={<AnimatedPage><BuiltinToolsPage /></AnimatedPage>} />
-            <Route path="/optimization" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
-            <Route path="/optimize" element={<AnimatedPage><OptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/memory-cleanup" element={<AnimatedPage><MemoryCleanupPage /></AnimatedPage>} />
-            <Route path="/optimize/ace-optimize" element={<AnimatedPage><AceOptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/game-process-optimize" element={<AnimatedPage><GameProcessOptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/memory-limit" element={<AnimatedPage><MemoryLimitPage /></AnimatedPage>} />
-            <Route path="/display-filter" element={<AnimatedPage><DisplayFilterPage /></AnimatedPage>} />
-            <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
-            <Route path="/crosshair" element={<AnimatedPage><CrosshairPage /></AnimatedPage>} />
-            <Route path="/autoclicker" element={<AnimatedPage><AutoClickerPage /></AnimatedPage>} />
-            <Route path="/overlay-panel" element={<AnimatedPage><OverlayPanelPage /></AnimatedPage>} />
-            <Route path="/delta-force" element={<AnimatedPage><DeltaForcePage /></AnimatedPage>} />
-            <Route path="/delta-force/other-platforms" element={<AnimatedPage><OtherGunCodePlatformsPage /></AnimatedPage>} />
-            <Route path="/mood" element={<AnimatedPage><MoodPage /></AnimatedPage>} />
-            <Route path="/gpu-rename" element={<AnimatedPage><GpuRenamePage /></AnimatedPage>} />
-            <Route path="/resolution-converter" element={<AnimatedPage><ResolutionConverterPage /></AnimatedPage>} />
-            <Route path="/optimize/shader-cache" element={<AnimatedPage><ShaderCachePage /></AnimatedPage>} />
-            <Route path="/optimize/power-management" element={<AnimatedPage><PowerManagementPage /></AnimatedPage>} />
-            <Route path="/optimize/storage-clean" element={<AnimatedPage><StorageCleanPage /></AnimatedPage>} />
-            <Route path="/optimize/startup-manager" element={<AnimatedPage><StartupManagerPage /></AnimatedPage>} />
-            <Route path="/optimize/system-optimizer" element={<AnimatedPage><SystemOptimizerPage /></AnimatedPage>} />
-            <Route path="/optimize/network-optimizer" element={<AnimatedPage><NetworkOptimizerPage /></AnimatedPage>} />
-            <Route path="/optimize/peripheral-optimize" element={<AnimatedPage><PeripheralOptimizePage /></AnimatedPage>} />
-            <Route path="/optimize/windows-update" element={<AnimatedPage><WindowsUpdatePage /></AnimatedPage>} />
-            <Route path="/optimize/cpu-scheduler" element={<AnimatedPage><CpuSchedulerPage /></AnimatedPage>} />
-            <Route path="/dlss-preset" element={<AnimatedPage><DLSSPresetPage /></AnimatedPage>} />
-            <Route path="/audio-eq" element={<AnimatedPage><AudioEqPage /></AnimatedPage>} />
-            <Route path="/nvidia-driver" element={<AnimatedPage><NvidiaDriverPage /></AnimatedPage>} />
-            <Route path="/nvidia-driver-download" element={<AnimatedPage><NvidiaDriverDownloadPage /></AnimatedPage>} />
-            <Route path="/disk-health" element={<AnimatedPage><DiskHealthPage /></AnimatedPage>} />
-            <Route path="/epic-free" element={<AnimatedPage><EpicFreePage /></AnimatedPage>} />
-            <Route path="/steam" element={<AnimatedPage><SteamPage /></AnimatedPage>} />
-            <Route path="/music" element={<AnimatedPage><MusicPage /></AnimatedPage>} />
-            <Route path="/custom" element={<AnimatedPage><CustomPage /></AnimatedPage>} />
-            <Route path="/speedtest" element={<AnimatedPage><SpeedTestPage /></AnimatedPage>} />
-            <Route path="/runtime-repair" element={<AnimatedPage><RuntimeRepairPage /></AnimatedPage>} />
-            <Route path="/vtx-virtualization" element={<AnimatedPage><VtxVirtualizationPage /></AnimatedPage>} />
-            <Route path="/hidden-features" element={<AnimatedPage><HiddenFeaturesPage /></AnimatedPage>} />
-            <Route path="/context-menu" element={<AnimatedPage><ContextMenuManagerPage /></AnimatedPage>} />
-        </Routes>
-    )
-      )}
+          {/* 主页常驻挂载：路由切换只隐藏、不卸载，避免每次回到主页重新加载硬件信息与快捷启动 */}
+          <Box display={location.pathname === "/" ? "block" : "none"}>
+            <AnimatedPage>
+              <HomePage />
+            </AnimatedPage>
+          </Box>
+          {location.pathname !== "/" &&
+            (pageTransitionMode !== "off" ? (
+              <AnimatePresence mode="wait" initial={false}>
+                <Routes location={location} key={location.pathname}>
+                  <Route
+                    path="/hardware"
+                    element={
+                      <AnimatedPage>
+                        <HardwarePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/tools"
+                    element={
+                      <AnimatedPage>
+                        <ToolsPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/builtin-tools"
+                    element={
+                      <AnimatedPage>
+                        <BuiltinToolsPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimization"
+                    element={
+                      <AnimatedPage>
+                        <OptimizePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize"
+                    element={
+                      <AnimatedPage>
+                        <OptimizePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/memory-cleanup"
+                    element={
+                      <AnimatedPage>
+                        <MemoryCleanupPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/ace-optimize"
+                    element={
+                      <AnimatedPage>
+                        <AceOptimizePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/game-process-optimize"
+                    element={
+                      <AnimatedPage>
+                        <GameProcessOptimizePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/memory-limit"
+                    element={
+                      <AnimatedPage>
+                        <MemoryLimitPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/display-filter"
+                    element={
+                      <AnimatedPage>
+                        <DisplayFilterPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <AnimatedPage>
+                        <SettingsPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/crosshair"
+                    element={
+                      <AnimatedPage>
+                        <CrosshairPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/autoclicker"
+                    element={
+                      <AnimatedPage>
+                        <AutoClickerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/disk-health"
+                    element={
+                      <AnimatedPage>
+                        <DiskHealthPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/overlay-panel"
+                    element={
+                      <AnimatedPage>
+                        <OverlayPanelPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/delta-force"
+                    element={
+                      <AnimatedPage>
+                        <DeltaForcePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/delta-force/other-platforms"
+                    element={
+                      <AnimatedPage>
+                        <OtherGunCodePlatformsPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/delta-force/random-equipment"
+                    element={
+                      <AnimatedPage>
+                        <DeltaForceRoulettePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/mood"
+                    element={
+                      <AnimatedPage>
+                        <MoodPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/gpu-rename"
+                    element={
+                      <AnimatedPage>
+                        <GpuRenamePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/resolution-converter"
+                    element={
+                      <AnimatedPage>
+                        <ResolutionConverterPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/shader-cache"
+                    element={
+                      <AnimatedPage>
+                        <ShaderCachePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/power-management"
+                    element={
+                      <AnimatedPage>
+                        <PowerManagementPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/storage-clean"
+                    element={
+                      <AnimatedPage>
+                        <StorageCleanPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/startup-manager"
+                    element={
+                      <AnimatedPage>
+                        <StartupManagerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/system-optimizer"
+                    element={
+                      <AnimatedPage>
+                        <SystemOptimizerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/network-optimizer"
+                    element={
+                      <AnimatedPage>
+                        <NetworkOptimizerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/peripheral-optimize"
+                    element={
+                      <AnimatedPage>
+                        <PeripheralOptimizePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/windows-update"
+                    element={
+                      <AnimatedPage>
+                        <WindowsUpdatePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/optimize/cpu-scheduler"
+                    element={
+                      <AnimatedPage>
+                        <CpuSchedulerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/dlss-preset"
+                    element={
+                      <AnimatedPage>
+                        <DLSSPresetPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/audio-eq"
+                    element={
+                      <AnimatedPage>
+                        <AudioEqPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/nvidia-driver"
+                    element={
+                      <AnimatedPage>
+                        <NvidiaDriverPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/nvidia-driver-download"
+                    element={
+                      <AnimatedPage>
+                        <NvidiaDriverDownloadPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/steam"
+                    element={
+                      <AnimatedPage>
+                        <SteamPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/epic-free"
+                    element={
+                      <AnimatedPage>
+                        <EpicFreePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/music"
+                    element={
+                      <AnimatedPage>
+                        <MusicPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/custom"
+                    element={
+                      <AnimatedPage>
+                        <CustomPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/speedtest"
+                    element={
+                      <AnimatedPage>
+                        <SpeedTestPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/runtime-repair"
+                    element={
+                      <AnimatedPage>
+                        <RuntimeRepairPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/vtx-virtualization"
+                    element={
+                      <AnimatedPage>
+                        <VtxVirtualizationPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/hidden-features"
+                    element={
+                      <AnimatedPage>
+                        <HiddenFeaturesPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/context-menu"
+                    element={
+                      <AnimatedPage>
+                        <ContextMenuManagerPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/download-accelerator"
+                    element={
+                      <AnimatedPage>
+                        <DownloadAcceleratorPage />
+                      </AnimatedPage>
+                    }
+                  />
+                </Routes>
+              </AnimatePresence>
+            ) : (
+              <Routes location={location}>
+                <Route
+                  path="/hardware"
+                  element={
+                    <AnimatedPage>
+                      <HardwarePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/tools"
+                  element={
+                    <AnimatedPage>
+                      <ToolsPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/builtin-tools"
+                  element={
+                    <AnimatedPage>
+                      <BuiltinToolsPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimization"
+                  element={
+                    <AnimatedPage>
+                      <OptimizePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize"
+                  element={
+                    <AnimatedPage>
+                      <OptimizePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/memory-cleanup"
+                  element={
+                    <AnimatedPage>
+                      <MemoryCleanupPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/ace-optimize"
+                  element={
+                    <AnimatedPage>
+                      <AceOptimizePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/game-process-optimize"
+                  element={
+                    <AnimatedPage>
+                      <GameProcessOptimizePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/memory-limit"
+                  element={
+                    <AnimatedPage>
+                      <MemoryLimitPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/display-filter"
+                  element={
+                    <AnimatedPage>
+                      <DisplayFilterPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <AnimatedPage>
+                      <SettingsPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/crosshair"
+                  element={
+                    <AnimatedPage>
+                      <CrosshairPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/autoclicker"
+                  element={
+                    <AnimatedPage>
+                      <AutoClickerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/overlay-panel"
+                  element={
+                    <AnimatedPage>
+                      <OverlayPanelPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/delta-force"
+                  element={
+                    <AnimatedPage>
+                      <DeltaForcePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/delta-force/other-platforms"
+                  element={
+                    <AnimatedPage>
+                      <OtherGunCodePlatformsPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/delta-force/random-equipment"
+                  element={
+                    <AnimatedPage>
+                      <DeltaForceRoulettePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/mood"
+                  element={
+                    <AnimatedPage>
+                      <MoodPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/gpu-rename"
+                  element={
+                    <AnimatedPage>
+                      <GpuRenamePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/resolution-converter"
+                  element={
+                    <AnimatedPage>
+                      <ResolutionConverterPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/shader-cache"
+                  element={
+                    <AnimatedPage>
+                      <ShaderCachePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/power-management"
+                  element={
+                    <AnimatedPage>
+                      <PowerManagementPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/storage-clean"
+                  element={
+                    <AnimatedPage>
+                      <StorageCleanPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/startup-manager"
+                  element={
+                    <AnimatedPage>
+                      <StartupManagerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/system-optimizer"
+                  element={
+                    <AnimatedPage>
+                      <SystemOptimizerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/network-optimizer"
+                  element={
+                    <AnimatedPage>
+                      <NetworkOptimizerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/peripheral-optimize"
+                  element={
+                    <AnimatedPage>
+                      <PeripheralOptimizePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/windows-update"
+                  element={
+                    <AnimatedPage>
+                      <WindowsUpdatePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/optimize/cpu-scheduler"
+                  element={
+                    <AnimatedPage>
+                      <CpuSchedulerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/dlss-preset"
+                  element={
+                    <AnimatedPage>
+                      <DLSSPresetPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/audio-eq"
+                  element={
+                    <AnimatedPage>
+                      <AudioEqPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/nvidia-driver"
+                  element={
+                    <AnimatedPage>
+                      <NvidiaDriverPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/nvidia-driver-download"
+                  element={
+                    <AnimatedPage>
+                      <NvidiaDriverDownloadPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/disk-health"
+                  element={
+                    <AnimatedPage>
+                      <DiskHealthPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/epic-free"
+                  element={
+                    <AnimatedPage>
+                      <EpicFreePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/steam"
+                  element={
+                    <AnimatedPage>
+                      <SteamPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/music"
+                  element={
+                    <AnimatedPage>
+                      <MusicPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/custom"
+                  element={
+                    <AnimatedPage>
+                      <CustomPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/speedtest"
+                  element={
+                    <AnimatedPage>
+                      <SpeedTestPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/runtime-repair"
+                  element={
+                    <AnimatedPage>
+                      <RuntimeRepairPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/vtx-virtualization"
+                  element={
+                    <AnimatedPage>
+                      <VtxVirtualizationPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/hidden-features"
+                  element={
+                    <AnimatedPage>
+                      <HiddenFeaturesPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/context-menu"
+                  element={
+                    <AnimatedPage>
+                      <ContextMenuManagerPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/download-accelerator"
+                  element={
+                    <AnimatedPage>
+                      <DownloadAcceleratorPage />
+                    </AnimatedPage>
+                  }
+                />
+              </Routes>
+            ))}
+        </MainLayout>
 
-      </MainLayout>
-
-      <UpdateModal />
-      <ImportantAnnouncementModal />
-      <DynamicIslandHost />
+        <UpdateModal />
+        <ImportantAnnouncementModal />
+        <DynamicIslandHost />
+        <AccelIslandBridge />
       </>
-      </MusicProvider>
+    </MusicProvider>
   );
 }
 

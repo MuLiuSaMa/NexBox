@@ -378,6 +378,63 @@ export function coverProxyUrl(url: string, proxyPort: number): string {
   return `http://127.0.0.1:${proxyPort}/cover?url=${encodeURIComponent(url)}`;
 }
 
+/// 后端 verify_local_covers 返回的单条封面修复结果
+interface CoverRepairPayload {
+  id: string;
+  cover_path: string;
+  cover_source: string;
+}
+
+/**
+ * 封面缓存自愈：把持有封面路径的本地歌曲交给后端校验，
+ * 缓存文件已被清理（清除缓存/存储感知/磁盘清理工具）的歌曲从音频重新提取封面。
+ * 启动后后台执行，不阻塞歌库加载；缓存完好时后端返回空数组，无任何写入。
+ */
+async function repairLocalCovers(
+  set: (partial: (state: unknown) => unknown) => void,
+  get: () => { localSongs: Song[] }
+): Promise<void> {
+  try {
+    const candidates = get().localSongs.filter((song) => song._localCoverPath);
+    if (candidates.length === 0) return;
+    const repairs = await invoke<CoverRepairPayload[]>("verify_local_covers", {
+      songs: candidates.map((song) => ({
+        id: song.id,
+        path: song._localPath ?? "",
+        cover_path: song._localCoverPath ?? "",
+      })),
+    });
+    if (repairs.length === 0) return;
+
+    // 回填修复结果：重提取成功换新路径，彻底失败（音频也没了等）则清掉失效路径
+    const repaired = new Map(repairs.map((r) => [r.id, r]));
+    set((state) => {
+      const st = state as { localSongs: Song[] };
+      return {
+        localSongs: st.localSongs.map((song) => {
+          const fix = repaired.get(song.id);
+          if (!fix) return song;
+          return {
+            ...song,
+            cover: fix.cover_path ? convertFileSrc(fix.cover_path) : "",
+            _localCoverPath: fix.cover_path || undefined,
+          };
+        }),
+      };
+    });
+
+    // 持久化修复结果
+    const s = await getStore();
+    await s.set("localSongs", get().localSongs.map(serializeLocalSong));
+    await s.save();
+    console.info(
+      `[Music] 封面自愈：修复 ${repairs.filter((r) => r.cover_path).length} 首`
+    );
+  } catch (e) {
+    console.warn("[Music] 封面自愈失败:", e);
+  }
+}
+
 // ── 内部播放器 SMTC（系统媒体传输控制）推送 ──────────────────────────
 // 把当前播放状态推给后端注册的「新境盒」媒体会话，供音量浮层/锁屏显示、
 // 系统媒体键（播放/暂停/上一曲/下一曲）与浮层拖动进度控制内部播放器。
@@ -602,6 +659,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           : song
       );
       set({ localSongs: restored });
+      // 后台自愈：封面缓存文件可能已被清理，失效时从音频重新提取（不阻塞启动）
+      void repairLocalCovers(set, get);
     } catch {
       set({ localSongs: [] });
     }
@@ -636,23 +695,40 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setImportingLocal: (importing) => set({ importingLocal: importing }),
 
   removeLocalSong: async (id) => {
+    const victim = get().localSongs.find((s) => s.id === id);
     set((state) => ({ localSongs: state.localSongs.filter((s) => s.id !== id) }));
     try {
       const s = await getStore();
       const list = get().localSongs.map(serializeLocalSong);
       await s.set("localSongs", list);
       await s.save();
+      // 清理孤儿封面缓存：仅当没有其他歌曲共用同一封面文件（同目录歌曲会共享）
+      const orphan = victim?._localCoverPath;
+      if (orphan && !get().localSongs.some((song) => song._localCoverPath === orphan)) {
+        await invoke("delete_cover_cache_files", { paths: [orphan] }).catch(() => {});
+      }
     } catch (e) {
       console.error("Remove local song persist failed:", e);
     }
   },
 
   clearLocalSongs: async () => {
+    // 清空前收集全部封面缓存路径（去重），清空后同步删除，避免缓存目录无限膨胀
+    const coverPaths = Array.from(
+      new Set(
+        get()
+          .localSongs.map((s) => s._localCoverPath)
+          .filter(Boolean)
+      )
+    ) as string[];
     set({ localSongs: [] });
     try {
       const s = await getStore();
       await s.set("localSongs", []);
       await s.save();
+      if (coverPaths.length > 0) {
+        await invoke("delete_cover_cache_files", { paths: coverPaths }).catch(() => {});
+      }
     } catch (e) {
       console.error("Clear local songs persist failed:", e);
     }

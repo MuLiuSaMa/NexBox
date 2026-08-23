@@ -32,42 +32,43 @@
     }
   },
   "sidebar": {
-        "home": "Startseite",
-        "tools": "Werkzeuge",
-        "hardware": "Hardware",
-        "optimization": "Optimieren",
-        "displayFilter": "Filter",
-        "floatingNav": "Schwebende Navigation",
-        "crosshair": "Fadenkreuz",
-        "overlayPanel": "Overlay-Panel",
-        "builtinTools": "Eingebaute Werkzeuge",
-        "deltaForce": "Delta Force",
-        "music": "Musik",
-        "mood": "Stimmung",
-        "settings": "Einstellungen",
-        "gpuRename": "GPU-Umbenennung",
-        "resolutionConverter": "Auflösungskonverter",
-        "dlssPreset": "Delta Force DLSS-Einstellungen",
-        "epicFree": "Epic Gratis-Spiele",
+    "home": "Startseite",
+    "tools": "Werkzeuge",
+    "hardware": "Hardware",
+    "optimization": "Optimieren",
+    "displayFilter": "Filter",
+    "floatingNav": "Schwebende Navigation",
+    "crosshair": "Fadenkreuz",
+    "overlayPanel": "Overlay-Panel",
+    "builtinTools": "Eingebaute Werkzeuge",
+    "deltaForce": "Delta Force",
+    "music": "Musik",
+    "mood": "Stimmung",
+    "settings": "Einstellungen",
+    "gpuRename": "GPU-Umbenennung",
+    "resolutionConverter": "Auflösungskonverter",
+    "dlssPreset": "Delta Force DLSS-Einstellungen",
+    "epicFree": "Epic Gratis-Spiele",
     "diskHealth": "Festplatten-Gesundheit",
-"screenRecord": "Bildschirmaufnahme",
+    "screenRecord": "Bildschirmaufnahme",
     "audioEq": "EQ-Tuner",
     "custom": "Benutzerdefiniert",
     "runtimeRepair": "Laufzeitbibliotheken reparieren",
-    "hiddenFeatures": "Versteckte Windows-Funktionen"
+    "hiddenFeatures": "Versteckte Windows-Funktionen",
+    "downloadAccelerator": "Downloader"
   },
-"customPage": {
-"title": "Benutzerdefinierte Seite",
-"addTool": "Tool hinzufügen",
-"emptyHint": "Klicken Sie auf die Schaltfläche oben rechts, um Ihre Lieblingstools hinzuzufügen",
-"searchTools": "Tools suchen...",
-"borderRadius": "Abrundung",
-"clearAll": "Alle löschen",
-"clearAllConfirm": "Möchten Sie wirklich alle Karten löschen?",
-"editMode": "Bearbeitungsmodus",
-"enterEdit": "Layout bearbeiten",
-"exitEdit": "Bearbeitung beenden"
-},
+  "customPage": {
+    "title": "Benutzerdefinierte Seite",
+    "addTool": "Tool hinzufügen",
+    "emptyHint": "Klicken Sie auf die Schaltfläche oben rechts, um Ihre Lieblingstools hinzuzufügen",
+    "searchTools": "Tools suchen...",
+    "borderRadius": "Abrundung",
+    "clearAll": "Alle löschen",
+    "clearAllConfirm": "Möchten Sie wirklich alle Karten löschen?",
+    "editMode": "Bearbeitungsmodus",
+    "enterEdit": "Layout bearbeiten",
+    "exitEdit": "Bearbeitung beenden"
+  },
   "powerAdvanced": {
     "title": "Erweiterte Prozessoreinstellungen",
     "description": "Erweiterte CPU-Energieoptionen für Leistung, Kühlung und Stromverbrauch optimieren",
@@ -402,17 +403,17 @@
       "warningText": "Das Festlegen des Speicherlimits erfordert Administratorrechte und einen Systemneustart, um wirksam zu werden",
       "adminRequired": "Administrator erforderlich",
       "options": {
-            "7.9gb": "7.9 GB",
-            "11.9gb": "11.9 GB",
-            "13.9gb": "13.9 GB",
-            "15.9gb": "15.9 GB"
-        },
-        "presetTab": "Voreingestelltes Limit",
-        "customTab": "Benutzerdefiniertes Limit",
-        "customPlaceholder": "Limitwert eingeben (GB)",
-        "selectPreset": "Voreingestelltes Limit auswählen",
-        "invalidInput": "Bitte geben Sie einen gültigen Speicherlimitwert ein",
-        "outOfRange": "Limit muss zwischen 0,1 und physischem Speicher liegen"
+        "7.9gb": "7.9 GB",
+        "11.9gb": "11.9 GB",
+        "13.9gb": "13.9 GB",
+        "15.9gb": "15.9 GB"
+      },
+      "presetTab": "Voreingestelltes Limit",
+      "customTab": "Benutzerdefiniertes Limit",
+      "customPlaceholder": "Limitwert eingeben (GB)",
+      "selectPreset": "Voreingestelltes Limit auswählen",
+      "invalidInput": "Bitte geben Sie einen gültigen Speicherlimitwert ein",
+      "outOfRange": "Limit muss zwischen 0,1 und physischem Speicher liegen"
     },
     "powerManagement": {
       "title": "Energieverwaltung",
@@ -458,96 +459,96 @@
       "laptopUnlockRestartHint": "Entsperrungskonfiguration wurde geschrieben. Bitte starten Sie den PC neu und versuchen Sie den Import der Energiepläne erneut."
     },
     "memoryCleanup": {
-        "title": "Speicherbereinigung",
-        "description": "Speicherdetails anzeigen und Speicherplatz freigeben",
-        "physicalMemory": "Physikalischer Speicher",
-        "virtualMemory": "Virtueller Speicher",
-        "workingSet": "Arbeitssatz",
-        "used": "Verwendet",
-        "available": "Verfügbar",
-        "total": "Gesamt",
-        "cleanAll": "Alles bereinigen",
-        "cleanStandby": "Standby-Speicher bereinigen",
-        "trimWorkingSet": "Arbeitssatz reduzieren",
-        "loading": "Laden...",
-        "cleaning": "Bereinigung...",
-        "freedMemory": "{{size}} MB freigegeben",
-        "noMemoryFreed": "Keine Bereinigung erforderlich",
-        "error": "Bereinigung fehlgeschlagen"
+      "title": "Speicherbereinigung",
+      "description": "Speicherdetails anzeigen und Speicherplatz freigeben",
+      "physicalMemory": "Physikalischer Speicher",
+      "virtualMemory": "Virtueller Speicher",
+      "workingSet": "Arbeitssatz",
+      "used": "Verwendet",
+      "available": "Verfügbar",
+      "total": "Gesamt",
+      "cleanAll": "Alles bereinigen",
+      "cleanStandby": "Standby-Speicher bereinigen",
+      "trimWorkingSet": "Arbeitssatz reduzieren",
+      "loading": "Laden...",
+      "cleaning": "Bereinigung...",
+      "freedMemory": "{{size}} MB freigegeben",
+      "noMemoryFreed": "Keine Bereinigung erforderlich",
+      "error": "Bereinigung fehlgeschlagen"
     },
     "aceOptimize": {
-        "title": "Anti-Cheat-Optimierung",
-        "description": "Begrenzen Sie die Ressourcennutzung der Anti-Cheat-Prozesse, um mehr Leistung für das Spiel freizugeben",
-        "deltaSection": {
-            "title": "Delta Force Optimierung",
-            "subtitle": "Steigern Sie die Spielleistung von Delta Force"
-        },
-        "deltaBoost": {
-            "title": "Prioritäts-Boost",
-            "description": "DeltaForceClient-Win64-Shipping.exe Priorität auf „Echtzeit\" setzen, um CPU-Ressourcen bevorzugt zuzuweisen und die Spielflüssigkeit zu verbessern",
-            "affinityTitle": "Kernaffinitäts-Optimierung",
-            "affinityDescription": "Delta Force-Prozess allen CPU-Kernen außer CPU0 zuweisen, um die Multikernleistung zu maximieren und Kern 0 für das System zu reservieren",
-            "success": "Delta Force-Priorität auf Echtzeit erhöht",
-            "notRunning": "Delta Force-Spiel läuft nicht",
-            "affinitySuccess": "Delta Force-Kernzuweisung optimiert"
-        },
-        "aceSection": {
-            "title": "ACE Anti-Cheat Optimierung",
-            "subtitle": "Ressourcennutzung von Anti-Cheat-Prozessen einschränken, um mehr Leistung für das Spiel freizugeben"
-        },
-        "aceLimit": {
-            "title": "Prioritätseinschränkung",
-            "description": "Priorität von ACE-Tray, SGuard64, SGuardSvc96 auf „Niedrig\" setzen, um CPU-Konflikte zu reduzieren",
-            "affinityTitle": "Kernaffinitäts-Einschränkung",
-            "affinityDescription": "ACE-Anti-Cheat-Prozesse auf einen einzelnen Kern (CPU0) beschränken, um zu verhindern, dass sie wichtige CPU-Ressourcen des Spiels belegen",
-            "success": "Priorität von {{count}} ACE-Prozessen eingeschränkt",
-            "notRunning": "Keine laufenden ACE-Prozesse gefunden",
-            "affinitySuccess": "{{count}} ACE-Prozesse auf Einzelkern beschränkt"
-        },
-        "aceEfficiency": {
-            "title": "Windows-Energiesparmodus",
-            "description": "Aufgabenmanager-Energiesparmodus für ACE-Prozesse aktivieren: Priorität auf Idle setzen + Energiedrosselung (EcoQoS) aktivieren, um die Hintergrundressourcennutzung erheblich zu reduzieren"
-        },
-        "optimizeAll": {
-            "button": "Alles optimieren",
-            "optimizing": "Optimiere...",
-            "title": "Alles auf einmal optimieren",
-            "description": "Delta-Prioritäts-Boost und ACE-Prioritäts-/Kern-Einschränkungen gemeinsam ausführen",
-            "success": "Alle Optimierungen abgeschlossen",
-            "partial": "Teilweise Optimierung abgeschlossen, Details prüfen"
-        },
-        "aceRegistry": {
-            "title": "Registrierungs-Zwangslimit",
-            "description": "Erzwingt die CPU-/I/O-Priorität der Delta Force- und SGuard-Prozesse über die systemweite IFEO-Registrierung (gilt beim Prozessstart, kann nicht durch Anti-Cheat zurückgesetzt werden; wirksam nach Neustart der Prozesse, gewisses Risiko)",
-            "badge": "Möglicherweise riskant",
-            "success": "Registrierungs-Zwangslimit angewendet",
-            "restored": "Registrierungs-Zwangslimit entfernt"
-        },
-        "autoDetect": {
-            "title": "Automatische Erkennung und Optimierung von ACE-Prozessen",
-            "description": "Hintergrundüberwachung - erkennt ACE-Tray/SGuard-Prozesse automatisch und begrenzt Priorität und Kernaffinität (Prüfung alle 5 Sekunden)",
-            "status": {
-                "running": "Automatische Erkennung läuft",
-                "stopped": "Automatische Erkennung gestoppt"
-            },
-            "lastCheck": "Letzte Prüfung",
-            "never": "Nie geprüft",
-            "optimizing": "{{count}} Prozesse werden optimiert",
-            "enabled": "Automatische Erkennung aktiviert",
-            "disabled": "Automatische Erkennung deaktiviert"
-        },
+      "title": "Anti-Cheat-Optimierung",
+      "description": "Begrenzen Sie die Ressourcennutzung der Anti-Cheat-Prozesse, um mehr Leistung für das Spiel freizugeben",
+      "deltaSection": {
+        "title": "Delta Force Optimierung",
+        "subtitle": "Steigern Sie die Spielleistung von Delta Force"
+      },
+      "deltaBoost": {
+        "title": "Prioritäts-Boost",
+        "description": "DeltaForceClient-Win64-Shipping.exe Priorität auf „Echtzeit\" setzen, um CPU-Ressourcen bevorzugt zuzuweisen und die Spielflüssigkeit zu verbessern",
+        "affinityTitle": "Kernaffinitäts-Optimierung",
+        "affinityDescription": "Delta Force-Prozess allen CPU-Kernen außer CPU0 zuweisen, um die Multikernleistung zu maximieren und Kern 0 für das System zu reservieren",
+        "success": "Delta Force-Priorität auf Echtzeit erhöht",
+        "notRunning": "Delta Force-Spiel läuft nicht",
+        "affinitySuccess": "Delta Force-Kernzuweisung optimiert"
+      },
+      "aceSection": {
+        "title": "ACE Anti-Cheat Optimierung",
+        "subtitle": "Ressourcennutzung von Anti-Cheat-Prozessen einschränken, um mehr Leistung für das Spiel freizugeben"
+      },
+      "aceLimit": {
+        "title": "Prioritätseinschränkung",
+        "description": "Priorität von ACE-Tray, SGuard64, SGuardSvc96 auf „Niedrig\" setzen, um CPU-Konflikte zu reduzieren",
+        "affinityTitle": "Kernaffinitäts-Einschränkung",
+        "affinityDescription": "ACE-Anti-Cheat-Prozesse auf einen einzelnen Kern (CPU0) beschränken, um zu verhindern, dass sie wichtige CPU-Ressourcen des Spiels belegen",
+        "success": "Priorität von {{count}} ACE-Prozessen eingeschränkt",
+        "notRunning": "Keine laufenden ACE-Prozesse gefunden",
+        "affinitySuccess": "{{count}} ACE-Prozesse auf Einzelkern beschränkt"
+      },
+      "aceEfficiency": {
+        "title": "Windows-Energiesparmodus",
+        "description": "Aufgabenmanager-Energiesparmodus für ACE-Prozesse aktivieren: Priorität auf Idle setzen + Energiedrosselung (EcoQoS) aktivieren, um die Hintergrundressourcennutzung erheblich zu reduzieren"
+      },
+      "optimizeAll": {
+        "button": "Alles optimieren",
+        "optimizing": "Optimiere...",
+        "title": "Alles auf einmal optimieren",
+        "description": "Delta-Prioritäts-Boost und ACE-Prioritäts-/Kern-Einschränkungen gemeinsam ausführen",
+        "success": "Alle Optimierungen abgeschlossen",
+        "partial": "Teilweise Optimierung abgeschlossen, Details prüfen"
+      },
+      "aceRegistry": {
+        "title": "Registrierungs-Zwangslimit",
+        "description": "Erzwingt die CPU-/I/O-Priorität der Delta Force- und SGuard-Prozesse über die systemweite IFEO-Registrierung (gilt beim Prozessstart, kann nicht durch Anti-Cheat zurückgesetzt werden; wirksam nach Neustart der Prozesse, gewisses Risiko)",
+        "badge": "Möglicherweise riskant",
+        "success": "Registrierungs-Zwangslimit angewendet",
+        "restored": "Registrierungs-Zwangslimit entfernt"
+      },
+      "autoDetect": {
+        "title": "Automatische Erkennung und Optimierung von ACE-Prozessen",
+        "description": "Hintergrundüberwachung - erkennt ACE-Tray/SGuard-Prozesse automatisch und begrenzt Priorität und Kernaffinität (Prüfung alle 5 Sekunden)",
         "status": {
-            "optimized": "Optimiert",
-            "notRunning": "Nicht ausgeführt",
-            "notOptimized": "Zu optimieren",
-            "processRunning": "Prozess läuft",
-            "processNotRunning": "Prozess läuft nicht",
-            "needsAdmin": "Admin-Rechte erforderlich"
+          "running": "Automatische Erkennung läuft",
+          "stopped": "Automatische Erkennung gestoppt"
         },
-        "apply": "Anwenden",
-        "applied": "Angewendet",
-        "restore": "Wiederherstellen",
-        "error": "Optimierung fehlgeschlagen"
+        "lastCheck": "Letzte Prüfung",
+        "never": "Nie geprüft",
+        "optimizing": "{{count}} Prozesse werden optimiert",
+        "enabled": "Automatische Erkennung aktiviert",
+        "disabled": "Automatische Erkennung deaktiviert"
+      },
+      "status": {
+        "optimized": "Optimiert",
+        "notRunning": "Nicht ausgeführt",
+        "notOptimized": "Zu optimieren",
+        "processRunning": "Prozess läuft",
+        "processNotRunning": "Prozess läuft nicht",
+        "needsAdmin": "Admin-Rechte erforderlich"
+      },
+      "apply": "Anwenden",
+      "applied": "Angewendet",
+      "restore": "Wiederherstellen",
+      "error": "Optimierung fehlgeschlagen"
     },
     "gameProcessOptimize": {
       "title": "Spielprozess-Optimierung",
@@ -893,7 +894,7 @@
     "gameFilterSupportedTitle": "Unterstützte Spiele",
     "gameFilterError": "Vorgang fehlgeschlagen"
   },
-"floatingNav": {
+  "floatingNav": {
     "title": "Schwebendes Navigationsfeld",
     "enable": "Schwebendes Feld aktivieren",
     "settings": "Einstellungen",
@@ -1013,17 +1014,50 @@
     "dlssNote": "Erfordert NVIDIA Profile Inspector. Starten Sie das Spiel neu, um die Änderungen zu übernehmen.",
     "back": "Zurück",
     "dlssModels": {
-      "A": { "name": "Modell A", "description": "Frühes Modell" },
-      "B": { "name": "Modell B", "description": "Frühes Modell" },
-      "C": { "name": "Modell C", "description": "Frühes Modell" },
-      "D": { "name": "Modell D", "description": "Stabiles Modell" },
-      "E": { "name": "Modell E", "description": "Experimentelles Modell" },
-      "F": { "name": "Modell F", "description": "Verbessertes Modell" },
-      "G": { "name": "Modell G", "description": "Verbessertes Modell" },
-      "J": { "name": "Modell J", "description": "Neueres Modell, Qualitätspriorität" },
-      "K": { "name": "Modell K", "description": "Empfohlenes Modell für die meisten DLSS-Modi" },
-      "L": { "name": "Modell L", "description": "Optimiert für Ultra Performance-Modus" },
-      "M": { "name": "Modell M", "description": "Optimiert für Performance-Modus" }
+      "A": {
+        "name": "Modell A",
+        "description": "Frühes Modell"
+      },
+      "B": {
+        "name": "Modell B",
+        "description": "Frühes Modell"
+      },
+      "C": {
+        "name": "Modell C",
+        "description": "Frühes Modell"
+      },
+      "D": {
+        "name": "Modell D",
+        "description": "Stabiles Modell"
+      },
+      "E": {
+        "name": "Modell E",
+        "description": "Experimentelles Modell"
+      },
+      "F": {
+        "name": "Modell F",
+        "description": "Verbessertes Modell"
+      },
+      "G": {
+        "name": "Modell G",
+        "description": "Verbessertes Modell"
+      },
+      "J": {
+        "name": "Modell J",
+        "description": "Neueres Modell, Qualitätspriorität"
+      },
+      "K": {
+        "name": "Modell K",
+        "description": "Empfohlenes Modell für die meisten DLSS-Modi"
+      },
+      "L": {
+        "name": "Modell L",
+        "description": "Optimiert für Ultra Performance-Modus"
+      },
+      "M": {
+        "name": "Modell M",
+        "description": "Optimiert für Performance-Modus"
+      }
     },
     "weaponCodePlatformNames": {
       "maqt": "Maqt",
@@ -1164,9 +1198,10 @@
     "shaderCacheDesc": "NVIDIA/AMD Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "dlssPresetDesc": "DLSS-Modell-Voreinstellungen wechseln, um Spielgrafiken zu optimieren",
     "diskHealthDesc": "Festplatten-Gesundheit und SMART-Informationen prüfen",
-"screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)",
+    "screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)",
     "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung",
-    "runtimeRepairDesc": "Fehlende VC++ / .NET / DirectX-Laufzeitbibliotheken erkennen und reparieren"
+    "runtimeRepairDesc": "Fehlende VC++ / .NET / DirectX-Laufzeitbibliotheken erkennen und reparieren",
+    "downloadAcceleratorDesc": "Mehrthreadige segmentierte Downloads für volle Bandbreite"
   },
   "gameProcessOptimize": {
     "title": "Spielprozess-Optimierung",
@@ -1289,16 +1324,16 @@
     "vendorTitle": "GPU-Hersteller",
     "vendorSubtitle": "Bereinigungselemente nach Hersteller organisiert, NVIDIA standardmäßig ausgewählt.",
     "nvidia": {
-        "name": "NVIDIA",
-        "description": "DXCache, GLCache, NV_Cache gemäß offiziellen NVIDIA-Pfaden bereinigen.",
-        "selected": "Ausgewählt",
-        "selectable": "Auswählbar"
+      "name": "NVIDIA",
+      "description": "DXCache, GLCache, NV_Cache gemäß offiziellen NVIDIA-Pfaden bereinigen.",
+      "selected": "Ausgewählt",
+      "selectable": "Auswählbar"
     },
     "amd": {
-        "name": "AMD",
-        "description": "Benutzerebene Cache-Verzeichnisse für AMD Software Reset Shader Cache bereinigen.",
-        "selected": "Ausgewählt",
-        "selectable": "Zum Auswählen klicken"
+      "name": "AMD",
+      "description": "Benutzerebene Cache-Verzeichnisse für AMD Software Reset Shader Cache bereinigen.",
+      "selected": "Ausgewählt",
+      "selectable": "Zum Auswählen klicken"
     },
     "detected": "Erkannt",
     "notDetected": "Nicht erkannt",
@@ -1307,11 +1342,11 @@
     "cleaning": "Bereinigung...",
     "scanButton": "Erneut scannen",
     "officialTip": {
-        "title": "Offizielle NVIDIA-Empfehlung",
-        "description": "Es wird empfohlen, die folgenden Schritte durchzuführen, bevor Sie die Bereinigung auf dieser Seite durchführen.",
-        "step1": "1. Öffnen Sie das NVIDIA-Kontrollzentrum und setzen Sie die Shader-Cache-Größe in den 3D-Einstellungen auf „Deaktiviert“.",
-        "step2": "2. Starten Sie Ihren Computer neu und kehren Sie dann zu dieser Seite zurück, um „NVIDIA bereinigen“ auszuführen.",
-        "step3": "3. Aktivieren Sie den Shader-Cache nach Abschluss der Bereinigung erneut. Die Größe hängt von der Kapazität Ihrer C-Festplatte ab."
+      "title": "Offizielle NVIDIA-Empfehlung",
+      "description": "Es wird empfohlen, die folgenden Schritte durchzuführen, bevor Sie die Bereinigung auf dieser Seite durchführen.",
+      "step1": "1. Öffnen Sie das NVIDIA-Kontrollzentrum und setzen Sie die Shader-Cache-Größe in den 3D-Einstellungen auf „Deaktiviert“.",
+      "step2": "2. Starten Sie Ihren Computer neu und kehren Sie dann zu dieser Seite zurück, um „NVIDIA bereinigen“ auszuführen.",
+      "step3": "3. Aktivieren Sie den Shader-Cache nach Abschluss der Bereinigung erneut. Die Größe hängt von der Kapazität Ihrer C-Festplatte ab."
     },
     "cleanSuccess": "Bereinigung abgeschlossen, {{size}} freigegeben",
     "cleanError": "Bereinigung fehlgeschlagen",
@@ -1794,6 +1829,37 @@
     "namedOnly": "Nur benannte Funktionen",
     "namedOnlyHint": "Unbenannte Einträge sind interne Windows-Wartungskonfigurationen ohne Wörterbucheintrag; eine Änderung ist meist unnötig. Ausschalten, um alle anzuzeigen",
     "numbersExplain": "Benannte Einträge stammen aus dem Community-Wörterbuch. Als reine Zahlen angezeigte Funktionen haben keinen öffentlichen Namen — Microsoft hat ihn nie veröffentlicht. Schalten Sie oben um, um alle anzuzeigen, oder suchen Sie namentlich unter über 17.000 bekannten Funktionen."
+  },
+  "downloadAccel": {
+    "urlLabel": "Download-URL",
+    "fileNamePlaceholder": "Dateiname (optional, wird automatisch ermittelt)",
+    "segmentsLabel": "Max. Verbindungen",
+    "segmentsAuto": "Auto",
+    "start": "Starten",
+    "pause": "Pausieren",
+    "resume": "Fortsetzen",
+    "cancel": "Aufgabe entfernen",
+    "segmentsDone": "Segmente fertig",
+    "status": {
+      "downloading": "Läuft",
+      "completed": "Abgeschlossen",
+      "error": "Fehlgeschlagen",
+      "preparing": "Wird vorbereitet",
+      "paused": "Angehalten"
+    },
+    "resetLearned": "Gelernte Werte zurücksetzen",
+    "resetLearnedTip": "Leert den gelernten Cache optimaler Verbindungen pro Domain (nach Serveränderungen)",
+    "resetLearnedDone": "Zurückgesetzt",
+    "speedLimitLabel": "Drosselung",
+    "speedUnlimited": "Unbegrenzt",
+    "openFile": "Datei öffnen",
+    "openFolder": "Im Ordner anzeigen",
+    "activeConnections": "Aktive Verbindungen",
+    "eta": "Restzeit",
+    "expandAll": "Alle anzeigen",
+    "collapseAll": "Einklappen",
+    "islandDownloading": "Wird geladen",
+    "islandComplete": "Download abgeschlossen",
+    "islandFailed": "Download fehlgeschlagen"
   }
 }
-

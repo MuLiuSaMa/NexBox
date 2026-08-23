@@ -1589,6 +1589,7 @@ function AppearanceSettings() {
   const emptySlotBorder = useColorModeValue("gray.200", "#333333");
   const activeSlotBorder = useColorModeValue("blue.400", "blue.300");
   const modeButtonActiveBg = useColorModeValue("blue.500", "blue.400");
+  const modeButtonActiveColor = useColorModeValue("gray.800", "white");
   const modeButtonInactiveBg = useColorModeValue("gray.100", "#1a1a1a");
   const modeButtonInactiveBorder = useColorModeValue("gray.200", "#333333");
   const toast = useDynamicIsland("settings");
@@ -1994,10 +1995,13 @@ function AppearanceSettings() {
                     py={2}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("preset")}
+                    border="1px solid"
+                    borderColor={backgroundMode === "preset" ? getActiveColor() : "transparent"}
+                    bg={backgroundMode === "preset" ? `${getActiveColor()}15` : "transparent"}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "preset" ? "black" : labelColor}
+                      color={backgroundMode === "preset" ? modeButtonActiveColor : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
@@ -2010,10 +2014,13 @@ function AppearanceSettings() {
                     py={2}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("image")}
+                    border="1px solid"
+                    borderColor={backgroundMode === "image" ? getActiveColor() : "transparent"}
+                    bg={backgroundMode === "image" ? `${getActiveColor()}15` : "transparent"}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "image" ? "black" : labelColor}
+                      color={backgroundMode === "image" ? modeButtonActiveColor : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
@@ -2026,10 +2033,13 @@ function AppearanceSettings() {
                     py={2}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("dynamic")}
+                    border="1px solid"
+                    borderColor={backgroundMode === "dynamic" ? getActiveColor() : "transparent"}
+                    bg={backgroundMode === "dynamic" ? `${getActiveColor()}15` : "transparent"}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "dynamic" ? "black" : labelColor}
+                      color={backgroundMode === "dynamic" ? modeButtonActiveColor : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
@@ -2042,10 +2052,13 @@ function AppearanceSettings() {
                     py={2}
                     cursor="pointer"
                     onClick={() => setBackgroundMode("mr")}
+                    border="1px solid"
+                    borderColor={backgroundMode === "mr" ? getActiveColor() : "transparent"}
+                    bg={backgroundMode === "mr" ? `${getActiveColor()}15` : "transparent"}
                   >
                     <Text
                       fontSize="sm"
-                      color={backgroundMode === "mr" ? "black" : labelColor}
+                      color={backgroundMode === "mr" ? modeButtonActiveColor : labelColor}
                       textAlign="center"
                       fontWeight="medium"
                     >
@@ -3062,7 +3075,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.6.7";
+  const currentVersion = "8.8.2";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3447,7 +3460,7 @@ function AboutSettings() {
 
 function HotkeySettings() {
   const { t } = useTranslation();
-  const { overlayHotkey, saveOverlayHotkey, crosshairHotkey, saveCrosshairHotkey, filterHotkey, saveFilterHotkey, autoclickerHotkey, saveAutoclickerHotkey, musicPrevHotkey, saveMusicPrevHotkey, musicNextHotkey, saveMusicNextHotkey, musicPlayPauseHotkey, saveMusicPlayPauseHotkey, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
+  const { overlayHotkey, saveOverlayHotkey, overlayHotkeyEnabled, saveOverlayHotkeyEnabled, crosshairHotkey, saveCrosshairHotkey, crosshairHotkeyEnabled, saveCrosshairHotkeyEnabled, filterHotkey, saveFilterHotkey, filterHotkeyEnabled, saveFilterHotkeyEnabled, autoclickerHotkey, saveAutoclickerHotkey, autoclickerHotkeyEnabled, saveAutoclickerHotkeyEnabled, musicPrevHotkey, saveMusicPrevHotkey, musicPrevHotkeyEnabled, saveMusicPrevHotkeyEnabled, musicNextHotkey, saveMusicNextHotkey, musicNextHotkeyEnabled, saveMusicNextHotkeyEnabled, musicPlayPauseHotkey, saveMusicPlayPauseHotkey, musicPlayPauseHotkeyEnabled, saveMusicPlayPauseHotkeyEnabled, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useDynamicIsland("settings");
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
@@ -3513,20 +3526,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.overlayToggleDesc") || "使用快捷键显示或隐藏悬浮框"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={overlayHotkey}
-              onChange={async (val) => {
-                const err = await saveOverlayHotkey(val);
-                toast({
-                  title: err
-                    ? err
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={overlayHotkeyEnabled}
+                onChange={(e) => saveOverlayHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={overlayHotkey}
+                onChange={async (val) => {
+                  const err = await saveOverlayHotkey(val);
+                  toast({
+                    title: err
+                      ? err
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
       </Box>
@@ -3552,20 +3572,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.crosshairToggleDesc") || "使用快捷键显示或隐藏准心"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={crosshairHotkey}
-              onChange={async (val) => {
-                const err = await saveCrosshairHotkey(val);
-                toast({
-                  title: err
-                    ? err
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={crosshairHotkeyEnabled}
+                onChange={(e) => saveCrosshairHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={crosshairHotkey}
+                onChange={async (val) => {
+                  const err = await saveCrosshairHotkey(val);
+                  toast({
+                    title: err
+                      ? err
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
       </Box>
@@ -3591,20 +3618,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.filterToggleDesc") || "使用快捷键开启或关闭滤镜"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={filterHotkey}
-              onChange={async (val) => {
-                const err = await saveFilterHotkey(val);
-                toast({
-                  title: err
-                    ? err
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={filterHotkeyEnabled}
+                onChange={(e) => saveFilterHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={filterHotkey}
+                onChange={async (val) => {
+                  const err = await saveFilterHotkey(val);
+                  toast({
+                    title: err
+                      ? err
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
       </Box>
@@ -3630,20 +3664,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.autoclickerToggleDesc") || "使用快捷键开始或停止连点（支持中键、侧键）"}
               </Text>
             </Box>
-            <MouseHotkeyRecorder
-              value={autoclickerHotkey}
-              onChange={async (val) => {
-                const err = await saveAutoclickerHotkey(val);
-                toast({
-                  title: err
-                    ? err
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={autoclickerHotkeyEnabled}
+                onChange={(e) => saveAutoclickerHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <MouseHotkeyRecorder
+                value={autoclickerHotkey}
+                onChange={async (val) => {
+                  const err = await saveAutoclickerHotkey(val);
+                  toast({
+                    title: err
+                      ? err
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
       </Box>
@@ -3669,20 +3710,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.musicPrevDesc") || "使用快捷键切换到上一曲"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={musicPrevHotkey}
-              onChange={async (val) => {
-                const err = await saveMusicPrevHotkey(val);
-                toast({
-                  title: err
-                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={musicPrevHotkeyEnabled}
+                onChange={(e) => saveMusicPrevHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={musicPrevHotkey}
+                onChange={async (val) => {
+                  const err = await saveMusicPrevHotkey(val);
+                  toast({
+                    title: err
+                      ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
           <HStack justify="space-between" mb={4}>
             <Box flex={1}>
@@ -3693,20 +3741,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.musicNextDesc") || "使用快捷键切换到下一曲"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={musicNextHotkey}
-              onChange={async (val) => {
-                const err = await saveMusicNextHotkey(val);
-                toast({
-                  title: err
-                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={musicNextHotkeyEnabled}
+                onChange={(e) => saveMusicNextHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={musicNextHotkey}
+                onChange={async (val) => {
+                  const err = await saveMusicNextHotkey(val);
+                  toast({
+                    title: err
+                      ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
           <HStack justify="space-between">
             <Box flex={1}>
@@ -3717,20 +3772,27 @@ function HotkeySettings() {
                 {t("hotkeySettings.musicPlayPauseDesc") || "使用快捷键播放或暂停音乐"}
               </Text>
             </Box>
-            <HotkeyRecorder
-              value={musicPlayPauseHotkey}
-              onChange={async (val) => {
-                const err = await saveMusicPlayPauseHotkey(val);
-                toast({
-                  title: err
-                    ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
-                    : (t("hotkeySettings.saved") || "快捷键已保存"),
-                  status: err ? "error" : "success",
-                  duration: 2000,
-                  isClosable: true,
-                });
-              }}
-            />
+            <HStack spacing={3} alignItems="center">
+              <ThemeSwitch
+                isChecked={musicPlayPauseHotkeyEnabled}
+                onChange={(e) => saveMusicPlayPauseHotkeyEnabled(e.target.checked)}
+                size="md"
+              />
+              <HotkeyRecorder
+                value={musicPlayPauseHotkey}
+                onChange={async (val) => {
+                  const err = await saveMusicPlayPauseHotkey(val);
+                  toast({
+                    title: err
+                      ? (t("hotkeySettings.saveFailed") || "快捷键保存失败")
+                      : (t("hotkeySettings.saved") || "快捷键已保存"),
+                    status: err ? "error" : "success",
+                    duration: 2000,
+                    isClosable: true,
+                  });
+                }}
+              />
+            </HStack>
           </HStack>
         </LiquidGlassCard>
       </Box>
