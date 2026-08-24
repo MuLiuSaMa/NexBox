@@ -108,14 +108,6 @@ export const searchIndex: SearchItem[] = [
     keywords: ["三角洲", "delta", "force", "密码", "改枪码"],
   },
   {
-    id: "mood",
-    nameKey: "sidebar.mood",
-    path: "/mood",
-    icon: Heart,
-    category: "page",
-    keywords: ["心境", "mood", "心情"],
-  },
-  {
     id: "epic-free",
     nameKey: "sidebar.epicFree",
     path: "/epic-free",

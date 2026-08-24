@@ -1133,6 +1133,7 @@ export function DynamicIslandHost() {
   const lastRevisionRef = useRef(revision);
   const chainRef = useRef<Promise<void>>(Promise.resolve());
   const islandRef = useRef<HTMLDivElement | null>(null);
+  const lastMusicKeyRef = useRef<string>("");
 
   useEffect(() => {
     itemRef.current = item;
@@ -1141,16 +1142,30 @@ export function DynamicIslandHost() {
   // 音乐播放灵动岛：有歌时设为持久基线（无自动关闭），无歌时才关闭。
   // 优先级：内部正在播放 > 外部正在播放 > 内部(暂停) > 外部(暂停)；即内部在播时优先显示内部，
   // 否则「正在播放」优先。切歌/切换来源触发 replace 动画。
-  // 注意：仅以「歌名 + 播放态」为依赖，避免每 1s 的外部队列进度刷新反复触发替换动画。
+  // 注意：playSong 会先置 currentSong(暂停) 再异步置 isPlaying=true，若以「播放态」为展示触发，
+  // 会导致同一首歌先淡入展开、再缩回扩散，看起来「加载两次才播放」。
+  // 因此用「展示键(来源+曲目)」去重：仅当实际展示的曲目/来源变化时才触发 showPersistent 动画；
+  // 仅 play/pause 翻转只实时驱动波形（useSongLevels），不再重复缩→扩动画。
   useEffect(() => {
     const internalActive = Boolean(currentSong) && (isPlaying || !externalPlaying);
     const useExternal = Boolean(externalTrack?.title) && !internalActive;
-    if (useExternal) {
-      showPersistent({ id: "music", kind: "music", duration: null, iconKey: "music", title: externalTrack!.title });
-    } else if (currentSong) {
-      showPersistent({ id: "music", kind: "music", duration: null, iconKey: "music", title: currentSong.name });
-    } else {
+    const key = useExternal
+      ? `ext:${externalTrack!.title}`
+      : currentSong
+        ? `int:${currentSong.id}:${currentSong.name}`
+        : "none";
+    if (key === lastMusicKeyRef.current) return;
+    lastMusicKeyRef.current = key;
+    if (key === "none") {
       closePersistent("music");
+    } else {
+      showPersistent({
+        id: "music",
+        kind: "music",
+        duration: null,
+        iconKey: "music",
+        title: useExternal ? externalTrack!.title : currentSong!.name,
+      });
     }
   }, [currentSong, isPlaying, externalPlaying, externalTrack?.title]);
 

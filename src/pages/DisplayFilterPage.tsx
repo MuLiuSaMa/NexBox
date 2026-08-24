@@ -74,6 +74,8 @@ interface FilterSettings {
   preview_filter_icc: string | null;
   preview_tint_color_icc: string | null;
   preview_tint_opacity_icc: number | null;
+  stacked: boolean;
+  stack_preset_ids: string[];
 }
 
 interface FilterPreset {
@@ -214,6 +216,8 @@ export default function DisplayFilterPage() {
     preview_filter_icc: null,
     preview_tint_color_icc: null,
     preview_tint_opacity_icc: null,
+    stacked: false,
+    stack_preset_ids: [],
   });
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -226,6 +230,18 @@ export default function DisplayFilterPage() {
         setAutoApplyOnStartup(v);
       } else {
         setAutoApplyOnStartup(localStorage.getItem("nexbox_auto_apply") === "true");
+      }
+    })();
+  }, []);
+
+  // 恢复「使用多个滤镜」开关状态
+  useEffect(() => {
+    (async () => {
+      let v = await store.get<boolean>("nexbox_multi_filter");
+      if (v !== null && v !== undefined) {
+        setMultiFilterEnabled(v);
+      } else {
+        setMultiFilterEnabled(localStorage.getItem("nexbox_multi_filter") === "true");
       }
     })();
   }, []);
@@ -262,6 +278,10 @@ export default function DisplayFilterPage() {
   const [gameFilterGames, setGameFilterGames] = useState<GameEntry[]>([]);
   const [isGameFilterBusy, setIsGameFilterBusy] = useState(false);
   const [isGameFilterListOpen, setIsGameFilterListOpen] = useState(false);
+  
+  // 多滤镜叠加模式：开关（持久化）+ 选中列表（点选标记，需手动应用）
+  const [multiFilterEnabled, setMultiFilterEnabled] = useState(false);
+  const [selectedStackIds, setSelectedStackIds] = useState<string[]>([]);
   
   // 滤镜预览相关
   const [splitPosition, setSplitPosition] = useState(50);
@@ -309,6 +329,10 @@ export default function DisplayFilterPage() {
     try {
       const result: FilterSettings = await invoke("get_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       setSettings(result);
+      // 叠加模式：回填已应用的组合徽标（不覆盖用户进行中的点选）
+      if (result.stacked && result.stack_preset_ids) {
+        setSelectedStackIds(result.stack_preset_ids);
+      }
       // 恢复 ICC 激活状态 — 映射 active_icc_id 回预设卡片
       if (result.icc_active && result.active_icc_id) {
         setActiveIccId(result.active_icc_id);
@@ -436,6 +460,83 @@ export default function DisplayFilterPage() {
     }
   }, [toast, t]);
 
+  // 切换「使用多个滤镜」开关（持久化到本地 store）
+  const handleToggleMultiFilter = useCallback((enabled: boolean) => {
+    setMultiFilterEnabled(enabled);
+    localStorage.setItem("nexbox_multi_filter", enabled ? "true" : "false");
+    store.set("nexbox_multi_filter", enabled).then(() => store.save());
+    if (enabled) {
+      // 多选模式：把当前已生效的滤镜自动带入选中列表（否则已开启的滤镜无徽标且会丢失）
+      let initial: string[] = [];
+      if (settings.stacked && settings.stack_preset_ids.length > 0) {
+        // 本就是叠加 → 沿用已应用的组合
+        initial = settings.stack_preset_ids;
+      } else if (settings.is_active) {
+        if (activeIccId && activeIccId !== "") {
+          // 内置预设 ICC（builtin_NexBox_*）映射回预设卡 id；其它 ICC 直接用原 id
+          initial = [ICC_TO_PRESET[activeIccId] || activeIccId];
+        } else if (activePresetId && activePresetId !== "" && activePresetId !== "custom") {
+          initial = [activePresetId];
+        } else {
+          // 兜底：按当前参数匹配预设卡（自定义/用户预设应用后 mode 归 0 的场景）
+          const matched = presets.find(
+            (p) =>
+              p.mode === settings.mode &&
+              p.temperature === settings.temperature &&
+              p.brightness === settings.brightness &&
+              p.contrast === settings.contrast &&
+              p.saturation === settings.saturation,
+          );
+          if (matched) initial = [matched.id];
+        }
+      }
+      setSelectedStackIds(initial);
+      // 中止单选高亮，避免与徽标混淆
+      setActivePresetId("");
+      setActiveIccId(null);
+    } else {
+      // 关闭多选：清空进行中的点选，恢复单选行为
+      setSelectedStackIds([]);
+      if (!settings.stacked) {
+        setActivePresetId("");
+      }
+    }
+  }, [settings, activeIccId, activePresetId, presets]);
+
+  // 将当前选中组合同步到后端（主开关开启时即时应用；空组合 = 清除叠加）
+  const syncStackToBackend = useCallback(async (ids: string[]) => {
+    try {
+      const result: any = await invoke("apply_filter_stack", {
+        displayIndex: activeDisplayIndexRef.current,
+        presetIds: ids,
+      });
+      if (result.success) {
+        setSettings(result.settings as FilterSettings);
+        setActiveIccId(null);
+        setActivePresetId("");
+      }
+    } catch (error) {
+      toast({
+        title: t("displayFilter.error"),
+        description: String(error),
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  }, [toast, t]);
+
+  // 多选点选/取消：仅做标记；主开关已开启时改选组合即时重新生效
+  const toggleStackSelection = useCallback((id: string) => {
+    const next = selectedStackIds.includes(id)
+      ? selectedStackIds.filter((x) => x !== id)
+      : [...selectedStackIds, id];
+    setSelectedStackIds(next);
+    if (settings.is_active) {
+      void syncStackToBackend(next);
+    }
+  }, [selectedStackIds, settings.is_active, syncStackToBackend]);
+
   useEffect(() => {
     activeDisplayIndexRef.current = activeDisplayIndex;
   }, [activeDisplayIndex]);
@@ -534,10 +635,18 @@ export default function DisplayFilterPage() {
         }
       }
 
-      console.log("%c[FilterToggle] 调用 toggle_filter...", "color: #4CAF50", {
+      // 多选叠加模式开启：开启主开关 = 直接应用当前选中的组合
+      const useStack = willEnable && multiFilterEnabled && selectedStackIds.length > 0;
+      console.log("%c[FilterToggle] 调用", "color: #4CAF50", useStack ? "apply_filter_stack" : "toggle_filter", {
         displayIndex: activeDisplayIndex,
+        presetIds: selectedStackIds,
       });
-      const result: any = await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
+      const result: any = useStack
+        ? await invoke("apply_filter_stack", {
+            displayIndex: activeDisplayIndex,
+            presetIds: selectedStackIds,
+          })
+        : await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
 
       console.log("%c[FilterToggle] toggle_filter 返回:", "color: #4CAF50", {
         success: result.success,
@@ -615,6 +724,8 @@ export default function DisplayFilterPage() {
           preview_filter_icc: s?.preview_filter_icc ?? null,
           preview_tint_color_icc: s?.preview_tint_color_icc ?? null,
           preview_tint_opacity_icc: s?.preview_tint_opacity_icc ?? null,
+          stacked: false,
+          stack_preset_ids: [],
         });
         // ICC 内置预设：使用后端返回的 ICC 预览效果（分段预览的滤镜侧）
         const hasIccPreview = !!result.preview_filter || !!result.preview_tint_color;
@@ -711,6 +822,8 @@ export default function DisplayFilterPage() {
             preview_filter_icc: null,
             preview_tint_color_icc: null,
             preview_tint_opacity_icc: null,
+            stacked: false,
+            stack_preset_ids: [],
           }));
         }
       } catch (error) {
@@ -806,6 +919,8 @@ export default function DisplayFilterPage() {
           preview_filter_icc: null,
           preview_tint_color_icc: null,
           preview_tint_opacity_icc: null,
+          stacked: false,
+          stack_preset_ids: [],
         }));
         
         await invoke("save_custom_filter_settings", {
@@ -932,6 +1047,8 @@ export default function DisplayFilterPage() {
           preview_filter_icc: null,
           preview_tint_color_icc: null,
           preview_tint_opacity_icc: null,
+          stacked: false,
+          stack_preset_ids: [],
         });
         editValuesRef.current = {
           temperature: preset.temperature,
@@ -1013,6 +1130,8 @@ export default function DisplayFilterPage() {
           preview_filter_icc: rs?.preview_filter_icc ?? null,
           preview_tint_color_icc: rs?.preview_tint_color_icc ?? null,
           preview_tint_opacity_icc: rs?.preview_tint_opacity_icc ?? null,
+          stacked: false,
+          stack_preset_ids: [],
         }));
         const normal = {
           temperature: 6500,
@@ -1765,6 +1884,23 @@ export default function DisplayFilterPage() {
           </HStack>
           <HStack spacing={2} flexWrap="wrap">
             <HStack
+              bg={multiFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={multiFilterEnabled ? primaryColor : "transparent"}
+            >
+              <Text color={textColor} fontSize="xs" fontWeight="500">
+                {t("displayFilter.multiFilterTitle")}
+              </Text>
+              <ThemeSwitch
+                isChecked={multiFilterEnabled}
+                onChange={(e) => handleToggleMultiFilter(e.target.checked)}
+                isDisabled={isLoading}
+              />
+            </HStack>
+            <HStack
               bg={gameFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
               px={4}
               py={2}
@@ -1848,7 +1984,10 @@ export default function DisplayFilterPage() {
         >
           {presets.map((preset) => {
             const Icon = presetIcons[preset.id] || Monitor;
-            const isActive = activePresetId === preset.id;
+            // 多选模式：选中态由 selectedStackIds 驱动；单选模式保持原有 activePresetId 高亮
+            const isActive = multiFilterEnabled
+              ? selectedStackIds.includes(preset.id)
+              : activePresetId === preset.id;
             const accentColor = presetColors[preset.id] || primaryColor;
             return (
               <Tooltip key={preset.id} label={preset.description} placement="top">
@@ -1859,7 +1998,7 @@ export default function DisplayFilterPage() {
                   borderRadius="xl"
                   p={4}
                   cursor="pointer"
-                  onClick={() => applyPreset(preset)}
+                  onClick={() => (multiFilterEnabled ? toggleStackSelection(preset.id) : applyPreset(preset))}
                   border={liquidGlassEnabled ? "1px solid" : "2px solid"}
                   borderColor={liquidGlassEnabled
                     ? (isActive ? accentColor : miniGlassBorder)
@@ -1887,21 +2026,44 @@ export default function DisplayFilterPage() {
                     />
                   )}
                   
-                  <Tooltip label={t("displayFilter.exportIcc")} placement="top">
-                    <IconButton
-                      aria-label={t("displayFilter.exportIcc")}
-                      icon={<Download size={14} />}
-                      size="xs"
-                      variant="ghost"
-                      position="absolute"
-                      top={1}
-                      right={1}
-                      color={subTextColor}
-                      opacity={0.5}
-                      _hover={{ opacity: 1, color: accentColor }}
-                      onClick={(e) => handleExportIcc(preset.id, e)}
-                    />
-                  </Tooltip>
+                  {multiFilterEnabled ? (
+                    isActive && (
+                      <HStack
+                        position="absolute"
+                        top={1.5}
+                        right={1.5}
+                        spacing={1}
+                        bg={hexToRgba(accentColor, 0.9)}
+                        color="#ffffff"
+                        px={1.5}
+                        py={0.5}
+                        borderRadius="full"
+                        fontSize="9px"
+                        fontWeight="700"
+                        pointerEvents="none"
+                        zIndex={2}
+                      >
+                        <Box as="span">✓</Box>
+                        <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
+                      </HStack>
+                    )
+                  ) : (
+                    <Tooltip label={t("displayFilter.exportIcc")} placement="top">
+                      <IconButton
+                        aria-label={t("displayFilter.exportIcc")}
+                        icon={<Download size={14} />}
+                        size="xs"
+                        variant="ghost"
+                        position="absolute"
+                        top={1}
+                        right={1}
+                        color={subTextColor}
+                        opacity={0.5}
+                        _hover={{ opacity: 1, color: accentColor }}
+                        onClick={(e) => handleExportIcc(preset.id, e)}
+                      />
+                    </Tooltip>
+                  )}
                   <VStack spacing={2}>
                     <Icon size={24} color={accentColor} />
                     <Text color={textColor} fontSize="sm" fontWeight="600">
@@ -2007,16 +2169,21 @@ export default function DisplayFilterPage() {
           >
             {userPresets.map((preset) => {
               const accentColor = "#8B5CF6";
+              const isActive = multiFilterEnabled ? selectedStackIds.includes(preset.id) : false;
               return (
                 <Box
                   key={preset.id}
-                  bg={liquidGlassEnabled ? miniGlassBg : sliderBg}
+                  bg={liquidGlassEnabled
+                    ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
+                    : (isActive ? `${accentColor}20` : sliderBg)}
                   borderRadius="xl"
                   p={4}
                   cursor="pointer"
-                  onClick={() => applyUserFilterPreset(preset)}
+                  onClick={() => (multiFilterEnabled ? toggleStackSelection(preset.id) : applyUserFilterPreset(preset))}
                   border={liquidGlassEnabled ? "1px solid" : "2px solid"}
-                  borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+                  borderColor={liquidGlassEnabled
+                    ? (isActive ? accentColor : miniGlassBorder)
+                    : (isActive ? accentColor : "transparent")}
                   backdropFilter={`blur(${effectiveBlur}px)`}
                   sx={{
                     transform: "translateZ(0)",
@@ -2034,25 +2201,50 @@ export default function DisplayFilterPage() {
                 >
                   {liquidGlassEnabled && (
                     <Box
-                      style={getBorderGlowStyle(miniGlassGlow)}
+                      style={getBorderGlowStyle(
+                        isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
+                      )}
                     />
                   )}
-                  <IconButton
-                    aria-label={t("displayFilter.delete")}
-                    icon={<Trash2 size={14} />}
-                    size="xs"
-                    variant="ghost"
-                    position="absolute"
-                    top={1}
-                    right={1}
-                    color={subTextColor}
-                    opacity={0.5}
-                    _hover={{ opacity: 1, color: "red.400" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteUserPresetId(preset.id);
-                    }}
-                  />
+                  {multiFilterEnabled ? (
+                    isActive && (
+                      <HStack
+                        position="absolute"
+                        top={1.5}
+                        right={1.5}
+                        spacing={1}
+                        bg={hexToRgba(accentColor, 0.9)}
+                        color="#ffffff"
+                        px={1.5}
+                        py={0.5}
+                        borderRadius="full"
+                        fontSize="9px"
+                        fontWeight="700"
+                        pointerEvents="none"
+                        zIndex={2}
+                      >
+                        <Box as="span">✓</Box>
+                        <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
+                      </HStack>
+                    )
+                  ) : (
+                    <IconButton
+                      aria-label={t("displayFilter.delete")}
+                      icon={<Trash2 size={14} />}
+                      size="xs"
+                      variant="ghost"
+                      position="absolute"
+                      top={1}
+                      right={1}
+                      color={subTextColor}
+                      opacity={0.5}
+                      _hover={{ opacity: 1, color: "red.400" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteUserPresetId(preset.id);
+                      }}
+                    />
+                  )}
                   <VStack spacing={2}>
                     <Bookmark size={24} color={accentColor} />
                     <Text color={textColor} fontSize="sm" fontWeight="600">
@@ -2104,7 +2296,10 @@ export default function DisplayFilterPage() {
             w="full"
           >
             {iccPresets.map((icc) => {
-              const isActive = activeIccId === icc.id;
+              // 多选模式：选中态由 selectedStackIds 驱动；单选模式保持原有 activeIccId 高亮
+              const isActive = multiFilterEnabled
+                ? selectedStackIds.includes(icc.id)
+                : activeIccId === icc.id;
               const accentColor = "#38B2AC";
               return (
                 <Box
@@ -2115,7 +2310,7 @@ export default function DisplayFilterPage() {
                   borderRadius="xl"
                   p={4}
                   cursor="pointer"
-                  onClick={() => handleApplyIcc(icc.id)}
+                  onClick={() => (multiFilterEnabled ? toggleStackSelection(icc.id) : handleApplyIcc(icc.id))}
                   border={liquidGlassEnabled ? "1px solid" : "2px solid"}
                   borderColor={liquidGlassEnabled
                     ? (isActive ? accentColor : miniGlassBorder)
@@ -2143,23 +2338,46 @@ export default function DisplayFilterPage() {
                     />
                   )}
                   
-                  <Tooltip label={icc.description} placement="top">
-                    <IconButton
-                      aria-label={t("displayFilter.deleteIcc")}
-                      icon={<Trash2 size={14} />}
-                      size="xs"
-                      variant="ghost"
-                      position="absolute"
-                      top={1}
-                      right={1}
-                      color="red.400"
-                      _hover={{ bg: "red.50" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteIccId(icc.id);
-                      }}
-                    />
-                  </Tooltip>
+                  {multiFilterEnabled ? (
+                    isActive && (
+                      <HStack
+                        position="absolute"
+                        top={1.5}
+                        right={1.5}
+                        spacing={1}
+                        bg={hexToRgba(accentColor, 0.9)}
+                        color="#ffffff"
+                        px={1.5}
+                        py={0.5}
+                        borderRadius="full"
+                        fontSize="9px"
+                        fontWeight="700"
+                        pointerEvents="none"
+                        zIndex={2}
+                      >
+                        <Box as="span">✓</Box>
+                        <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
+                      </HStack>
+                    )
+                  ) : (
+                    <Tooltip label={icc.description} placement="top">
+                      <IconButton
+                        aria-label={t("displayFilter.deleteIcc")}
+                        icon={<Trash2 size={14} />}
+                        size="xs"
+                        variant="ghost"
+                        position="absolute"
+                        top={1}
+                        right={1}
+                        color="red.400"
+                        _hover={{ bg: "red.50" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteIccId(icc.id);
+                        }}
+                      />
+                    </Tooltip>
+                  )}
                   <VStack spacing={2}>
                     <FileImage size={24} color={accentColor} />
                     <Text color={textColor} fontSize="sm" fontWeight="600" noOfLines={1}>
@@ -2272,11 +2490,13 @@ export default function DisplayFilterPage() {
                   willChange: "filter",
                   ...(activeIccId
                     ? { filter: iccPreviewFilter || "none" } as React.CSSProperties
+                    : settings.stacked
+                    ? { filter: settings.preview_filter_icc || "none" } as React.CSSProperties
                     : filterStyle),
                 }}
                 draggable={false}
               />
-              {/* 色温/ICC 覆盖层 */}
+              {/* 色温/ICC/叠加 覆盖层 */}
               {activeIccId ? (
                 iccTintColor ? (
                   <Box
@@ -2288,6 +2508,15 @@ export default function DisplayFilterPage() {
                     pointerEvents="none"
                   />
                 ) : null
+              ) : settings.stacked && settings.preview_tint_color_icc ? (
+                <Box
+                  position="absolute"
+                  inset={0}
+                  backgroundColor={settings.preview_tint_color_icc}
+                  mixBlendMode="overlay"
+                  opacity={settings.preview_tint_opacity_icc ?? 0}
+                  pointerEvents="none"
+                />
               ) : (
                 <Box style={temperatureOverlay} />
               )}
@@ -2392,6 +2621,11 @@ export default function DisplayFilterPage() {
                   ICC
                 </Text>
               )}
+              {settings.stacked && !activeIccId && (
+                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={hexToRgba(primaryColor, 0.2)} px={1} py={0.5} borderRadius="full">
+                  {t("displayFilter.stackedMode")}
+                </Text>
+              )}
             </HStack>
             {activePresetId === "custom" && (
               <VStack spacing={1} align="stretch">
@@ -2447,6 +2681,14 @@ export default function DisplayFilterPage() {
             <Box p={2} borderRadius="md" bg={hexToRgba(primaryColor, 0.08)}>
               <Text color={textColor} fontSize="xs">
                 {iccPresets.find(p => p.id === activeIccId)?.description || t("displayFilter.iccApplied")}
+              </Text>
+            </Box>
+          )}
+
+          {settings.stacked && !activeIccId && (
+            <Box p={2} borderRadius="md" bg={hexToRgba(primaryColor, 0.08)}>
+              <Text color={textColor} fontSize="xs">
+                {t("displayFilter.stackedCount")}: {settings.stack_preset_ids.length}
               </Text>
             </Box>
           )}
@@ -2538,6 +2780,18 @@ export default function DisplayFilterPage() {
                     </VStack>
                   </Box>
                 </>
+              ) : settings.stacked ? (
+                <VStack spacing={2} align="stretch" justify="center" py={2}>
+                  <Box p={3} borderRadius="md" bg={hexToRgba(primaryColor, 0.08)}>
+                    <Text color={textColor} fontSize="sm" fontWeight="600">
+                      {t("displayFilter.stackedMode")}
+                    </Text>
+                    <Flex justify="space-between" mt={1}>
+                      <Text color={subTextColor} fontSize="xs">{t("displayFilter.stackedCount")}</Text>
+                      <Text color={primaryColor} fontSize="xs" fontWeight="700">{settings.stack_preset_ids.length}</Text>
+                    </Flex>
+                  </Box>
+                </VStack>
               ) : (
                 <>
                   <ReadOnlyItem 

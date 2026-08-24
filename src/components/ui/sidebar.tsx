@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image, useColorMode } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Cpu, TrendingUp, Heart, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
+import { Home, Wrench, Settings, Cpu, TrendingUp, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -260,7 +260,7 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
-  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
   const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
 
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
@@ -288,7 +288,7 @@ export function Sidebar() {
       if (orderStr) {
         try {
           const parsed = JSON.parse(orderStr) as string[];
-          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+          const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
           let changed = false;
           for (const p of allPaths) {
             if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -305,7 +305,7 @@ export function Sidebar() {
           const saved = localStorage.getItem(NAV_ORDER_KEY);
           if (saved) {
             const parsed = JSON.parse(saved) as string[];
-            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+            const allPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
             let changed = false;
             for (const p of allPaths) {
               if (!parsed.includes(p)) { parsed.push(p); changed = true; }
@@ -403,7 +403,6 @@ export function Sidebar() {
     { path: "/delta-force", icon: null, customIcon: deltaForceIconLight, customIconDark: deltaForceIconDark, customIconSize: "20px", ariaLabel: t("sidebar.deltaForce") },
     { path: "/steam", icon: null, customIcon: steamIconLight, customIconDark: steamIconDark, customIconSize: "44px", ariaLabel: t("sidebar.steam"), alwaysShowLabel: true },
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
-    { path: "/mood", icon: Heart, ariaLabel: t("sidebar.mood") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
   ];

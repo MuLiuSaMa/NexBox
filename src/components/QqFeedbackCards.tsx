@@ -114,10 +114,12 @@ function FeedbackLinkCard({
 /** 首页「问题反馈」卡片：点击跳转官网反馈 */
 export function FeedbackCard() {
   const { t } = useTranslation();
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
+  // 注意：react-icons 的 <svg color> 不经过 Chakra 主题解析，必须传真实 hex，
+  // 不能用 Chakra token（如 gray.800），否则浅色模式下图标会退化为白色
+  const iconColor = useColorModeValue("#1a202c", "#ffffff");
   return (
     <FeedbackLinkCard
-      icon={<FaBug size={18} color={titleColor} />}
+      icon={<FaBug size={18} color={iconColor} />}
       title={t("home.feedbackCard.title")}
       subtitle={t("home.feedbackCard.subtitle")}
       onClick={() => openExternal(FEEDBACK_URL)}

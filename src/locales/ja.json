@@ -677,6 +677,10 @@
       "downloadFailed": "画像の保存に失敗しました",
       "noImageYet": "ダウンロードできる画像がありません",
       "previewAlt": "ランダム画像プレビュー"
+    },
+    "mood": {
+      "title": "心境",
+      "subtitle": "クリックして心境を開く"
     }
   },
   "hardware": {
@@ -936,7 +940,11 @@
     "save": "保存",
     "gameFilterTitle": "ゲーム起動時にフィルターを自動適用",
     "gameFilterSupportedTitle": "対応しているゲーム",
-    "gameFilterError": "操作に失敗しました"
+    "gameFilterError": "操作に失敗しました",
+    "multiFilterTitle": "複数のフィルターを使用",
+    "multiFilterSelected": "選択済み",
+    "stackedMode": "スタックモード",
+    "stackedCount": "スタックされたフィルター数"
   },
   "floatingNav": {
     "title": "フローティングナビゲーションボックス",
@@ -1058,6 +1066,10 @@
     "dlssNote": "NVIDIA Profile Inspectorが必要です。変更を有効にするにはゲームを再起動してください",
     "back": "戻る",
     "dlssModels": {
+      "default": {
+        "name": "デフォルト（3Dプログラム）",
+        "description": "3Dプログラムが決定（強制オーバーライドなし）"
+      },
       "A": {
         "name": "モデルA",
         "description": "初期モデル"
@@ -1744,6 +1756,12 @@
       "gameModeDesc": "タイトルバーにゲームモード切替を表示し、デフォルト/通常/競技モードをワンクリックで切替",
       "randomImageLabel": "ランダム画像",
       "randomImageDesc": "ホームページにランダム画像カードを表示",
+      "moodCardLabel": "心境カード",
+      "moodCardDesc": "ホームページに心境カードを表示",
+      "cornerTopLeft": "左上",
+      "cornerTopRight": "右上",
+      "cornerBottomLeft": "左下",
+      "cornerBottomRight": "右下",
       "splash": "アニメーション",
       "splashLogoLabel": "スプラッシュロゴ",
       "splashLogoDesc": "起動時に表示されるロゴ画像をカスタマイズ",

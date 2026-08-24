@@ -33,6 +33,7 @@ mod hardware_report;
 mod feature_flags;
 mod hotkey;
 mod main_window;
+mod media_keys;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -54,6 +55,7 @@ mod smart;
 mod sponsor;
 mod contributor;
 mod qq_group;
+mod ads;
 mod startup_manager;
 mod service_manager;
 mod system_fonts;
@@ -117,6 +119,49 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
             None
         }
     }
+}
+
+/// 按需创建心境窗口（不常驻，点击主页「心境」卡片时创建并显示）。
+/// 加载应用内 /mood 路由（WebviewUrl::App 对 SPA 回退到 index.html）。
+pub fn ensure_mood_window<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Option<tauri::WebviewWindow<R>> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+
+    let label = "mood";
+    if let Some(win) = app.get_webview_window(label) {
+        return Some(win);
+    }
+
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(label.into()))
+        .title("心境")
+        // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
+        // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+        .inner_size(1000.0, 700.0)
+        .resizable(true)
+        .center()
+        .visible(false);
+
+    match builder.build() {
+        Ok(win) => Some(win),
+        Err(e) => {
+            log::error!("[Window] 创建 mood 窗口失败: {e}");
+            None
+        }
+    }
+}
+
+/// 打开心境窗口：不存在则创建，已存在则显示并聚焦。
+/// 使用 async 命令（与其它开窗命令保持一致），避免同步命令在阻塞线程操作窗口导致死锁。
+#[tauri::command]
+async fn open_mood_window(app: tauri::AppHandle) -> Result<(), String> {
+    let Some(win) = ensure_mood_window(&app) else {
+        return Err("创建心境窗口失败".to_string());
+    };
+    win.show().map_err(|e| format!("显示心境窗口失败: {}", e))?;
+    let _ = win.set_focus();
+    Ok(())
 }
 
 /// 设置当前进程效能模式（EcoQoS，即任务管理器中的"小绿叶"）。
@@ -482,6 +527,9 @@ pub fn run() {
             // 注册本应用内置播放器的 SMTC 媒体会话（音量浮层/锁屏显示「新境盒」并支持媒体键控制）
             smtc::start(app.handle().clone());
 
+            // 键盘物理媒体键统一捕获（前台聚焦时 WebView2 会抢键，必须用低层钩子在 WebView2 之前接管）
+            media_keys::start(app.handle().clone());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -731,6 +779,7 @@ pub fn run() {
         display_filter::apply_icc_preset,
         display_filter::delete_icc_preset,
         display_filter::export_preset_as_icc,
+        display_filter::apply_filter_stack,
         display_filter::restore_filter_state,
         game_filter::get_game_filter_status,
         game_filter::set_game_filter_enabled,
@@ -903,6 +952,7 @@ pub fn run() {
         delta_force::toggle_dlss_lock,
         delta_force::get_dlss_settings_status,
         delta_force::open_platform_window,
+        open_mood_window,
         game_launcher::launch_game,
         game_launcher::search_delta_force_launcher,
         game_launcher::get_default_delta_force_game,
@@ -918,6 +968,8 @@ pub fn run() {
             contributor::get_contributors,
         qq_group::get_qq_groups,
         qq_group::get_qq_group_icon,
+        ads::get_ads,
+        ads::get_ad_image,
         shader_cache::scan_shader_caches,
         shader_cache::clean_shader_cache,
         nvapi::get_nvapi_status,

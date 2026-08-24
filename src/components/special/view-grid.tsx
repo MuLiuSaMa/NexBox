@@ -28,6 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LiquidGlassCard } from "./liquid-glass-card";
+import { PressTilt } from "./press-tilt";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -180,7 +181,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
         style={{ pointerEvents: isDragging ? "none" : "auto" }}
         cursor={isDragging ? "grabbing" : "pointer"}
       >
-        {innerCard}
+        <PressTilt color={tool.color}>{innerCard}</PressTilt>
       </Box>
     </Box>
   );
@@ -245,40 +246,44 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
   if (liquidGlassEnabled) {
     return (
       <Link to={tool.path}>
-        <LiquidGlassCard
-          w="full"
-          h="full"
-          minH="200px"
-          cursor="pointer"
-          p={6}
-          position="relative"
-        >
-          {cardContent}
-        </LiquidGlassCard>
+        <PressTilt color={tool.color}>
+          <LiquidGlassCard
+            w="full"
+            h="full"
+            minH="200px"
+            cursor="pointer"
+            p={6}
+            position="relative"
+          >
+            {cardContent}
+          </LiquidGlassCard>
+        </PressTilt>
       </Link>
     );
   }
 
   return (
     <Link to={tool.path}>
-      <Box
-        bg={cardBg}
-        borderRadius="xl"
-        p={6}
-        minH="200px"
-        cursor="pointer"
-        border="2px solid"
-        borderColor={cardBorder}
-        transition="all 0.2s"
-        _hover={{
-          borderColor: tool.color,
-          bg: hoverBg,
-        }}
-        position="relative"
-        overflow="hidden"
-      >
-        {cardContent}
-      </Box>
+      <PressTilt color={tool.color}>
+        <Box
+          bg={cardBg}
+          borderRadius="xl"
+          p={6}
+          minH="200px"
+          cursor="pointer"
+          border="2px solid"
+          borderColor={cardBorder}
+          transition="all 0.2s"
+          _hover={{
+            borderColor: tool.color,
+            bg: hoverBg,
+          }}
+          position="relative"
+          overflow="hidden"
+        >
+          {cardContent}
+        </Box>
+      </PressTilt>
     </Link>
   );
 }

@@ -1,7 +1,41 @@
 import { extendTheme, type ThemeConfig } from "@chakra-ui/react";
 
+export const LS_THEME_MODE = "nexbox-theme-mode";
+export type ThemeMode = "light" | "dark" | "system";
+
+/** 同步读取持久化的主题模式：light/dark/system，无记录时默认跟随系统 */
+export function readInitialThemeMode(): ThemeMode {
+  try {
+    const m = localStorage.getItem(LS_THEME_MODE);
+    if (m === "light" || m === "dark" || m === "system") return m;
+    // 迁移：老版本只有 chakra-ui-color-mode，尊重既有显式选择
+    const legacy = localStorage.getItem("chakra-ui-color-mode");
+    if (legacy === "light" || legacy === "dark") return legacy;
+  } catch {
+    // localStorage 不可用时返回默认跟随系统
+  }
+  return "system";
+}
+
+/** 系统是否偏好深色 */
+export function systemPrefersDark(): boolean {
+  try {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  } catch {
+    return false;
+  }
+}
+
+/** 根据持久化主题模式的解析浅/深，用作首帧初始 colorMode、避免闪烁 */
+function readInitialScheme(): "light" | "dark" {
+  const m = readInitialThemeMode();
+  if (m === "light") return "light";
+  if (m === "dark") return "dark";
+  return systemPrefersDark() ? "dark" : "light";
+}
+
 const config: ThemeConfig = {
-  initialColorMode: "light",
+  initialColorMode: readInitialScheme(),
   useSystemColorMode: false,
 };
 

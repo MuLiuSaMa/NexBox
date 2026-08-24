@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
+
 import { useLocation } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
@@ -11,6 +13,7 @@ import {
   Input,
   InputGroup,
   InputLeftElement,
+  InputRightElement,
   Button,
   Text,
   Spinner,
@@ -61,11 +64,13 @@ import {
   ChevronRight,
   X,
   Maximize2,
+  Minimize2,
   Trash2,
   FolderOpen,
   FolderPlus,
   FileMusic,
   HeartPulse,
+  Waves,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -75,6 +80,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
+import { ImmersiveLyricsView, ImmersiveRippleField } from "@/components/ImmersiveLyricsView";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualList } from "@/components/VirtualList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
@@ -632,12 +638,135 @@ interface ExpandedPlayerProps {
   onClose: () => void;
 }
 
+/**
+ * 沉浸背景固定色板（纯色，均为深色调中性色）：
+ * 青 / 深蓝 / 深橙 / 紫粉 / 黄色 / 红色 / 绿色 / 灰色
+ */
+const VIVID_PALETTE: { name: string; hue: number; hex: string; rgb: [number, number, number] }[] = [
+  { name: "青", hue: 194, hex: "#126d83", rgb: [18, 109, 131] },
+  { name: "深蓝", hue: 232, hex: "#303679", rgb: [48, 54, 121] },
+  { name: "深橙", hue: 18, hex: "#804127", rgb: [128, 65, 39] },
+  { name: "紫粉", hue: 313, hex: "#7e356e", rgb: [126, 53, 110] },
+  { name: "黄色", hue: 44, hex: "#7e681f", rgb: [126, 104, 31] },
+  { name: "红色", hue: 354, hex: "#7d2c33", rgb: [125, 44, 51] },
+  { name: "绿色", hue: 84, hex: "#5e8023", rgb: [94, 128, 35] },
+  { name: "灰色", hue: -1, hex: "#333333", rgb: [51, 51, 51] },
+];
+
+/** HSL → hex */
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, t: number) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  let r: number, g: number, b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h / 360 + 1 / 3);
+    g = hue2rgb(p, q, h / 360);
+    b = hue2rgb(p, q, h / 360 - 1 / 3);
+  }
+  return "#" + [r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
+}
+
+/** 在颜色基础上微调亮度（保持色相/饱和度），返回 hex */
+function shiftLightness(rgb: [number, number, number], dL: number): string {
+  const r = rgb[0] / 255, g = rgb[1] / 255, b = rgb[2] / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  const l0 = (max + min) / 2;
+  const s = d === 0 ? 0 : l0 > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+    else if (max === g) h = ((b - r) / d + 2) * 60;
+    else h = ((r - g) / d + 4) * 60;
+    h = ((h % 360) + 360) % 360;
+  }
+  const nl = Math.min(0.97, Math.max(0.03, l0 + dL));
+  return hslToHex(h, s, nl);
+}
+
+/**
+ * 封面主色 → 沉浸背景色：
+ * 提取封面色相，在固定色板中选最近色；封面几乎无色（饱和度过低）时用灰色。
+ * 额外返回 deep/light（仅微调亮度），用于"左深右浅但差别不大"的柔和渐变背景
+ */
+function makeVividColor(cr: number, cg: number, cb: number): {
+  hex: string;
+  deep: string;
+  light: string;
+  rgb: [number, number, number];
+  isLight: boolean;
+} {
+  const r = cr / 255, g = cg / 255, b = cb / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  const l = (max + min) / 2;
+  const s = d === 0 ? 0 : l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (d !== 0) {
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) * 60; break;
+      case g: h = ((b - r) / d + 2) * 60; break;
+      default: h = ((r - g) / d + 4) * 60;
+    }
+  }
+  h = ((h % 360) + 360) % 360;
+
+  // 饱和度极低 → 灰色
+  if (s < 0.08) {
+    return {
+      hex: "#333333",
+      deep: shiftLightness([51, 51, 51], -0.07),
+      light: shiftLightness([51, 51, 51], 0.07),
+      rgb: [51, 51, 51],
+      isLight: false,
+    };
+  }
+  // 色相环找最近固定色（灰色 hue=-1 不参与匹配）
+  let best = VIVID_PALETTE[0];
+  let bestDist = 361;
+  for (const c of VIVID_PALETTE) {
+    if (c.hue < 0) continue;
+    const dist = Math.min(Math.abs(h - c.hue), 360 - Math.abs(h - c.hue));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = c;
+    }
+  }
+  return {
+    hex: best.hex,
+    deep: shiftLightness(best.rgb, -0.07),
+    light: shiftLightness(best.rgb, 0.07),
+    rgb: best.rgb,
+    isLight: false,
+  };
+}
+
 const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerProps) {
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const volume = useMusicStore((s) => s.volume);
   const playMode = useMusicStore((s) => s.playMode);
   const proxyPort = useMusicStore((s) => s.proxyPort);
+  // 滚轮调节音量：上滚 +5%，下滚 -5%，四舍五入到 0.01，夹在 0~1 之间
+  const handleWheelVolume = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY === 0) return;
+    const step = 0.05;
+    const cur = useMusicStore.getState().volume;
+    const next = Math.round((cur + (e.deltaY < 0 ? step : -step)) * 100) / 100;
+    useMusicStore.getState().setVolume(Math.min(1, Math.max(0, next)));
+  }, []);
   const audioRef = useMusicStore((s) => s.audioRef);
   const currentLyrics = useMusicStore((s) => s.currentLyrics);
   const loadingLyrics = useMusicStore((s) => s.loadingLyrics);
@@ -657,6 +786,57 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const [isClosing, setIsClosing] = useState(false);
   const [rightTab, setRightTab] = useState<"lyrics" | "comments">("lyrics");
+  // 页面级全屏：播放器放大铺满整个窗口，其他组件被覆盖淡出（非系统窗口全屏）
+  const [pageFullscreen, setPageFullscreen] = useState(false);
+
+  // 光标无移动自动隐藏顶部/底部控制 UI（鼠标一动立即恢复）
+  const [uiHidden, setUiHidden] = useState(false);
+  const uiIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleUiHide = useCallback(() => {
+    setUiHidden(false);
+    if (uiIdleTimerRef.current) clearTimeout(uiIdleTimerRef.current);
+    uiIdleTimerRef.current = setTimeout(() => setUiHidden(true), 3000);
+  }, []);
+
+  useEffect(() => {
+    scheduleUiHide();
+    const onAny = () => scheduleUiHide();
+    window.addEventListener("mousemove", onAny);
+    window.addEventListener("mousedown", onAny);
+    window.addEventListener("touchstart", onAny);
+    return () => {
+      window.removeEventListener("mousemove", onAny);
+      window.removeEventListener("mousedown", onAny);
+      window.removeEventListener("touchstart", onAny);
+      if (uiIdleTimerRef.current) clearTimeout(uiIdleTimerRef.current);
+    };
+  }, [scheduleUiHide]);
+
+  // 用 ref 持有最新全屏状态，连点也能基于最新值翻转（避免闭包陈旧值）
+  const pageFullscreenRef = useRef(pageFullscreen);
+  pageFullscreenRef.current = pageFullscreen;
+
+  const handleToggleFullscreen = useCallback(() => {
+    const next = !pageFullscreenRef.current;
+    pageFullscreenRef.current = next;
+    setPageFullscreen(next);
+    // 广播给标题栏：全屏时淡出搜索框/游戏模式、左上角显示"缩小"按钮
+    window.dispatchEvent(new CustomEvent("immersive-page-fullscreen", { detail: next }));
+  }, []);
+
+  // 监听标题栏"缩小"按钮等外部触发，双向同步页面全屏状态
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<boolean>).detail;
+      pageFullscreenRef.current = detail;
+      setPageFullscreen(detail);
+    };
+    window.addEventListener("immersive-page-fullscreen", handler as EventListener);
+    return () => {
+      window.removeEventListener("immersive-page-fullscreen", handler as EventListener);
+    };
+  }, []);
 
   // 音乐控制热键（用于按钮 tooltip 展示）
   const { musicPrevHotkey, musicNextHotkey, musicPlayPauseHotkey } = useAppStartup();
@@ -672,6 +852,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   // 现代模式：根据封面颜色决定文字色和背景
   const [cr, cg, cb] = coverColor.rgb;
+  // 沉浸模式：封面色匹配固定色板，左略深右略浅的柔和渐变背景
+  const vividBg = useMemo(() => makeVividColor(cr, cg, cb), [cr, cg, cb]);
+  const immersiveBgGradient = `linear-gradient(90deg, ${vividBg.deep} 0%, ${vividBg.hex} 50%, ${vividBg.light} 100%)`;
   const modernBgSolid = coverColor.hex;
   const modernBgDark = `rgb(${Math.round(cr * 0.25)},${Math.round(cg * 0.25)},${Math.round(cb * 0.25)})`;
   const modernBgGradient = dynamicEnabled
@@ -685,7 +868,14 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const modernBorderColor = coverColor.isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)";
   const modernHoverBg = coverColor.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
 
-  const isModern = expandedStyle === "modern";
+  // 本地导入歌曲没有沉浸模式：沉浸样式对本地歌曲回退为通透
+  const isLocalSong = currentSong?.provider === "local";
+  const currentStyle = isLocalSong && expandedStyle === "immersive" ? "glass" : expandedStyle;
+  const isModern = currentStyle === "modern";
+  const isImmersive = currentStyle === "immersive";
+  // 样式三态循环：通透 → 现代 → 沉浸（本地歌曲跳过沉浸）→ 通透
+  const nextStyle: "glass" | "modern" | "immersive" =
+    currentStyle === "glass" ? "modern" : currentStyle === "modern" ? (isLocalSong ? "glass" : "immersive") : "glass";
 
   const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -693,7 +883,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
-  // 文字颜色覆写（现代模式）
+  // 文字颜色覆写（现代模式；沉浸模式跟随主题玻璃背景）
   const effectiveTextColor = isModern ? modernTextColor : textColor;
   const effectiveSubTextColor = isModern ? modernSubTextColor : subTextColor;
   const effectiveHoverBg = isModern ? modernHoverBg : hoverBg;
@@ -728,27 +918,28 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
 
   const isLiked = likedSongIds.has(currentSong.id);
 
-  // 本地导入歌曲：去掉右侧歌词/评论区域，封面居中展示
-  const isLocalSong = currentSong.provider === "local";
-
   const handleCloseWithAnimation = useCallback(() => {
     setIsClosing(true);
+    setPageFullscreen(false);
+    // 同步标题栏：退出全屏恢复搜索框/游戏模式
+    window.dispatchEvent(new CustomEvent("immersive-page-fullscreen", { detail: false }));
     closeTimerRef.current = setTimeout(() => onClose(), 300);
   }, [onClose]);
 
-  return (
+  const playerEl = (
     <Box
-      position="absolute"
+      position={pageFullscreen ? "fixed" : "absolute"}
       top={0}
       left={0}
       right={0}
       bottom={0}
-      zIndex={9999}
-      bg={isModern ? modernBgFinal : bgColor}
-      backdropFilter={isModern ? "none" : "blur(20px)"}
-      borderRadius="xl"
+      pt={pageFullscreen ? "48px" : 0}
+      zIndex={pageFullscreen ? 950 : 9999}
+      bg={isModern ? modernBgFinal : isImmersive ? immersiveBgGradient : bgColor}
+      backdropFilter={isModern || isImmersive ? "none" : "blur(20px)"}
+      borderRadius={pageFullscreen ? 0 : "xl"}
       overflow="hidden"
-      boxShadow="xl"
+      boxShadow={pageFullscreen ? "none" : "xl"}
       sx={{
         "@keyframes expandedPlayerSlideUp": {
           from: { transform: "translateY(100%)", opacity: 0 },
@@ -758,17 +949,26 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           from: { transform: "translateY(0)", opacity: 1 },
           to: { transform: "translateY(100%)", opacity: 0 },
         },
+        // 页面级全屏入场：放大铺满窗口 + 淡入
+        "@keyframes immersiveFullscreenIn": {
+          from: { transform: "scale(0.93)", opacity: 0.75 },
+          to: { transform: "scale(1)", opacity: 1 },
+        },
         display: "flex",
         flexDirection: "column",
-        WebkitBackdropFilter: isModern ? "none" : "blur(20px)",
+        WebkitBackdropFilter: isModern || isImmersive ? "none" : "blur(20px)",
         animation: (() => {
           const slide = isClosing
             ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
             : "expandedPlayerSlideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1)";
-          const dynamic = (dynamicEnabled && isModern) ? ", dynamicBg 8s ease infinite" : "";
-          return `${slide}${dynamic}`;
+          // 进入页面全屏时叠加放大淡入动画
+          const full = pageFullscreen && !isClosing
+            ? ", immersiveFullscreenIn 0.35s cubic-bezier(0.25, 0.8, 0.35, 1)"
+            : "";
+          const dynamic = (dynamicEnabled && (isModern || isImmersive)) ? ", dynamicBg 8s ease infinite" : "";
+          return `${slide}${full}${dynamic}`;
         })(),
-        ...(dynamicEnabled && isModern ? {
+        ...(dynamicEnabled && (isModern || isImmersive) ? {
           backgroundSize: "400% 400%",
           "@keyframes dynamicBg": {
             "0%": { backgroundPosition: "0% 50%" },
@@ -778,8 +978,23 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         } : {}),
       }}
     >
-      {/* 顶部栏：关闭按钮 */}
-      <HStack justify="space-between" p={4} flexShrink={0}>
+      {/* 沉浸模式全屏水波层：铺满整个播放器（z=1），上下栏与歌词在其上层 */}
+      {isImmersive && (
+        <ImmersiveRippleField isPlaying={isPlaying} bgRgb={vividBg.rgb} />
+      )}
+      {/* 顶部栏：关闭按钮 + 沉浸模式全屏按钮（光标无移动自动隐藏） */}
+      <HStack
+        justify="space-between"
+        p={4}
+        flexShrink={0}
+        position="relative"
+        zIndex={2}
+        opacity={uiHidden ? 0 : 1}
+        transform={uiHidden ? "translateY(-10px)" : "translateY(0)"}
+        pointerEvents={uiHidden ? "none" : "auto"}
+        visibility={uiHidden ? "hidden" : "visible"}
+        sx={{ transition: "opacity 0.35s ease, transform 0.35s ease, visibility 0.35s ease" }}
+      >
         <HStack spacing={3}>
           <Tooltip label="收起">
             <IconButton
@@ -791,11 +1006,35 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
               sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
             />
           </Tooltip>
-          <Text color={effectiveSubTextColor} fontSize="sm">正在播放</Text>
+          <Tooltip label={pageFullscreen ? "退出全屏" : "进入全屏"}>
+            <IconButton
+              aria-label="Fullscreen"
+              icon={pageFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+              size="sm"
+              variant="ghost"
+              onClick={handleToggleFullscreen}
+              sx={{
+                color: pageFullscreen ? activeColor : effectiveTextColor,
+                _hover: { bg: effectiveHoverBg },
+              }}
+            />
+          </Tooltip>
         </HStack>
       </HStack>
 
-      {/* 主体：左（封面+信息）+ 右（歌词）；本地歌曲时去掉右侧，封面居中 */}
+      {/* 主体：沉浸模式为全屏歌词可视化；否则左（封面+信息）+ 右（歌词） */}
+      {isImmersive ? (
+        <Box flex={1} minH={0} px={6} pb={2} overflow="hidden" display="flex" flexDirection="column">
+          <ImmersiveLyricsView
+            lines={karaokeLines}
+            loading={loadingLyrics}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            coverColor={vividBg}
+            baseFontSize={lyricsFontSize}
+          />
+        </Box>
+      ) : (
       <HStack
         flex={1}
         spacing={8}
@@ -1104,9 +1343,23 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         </VStack>
         )}
       </HStack>
+      )}
 
-      {/* 底部：播放控制 + 进度条（全宽居中） */}
-      <VStack spacing={4} w="100%" flexShrink={0} pb={4} px={8}>
+      {/* 底部：播放控制 + 进度条（全宽居中，光标无移动自动隐藏） */}
+      <VStack
+        spacing={4}
+        w="100%"
+        flexShrink={0}
+        pb={4}
+        px={8}
+        position="relative"
+        zIndex={2}
+        opacity={uiHidden ? 0 : 1}
+        transform={uiHidden ? "translateY(14px)" : "translateY(0)"}
+        pointerEvents={uiHidden ? "none" : "auto"}
+        visibility={uiHidden ? "hidden" : "visible"}
+        sx={{ transition: "opacity 0.35s ease, transform 0.35s ease, visibility 0.35s ease" }}
+      >
         {/* 控制按钮：主按钮居中，红心在左侧，音质在右侧 */}
         <Box position="relative" w="100%">
           {/* 左下方红心 + 样式切换 */}
@@ -1139,19 +1392,38 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 }}
               />
             </Tooltip>
-            <Tooltip label={isModern ? "切换通透样式" : "切换现代样式"}>
+            <Box position="relative">
+            <Tooltip label={nextStyle === "glass" ? "切换通透样式" : nextStyle === "modern" ? "切换现代样式" : "切换沉浸样式"}>
               <IconButton
                 aria-label="Toggle style"
-                icon={isModern ? <Droplets size={18} /> : <Palette size={18} />}
+                icon={nextStyle === "glass" ? <Droplets size={18} /> : nextStyle === "modern" ? <Palette size={18} /> : <Waves size={18} />}
                 size="sm"
                 variant="ghost"
                 onClick={() => {
-                  const next = expandedStyle === "glass" ? "modern" : "glass";
-                  useMusicStore.getState().setExpandedStyle(next);
+                  useMusicStore.getState().setExpandedStyle(nextStyle);
                 }}
                 sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
               />
             </Tooltip>
+            {/* 样式切换按钮右上角红色 NEW 标签 */}
+            <Box
+              position="absolute"
+              top="-6px"
+              right="-11px"
+              zIndex={3}
+              bg="red.500"
+              color="white"
+              fontSize="9px"
+              fontWeight="bold"
+              lineHeight="1.4"
+              px={1}
+              borderRadius="full"
+              pointerEvents="none"
+              boxShadow="0 1px 3px rgba(0,0,0,0.35)"
+            >
+              NEW
+            </Box>
+            </Box>
             {isModern && (
               <HStack spacing={1}>
                 <Text fontSize="xs" color={effectiveSubTextColor} fontWeight="medium">动态</Text>
@@ -1212,6 +1484,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           <Box
             role="group"
             position="relative"
+            onWheel={handleWheelVolume}
             sx={{
               "&:hover .volume-slider": {
                 width: "80px",
@@ -1274,9 +1547,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Box>
         </HStack>
 
-          {/* 歌词高亮颜色 + 歌词字体大小 + 音质选择 - 右侧 */}
+          {/* 歌词高亮颜色 + 歌词字体大小 + 音质选择 - 右侧（沉浸模式隐藏歌词高亮/字号） */}
           <Box position="absolute" right={0} top="50%" transform="translateY(-50%)">
             <HStack spacing={2} align="center">
+              {!isImmersive && (
+              <>
               {/* 歌词高亮颜色选择器 */}
               <Tooltip label="歌词高亮颜色">
                 <Box>
@@ -1294,13 +1569,13 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     as="input"
                     type="range"
                     min={17}
-                    max={28}
+                    max={48}
                     step={1}
                     value={lyricsFontSize}
                     onChange={(e) => useMusicStore.getState().setLyricsFontSize(parseInt((e.target as HTMLInputElement).value))}
                     tabIndex={-1}
                     w="60px"
-                    style={sliderBgStyle(activeColor, ((lyricsFontSize - 17) / 11) * 100, sliderTrackBg)}
+                    style={sliderBgStyle(activeColor, ((lyricsFontSize - 17) / 31) * 100, sliderTrackBg)}
                     sx={{
                       ...rangeSliderSx,
                       "&::-webkit-slider-thumb": { ...rangeSliderSx["&::-webkit-slider-thumb"], background: activeColor },
@@ -1311,6 +1586,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   />
                 </HStack>
               </Tooltip>
+              </>
+              )}
               <Popover placement="top-end" isLazy strategy="fixed">
                 <Tooltip label="音质选择">
                   <PopoverTrigger>
@@ -1461,6 +1738,12 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       </VStack>
     </Box>
   );
+
+  // 页面级全屏：将播放器挂载到 body 根部（脱离带 transform 的页面祖先），
+  // 确保 fixed 相对整个视口铺满窗口
+  return pageFullscreen
+    ? createPortal(playerEl, document.body)
+    : playerEl;
 });
 
 
@@ -1593,6 +1876,15 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const playMode = useMusicStore((s) => s.playMode);
   const playQueue = useMusicStore((s) => s.playQueue);
   const currentIndex = useMusicStore((s) => s.currentIndex);
+  // 滚轮调节音量：上滚 +5%，下滚 -5%，四舍五入到 0.01，夹在 0~1 之间
+  const handleWheelVolume = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    if (e.deltaY === 0) return;
+    const step = 0.05;
+    const cur = useMusicStore.getState().volume;
+    const next = Math.round((cur + (e.deltaY < 0 ? step : -step)) * 100) / 100;
+    useMusicStore.getState().setVolume(Math.min(1, Math.max(0, next)));
+  }, []);
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const playbackQuality = useMusicStore((s) => s.playbackQuality);
   const currentQuality = useMusicStore((s) => s.currentQuality);
@@ -1706,7 +1998,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
           </HStack>
 
           {/* 右侧：音质 + 音量 + 播放队列 */}
-          <HStack spacing={1} w="180px" ml="auto">
+          <HStack spacing={1} w="180px" ml="auto" onWheel={handleWheelVolume}>
             <Menu>
               <Tooltip label="音质选择">
                 <MenuButton
@@ -2486,6 +2778,7 @@ export default function MusicPage() {
   const loadingPlaylists = useMusicStore((s) => s.loadingPlaylists);
   const userPlaylistsError = useMusicStore((s) => s.userPlaylistsError);
   const loadingLeftTracks = useMusicStore((s) => s.loadingLeftTracks);
+  const leftPlaylistLoadingAll = useMusicStore((s) => s.leftPlaylistLoadingAll);
   const loadingRightTracks = useMusicStore((s) => s.loadingRightTracks);
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const artistSearchResults = useMusicStore((s) => s.artistSearchResults);
@@ -2532,6 +2825,8 @@ export default function MusicPage() {
   const previousViewRef = useRef<typeof viewMode>("main");
   const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks" | "local">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks" | "daily">("recommendations");
+  // 左侧「我的歌单」曲目视图的歌单内搜索关键词（空 = 不筛选）
+  const [playlistKeyword, setPlaylistKeyword] = useState("");
   const [expandedPlayer, setExpandedPlayer] = useState(false);
   const [artistTab, setArtistTab] = useState<"songs" | "albums" | "mvs" | "info">("songs");
   const [expandedAlbum, setExpandedAlbum] = useState<Album | null>(null);
@@ -2779,10 +3074,12 @@ const handlePlaylistClick = useCallback((pl: Playlist) => {
 storeActions.loadLeftPlaylistTracks(pl.id);
 setLeftPanelView("tracks");
 setRightPanelView("recommendations");
+setPlaylistKeyword("");
 }, [storeActions]);
 
   const handleBackToPlaylists = useCallback(() => {
     setLeftPanelView("playlists");
+    setPlaylistKeyword("");
   }, []);
 
   // ── 本地导入歌曲 ──
@@ -2976,6 +3273,35 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     (song: Song, i: number) => renderSongRow(song, i, leftPlaylistTracks),
     [renderSongRow, leftPlaylistTracks]
   );
+
+  // 左侧「我的歌单」曲目：歌单内搜索。输入关键词时先把歌单全部曲目拉齐，再按歌名/歌手筛选（忽略大小写）
+  const displayedLeftTracks = useMemo(() => {
+    const kw = playlistKeyword.trim().toLowerCase();
+    if (!kw) return leftPlaylistTracks;
+    return leftPlaylistTracks.filter(
+      (s) => s.name.toLowerCase().includes(kw) || (s.artist || "").toLowerCase().includes(kw)
+    );
+  }, [playlistKeyword, leftPlaylistTracks]);
+
+  // 歌单内搜索框输入：更新关键词；若非空且歌单未加载完，则触发一次性加载全部剩余曲目
+  const handlePlaylistSearchChange = useCallback((value: string) => {
+    setPlaylistKeyword(value);
+    const st = useMusicStore.getState();
+    const kw = value.trim();
+    if (kw && st.leftPlaylistMeta
+      && st.leftPlaylistTracks.length < (st.leftPlaylistMeta.track_count ?? 0)
+      && !st.leftPlaylistLoadingAll) {
+      // fire-and-forget：加载完成后 leftPlaylistTracks 更新会驱动 displayedLeftTracks 重新筛选
+      void storeActions.loadAllLeftPlaylistTracks();
+    }
+  }, [storeActions]);
+
+  const renderFilteredLeftTrackItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, displayedLeftTracks),
+    [renderSongRow, displayedLeftTracks]
+  );
+
+  const searchingPlaylist = playlistKeyword.trim() !== "";
   const renderRightTrackItem = useCallback(
     (song: Song, i: number) => renderSongRow(song, i, rightPlaylistTracks),
     [renderSongRow, rightPlaylistTracks]
@@ -4189,21 +4515,59 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   {leftPlaylistMeta?.name || "曲目列表"}
                 </Text>
                 <Text color={subTextColor} fontSize="xs" flexShrink={0}>
-                  ({leftPlaylistTracks.length} 首)
+                  ({displayedLeftTracks.length} 首)
                 </Text>
               </HStack>
+              {/* 歌单内搜索：固定于列表上方，不随曲目滚动 */}
+              <HStack spacing={2} mb={2} flexShrink={0}>
+                <InputGroup size="sm">
+                  <InputLeftElement pointerEvents="none">
+                    <Search size={14} style={{ color: subTextColor }} />
+                  </InputLeftElement>
+                  <Input
+                    placeholder="搜索歌单内歌曲"
+                    value={playlistKeyword}
+                    onChange={(e) => handlePlaylistSearchChange(e.target.value)}
+                    borderRadius="md"
+                    focusBorderColor={activeColor}
+                    sx={{
+                      bg: liquidGlassEnabled ? itemActiveBg : "transparent",
+                      borderColor: liquidGlassEnabled ? getBorderColor() : borderColor,
+                      fontSize: "sm",
+                    }}
+                  />
+                  {playlistKeyword !== "" && (
+                    <InputRightElement width="2rem">
+                      <IconButton
+                        aria-label="清除歌单内搜索"
+                        icon={<X size={14} />}
+                        size="xs"
+                        variant="ghost"
+                        onClick={() => handlePlaylistSearchChange("")}
+                        sx={{ color: subTextColor, _hover: { bg: hoverBg } }}
+                      />
+                    </InputRightElement>
+                  )}
+                </InputGroup>
+                {leftPlaylistLoadingAll && (
+                  <HStack spacing={1.5} color={subTextColor} flexShrink={0} pr={1}>
+                    <Spinner size="xs" sx={{ color: activeColor }} />
+                    <Text fontSize="xs">加载全部曲目中...</Text>
+                  </HStack>
+                )}
+              </HStack>
               <VirtualList
-                items={leftPlaylistTracks}
+                items={displayedLeftTracks}
                 itemHeight={60}
-                renderItem={renderLeftTrackItem}
+                renderItem={searchingPlaylist ? renderFilteredLeftTrackItem : renderLeftTrackItem}
                 getKey={(song, i) => `${song.provider}-${song.id}-${i}`}
                 loading={loadingLeftTracks}
                 loadingText="加载曲目中..."
-                emptyText="暂无曲目"
-                resetKey={leftPlaylistMeta?.id}
+                emptyText={searchingPlaylist ? "未找到匹配的歌曲" : "暂无曲目"}
+                resetKey={leftPlaylistMeta?.id ? `${leftPlaylistMeta.id}|${playlistKeyword}` : playlistKeyword}
                 scrollbarSx={memoScrollbarSx}
-                onEndReached={() => storeActions.loadMoreLeftPlaylistTracks()}
-                hasMore={(leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
+                onEndReached={searchingPlaylist ? () => {} : () => storeActions.loadMoreLeftPlaylistTracks()}
+                hasMore={searchingPlaylist ? false : (leftPlaylistMeta?.track_count ?? 0) > leftPlaylistTracks.length}
               />
             </>
           ) : leftPanelView === "local" ? (

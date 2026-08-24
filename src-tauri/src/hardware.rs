@@ -1705,7 +1705,20 @@ fn collect_disk_stats() -> (u64, u64, u64, f64) {
         if mount_point.is_empty() {
             continue;
         }
-        total_space = total_space.saturating_add(disk.total_space());
+        let total = disk.total_space();
+        let total_gb = total as f64 / 1_073_741_824.0;
+        // 跳过容量明显异常的卷（如存储空间/虚拟盘的薄配置会报告虚高的逻辑容量，可达数百 TB），
+        // 避免污染顶部状态卡的磁盘总容量统计。
+        if total_gb > MAX_REASONABLE_DISK_GB {
+            log::warn!(
+                "跳过容量异常的卷 {}: {:.0}GB (> {}GB)",
+                mount_point,
+                total_gb,
+                MAX_REASONABLE_DISK_GB
+            );
+            continue;
+        }
+        total_space = total_space.saturating_add(total);
         available_space = available_space.saturating_add(disk.available_space());
     }
 

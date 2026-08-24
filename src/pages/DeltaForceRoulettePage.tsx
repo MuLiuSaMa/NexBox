@@ -361,27 +361,28 @@ function SlotScroller({
       <LiquidGlassCard p={5} mb={6}>
         <VStack align="stretch" spacing={4}>
           <HStack spacing={6} wrap="wrap">
-            <Checkbox
-              isChecked={onlyClassified}
-              onChange={(e) => setOnlyClassified(e.target.checked)}
-              color={textColor}
-            >
-              {t("deltaForce.roulette.onlyClassified", "只玩绝密")}
-            </Checkbox>
-            <Checkbox
-              isChecked={skipAnimation}
-              onChange={(e) => setSkipAnimation(e.target.checked)}
-              color={textColor}
-            >
-              {t("deltaForce.roulette.skipAnimation", "跳过动画")}
-            </Checkbox>
-            <Checkbox
-              isChecked={noPistol}
-              onChange={(e) => setNoPistol(e.target.checked)}
-              color={textColor}
-            >
-              {t("deltaForce.roulette.noPistol", "不要手枪")}
-            </Checkbox>
+            {[
+              { label: t("deltaForce.roulette.onlyClassified", "只玩绝密"), checked: onlyClassified, set: setOnlyClassified },
+              { label: t("deltaForce.roulette.skipAnimation", "跳过动画"), checked: skipAnimation, set: setSkipAnimation },
+              { label: t("deltaForce.roulette.noPistol", "不要手枪"), checked: noPistol, set: setNoPistol },
+            ].map((opt) => (
+              <Checkbox
+                key={opt.label}
+                isChecked={opt.checked}
+                onChange={(e) => opt.set(e.target.checked)}
+                color={primaryColor}
+                _checked={{
+                  ".chakra-checkbox__control": {
+                    borderColor: primaryColor,
+                    bg: primaryColor,
+                  },
+                  ".chakra-checkbox__label": { color: primaryColor },
+                }}
+                iconColor="#fff"
+              >
+                {opt.label}
+              </Checkbox>
+            ))}
           </HStack>
 
           <HStack spacing={2} align="center" justify="space-between" wrap="wrap">

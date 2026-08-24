@@ -315,10 +315,16 @@ fn make_profile_setting(name: &str, setting_id: u32, value: u32) -> String {
 }
 
 fn generate_nip_config(preset: &str, quality_level: &str, texture_quality: &str, antialiasing: &str) -> Vec<u8> {
-    let preset_value: u32 = match preset.to_uppercase().as_str() {
-        "A" => 1, "B" => 2, "C" => 3, "D" => 4, "E" => 5, "F" => 6, "G" => 7,
-        "J" => 10, "K" => 11, "L" => 12, "M" => 13,
-        _ => 11,
+    // default: 由3D程序设置，不强制覆盖 DLSS-SR 预设
+    let is_default = preset.eq_ignore_ascii_case("default");
+    let preset_value: u32 = if is_default {
+        0
+    } else {
+        match preset.to_uppercase().as_str() {
+            "A" => 1, "B" => 2, "C" => 3, "D" => 4, "E" => 5, "F" => 6, "G" => 7,
+            "J" => 10, "K" => 11, "L" => 12, "M" => 13,
+            _ => 11,
+        }
     };
 
     let mut settings = vec![
@@ -381,7 +387,7 @@ fn generate_nip_config(preset: &str, quality_level: &str, texture_quality: &str,
     settings.push(make_profile_setting("Override DLSSG Target Frame Rate", 282018085, 0));
     settings.push(make_profile_setting("Override DLSS-FG preset", 283385329, 0));
     settings.push(make_profile_setting("Override DLSS-SR presets", 283385331, preset_value));
-    settings.push(make_profile_setting("Enable DLSS-SR override", 283385345, 1));
+    settings.push(make_profile_setting("Enable DLSS-SR override", 283385345, if is_default { 0 } else { 1 }));
     settings.push(make_profile_setting("Enable DLSS-FG override", 283385347, 0));
 
     let settings_xml = settings.join("\n");
@@ -453,7 +459,10 @@ pub async fn apply_dlss_model_preset(preset: String, quality: String, texture_qu
             }
         }
 
-        let mut parts = vec![format!("DLSS预设: {}", preset)];
+        let mut parts = vec![format!(
+            "DLSS预设: {}",
+            if preset.eq_ignore_ascii_case("default") { "默认（由3D程序设置）" } else { &preset }
+        )];
         if quality != "default" { parts.push(format!("质量: {}", quality)); }
         if texture_quality != "default" { parts.push(format!("纹理: {}", texture_quality)); }
         if antialiasing != "default" { parts.push(format!("抗锯齿: {}", antialiasing)); }
@@ -659,7 +668,7 @@ pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
         }
     }
 
-    Ok(DLSSPresetStatus { preset: "K".to_string(), quality: "default".to_string(), texture_quality: "default".to_string(), antialiasing: "default".to_string() })
+    Ok(DLSSPresetStatus { preset: "default".to_string(), quality: "default".to_string(), texture_quality: "default".to_string(), antialiasing: "default".to_string() })
 }
 
 /// 在独立 WebView 窗口中打开外部平台链接，iframe 内嵌支持完整跳转

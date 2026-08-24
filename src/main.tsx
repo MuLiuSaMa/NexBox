@@ -13,6 +13,7 @@ import { ThemeColorProvider } from "./contexts/theme-color-context";
 import { AppStartupProvider } from "./contexts/app-startup-context";
 import { UpdateProvider } from "./contexts/update-context";
 import { FontProvider } from "./contexts/font-context";
+import { ThemeModeProvider } from "./contexts/theme-mode-context";
 import { LiquidGlassSvgFilter } from "./components/special/liquid-glass-svg-filter";
 import theme from "./lib/theme";
 import { mockIPC, mockWindows, mockConvertFileSrc } from "@tauri-apps/api/mocks";
@@ -125,7 +126,9 @@ function Root() {
                     <ThemeColorProvider>
                       <FontProvider>
                         <LiquidGlassSvgFilter />
-                        <App />
+                        <ThemeModeProvider>
+                          <App />
+                        </ThemeModeProvider>
                       </FontProvider>
                     </ThemeColorProvider>
                   </BackgroundProvider>

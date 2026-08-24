@@ -6,7 +6,6 @@ import {
   Badge,
   VStack,
   Divider,
-  useColorMode,
   useColorModeValue,
   Button,
   IconButton,
@@ -26,6 +25,7 @@ import {
   SliderThumb,
   Spinner,
   Tooltip,
+  SimpleGrid,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
@@ -58,6 +58,8 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useThemeMode } from "@/contexts/theme-mode-context";
+
 import { useFont } from "@/contexts/font-context";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
@@ -201,6 +203,7 @@ function GeneralSettings() {
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [qqGroupCardEnabled, setQqGroupCardEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
+  const [moodCardEnabled, setMoodCardEnabled] = useState(true);
   const [homeUsername, setHomeUsername] = useState("");
   const [splashLogo, setSplashLogo] = useState<string | null>(null);
   const [closeBehavior, setCloseBehavior] = useState<string>(() => {
@@ -210,7 +213,7 @@ function GeneralSettings() {
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const NAV_ORDER_KEY = "nexbox_nav_order";
-  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"];
+  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
   const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
   const navSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -389,6 +392,15 @@ function GeneralSettings() {
         if (ls !== null) setRandomImageEnabled(ls === "true");
       }
 
+      // 主页心境卡片显示（store 持久化，默认开启）
+      v = await store.get<boolean>("nexbox_mood_card_enabled");
+      if (v !== null && v !== undefined) {
+        setMoodCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_mood_card_enabled");
+        if (ls !== null) setMoodCardEnabled(ls === "true");
+      }
+
       // 标题用户名（空 = 使用系统用户名）
       let uname = await store.get<string>("nexbox_home_username");
       if (uname !== null && uname !== undefined) {
@@ -445,7 +457,7 @@ function GeneralSettings() {
 
       // 导航可见性
       const visibilityMap: Record<string, boolean> = {};
-      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/mood", "/custom"]) {
+      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"]) {
         const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
         let vis = await store.get<boolean>(key);
         if (vis === null || vis === undefined) {
@@ -518,9 +530,15 @@ function GeneralSettings() {
     };
     window.addEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
 
+    const handleMoodCardSync = (e: CustomEvent) => {
+      setMoodCardEnabled(e.detail);
+    };
+    window.addEventListener("mood-card-setting-changed", handleMoodCardSync as EventListener);
+
     return () => {
       window.removeEventListener("game-win-key-card-setting-changed", handleWinKeyCardSync as EventListener);
       window.removeEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
+      window.removeEventListener("mood-card-setting-changed", handleMoodCardSync as EventListener);
     };
   }, []);
 
@@ -612,6 +630,14 @@ function GeneralSettings() {
         console.error("停用游戏模式失败:", e);
       });
     }
+  };
+
+  const handleMoodCardToggle = () => {
+    const newValue = !moodCardEnabled;
+    setMoodCardEnabled(newValue);
+    store.set("nexbox_mood_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_mood_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("mood-card-setting-changed", { detail: newValue }));
   };
 
   const handleSearchBarToggle = () => {
@@ -922,245 +948,248 @@ function GeneralSettings() {
           {t("settings.generalSettings.homepage")}
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
-          <VStack spacing={0} align="stretch">
-            <HStack justify="space-between" py={2}>
-              <Box flex={1} pr={3}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.homeUsernameLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.homeUsernameDesc")}
-                </Text>
-              </Box>
-              <HStack spacing={2}>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleHomeUsernameReset}
-                  leftIcon={<LuRotateCcw size={13} />}
-                  color={subLabelColor}
-                  _hover={{ color: "red.400" }}
-                  isDisabled={!homeUsername}
-                  flexShrink={0}
-                >
-                  {t("settings.generalSettings.homeUsernameReset")}
-                </Button>
-                <Input
-                  value={homeUsername}
-                  onChange={handleHomeUsernameChange}
-                  placeholder={t("settings.generalSettings.homeUsernamePlaceholder")}
-                  size="sm"
-                  pl={3}
-                  pr={3}
-                  h="34px"
-                  width="160px"
-                  flexShrink={0}
-                  borderRadius="lg"
-                  bg={inputBg}
-                  border="1px solid"
-                  borderColor={hexToRgba(config.primaryColor, 0.4)}
-                  _hover={{ borderColor: hexToRgba(config.primaryColor, 0.7) }}
-                  _focus={{
-                    borderColor: config.primaryColor,
-                    boxShadow: `0 0 0 3px ${hexToRgba(config.primaryColor, 0.22)}`,
-                  }}
-                  transition="all 0.2s"
-                />
-              </HStack>
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.todayPopularityLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.todayPopularityDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={todayPopularityEnabled}
-                onChange={handleTodayPopularityToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.announcementLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.announcementDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={announcementEnabled}
-                onChange={handleAnnouncementToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.randomQuoteLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.randomQuoteDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={randomQuoteEnabled}
-                onChange={handleRandomQuoteToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameLauncherLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameLauncherDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameLauncherEnabled}
-                onChange={handleGameLauncherToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.homeHardwareModelLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.homeHardwareModelDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={homeHardwareModelEnabled}
-                onChange={handleHomeHardwareModelToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameWinKeyLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameWinKeyDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameWinKeyCardEnabled}
-                onChange={handleGameWinKeyCardToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameImeLockLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameImeLockDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameImeLockCardEnabled}
-                onChange={handleGameImeLockCardToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.gameModeLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.gameModeDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={gameModeEnabled}
-                onChange={handleGameModeToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.randomImageLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.randomImageDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={randomImageEnabled}
-                onChange={handleRandomImageToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.searchBarLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.searchBarDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={searchBarEnabled}
-                onChange={handleSearchBarToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.feedbackLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.feedbackDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={feedbackEnabled}
-                onChange={handleFeedbackToggle}
-              />
-            </HStack>
-            <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.qqGroupCardLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.qqGroupCardDesc")}
-                </Text>
-              </Box>
-              <ThemeSwitch
-                size="md"
-                isChecked={qqGroupCardEnabled}
-                onChange={handleQqGroupCardToggle}
-              />
-            </HStack>
-          </VStack>
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+            {/* 左上角：问候语与顶部信息卡片 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" color={subLabelColor} mb={2} textTransform="uppercase" letterSpacing="0.05em">
+                {t("settings.generalSettings.cornerTopLeft")}
+              </Text>
+              <VStack spacing={0} align="stretch">
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1} pr={3}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.homeUsernameLabel")}
+                    </Text>
+                  </Box>
+                  <HStack spacing={2}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleHomeUsernameReset}
+                      leftIcon={<LuRotateCcw size={13} />}
+                      color={subLabelColor}
+                      _hover={{ color: "red.400" }}
+                      isDisabled={!homeUsername}
+                      flexShrink={0}
+                    >
+                      {t("settings.generalSettings.homeUsernameReset")}
+                    </Button>
+                    <Input
+                      value={homeUsername}
+                      onChange={handleHomeUsernameChange}
+                      placeholder={t("settings.generalSettings.homeUsernamePlaceholder")}
+                      size="sm"
+                      pl={3}
+                      pr={3}
+                      h="34px"
+                      width="160px"
+                      flexShrink={0}
+                      borderRadius="lg"
+                      bg={inputBg}
+                      border="1px solid"
+                      borderColor={hexToRgba(config.primaryColor, 0.4)}
+                      _hover={{ borderColor: hexToRgba(config.primaryColor, 0.7) }}
+                      _focus={{
+                        borderColor: config.primaryColor,
+                        boxShadow: `0 0 0 3px ${hexToRgba(config.primaryColor, 0.22)}`,
+                      }}
+                      transition="all 0.2s"
+                    />
+                  </HStack>
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.todayPopularityLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={todayPopularityEnabled}
+                    onChange={handleTodayPopularityToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.announcementLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={announcementEnabled}
+                    onChange={handleAnnouncementToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.randomQuoteLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={randomQuoteEnabled}
+                    onChange={handleRandomQuoteToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.searchBarLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={searchBarEnabled}
+                    onChange={handleSearchBarToggle}
+                  />
+                </HStack>
+              </VStack>
+            </Box>
+            {/* 左下角：底部左侧快捷卡片 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" color={subLabelColor} mb={2} textTransform="uppercase" letterSpacing="0.05em">
+                {t("settings.generalSettings.cornerBottomLeft")}
+              </Text>
+              <VStack spacing={0} align="stretch">
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.randomImageLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={randomImageEnabled}
+                    onChange={handleRandomImageToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.moodCardLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={moodCardEnabled}
+                    onChange={handleMoodCardToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.gameWinKeyLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={gameWinKeyCardEnabled}
+                    onChange={handleGameWinKeyCardToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.gameImeLockLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={gameImeLockCardEnabled}
+                    onChange={handleGameImeLockCardToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.homeHardwareModelLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={homeHardwareModelEnabled}
+                    onChange={handleHomeHardwareModelToggle}
+                  />
+                </HStack>
+              </VStack>
+            </Box>
+            {/* 右上角：右侧信息卡片 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" color={subLabelColor} mb={2} textTransform="uppercase" letterSpacing="0.05em">
+                {t("settings.generalSettings.cornerTopRight")}
+              </Text>
+              <VStack spacing={0} align="stretch">
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.gameModeLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={gameModeEnabled}
+                    onChange={handleGameModeToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.feedbackLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={feedbackEnabled}
+                    onChange={handleFeedbackToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.qqGroupCardLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={qqGroupCardEnabled}
+                    onChange={handleQqGroupCardToggle}
+                  />
+                </HStack>
+              </VStack>
+            </Box>
+            {/* 右下角：底部右侧快捷启动 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="semibold" color={subLabelColor} mb={2} textTransform="uppercase" letterSpacing="0.05em">
+                {t("settings.generalSettings.cornerBottomRight")}
+              </Text>
+              <VStack spacing={0} align="stretch">
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.gameLauncherLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={gameLauncherEnabled}
+                    onChange={handleGameLauncherToggle}
+                  />
+                </HStack>
+              </VStack>
+            </Box>
+          </SimpleGrid>
         </LiquidGlassCard>
       </Box>
 
@@ -1436,7 +1465,6 @@ function GeneralSettings() {
                     "/delta-force": t("sidebar.deltaForce"),
                     "/steam": t("sidebar.steam"),
                     "/epic-free": t("sidebar.epicFree"),
-                    "/mood": t("sidebar.mood"),
                     "/custom": t("sidebar.custom"),
                   };
                   return (
@@ -1547,7 +1575,6 @@ function ThemeColorSettings() {
 
 function AppearanceSettings() {
   const { t } = useTranslation();
-  const { colorMode, toggleColorMode } = useColorMode();
   const { getActiveColor } = useThemeColor();
   const { font, setFont, fontOptions, importCustomFont, removeCustomFont, importing } = useFont();
   const {
@@ -1595,17 +1622,15 @@ function AppearanceSettings() {
   const toast = useDynamicIsland("settings");
 
   const themeOptions = [
+    { value: "system", label: "跟随系统" },
     { value: "light", label: "浅色" },
     { value: "dark", label: "深色" },
   ];
 
+  const { themeMode, setThemeMode } = useThemeMode();
+
   const handleThemeChange = (value: string) => {
-    if (
-      (value === "dark" && colorMode === "light") ||
-      (value === "light" && colorMode === "dark")
-    ) {
-      toggleColorMode();
-    }
+    setThemeMode(value as "system" | "light" | "dark");
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1692,7 +1717,7 @@ function AppearanceSettings() {
               {t("settings.appearanceSettings.themeStyle")}
             </Text>
             <CustomSelect
-              value={colorMode}
+              value={themeMode}
               onChange={handleThemeChange}
               options={themeOptions}
               width="140px"
@@ -3075,7 +3100,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "8.8.2";
+  const currentVersion = "9.0.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

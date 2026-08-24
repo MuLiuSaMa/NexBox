@@ -10,7 +10,10 @@ import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
 import GameImeLockCard from "@/components/GameImeLockCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
+import MoodCard from "@/components/MoodCard";
 import { FeedbackCard, QqGroupCard, useFeedbackEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
+import { HomeAdCards } from "@/components/ads/home-ad-card";
+import { useAds } from "@/hooks/use-ads";
 import { store } from "@/lib/store";
 import { getGreeting, rollEasterEgg, EASTER_EGG_TEXT } from "@/lib/greetings";
 import { invoke } from "@tauri-apps/api/core";
@@ -39,6 +42,7 @@ export default function HomePage() {
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
   const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(true);
+  const [moodCardEnabled, setMoodCardEnabled] = useState(true);
   const [homeCardsReady, setHomeCardsReady] = useState(false);
 
   const computeGreeting = () => {
@@ -46,11 +50,11 @@ export default function HomePage() {
     return getGreeting(new Date(), usernameRef.current).text;
   };
 
-  // 四个本地主页开关全部加载完成后才渲染卡片区域，避免默认值导致的闪烁
+  // 五个本地主页开关全部加载完成后才渲染卡片区域，避免默认值导致的闪烁
   const homeCardsReadyRef = useRef(0);
   const markHomeCardLoaded = () => {
     homeCardsReadyRef.current += 1;
-    if (homeCardsReadyRef.current >= 4) setHomeCardsReady(true);
+    if (homeCardsReadyRef.current >= 5) setHomeCardsReady(true);
   };
 
   // 获取用户名：优先使用自定义标题用户名，留空时回退到系统用户名
@@ -111,6 +115,7 @@ export default function HomePage() {
   const { enabled: announcementEnabled, ready: announcementReady } = useAnnouncementEnabled();
   const { enabled: randomQuoteEnabled, ready: randomQuoteReady } = useRandomQuoteEnabled();
   const { enabled: randomImageEnabled, ready: randomImageReady } = useRandomImageEnabled();
+  const { home: homeAds } = useAds();
   useEffect(() => {
     (async () => {
       const saved = await store.get<boolean>("nexbox_game_launcher_enabled");
@@ -197,6 +202,26 @@ export default function HomePage() {
     return () => window.removeEventListener("game-ime-lock-card-setting-changed", handler as EventListener);
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      let saved = await store.get<boolean>("nexbox_mood_card_enabled");
+      if (saved !== null && saved !== undefined) {
+        setMoodCardEnabled(saved);
+      } else {
+        const ls = localStorage.getItem("nexbox_mood_card_enabled");
+        if (ls !== null) setMoodCardEnabled(ls === "true");
+      }
+      markHomeCardLoaded();
+    })();
+
+    const handler = (e: CustomEvent) => {
+      setMoodCardEnabled(e.detail);
+    };
+
+    window.addEventListener("mood-card-setting-changed", handler as EventListener);
+    return () => window.removeEventListener("mood-card-setting-changed", handler as EventListener);
+  }, []);
+
   const greeting = greetingText || t("home.title");
   const { main: greetingMain, emoji: greetingEmoji } = splitEmojiBlock(greeting);
 
@@ -224,11 +249,12 @@ export default function HomePage() {
             </HStack>
           ) : null}
         </Box>
-        {(feedbackReady && feedbackEnabled) || (qqGroupCardReady && qqGroupCardEnabled) ? (
+        {(feedbackReady && feedbackEnabled) || (qqGroupCardReady && qqGroupCardEnabled) || homeAds.length > 0 ? (
           <Box pt={6}>
             <VStack spacing={2} align="stretch">
               {feedbackReady && feedbackEnabled && <FeedbackCard />}
               {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
+              {homeAds.length > 0 && <HomeAdCards ads={homeAds} />}
             </VStack>
           </Box>
         ) : null}
@@ -236,14 +262,20 @@ export default function HomePage() {
 
       {homeCardsReady &&
         (randomImageEnabled ||
+          moodCardEnabled ||
           gameWinKeyCardEnabled ||
           gameImeLockCardEnabled ||
           homeHardwareModelEnabled) && (
-        <Box position="absolute" bottom={4} left={4}>
+        <Box position="absolute" bottom={4} left={4} w="360px">
           <VStack spacing={2} align="stretch">
-            {randomImageReady && randomImageEnabled && <RandomImageCard />}
+            {(randomImageReady && randomImageEnabled) || moodCardEnabled ? (
+              <HStack spacing={2} align="stretch" w="full" justify="space-between">
+                {randomImageReady && randomImageEnabled && <RandomImageCard />}
+                {moodCardEnabled && <MoodCard />}
+              </HStack>
+            ) : null}
             {(gameWinKeyCardEnabled || gameImeLockCardEnabled) && (
-              <HStack spacing={2} align="stretch" w="full" justify="flex-start">
+              <HStack spacing={2} align="stretch" w="full" justify="space-between">
                 {gameWinKeyCardEnabled && <GameWinKeyCard />}
                 {gameImeLockCardEnabled && <GameImeLockCard />}
               </HStack>
@@ -251,7 +283,7 @@ export default function HomePage() {
             {homeHardwareModelEnabled && <HardwareModelCard />}
           </VStack>
         </Box>
-        )}
+      )}
 
       {homeCardsReady && gameLauncherEnabled && (
         <Box

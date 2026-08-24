@@ -665,6 +665,10 @@
       "downloadFailed": "圖片儲存失敗",
       "noImageYet": "尚無可下載的圖片",
       "previewAlt": "隨機圖片預覽"
+    },
+    "mood": {
+      "title": "心境",
+      "subtitle": "點擊開啟心境"
     }
   },
   "hardware": {
@@ -881,7 +885,11 @@
     "save": "儲存",
     "gameFilterTitle": "遊戲啟動時自動套用濾鏡",
     "gameFilterSupportedTitle": "已支援的遊戲",
-    "gameFilterError": "操作失敗"
+    "gameFilterError": "操作失敗",
+    "multiFilterTitle": "使用多個濾鏡",
+    "multiFilterSelected": "已選擇",
+    "stackedMode": "疊加模式",
+    "stackedCount": "疊加濾鏡數量"
   },
   "floatingNav": {
     "title": "懸浮導航框",
@@ -1003,6 +1011,10 @@
     "dlssNote": "需要NVIDIA Profile Inspector支援，套用後重新啟動遊戲生效",
     "back": "返回",
     "dlssModels": {
+      "default": {
+        "name": "默認（由3D程式設定）",
+        "description": "由3D程式自行決定，不做強制覆蓋"
+      },
       "A": {
         "name": "A模型",
         "description": "早期模型"
@@ -1385,6 +1397,12 @@
       "gameModeDesc": "在頂欄顯示遊戲模式切換條，一鍵切換預設/一般/競技壓制",
       "randomImageLabel": "隨機圖片",
       "randomImageDesc": "在首頁顯示隨機圖片卡片",
+      "moodCardLabel": "心境卡片",
+      "moodCardDesc": "在首頁顯示心境卡片",
+      "cornerTopLeft": "左上角",
+      "cornerTopRight": "右上角",
+      "cornerBottomLeft": "左下角",
+      "cornerBottomRight": "右下角",
       "splash": "動畫",
       "splashLogoLabel": "啟動動畫 Logo",
       "splashLogoDesc": "自訂啟動動畫中顯示的 Logo 圖片",

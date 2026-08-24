@@ -1,6 +1,6 @@
 [package]
 name = "uninstnexbox"
-version = "8.8.2"
+version = "9.0.0"
 description = "NexBox Uninstaller"
 authors = ["MuLiu"]
 edition = "2021"

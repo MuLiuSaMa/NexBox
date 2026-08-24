@@ -41,20 +41,18 @@ export default function RandomImageCard() {
 
   return (
     <>
-      <LiquidGlassCard px={3} py={2} boxShadow="sm" minW="260px" maxW="360px" cursor="pointer" onClick={onOpen}>
-        <VStack spacing={1} align="start">
-          <HStack spacing={3} align="center" justify="space-between" w="full">
-            <HStack spacing={2} minW={0}>
-              <Text fontSize="sm" color={textColor} fontWeight="semibold" noOfLines={1}>
-                {t("home.randomImage.title") || "随机图片"}
-              </Text>
-              <FaImage size={16} color={textColor} style={{ flexShrink: 0 }} />
-            </HStack>
-          </HStack>
-          <Text fontSize="xs" color={subTextColor} noOfLines={1}>
-            {t("home.randomImage.subtitle") || "点击打开随机图片"}
-          </Text>
-        </VStack>
+      <LiquidGlassCard px={3} py={2} boxShadow="sm" flex="1" minW="0" maxW="full" w="full" cursor="pointer" onClick={onOpen}>
+        <HStack spacing={2} align="center">
+          <FaImage size={18} color={textColor} style={{ flexShrink: 0 }} />
+          <VStack spacing={0} align="start">
+            <Text fontSize="sm" color={textColor} fontWeight="semibold" whiteSpace="nowrap">
+              {t("home.randomImage.title") || "随机图片"}
+            </Text>
+            <Text fontSize="xs" color={subTextColor} noOfLines={1}>
+              {t("home.randomImage.subtitle") || "点击打开随机图片"}
+            </Text>
+          </VStack>
+        </HStack>
       </LiquidGlassCard>
       <RandomImageModal isOpen={isOpen} onClose={onClose} />
     </>

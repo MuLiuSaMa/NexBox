@@ -54,7 +54,7 @@ fn create_scheduled_task(exe_path: &str, minimized_start: bool) -> Result<(), St
         "/tr", &run_cmd,
         "/sc", "onlogon",
         "/rl", "highest",
-        "/delay", "0000:00:05",
+        "/delay", "0000:05",
         "/f",
     ])?;
 

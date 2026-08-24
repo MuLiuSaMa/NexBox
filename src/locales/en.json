@@ -856,6 +856,10 @@
       "noImageYet": "No image to download yet",
       "previewAlt": "Random image preview"
     },
+    "mood": {
+      "title": "Mood",
+      "subtitle": "Click to open Mood"
+    },
     "feedbackCard": {
       "title": "Feedback",
       "subtitle": "Report issues on the official website"
@@ -1196,7 +1200,11 @@
     "save": "Save",
     "gameFilterTitle": "Auto-apply filter when a game starts",
     "gameFilterSupportedTitle": "Supported Games",
-    "gameFilterError": "Operation failed"
+    "gameFilterError": "Operation failed",
+    "multiFilterTitle": "Use Multiple Filters",
+    "multiFilterSelected": "Selected",
+    "stackedMode": "Stack Mode",
+    "stackedCount": "Stacked Filters"
   },
   "floatingNav": {
     "title": "Floating Navigation Box",
@@ -1350,6 +1358,10 @@
     "dlssNote": "Requires NVIDIA Profile Inspector, restart game to take effect",
     "back": "Back",
     "dlssModels": {
+      "default": {
+        "name": "Default (set by 3D app)",
+        "description": "Managed by the 3D application; no override applied"
+      },
       "A": {
         "name": "Model A",
         "description": "Early model"
@@ -1873,6 +1885,12 @@
       "gameModeDesc": "Show the game mode switcher in the title bar to toggle Default/Regular/Competitive suppression with one click",
       "randomImageLabel": "Random Image",
       "randomImageDesc": "Show the random image card on the homepage",
+      "moodCardLabel": "Mood Card",
+      "moodCardDesc": "Show the mood card on the homepage",
+      "cornerTopLeft": "Top Left",
+      "cornerTopRight": "Top Right",
+      "cornerBottomLeft": "Bottom Left",
+      "cornerBottomRight": "Bottom Right",
       "searchBarLabel": "Search Bar",
       "searchBarDesc": "Show the global search bar in the title bar",
       "feedbackLabel": "Feedback",

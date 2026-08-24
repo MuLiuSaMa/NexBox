@@ -434,12 +434,6 @@ export default function GpuRenamePage() {
               </Button>
             </Box>
           </VStack>
-
-          <Box w="full" mt={4} p={4} bg="blue.50" borderRadius="md" borderWidth="1px" borderColor="blue.200">
-            <Text color="blue.700" fontSize="sm" whiteSpace="pre-line">
-              {t("gpuRename.note")}
-            </Text>
-          </Box>
         </>
       )}
     </VStack>

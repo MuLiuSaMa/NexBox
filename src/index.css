@@ -31,6 +31,15 @@
   font-display: swap;
 }
 
+/* 思源宋体 Heavy（沉浸式歌词专用） */
+@font-face {
+  font-family: "NotoSerifSC-900";
+  src: url("/fonts/NotoSerifSC-900.woff2") format("woff2");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   font-family: var(--app-font-family, "Sinter-Regular"), Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;

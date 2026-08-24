@@ -127,6 +127,12 @@ CrystalDiskInfo-master/
 # Third-party reference project (downloaded Pavise source, not part of repo)
 Pavise-Game-main/
 
+# Third-party reference project (downloaded Liquid Glass JS library, not part of repo)
+liquid-glass-main/
+
+# 根目录字体副本（与 public/fonts/ 下重复，仅提交 public/fonts 版本）
+NotoSerifSC-900.woff2
+
 # 临时调试测试文件
 src-tauri/reg_test.pdb
 src-tauri/reg_test.rs

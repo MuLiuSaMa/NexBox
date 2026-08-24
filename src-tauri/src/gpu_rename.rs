@@ -686,6 +686,11 @@ pub async fn get_gpu_options() -> Result<Vec<GpuOption>, String> {
             name: "NVIDIA GeForce GTX 1050".to_string(),
             category: "low-end".to_string(),
         },
+        GpuOption {
+            id: "gtx1050ti".to_string(),
+            name: "NVIDIA GeForce GTX 1050 Ti".to_string(),
+            category: "low-end".to_string(),
+        },
         // 低端显卡（AMD）
         GpuOption {
             id: "r7240".to_string(),

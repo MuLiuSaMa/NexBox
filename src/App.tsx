@@ -60,12 +60,20 @@ import { invoke } from "@tauri-apps/api/core";
 
 import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
+import { StartupAdModal } from "./components/ads/startup-ad-popup";
+import { useAds } from "./hooks/use-ads";
 import { useAppStartup } from "./contexts/app-startup-context";
 import { MusicProvider } from "./contexts/music-context";
 import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
 import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
+
+/** 启动完成后展示一次开屏广告弹窗（ads 为空时不显示任何内容） */
+function StartupAdHost() {
+  const { splash } = useAds();
+  return <StartupAdModal ads={splash} />;
+}
 
 function App() {
   const { isStartupComplete } = useAppStartup();
@@ -96,6 +104,11 @@ function App() {
     return <SensorMonitorPage />;
   }
 
+  // Mood window: standalone, no main layout（主页「心境」卡片点击打开独立窗口）
+  if (location.pathname === "/mood") {
+    return <MoodPage />;
+  }
+
   // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
   // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
   useEffect(() => {
@@ -124,6 +137,7 @@ function App() {
     <MusicProvider>
       <>
         {!isStartupComplete && <SplashScreen />}
+        {isStartupComplete && <StartupAdHost />}
         {/* <MiniMusicPlayer /> */}
         <MainLayout>
           {/* 主页常驻挂载：路由切换只隐藏、不卸载，避免每次回到主页重新加载硬件信息与快捷启动 */}
@@ -277,14 +291,6 @@ function App() {
                     element={
                       <AnimatedPage>
                         <DeltaForceRoulettePage />
-                      </AnimatedPage>
-                    }
-                  />
-                  <Route
-                    path="/mood"
-                    element={
-                      <AnimatedPage>
-                        <MoodPage />
                       </AnimatedPage>
                     }
                   />
@@ -625,14 +631,6 @@ function App() {
                   element={
                     <AnimatedPage>
                       <DeltaForceRoulettePage />
-                    </AnimatedPage>
-                  }
-                />
-                <Route
-                  path="/mood"
-                  element={
-                    <AnimatedPage>
-                      <MoodPage />
                     </AnimatedPage>
                   }
                 />

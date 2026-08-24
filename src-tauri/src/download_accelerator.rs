@@ -59,6 +59,8 @@ pub struct TaskEntry {
     /// 0=pending 1=downloading 2=paused 3=completed 4=error 5=preparing
     pub status: AtomicI32,
     pub error_message: Mutex<String>,
+    /// 创建序号（任务注册表裁剪时用作新旧排序，值仅在同锁访问下读写）
+    pub created_seq: u64,
     cancel: Mutex<CancellationToken>,
 }
 
@@ -76,6 +78,11 @@ impl TaskEntry {
 
 static TASKS: LazyLock<Mutex<HashMap<String, Arc<TaskEntry>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+/// 会话内任务创建序号，用于注册表裁剪时保留最近项
+static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+/// 注册表内存里最多保留的终态（完成/错误）条目数，防止长会话内无界增长。
+/// 活跃/进行中任务永远保留；超出部分仅从内存移除，历史仍可从持久层恢复。
+const MAX_FINISHED_TASKS: usize = 50;
 static SPAWN_GEN: AtomicI64 = AtomicI64::new(1);
 /// 全局限速器（v1 不限速；后续接设置面板 set_limit 即可生效于所有任务）。
 static LIMITER: LazyLock<SpeedLimiter> = LazyLock::new(|| SpeedLimiter::new(0));
@@ -244,6 +251,7 @@ pub async fn accel_start(
         downloaded_bytes: AtomicI64::new(0),
         status: AtomicI32::new(5),
         error_message: Mutex::new(String::new()),
+        created_seq: SEQ.fetch_add(1, Ordering::Relaxed),
         cancel: Mutex::new(CancellationToken::new()),
     });
     tasks().lock().unwrap().insert(entry.id.clone(), entry.clone());
@@ -316,6 +324,7 @@ pub async fn accel_resume(app: AppHandle, id: String) -> Result<(), String> {
                 downloaded_bytes: AtomicI64::new(0),
                 status: AtomicI32::new(5),
                 error_message: Mutex::new(String::new()),
+                created_seq: SEQ.fetch_add(1, Ordering::Relaxed),
                 cancel: Mutex::new(CancellationToken::new()),
             });
             tasks().lock().unwrap().insert(entry.id.clone(), entry.clone());
@@ -590,6 +599,7 @@ async fn run_task(
                 apply_server_mtime(&entry.final_path, &info.last_modified);
             }
             emit_snapshot(&app, &entry, 0, full_segments(done));
+            prune_finished_tasks();
         }
         Err(err) => {
             if err_is_cancel(&err)
@@ -639,6 +649,7 @@ async fn run_task(
                         }
                         entry.status.store(STATUS_COMPLETED, Ordering::Relaxed);
                         emit_snapshot(&app, &entry, 0, Vec::new());
+                        prune_finished_tasks();
                         return;
                     }
                     Err(e2) => {
@@ -914,6 +925,37 @@ async fn finish_error(app: &AppHandle, entry: &Arc<TaskEntry>, msg: String) {
     *entry.error_message.lock().unwrap() = msg;
     entry.status.store(4, Ordering::Relaxed);
     emit_snapshot(app, entry, 0, Vec::new());
+    prune_finished_tasks();
+}
+
+/// 裁剪注册表里多余的终态（完成/错误）条目，保留最近的 MAX_FINISHED_TASKS 个。
+/// 进行中/暂停/准备的条目永远保留；仅移除最旧的已完成/失败项，
+/// 历史仍可从持久层恢复，不影响 accel_list 的“最近任务”展示。
+fn prune_finished_tasks() {
+    let mut map = tasks().lock().unwrap();
+    if map.len() <= MAX_FINISHED_TASKS {
+        return;
+    }
+    let excess = map.len() - MAX_FINISHED_TASKS;
+    let mut finished: Vec<(u64, String)> = map
+        .iter()
+        .filter(|(_, e)| {
+            let s = e.status.load(Ordering::Relaxed);
+            s == STATUS_COMPLETED || s == 4
+        })
+        .map(|(id, e)| (e.created_seq, id.clone()))
+        .collect();
+    // 最旧（序号最小）优先移除
+    finished.sort_by_key(|(seq, _)| *seq);
+    let mut removed = 0usize;
+    for (_, id) in finished {
+        if removed >= excess {
+            break;
+        }
+        if map.remove(&id).is_some() {
+            removed += 1;
+        }
+    }
 }
 
 fn full_segments(total: i64) -> Vec<SegmentDto> {

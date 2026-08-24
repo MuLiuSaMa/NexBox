@@ -24,6 +24,18 @@ export function TitleBar() {
   const [gameModeVisible, setGameModeVisible] = useState(true);
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
   const [isMaximized, setIsMaximized] = useState(false);
+  // 音乐沉浸页面级全屏状态：全屏时淡出搜索框/游戏模式，左上角显示"缩小"按钮
+  const [pageFs, setPageFs] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      setPageFs(!!(e as CustomEvent<boolean>).detail);
+    };
+    window.addEventListener("immersive-page-fullscreen", handler as EventListener);
+    return () => {
+      window.removeEventListener("immersive-page-fullscreen", handler as EventListener);
+    };
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -221,12 +233,29 @@ export function TitleBar() {
             transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {searchBarVisible && <GlobalSearch />}
+            {/* 沉浸页面全屏：搜索框淡出，左上角显示"缩小"（退出全屏）按钮 */}
+            {searchBarVisible && (
+              <Box
+                opacity={pageFs ? 0 : 1}
+                visibility={pageFs ? "hidden" : "visible"}
+                transition="opacity 0.3s ease"
+                pointerEvents={pageFs ? "none" : "auto"}
+              >
+                <GlobalSearch />
+              </Box>
+            )}
           </Flex>
           <HStack id="window-controls" spacing={1} h="40px" align="center">
-            {gameModeVisible && (
-              <Box transform="translateX(-12px)"><GameModeSwitch /></Box>
-            )}
+            {/* 沉浸页面全屏时游戏模式切换淡出，保留最小化/最大化/关闭 */}
+            <Box
+              transform="translateX(-12px)"
+              opacity={pageFs ? 0 : 1}
+              visibility={pageFs ? "hidden" : "visible"}
+              transition="opacity 0.3s ease"
+              pointerEvents={pageFs ? "none" : "auto"}
+            >
+              {gameModeVisible && <GameModeSwitch />}
+            </Box>
             <IconButton
               icon={<LuMinus size={18} />}
               aria-label="最小化"

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox安装程序",
-  "version": "8.8.2",
+  "version": "9.0.0",
   "identifier": "com.nexbox.installer",
   "build": {
     "frontendDist": "../dist",

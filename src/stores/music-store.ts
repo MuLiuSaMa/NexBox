@@ -73,6 +73,8 @@ interface MusicState {
   leftPlaylistTotalTrackIds: string[];
   rightPlaylistTotalTrackIds: string[];
   leftPlaylistLoadingMore: boolean;
+  // 歌单内搜索时「先加载全部曲目」的进行中标记
+  leftPlaylistLoadingAll: boolean;
   rightPlaylistLoadingMore: boolean;
   likedSongIds: Set<string>;
   currentLyrics: Lyrics | null;
@@ -133,7 +135,7 @@ interface MusicState {
   loadingLeftTracks: boolean;
   loadingRightTracks: boolean;
   loadingLyrics: boolean;
-  expandedStyle: "glass" | "modern";
+  expandedStyle: "glass" | "modern" | "immersive";
   dynamicEnabled: boolean;
   coverFilmEffect: boolean;
 
@@ -177,7 +179,7 @@ interface MusicState {
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
   setLyricsHighlightColor: (color: string) => Promise<void>;
-  setExpandedStyle: (style: "glass" | "modern") => Promise<void>;
+  setExpandedStyle: (style: "glass" | "modern" | "immersive") => Promise<void>;
   setDynamicEnabled: (enabled: boolean) => Promise<void>;
   setCoverFilmEffect: (enabled: boolean) => Promise<void>;
   setCurrentTime: (t: number) => void;
@@ -211,6 +213,8 @@ interface MusicState {
   loadUserPlaylistsFor: (provider: MusicProvider) => Promise<void>;
   loadLeftPlaylistTracks: (id: string) => Promise<void>;
   loadMoreLeftPlaylistTracks: () => Promise<void>;
+  // 歌单内搜索：一次性把当前歌单全部剩余曲目拉齐到 leftPlaylistTracks
+  loadAllLeftPlaylistTracks: () => Promise<void>;
   loadRightPlaylistTracks: (id: string) => Promise<void>;
   loadRightRankTracks: (rankId: string) => Promise<void>;
   loadMoreRightPlaylistTracks: () => Promise<void>;
@@ -331,6 +335,43 @@ async function mergeLocalSongInfos(
 let timeSyncTimer: ReturnType<typeof setInterval> | null = null;
 // 防止 React Strict Mode 双重调用 init 导致重复注册 listener
 let listenersRegistered = false;
+// 页面关闭时仅注册一次 unload 清理，避免重复绑定
+let unloadCleanupBound = false;
+// 当前已绑定 SMTC 事件的 <audio> 元素，用于替换/卸载时解绑，防止监听残留
+let smtcBoundAudio: HTMLAudioElement | null = null;
+// SMTC 事件具名回调：绑定/解绑需引用同一函数
+function onSmtcTimeUpdate() {
+  pushSmtc();
+}
+function onSmtcPlay() {
+  useMusicStore.setState({ isPlaying: true });
+  pushSmtc(true);
+}
+function onSmtcPause() {
+  useMusicStore.setState({ isPlaying: false });
+  pushSmtc(true);
+}
+function onSmtcLoadedMetadata() {
+  pushSmtc(true);
+}
+function onSmtcEnded() {
+  pushSmtc(true);
+}
+function bindSmtcHandlers(audio: HTMLAudioElement) {
+  audio.addEventListener("timeupdate", onSmtcTimeUpdate);
+  audio.addEventListener("play", onSmtcPlay);
+  audio.addEventListener("pause", onSmtcPause);
+  audio.addEventListener("loadedmetadata", onSmtcLoadedMetadata);
+  audio.addEventListener("ended", onSmtcEnded);
+}
+function unbindSmtcHandlers(audio: HTMLAudioElement | null) {
+  if (!audio) return;
+  audio.removeEventListener("timeupdate", onSmtcTimeUpdate);
+  audio.removeEventListener("play", onSmtcPlay);
+  audio.removeEventListener("pause", onSmtcPause);
+  audio.removeEventListener("loadedmetadata", onSmtcLoadedMetadata);
+  audio.removeEventListener("ended", onSmtcEnded);
+}
 // 存储 Tauri 事件监听器的取消函数，防止内存泄漏
 const unlistenFns: (() => void)[] = [];
 
@@ -359,6 +400,16 @@ export function cleanupMusicListeners() {
   unlistenFns.forEach((fn) => fn());
   unlistenFns.length = 0;
   listenersRegistered = false;
+  unbindSmtcHandlers(smtcBoundAudio);
+  smtcBoundAudio = null;
+  stopTimeSync();
+}
+
+/** 绑定页面卸载时的统一清理（只注册一次），避免 Tauri listener/音频监听残留在整个会话 */
+function bindUnloadCleanup() {
+  if (unloadCleanupBound) return;
+  unloadCleanupBound = true;
+  window.addEventListener("beforeunload", cleanupMusicListeners);
 }
 
 async function getProxyAudioUrl(rawUrl: string, proxyPort: number): Promise<string> {
@@ -440,6 +491,19 @@ async function repairLocalCovers(
 // 系统媒体键（播放/暂停/上一曲/下一曲）与浮层拖动进度控制内部播放器。
 let lastSmtcPush = 0;
 let smtcCleared = true;
+
+// SMTC 控制事件去重：物理媒体键同时触发「低层键盘钩子」和 SMTC ButtonPressed
+// 两条链路，毫秒级内对同一动作各 emit 一次；窗口期内忽略相同动作的重复事件。
+let lastSmtcAction: string | null = null;
+let lastSmtcActionTime = 0;
+function shouldHandleSmtc(action: string): boolean {
+  if (action === "seek") return true; // seek 来自浮层拖动，不会重复
+  const now = Date.now();
+  if (action === lastSmtcAction && now - lastSmtcActionTime < 150) return false;
+  lastSmtcAction = action;
+  lastSmtcActionTime = now;
+  return true;
+}
 
 /**
  * 计算 SMTC 封面来源，交给后端下载（后端 reqwest 带防盗链 Referer，无 CORS 限制）：
@@ -585,6 +649,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   leftPlaylistTotalTrackIds: [],
   rightPlaylistTotalTrackIds: [],
   leftPlaylistLoadingMore: false,
+  leftPlaylistLoadingAll: false,
   rightPlaylistLoadingMore: false,
   likedSongIds: new Set(),
   currentLyrics: null,
@@ -767,8 +832,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (fontSize != null) set({ lyricsFontSize: fontSize });
       const expStyle = await store.get<string>("expandedStyle");
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
-      // 恢复播放器样式（glass/modern 都需还原，否则切到 glass 后重启会退回默认 modern）
-      if (expStyle === "modern" || expStyle === "glass") set({ expandedStyle: expStyle });
+      // 恢复播放器样式（glass/modern/immersive 都需还原，否则切换后重启会退回默认 modern）
+      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive") set({ expandedStyle: expStyle });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
       const filmEffect = await store.get<boolean>("coverFilmEffect");
@@ -811,8 +876,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     } catch {}
 
     // 防止 React Strict Mode 双重调用导致重复注册
-    if (listenersRegistered) return;
+    if (listenersRegistered) {
+      // 无论是否首次注册，确保绑定了页面卸载清理（唯一一次真实注册时绑定）
+      bindUnloadCleanup();
+      return;
+    }
     listenersRegistered = true;
+    bindUnloadCleanup();
 
     // 桌面歌词控制事件监听
     unlistenFns.push(
@@ -868,9 +938,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     );
 
     // 系统媒体键 / 音量浮层控制事件（后端 SMTC 转发）→ 控制内部播放器
+    // 注意：物理媒体键会同时触发「低层键盘钩子」与系统的 SMTC ButtonPressed 两条链路，
+    // 毫秒级内会对同一动作各 emit 一次；这里在窗口期内忽略相同动作的重复事件，避免按一次跳两首/切换两次。
     unlistenFns.push(
       await listen<{ action: string; positionMs?: number }>("smtc:control", (event) => {
         const { action, positionMs } = event.payload;
+        if (!shouldHandleSmtc(action)) return;
         switch (action) {
           case "play-pause":
             get().togglePlay();
@@ -1031,23 +1104,19 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   setAudioRef: (audio) => {
-    set({ audioRef: audio });
-    // 绑定 SMTC 推送与播放状态同步：无论音频被前端/系统媒体键/外部路径暂停或恢复，
-    // isPlaying 都跟随 <audio> 真实状态，保证灵动岛/播放器按钮图标始终同步。
-    if (audio && !(audio as HTMLAudioElement & { _smtcBound?: boolean })._smtcBound) {
-      (audio as HTMLAudioElement & { _smtcBound?: boolean })._smtcBound = true;
-      audio.addEventListener("timeupdate", () => pushSmtc());
-      audio.addEventListener("play", () => {
-        useMusicStore.setState({ isPlaying: true });
-        pushSmtc(true);
-      });
-      audio.addEventListener("pause", () => {
-        useMusicStore.setState({ isPlaying: false });
-        pushSmtc(true);
-      });
-      audio.addEventListener("loadedmetadata", () => pushSmtc(true));
-      audio.addEventListener("ended", () => pushSmtc(true));
+    if (smtcBoundAudio === audio) {
+      set({ audioRef: audio });
+      return;
     }
+    // 若已有绑定元素且被替换，先解绑旧元素监听，避免监听残留
+    unbindSmtcHandlers(smtcBoundAudio);
+    smtcBoundAudio = audio;
+    if (audio) {
+      // 绑定 SMTC 推送与播放状态同步：无论音频被前端/系统媒体键/外部路径暂停或恢复，
+      // isPlaying 都跟随 <audio> 真实状态，保证灵动岛/播放器按钮图标始终同步。
+      bindSmtcHandlers(audio);
+    }
+    set({ audioRef: audio });
   },
 
   search: async (keywords) => {
@@ -2013,6 +2082,42 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       console.error("loadMore left failed:", e);
     } finally {
       set({ leftPlaylistLoadingMore: false });
+    }
+  },
+
+  // 歌单内搜索：一次性把当前歌单全部剩余曲目拉齐到 leftPlaylistTracks
+  loadAllLeftPlaylistTracks: async () => {
+    const state = get();
+    const id = state.leftPlaylistMeta?.id;
+    const total = state.leftPlaylistMeta?.track_count ?? 0;
+    if (!id || total === 0) return;
+    // 已加载完或已在加载中则直接返回
+    if (state.leftPlaylistTracks.length >= total || state.leftPlaylistLoadingAll) return;
+    set({ leftPlaylistLoadingAll: true });
+    try {
+      const provider = get().playbackSource;
+      const cmd = provider === "kugou" ? "kugou_playlist_tracks_range"
+        : provider === "qqmusic" ? "qq_playlist_tracks_range"
+        : "music_playlist_tracks_range";
+      // 循环拉取剩余所有页；任一页返回空或报错即退出，避免死循环
+      for (;;) {
+        const s = get();
+        const start = s.leftPlaylistTracks.length;
+        if (s.leftPlaylistMeta?.id !== id || start >= total) break;
+        let songs: Song[] = [];
+        try {
+          songs = await invoke<Song[]>(cmd, { id, start, count: 50 });
+        } catch (e) {
+          console.error("loadAll left page failed:", e);
+          break;
+        }
+        if (songs.length === 0) break;
+        set((s) => ({
+          leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
+        }));
+      }
+    } finally {
+      set({ leftPlaylistLoadingAll: false });
     }
   },
 

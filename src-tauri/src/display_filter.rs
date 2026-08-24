@@ -313,6 +313,10 @@ pub(crate) struct DisplayState {
     icc_active: bool,
     active_icc_id: Option<String>,
     filter_active: bool,
+    /// 是否处于多滤镜叠加模式（已应用叠加组合）
+    stacked: bool,
+    /// 已应用的叠加组合（应用顺序，即卡片点选顺序）
+    stack_preset_ids: Vec<String>,
 }
 
 impl Default for DisplayState {
@@ -321,6 +325,7 @@ impl Default for DisplayState {
             temperature: 6500, brightness: 100, contrast: 100, saturation: 100,
             r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0, mode: 0,
             icc_ramp: None, icc_active: false, active_icc_id: None, filter_active: false,
+            stacked: false, stack_preset_ids: Vec::new(),
         }
     }
 }
@@ -350,6 +355,8 @@ fn display_state_from_persisted(saved: &HashMap<usize, PersistentFilterState>, i
         st.mode = p.mode;
         st.icc_active = p.icc_active;
         st.active_icc_id = p.active_icc_id.clone();
+        st.stacked = p.stacked;
+        st.stack_preset_ids = p.stack_preset_ids.clone();
         st.icc_ramp = p.icc_ramp.as_ref().map(|r| {
             let mut arr = [[0u16; 256]; 3];
             for ch in 0..3.min(r.len()) {
@@ -641,12 +648,16 @@ pub struct FilterSettings {
     pub preview_filter_icc: Option<String>,
     pub preview_tint_color_icc: Option<String>,
     pub preview_tint_opacity_icc: Option<f64>,
+    /// 是否多滤镜叠加模式
+    pub stacked: bool,
+    /// 已应用的叠加组合 id 列表（应用顺序）
+    pub stack_preset_ids: Vec<String>,
 }
 
 impl FilterSettings {
     fn from_display_state(state: &DisplayState) -> Self {
         let (preview_filter_icc, preview_tint_color_icc, preview_tint_opacity_icc) =
-            if state.icc_active {
+            if state.icc_active || state.stacked {
                 if let Some(ref ramp) = state.icc_ramp {
                     let (pf, ptc, pto) = compute_icc_preview(ramp);
                     (if pf.is_empty() { None } else { Some(pf) }, ptc, pto)
@@ -676,6 +687,8 @@ impl FilterSettings {
             mode: state.mode, is_active: state.filter_active,
             icc_active: state.icc_active, active_icc_id: state.active_icc_id.clone(),
             preview_filter_icc, preview_tint_color_icc, preview_tint_opacity_icc,
+            stacked: state.stacked,
+            stack_preset_ids: state.stack_preset_ids.clone(),
         }
     }
 }
@@ -735,6 +748,10 @@ struct PersistentFilterState {
     active_icc_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     icc_ramp: Option<Vec<Vec<u16>>>,
+    #[serde(default)]
+    stacked: bool,
+    #[serde(default)]
+    stack_preset_ids: Vec<String>,
 }
 
 fn save_all_filter_states() {
@@ -758,6 +775,8 @@ fn save_all_filter_states() {
             icc_active: s.icc_active,
             active_icc_id: s.active_icc_id.clone(),
             icc_ramp: s.icc_ramp.map(|r| r.iter().map(|ch| ch.to_vec()).collect()),
+            stacked: s.stacked,
+            stack_preset_ids: s.stack_preset_ids.clone(),
         });
     }
 
@@ -1543,6 +1562,15 @@ pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
     // 恢复，避免 `xcalib -c` 把图形控制台/颜色管理里的 sRGB 校色清成线性。
     capture_original_ramp(idx);
 
+    // 多滤镜叠加模式：优先走叠加组合（ramp 复合 → ICC → xcalib）
+    {
+        let stacked = with_display_state(idx, |s| s.stacked && !s.stack_preset_ids.is_empty());
+        if stacked {
+            log::info!("apply_filter_to_display[{}]: 叠加模式，应用滤镜组合", idx);
+            return apply_stack_to_display(idx);
+        }
+    }
+
     let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode, _icc_ramp_opt) =
         with_display_state(idx, |state| {
             (state.icc_active, state.temperature, state.brightness, state.contrast,
@@ -1657,6 +1685,8 @@ pub async fn set_filter_settings(
             state.mode = mode;
             state.icc_active = false;
             state.active_icc_id = None;
+            state.stacked = false;
+            state.stack_preset_ids.clear();
             if is_active && !state.filter_active { state.filter_active = true; }
         });
 
@@ -1676,6 +1706,7 @@ pub async fn set_filter_settings(
                 s_curve: 0.0, r_boost: 1.0, g_boost: 1.0, b_boost: 1.0,
                 mode, is_active: actually_active, icc_active: false, active_icc_id: None,
                 preview_filter_icc: None, preview_tint_color_icc: None, preview_tint_opacity_icc: None,
+                stacked: false, stack_preset_ids: Vec::new(),
             }),
             preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
         })
@@ -1835,6 +1866,135 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
     }
 }
 
+// ─── 多滤镜叠加（ramp 复合）───
+
+/// 将一组 Gamma ramp 按顺序复合为一条 ramp（LUT 复合，等价像素依次经过各滤镜曲线）。
+/// 从恒等 ramp 出发，对每个滤镜 f：composed[i] = f[composed[i] / 257]（最近邻插值）。
+fn compose_ramps(ramps: &[[[u16; 256]; 3]]) -> [[u16; 256]; 3] {
+    let mut composed = [[0u16; 256]; 3];
+    for c in 0..3 {
+        for i in 0..256 { composed[c][i] = (i * 257) as u16; }
+    }
+    for ramp in ramps {
+        let mut next = [[0u16; 256]; 3];
+        for c in 0..3 {
+            for i in 0..256 {
+                let idx = ((composed[c][i] as usize) / 257).min(255);
+                next[c][i] = ramp[c][idx];
+            }
+        }
+        composed = next;
+    }
+    // 单调约束 + 端点固定（与 build_gamma_ramp 一致）
+    for c in 0..3 {
+        for i in 1..256 {
+            if composed[c][i] < composed[c][i - 1] { composed[c][i] = composed[c][i - 1]; }
+        }
+    }
+    composed[0][0] = 0; composed[1][0] = 0; composed[2][0] = 0;
+    composed[0][255] = 65535; composed[1][255] = 65535; composed[2][255] = 65535;
+    composed
+}
+
+/// 将任意滤镜 id（内置预设 / ICC 配置文件 / 我的滤镜预设）解析为 Gamma ramp。
+/// 与前端卡片 id 空间一一对应；任一来源命中即返回。
+fn preset_id_to_ramp(id: &str) -> Option<[[u16; 256]; 3]> {
+    // 1. 内置参数化预设：优先内置 ICC 文件，失败回退参数生成
+    if let Some(icc_filename) = preset_id_to_builtin_icc(id) {
+        if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
+            if let Ok(parsed) = parse_icc_file(icc_path.to_str().unwrap_or("")) {
+                return Some(parsed.to_ramp_array());
+            }
+            log::warn!("preset_id_to_ramp[{}]: 内置 ICC '{}' 解析失败，回退参数生成", id, icc_filename);
+        }
+        if let Ok(presets) = get_filter_presets_sync() {
+            if let Some(p) = presets.iter().find(|x| x.id == id) {
+                return Some(build_gamma_ramp(
+                    p.temperature, p.brightness, p.contrast, p.saturation,
+                    FilterMode::from_i32(p.mode), None,
+                ));
+            }
+        }
+        return None;
+    }
+    // 1b. 内置 ICC 文件 id（形如 builtin_NexBox_*，来自单选预设/重置应用后的 active_icc_id）
+    if let Some(stem) = id.strip_prefix("builtin_") {
+        let icc_filename = format!("{}.icc", stem);
+        if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
+            if let Ok(parsed) = parse_icc_file(icc_path.to_str().unwrap_or("")) {
+                return Some(parsed.to_ramp_array());
+            }
+        }
+    }
+    // 2. ICC 配置文件（用户导入，id 由导入时生成）
+    if let Some((_id, ramp)) = get_or_load_icc_presets()
+        .iter()
+        .find(|p| p.id == id)
+        .map(|p| (p.id.clone(), p.to_ramp_array()))
+    {
+        return Some(ramp);
+    }
+    // 3. 我的滤镜预设（参数化）
+    let user_presets = {
+        let mut lock = USER_FILTER_PRESETS.lock().unwrap();
+        if lock.is_none() {
+            let loaded = load_user_filter_presets_from_file();
+            *lock = Some(loaded.clone());
+            loaded
+        } else { lock.as_ref().unwrap().clone() }
+    };
+    if let Some(p) = user_presets.iter().find(|x| x.id == id) {
+        return Some(build_gamma_ramp(
+            p.temperature, p.brightness, p.contrast, p.saturation,
+            FilterMode::Normal, Some((p.r_gamma, p.g_gamma, p.b_gamma)),
+        ));
+    }
+    None
+}
+
+/// 同步取内置预设列表（供 ramp 解析器使用，避免在同步上下文 `await`）。
+fn get_filter_presets_sync() -> Result<Vec<FilterPreset>, String> {
+    Ok(vec![
+        FilterPreset { id: "de-exposure-pro".to_string(), name: "去曝光Pro".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "专业去曝光，保护高光细节".to_string() },
+        FilterPreset { id: "vivid".to_string(), name: "鲜艳".to_string(), mode: 1, temperature: 6800, brightness: 102, contrast: 105, saturation: 115, description: "增强色彩饱和度，画面更鲜艳".to_string() },
+        FilterPreset { id: "movie".to_string(), name: "电影".to_string(), mode: 2, temperature: 5800, brightness: 98, contrast: 95, saturation: 95, description: "电影质感，柔和色调".to_string() },
+        FilterPreset { id: "highlight".to_string(), name: "高亮".to_string(), mode: 3, temperature: 7200, brightness: 110, contrast: 102, saturation: 100, description: "提高亮度，适合暗光环境".to_string() },
+        FilterPreset { id: "soft".to_string(), name: "柔和".to_string(), mode: 4, temperature: 5200, brightness: 98, contrast: 92, saturation: 95, description: "柔和画面，减少眼睛疲劳".to_string() },
+        FilterPreset { id: "gaming".to_string(), name: "游戏".to_string(), mode: 5, temperature: 6800, brightness: 103, contrast: 108, saturation: 110, description: "增强对比度和色彩，适合游戏".to_string() },
+        FilterPreset { id: "reading".to_string(), name: "阅读".to_string(), mode: 6, temperature: 4800, brightness: 95, contrast: 100, saturation: 92, description: "暖色调，保护眼睛".to_string() },
+        FilterPreset { id: "de-exposure".to_string(), name: "去曝光".to_string(), mode: 7, temperature: 6500, brightness: 92, contrast: 103, saturation: 98, description: "压暗高光，降低过度曝光，恢复高光细节".to_string() },
+        FilterPreset { id: "shadow-boost".to_string(), name: "暗部增强".to_string(), mode: 8, temperature: 6500, brightness: 106, contrast: 94, saturation: 104, description: "提亮暗部阴影，让黑暗角落的敌人无处遁形".to_string() },
+        FilterPreset { id: "dam-contrast".to_string(), name: "大坝降低对比度".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "降低对比度，保护高光细节，画面更柔和".to_string() },
+        FilterPreset { id: "aerospace".to_string(), name: "航天推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "航天基地专属色彩调教".to_string() },
+        FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
+        FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
+        FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
+        FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
+    ])
+}
+
+/// 应用叠加组合到显示器：按 state.stack_preset_ids 顺序取 ramp → 复合 → 写 ICC → xcalib。
+/// 供 apply_filter_to_display（开关/启动/游戏自动开启）与 apply_filter_stack 命令共用。
+fn apply_stack_to_display(idx: usize) -> Result<(), String> {
+    let ids = with_display_state(idx, |s| s.stack_preset_ids.clone());
+    if ids.is_empty() {
+        return Err("叠加组合为空".to_string());
+    }
+    capture_original_ramp(idx);
+    let mut ramps = Vec::with_capacity(ids.len());
+    for id in &ids {
+        match preset_id_to_ramp(id) {
+            Some(ramp) => ramps.push(ramp),
+            None => return Err(format!("叠加滤镜解析失败，找不到滤镜: {}", id)),
+        }
+    }
+    let composed = compose_ramps(&ramps);
+    let temp_icc = get_temp_icc_path();
+    let icc_data = build_icc_profile(&composed, "NexBox Filter Stack");
+    fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
+    apply_icc_via_xcalib(&temp_icc, idx)
+}
+
 /// Clear the gamma ramp via xcalib (reset to system default / linear).
 /// 仅在无法恢复捕获的原始 ramp 时作为兜底；系统关机/注销时跳过（外部子进程会
 /// 因运行库被拆除而初始化失败 0xc0000142）。
@@ -1984,6 +2144,8 @@ pub async fn apply_preset(
                 state.icc_ramp = Some(ramp_array);
                 state.icc_active = true;
                 state.active_icc_id = Some(format!("builtin_{}", icc_filename.trim_end_matches(".icc")));
+                state.stacked = false;
+                state.stack_preset_ids.clear();
                 if is_active && !state.filter_active { state.filter_active = true; }
             });
 
@@ -2018,6 +2180,82 @@ pub async fn apply_preset(
 
     // Fallback: generate ICC from parameters (legacy / custom behavior)
     set_filter_settings(display_index, preset.temperature, preset.brightness, preset.contrast, preset.saturation, preset.mode, is_active, None, None, None).await
+}
+
+/// 应用多滤镜叠加组合。`preset_ids` 按点选顺序排列（首个作用在输入层，末个作用在输出层）。
+/// - 非空：校验每个滤镜可解析 → 复合 ramp → 落屏（filter_active=true）并持久化。
+/// - 空：若此前处于叠加模式，则清除叠加并恢复默认显示；否则 no-op。
+#[tauri::command]
+pub async fn apply_filter_stack(
+    display_index: Option<usize>,
+    preset_ids: Vec<String>,
+) -> Result<FilterResult, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let idx = resolve_display_index(display_index);
+
+        if preset_ids.is_empty() {
+            let was_stacked = with_display_state(idx, |s| s.stacked);
+            if was_stacked {
+                with_display_state(idx, |s| {
+                    s.stacked = false;
+                    s.stack_preset_ids.clear();
+                    s.icc_active = false;
+                    s.active_icc_id = None;
+                    s.icc_ramp = None;
+                    s.filter_active = false;
+                });
+                let idx_move = idx;
+                tauri::async_runtime::spawn_blocking(move || restore_display_default(idx_move))
+                    .await.map_err(|e| format!("清除叠加失败: {}", e))??;
+            }
+            save_all_filter_states();
+            return Ok(with_display_state(idx, |state| FilterResult {
+                success: true,
+                message: "叠加滤镜已清除".to_string(),
+                settings: Some(FilterSettings::from_display_state(state)),
+                preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
+            }));
+        }
+
+        // 全校验：任一滤镜解析失败则整体报错，不污染状态
+        let mut ramps = Vec::with_capacity(preset_ids.len());
+        for id in &preset_ids {
+            match preset_id_to_ramp(id) {
+                Some(ramp) => ramps.push(ramp),
+                None => return Err(format!("找不到滤镜: {}", id)),
+            }
+        }
+        let composed = compose_ramps(&ramps);
+
+        with_display_state(idx, |state| {
+            state.stack_preset_ids = preset_ids.clone();
+            state.stacked = true;
+            state.icc_ramp = Some(composed);
+            state.icc_active = false;
+            state.active_icc_id = None;
+            state.filter_active = true;
+        });
+
+        // 后台应用，避免等待 xcalib 导致 UI 卡顿
+        let idx_move = idx;
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_stack_to_display(idx_move)).await {
+                log::error!("apply_filter_stack[{}]: 后台应用叠加滤镜失败: {}", idx_move, e);
+            }
+        });
+
+        save_all_filter_states();
+
+        Ok(with_display_state(idx, |state| FilterResult {
+            success: true,
+            message: format!("已应用 {} 个叠加滤镜", preset_ids.len()),
+            settings: Some(FilterSettings::from_display_state(state)),
+            preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
+        }))
+    }
+    #[cfg(not(target_os = "windows"))]
+    { Err("此功能仅支持 Windows 系统".to_string()) }
 }
 
 // ─── System session watch (shutdown/logoff detection) ───
@@ -2414,6 +2652,8 @@ pub async fn apply_icc_preset(
             state.icc_ramp = Some(ramp_array);
             state.icc_active = true;
             state.active_icc_id = Some(id.clone());
+            state.stacked = false;
+            state.stack_preset_ids.clear();
             if is_active && !state.filter_active { state.filter_active = true; }
         });
 

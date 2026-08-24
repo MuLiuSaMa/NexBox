@@ -676,6 +676,10 @@
       "downloadFailed": "Bild konnte nicht gespeichert werden",
       "noImageYet": "Noch kein Bild zum Herunterladen",
       "previewAlt": "Zufallsbild-Vorschau"
+    },
+    "mood": {
+      "title": "Stimmung",
+      "subtitle": "Klicken, um die Stimmung zu öffnen"
     }
   },
   "hardware": {
@@ -892,7 +896,11 @@
     "save": "Speichern",
     "gameFilterTitle": "Filter beim Start eines Spiels automatisch anwenden",
     "gameFilterSupportedTitle": "Unterstützte Spiele",
-    "gameFilterError": "Vorgang fehlgeschlagen"
+    "gameFilterError": "Vorgang fehlgeschlagen",
+    "multiFilterTitle": "Mehrere Filter verwenden",
+    "multiFilterSelected": "Ausgewählt",
+    "stackedMode": "Stapelmodus",
+    "stackedCount": "Gestapelte Filter"
   },
   "floatingNav": {
     "title": "Schwebendes Navigationsfeld",
@@ -1014,6 +1022,10 @@
     "dlssNote": "Erfordert NVIDIA Profile Inspector. Starten Sie das Spiel neu, um die Änderungen zu übernehmen.",
     "back": "Zurück",
     "dlssModels": {
+      "default": {
+        "name": "Standard (3D-Programm)",
+        "description": "Vom 3D-Programm verwaltet; keine Überschreibung"
+      },
       "A": {
         "name": "Modell A",
         "description": "Frühes Modell"
@@ -1394,6 +1406,12 @@
       "gameModeDesc": "Den Spielmodus-Schalter in der Titelleiste anzeigen, um per Klick zwischen Standard/Normal/Wettbewerb umzuschalten",
       "randomImageLabel": "Zufallsbild",
       "randomImageDesc": "Zufallsbild-Karte auf der Startseite anzeigen",
+      "moodCardLabel": "Stimmungskarte",
+      "moodCardDesc": "Stimmungskarte auf der Startseite anzeigen",
+      "cornerTopLeft": "Oben links",
+      "cornerTopRight": "Oben rechts",
+      "cornerBottomLeft": "Unten links",
+      "cornerBottomRight": "Unten rechts",
       "splash": "Animation",
       "splashLogoLabel": "Startlogo",
       "splashLogoDesc": "Passen Sie das beim Start angezeigte Logo an",

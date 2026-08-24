@@ -32,6 +32,7 @@ export const BUILTIN_FONT_OPTIONS: FontOption[] = [
   { value: "Sinter-Regular", label: "Sinter" },
   { value: "AiDianFengYaHei", label: "AiDianFengYaHei" },
   { value: "Cubic", label: "Cubic" },
+  { value: "NotoSerifSC-900", label: "思源宋体 900" },
 ];
 
 /** 默认字体 */

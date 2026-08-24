@@ -676,6 +676,10 @@
       "downloadFailed": "Échec de l'enregistrement de l'image",
       "noImageYet": "Aucune image à télécharger",
       "previewAlt": "Aperçu de l'image aléatoire"
+    },
+    "mood": {
+      "title": "Ambiance",
+      "subtitle": "Cliquez pour ouvrir l'ambiance"
     }
   },
   "hardware": {
@@ -892,7 +896,11 @@
     "save": "Enregistrer",
     "gameFilterTitle": "Appliquer automatiquement le filtre au lancement d'un jeu",
     "gameFilterSupportedTitle": "Jeux pris en charge",
-    "gameFilterError": "Échec de l'opération"
+    "gameFilterError": "Échec de l'opération",
+    "multiFilterTitle": "Utiliser plusieurs filtres",
+    "multiFilterSelected": "Sélectionné",
+    "stackedMode": "Mode pile",
+    "stackedCount": "Filtres empilés"
   },
   "floatingNav": {
     "title": "Boîte de navigation flottante",
@@ -1014,6 +1022,10 @@
     "dlssNote": "Nécessite NVIDIA Profile Inspector, redémarrez le jeu pour que les modifications prennent effet",
     "back": "Retour",
     "dlssModels": {
+      "default": {
+        "name": "Défaut (programme 3D)",
+        "description": "Géré par le programme 3D; aucun remplacement"
+      },
       "A": {
         "name": "Modèle A",
         "description": "Modèle précoce"
@@ -1394,6 +1406,12 @@
       "gameModeDesc": "Afficher le sélecteur de mode jeu dans la barre de titre pour basculer en un clic entre les modes par défaut/régulier/compétitif",
       "randomImageLabel": "Image aléatoire",
       "randomImageDesc": "Afficher la carte d'image aléatoire sur la page d'accueil",
+      "moodCardLabel": "Carte Ambiance",
+      "moodCardDesc": "Afficher la carte Ambiance sur la page d'accueil",
+      "cornerTopLeft": "Haut gauche",
+      "cornerTopRight": "Haut droite",
+      "cornerBottomLeft": "Bas gauche",
+      "cornerBottomRight": "Bas droite",
       "splash": "Animation",
       "splashLogoLabel": "Logo de démarrage",
       "splashLogoDesc": "Personnalisez l'image du logo affichée au démarrage",

@@ -28,6 +28,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LiquidGlassCard } from "./liquid-glass-card";
+import { PressTilt } from "./press-tilt";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -157,26 +158,28 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
           w="full"
           style={{ pointerEvents: activeDrag ? "none" : "auto" }}
         >
-          {liquidGlassEnabled ? (
-            <LiquidGlassCard w="full" cursor="pointer" p={4} pl={10} position="relative">
-              {cardContent}
-            </LiquidGlassCard>
-          ) : (
-            <Box
-              bg={listBg}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={listBorder}
-              p={4}
-              pl={10}
-              cursor="pointer"
-              transition="all 0.2s"
-              _hover={{ borderColor: tool.color, bg: hoverBg }}
-              position="relative"
-            >
-              {cardContent}
-            </Box>
-          )}
+          <PressTilt color={tool.color}>
+            {liquidGlassEnabled ? (
+              <LiquidGlassCard w="full" cursor="pointer" p={4} pl={10} position="relative">
+                {cardContent}
+              </LiquidGlassCard>
+            ) : (
+              <Box
+                bg={listBg}
+                borderRadius="xl"
+                border="1px solid"
+                borderColor={listBorder}
+                p={4}
+                pl={10}
+                cursor="pointer"
+                transition="all 0.2s"
+                _hover={{ borderColor: tool.color, bg: hoverBg }}
+                position="relative"
+              >
+                {cardContent}
+              </Box>
+            )}
+          </PressTilt>
         </Box>
       </Box>
     </Box>
@@ -291,25 +294,27 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
       <VStack w="full" spacing={3}>
         {tools.map((tool) => (
           <Link key={tool.id} to={tool.path} style={{ width: "100%" }}>
-            {liquidGlassEnabled ? (
-              <LiquidGlassCard w="full" cursor="pointer" p={4} position="relative">
-                {listCardContent(tool)}
-              </LiquidGlassCard>
-            ) : (
-              <Box
-                bg={listBg}
-                borderRadius="xl"
-                border="1px solid"
-                borderColor={listBorder}
-                p={4}
-                cursor="pointer"
-                transition="all 0.2s"
-                _hover={{ borderColor: tool.color, bg: hoverBg }}
-                position="relative"
-              >
-                {listCardContent(tool)}
-              </Box>
-            )}
+            <PressTilt color={tool.color}>
+              {liquidGlassEnabled ? (
+                <LiquidGlassCard w="full" cursor="pointer" p={4} position="relative">
+                  {listCardContent(tool)}
+                </LiquidGlassCard>
+              ) : (
+                <Box
+                  bg={listBg}
+                  borderRadius="xl"
+                  border="1px solid"
+                  borderColor={listBorder}
+                  p={4}
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ borderColor: tool.color, bg: hoverBg }}
+                  position="relative"
+                >
+                  {listCardContent(tool)}
+                </Box>
+              )}
+            </PressTilt>
           </Link>
         ))}
       </VStack>

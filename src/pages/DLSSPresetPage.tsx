@@ -76,6 +76,7 @@ interface PresetReference {
 }
 
 const getDLSSPresets = (t: (key: string) => string): DLSSModelPreset[] => [
+  { id: "default", name: t("deltaForce.dlssModels.default.name"), description: t("deltaForce.dlssModels.default.description"), recommended: false },
   { id: "A", name: t("deltaForce.dlssModels.A.name"), description: t("deltaForce.dlssModels.A.description"), recommended: false },
   { id: "B", name: t("deltaForce.dlssModels.B.name"), description: t("deltaForce.dlssModels.B.description"), recommended: false },
   { id: "C", name: t("deltaForce.dlssModels.C.name"), description: t("deltaForce.dlssModels.C.description"), recommended: false },
@@ -185,7 +186,7 @@ function DLSSCard() {
   const { t } = useTranslation();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const toast = useDynamicIsland("gpu");
-  const [selectedPreset, setSelectedPreset] = useState("K");
+  const [selectedPreset, setSelectedPreset] = useState("default");
   const [selectedQuality, setSelectedQuality] = useState("default");
   const [selectedTextureQuality, setSelectedTextureQuality] = useState("default");
   const [selectedAntialiasing, setSelectedAntialiasing] = useState("default");

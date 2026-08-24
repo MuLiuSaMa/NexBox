@@ -661,6 +661,10 @@
       "noImageYet": "还没有可下载的图片",
       "previewAlt": "随机图片预览"
     },
+    "mood": {
+      "title": "心境",
+      "subtitle": "点击打开心境"
+    },
     "feedbackCard": {
       "title": "问题反馈",
       "subtitle": "跳转到官网反馈问题"
@@ -1009,7 +1013,11 @@
     "save": "保存",
     "gameFilterTitle": "游戏启动时自动应用滤镜",
     "gameFilterSupportedTitle": "已支持的游戏",
-    "gameFilterError": "操作失败"
+    "gameFilterError": "操作失败",
+    "multiFilterTitle": "使用多个滤镜",
+    "multiFilterSelected": "已选择",
+    "stackedMode": "叠加模式",
+    "stackedCount": "叠加滤镜数量"
   },
   "floatingNav": {
     "title": "悬浮导航框",
@@ -1163,6 +1171,10 @@
     "dlssNote": "需要NVIDIA Profile Inspector支持，应用后重启游戏生效",
     "back": "返回",
     "dlssModels": {
+      "default": {
+        "name": "默认（由3D程序设置）",
+        "description": "由3D程序自行决定，不做强制覆盖"
+      },
       "A": {
         "name": "A模型",
         "description": "早期模型"
@@ -1743,6 +1755,12 @@
       "gameModeDesc": "在顶栏显示游戏模式开关，一键开启/关闭常规压制",
       "randomImageLabel": "随机图片",
       "randomImageDesc": "在主页显示随机图片卡片",
+      "moodCardLabel": "心境卡片",
+      "moodCardDesc": "在主页显示心境卡片",
+      "cornerTopLeft": "左上角",
+      "cornerTopRight": "右上角",
+      "cornerBottomLeft": "左下角",
+      "cornerBottomRight": "右下角",
       "searchBarLabel": "搜索框",
       "searchBarDesc": "在标题栏显示全局搜索框",
       "feedbackLabel": "问题反馈",

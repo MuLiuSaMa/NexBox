@@ -80,6 +80,18 @@ function LyricsControlBarInner({
     setVolPreview(null);
   }, []);
 
+  // 滚轮调节音量：上滚 +5%，下滚 -5%，四舍五入到 0.01，夹在 0~1 之间
+  const handleWheelVolume = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      if (e.deltaY === 0) return;
+      const step = 0.05;
+      const next = Math.round((volume + (e.deltaY < 0 ? step : -step)) * 100) / 100;
+      onControl("volume", Math.min(1, Math.max(0, next)));
+    },
+    [volume, onControl]
+  );
+
   return (
     <div
       style={{
@@ -168,6 +180,7 @@ function LyricsControlBarInner({
           borderRadius: "999px",
           overflow: "hidden",
         }}
+        onWheel={handleWheelVolume}
         onMouseEnter={() => setVolOpen(true)}
         onMouseLeave={() => {
           setVolOpen(false);
