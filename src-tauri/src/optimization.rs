@@ -4252,41 +4252,124 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
     .map_err(|e| format!("批量恢复线程异常: {}", e))?
 }
 
-/// 重启显卡驱动（模拟 Win+Ctrl+Shift+B）
-/// 该快捷键会触发 Windows 图形栈重置，适用于网吧用户需要快速恢复显示异常的场景
+/// 重启显卡驱动（禁用全部显示适配器后再自动启用）
+/// 通过 SetupAPI（C API，不依赖 PowerShell）将显卡驱动完整卸载并重新加载，
+/// 比模拟 Win+Ctrl+Shift+B 更彻底，能让显卡改名等注册表修改完整生效。
+/// 注意：操作期间当前输出屏幕会短暂黑屏数秒，且需要管理员权限。
 #[tauri::command]
 pub fn restart_graphics_driver() -> Result<PerfTweakResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
-    unsafe {
-        use winapi::um::winuser::{
-            keybd_event, KEYEVENTF_KEYUP,
-            VK_LCONTROL, VK_LSHIFT, VK_LWIN,
+    use std::mem::size_of;
+    use std::time::Duration;
+    use windows::Win32::Devices::DeviceAndDriverInstallation::{
+        DICS_DISABLE, DICS_ENABLE, DICS_FLAG_GLOBAL, DIF_PROPERTYCHANGE, DIGCF_PRESENT,
+        SetupDiCallClassInstaller, SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo,
+        SetupDiGetClassDevsW, SetupDiSetClassInstallParamsW, SP_CLASSINSTALL_HEADER,
+        SP_DEVINFO_DATA, SP_PROPCHANGE_PARAMS,
+    };
+    use windows::core::GUID;
+    use windows::Win32::Foundation::HWND;
+
+    // 显示适配器设备类 GUID：{4d36e968-e325-11ce-bfc1-08002be10318}
+    const DISPLAY_CLASS_GUID: GUID = GUID::from_u128(0x4d36e968e32511cebfc108002be10318);
+    // 枚举结束错误码 ERROR_NO_MORE_ITEMS (259)
+    const ERROR_NO_MORE_ITEMS: i32 = 259;
+
+    /// 对全部显示适配器执行 禁用/启用，返回成功操作的设备数量
+    fn set_display_state(enable: bool) -> Result<usize, String> {
+        let devs = unsafe {
+            SetupDiGetClassDevsW(
+                Some(&DISPLAY_CLASS_GUID),
+                None,
+                HWND::default(),
+                DIGCF_PRESENT,
+            )
+            .map_err(|e| format!("枚举显示适配器失败: {}", e))?
         };
 
-        const VK_B: u8 = 0x42;
+        let mut changed = 0usize;
+        let mut index = 0u32;
+        loop {
+            let mut dev_info = SP_DEVINFO_DATA::default();
+            dev_info.cbSize = size_of::<SP_DEVINFO_DATA>() as u32;
 
-        // 按下组合键：Win + Ctrl + Shift + B
-        keybd_event(VK_LWIN as u8, 0, 0, 0);
-        keybd_event(VK_LCONTROL as u8, 0, 0, 0);
-        keybd_event(VK_LSHIFT as u8, 0, 0, 0);
-        keybd_event(VK_B, 0, 0, 0);
+            if let Err(e) = unsafe { SetupDiEnumDeviceInfo(devs, index, &mut dev_info) } {
+                if e.code().0 == ERROR_NO_MORE_ITEMS {
+                    break;
+                }
+                unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+                return Err(format!("枚举显示适配器失败: {}", e));
+            }
 
-        // 短暂延迟确保系统注册该组合键
-        std::thread::sleep(std::time::Duration::from_millis(100));
+            let mut params = SP_PROPCHANGE_PARAMS::default();
+            params.ClassInstallHeader.cbSize = size_of::<SP_CLASSINSTALL_HEADER>() as u32;
+            params.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
+            params.StateChange = if enable { DICS_ENABLE } else { DICS_DISABLE };
+            params.Scope = DICS_FLAG_GLOBAL;
+            params.HwProfile = 0;
 
-        // 释放按键（逆序）：B, Shift, Ctrl, Win
-        keybd_event(VK_B, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_LSHIFT as u8, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_LCONTROL as u8, 0, KEYEVENTF_KEYUP, 0);
-        keybd_event(VK_LWIN as u8, 0, KEYEVENTF_KEYUP, 0);
+            if let Err(e) = unsafe {
+                SetupDiSetClassInstallParamsW(
+                    devs,
+                    Some(&dev_info),
+                    Some(&params.ClassInstallHeader),
+                    size_of::<SP_PROPCHANGE_PARAMS>() as u32,
+                )
+            } {
+                unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+                return Err(format!(
+                    "设置{}参数失败: {}",
+                    if enable { "启用" } else { "禁用" },
+                    e
+                ));
+            }
+
+            match unsafe { SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, Some(&dev_info)) } {
+                Ok(()) => changed += 1,
+                Err(e) => {
+                    unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+                    let action = if enable { "启用" } else { "禁用" };
+                    if e.code().0 == 5 {
+                        // ERROR_ACCESS_DENIED
+                        return Err(format!(
+                            "{}显示适配器失败：权限不足，请以管理员身份运行 NexBox 后重试（{}）",
+                            action, e
+                        ));
+                    }
+                    return Err(format!("{}显示适配器失败: {}", action, e));
+                }
+            }
+            index += 1;
+        }
+
+        unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+        Ok(changed)
+    }
+
+    // 1. 禁用全部显示适配器（当前输出屏幕会短暂黑屏）
+    let disabled = set_display_state(false)?;
+    if disabled == 0 {
+        return Err("未找到可操作的显示适配器".to_string());
+    }
+
+    // 2. 等待驱动完整卸载
+    std::thread::sleep(Duration::from_secs(3));
+
+    // 3. 重新启用全部显示适配器
+    let enabled = set_display_state(true)?;
+    if enabled == 0 {
+        return Err("显卡已被禁用，但重新启用失败，请重启电脑恢复显示".to_string());
     }
 
     Ok(PerfTweakResult {
         success: true,
-        message: "已发送重启显卡驱动指令，屏幕可能会短暂闪烁".to_string(),
+        message: format!(
+            "显卡驱动已通过禁用/启用方式重置（禁用 {} 台，启用 {} 台），屏幕可能短暂黑屏",
+            disabled, enabled
+        ),
     })
 }
 

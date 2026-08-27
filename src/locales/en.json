@@ -1831,6 +1831,8 @@
       "clearDataConfirmTitle": "Confirm Clear Data",
       "clearDataConfirm": "This will clear all data and reset all settings. This cannot be undone. Confirm reset?",
       "confirmReset": "Confirm Reset",
+      "mediaKeysTitle": "Keyboard Media Keys Control Music (SMTC)",
+      "mediaKeysDesc": "When off, the system media session (SMTC) is disabled: NexBox disappears from the volume overlay/lock screen and media keys are handed back to other apps",
       "gameListTitle": "Filter Game List",
       "builtinCount": "{{count}} built-in",
       "addGame": "Add Game",
@@ -2416,14 +2418,14 @@
   },
   "gpuDriverRestart": {
     "pageTitle": "Restart Graphics Driver",
-    "pageDesc": "Simulate Win+Ctrl+Shift+B to restart graphics driver (for internet cafe users)",
-    "detailDesc": "Click the button to send a graphics driver restart command to the system, equivalent to pressing Win+Ctrl+Shift+B. The screen will briefly go black or flicker and return to normal within seconds. No administrator privileges required.",
+    "pageDesc": "Disable all graphics drivers then re-enable automatically (more thorough than Win+Ctrl+Shift+B, requires administrator)",
+    "detailDesc": "Clicking the button will disable all display adapters on the system and automatically re-enable them after a few seconds, achieving a complete unload and reload of the graphics driver. The screen will briefly go black and return to normal within seconds. Administrator privileges are required.",
     "restartBtn": "Restart Graphics Driver",
-    "success": "Restart command sent, screen will flicker briefly",
+    "success": "Graphics driver disabled and re-enabled, screen may briefly go black",
     "error": "Failed to restart graphics driver",
-    "waiting": "Executing restart command, please wait...",
+    "waiting": "Disabling and re-enabling graphics driver, please wait...",
     "warningTitle": "Note",
-    "warningDesc": "Restarting the graphics driver will cause a brief black screen or flicker. Please ensure no important tasks (such as gaming or file editing) are in progress. Suitable for display anomalies, screen artifacts, stuttering, etc. Windows only."
+    "warningDesc": "This operation will disable all graphics drivers first, then automatically re-enable them. The screen will briefly go black for a few seconds. Make sure no important tasks (such as gaming or file editing) are in progress. If re-enabling fails, you may need to restart the computer to restore the display. Suitable for display anomalies, artifacts, stuttering, and applying GPU renames. Windows only. Administrator privileges required."
   },
   "shaderCache": {
     "title": "Shader Cache Cleanup",
@@ -2504,6 +2506,9 @@
     "filter": "Filter",
     "filterToggle": "Toggle Display Filter",
     "filterToggleDesc": "Use shortcut to enable or disable the display filter",
+    "autoclicker": "Autoclicker",
+    "autoclickerToggle": "Autoclicker Hotkey Toggle",
+    "autoclickerToggleDesc": "Use shortcut to start or stop autoclicking (supports middle and side buttons)",
     "music": "Music",
     "musicPrev": "Previous Track",
     "musicPrevDesc": "Use shortcut to switch to the previous track",

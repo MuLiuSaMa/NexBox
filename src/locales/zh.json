@@ -1631,6 +1631,7 @@
     "presetSide2": "侧键2",
     "presetSpace": "空格",
     "hotkeyHint": "支持键盘键与鼠标键（中键、侧键，左右键不可用）。点击后按下进行录制，按 Esc 取消；按下快捷键即可开始或停止连点",
+    "enableToggleHint": "开启上方的「连点器热键开关」后快捷键才会生效",
     "hotkeySaved": "快捷键已保存"
   },
   "gpuRename": {
@@ -1701,6 +1702,8 @@
       "clearDataConfirmTitle": "确认清除数据",
       "clearDataConfirm": "将清除全部数据并重置所有设置，此操作不可撤销。确认重置？",
       "confirmReset": "确认重置",
+      "mediaKeysTitle": "键盘媒体键控制音乐（SMTC）",
+      "mediaKeysDesc": "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件",
       "gameListTitle": "游戏名单",
       "builtinCount": "内置 {{count}} 款",
       "addGame": "添加游戏",
@@ -2293,14 +2296,14 @@
   },
   "gpuDriverRestart": {
     "pageTitle": "重启显卡驱动",
-    "pageDesc": "模拟 Win+Ctrl+Shift+B 快捷键重启显卡驱动（网吧用户适用）",
-    "detailDesc": "点击按钮将向系统发送重启显卡驱动的指令，效果等同于按下 Win+Ctrl+Shift+B。屏幕会短暂黑屏或闪烁，几秒后恢复正常。此功能无需管理员权限。",
+    "pageDesc": "禁用全部显卡驱动后自动重新启用（比 Win+Ctrl+Shift+B 更彻底，需管理员权限）",
+    "detailDesc": "点击按钮将禁用系统全部显示适配器，等待数秒后自动重新启用，实现显卡驱动的完整卸载与重载。屏幕会短暂黑屏，数秒后恢复正常。此功能需要管理员权限。",
     "restartBtn": "重启显卡驱动",
-    "success": "已发送重启指令，屏幕即将短暂闪烁",
+    "success": "显卡驱动已禁用并重新启用，屏幕可能短暂黑屏",
     "error": "重启显卡驱动失败",
-    "waiting": "正在执行重启指令，请稍候...",
+    "waiting": "正在禁用并重新启用显卡驱动，请稍候...",
     "warningTitle": "请注意",
-    "warningDesc": "重启显卡驱动会导致屏幕短暂黑屏或闪烁，请先确认没有正在进行的重要操作（如游戏、文件编辑等）。此功能适用于显卡显示异常、花屏、卡顿等情形，仅限 Windows 系统使用。"
+    "warningDesc": "此操作会先禁用全部显卡驱动，再自动重新启用。过程中屏幕会短暂黑屏数秒，请先确认没有正在进行的重要操作（如游戏、文件编辑等）。若重新启用失败，可能需要重启电脑恢复显示。此功能适用于显卡显示异常、花屏、卡顿及显卡改名后生效等情形，仅限 Windows 系统使用，且需要管理员权限。"
   },
   "networkOptimize": {
     "pageTitle": "网络优化",
@@ -2629,7 +2632,7 @@
     "filterToggle": "切换滤镜",
     "filterToggleDesc": "使用快捷键开启或关闭滤镜",
     "autoclicker": "连点器",
-    "autoclickerToggle": "切换连点器",
+    "autoclickerToggle": "连点器热键开关",
     "autoclickerToggleDesc": "使用快捷键开始或停止连点（支持中键、侧键）",
     "music": "音乐",
     "musicPrev": "上一曲",

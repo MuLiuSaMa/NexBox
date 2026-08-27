@@ -1626,14 +1626,14 @@
   },
   "gpuDriverRestart": {
     "pageTitle": "Grafiktreiber Neustarten",
-    "pageDesc": "Simuliert Win+Strg+Umschalt+B zum Neustart des Grafiktreibers (für Internetcafé-Benutzer)",
-    "detailDesc": "Klicken Sie auf die Schaltfläche, um einen Neustartbefehl für den Grafiktreiber an das System zu senden, vergleichbar mit Win+Strg+Umschalt+B. Der Bildschirm wird kurz schwarz oder flackert und kehrt innerhalb weniger Sekunden zum Normalzustand zurück.",
+    "pageDesc": "Alle Grafiktreiber deaktivieren und automatisch wieder aktivieren (gründlicher als Win+Strg+Umschalt+B, Administratorrechte erforderlich)",
+    "detailDesc": "Durch Klicken auf die Schaltfläche werden alle Display-Adapter des Systems deaktiviert und nach einigen Sekunden automatisch wieder aktiviert, wodurch der Grafiktreiber vollständig entladen und neu geladen wird. Der Bildschirm wird kurz schwarz und kehrt innerhalb weniger Sekunden zum Normalzustand zurück. Administratorrechte sind erforderlich.",
     "restartBtn": "Grafiktreiber Neustarten",
-    "success": "Neustartbefehl gesendet, Bildschirm flackert kurz",
+    "success": "Grafiktreiber deaktiviert und wieder aktiviert, Bildschirm wird kurz schwarz",
     "error": "Grafiktreiber-Neustart fehlgeschlagen",
-    "waiting": "Neustartbefehl wird ausgeführt, bitte warten...",
+    "waiting": "Grafiktreiber wird deaktiviert und neu aktiviert, bitte warten...",
     "warningTitle": "Hinweis",
-    "warningDesc": "Der Neustart des Grafiktreibers führt zu einem kurzen schwarzen Bildschirm oder Flackern. Stellen Sie sicher, dass keine wichtigen Vorgänge (wie Spiele oder Dateibearbeitung) ausgeführt werden."
+    "warningDesc": "Dieser Vorgang deaktiviert zuerst alle Grafiktreiber und aktiviert sie dann automatisch wieder. Der Bildschirm wird für einige Sekunden schwarz. Stellen Sie sicher, dass keine wichtigen Vorgänge (wie Spiele oder Dateibearbeitung) ausgeführt werden. Falls die Reaktivierung fehlschlägt, müssen Sie möglicherweise den Computer neu starten, um die Anzeige wiederherzustellen. Administratorrechte sind erforderlich."
   },
   "closeDialog": {
     "title": "Schließen bestätigen",

@@ -1626,14 +1626,14 @@
   },
   "gpuDriverRestart": {
     "pageTitle": "Redémarrer le pilote graphique",
-    "pageDesc": "Simule Win+Ctrl+Maj+B pour redémarrer le pilote graphique (pour les cybercafés)",
-    "detailDesc": "Cliquez sur le bouton pour envoyer une commande de redémarrage du pilote graphique au système, équivalent à Win+Ctrl+Maj+B. L'écran deviendra brièvement noir ou scintillera et reviendra à la normale en quelques secondes.",
+    "pageDesc": "Désactiver tous les pilotes graphiques puis les réactiver automatiquement (plus complet que Win+Ctrl+Maj+B, droits administrateur requis)",
+    "detailDesc": "Cliquez sur le bouton pour désactiver tous les adaptateurs d'affichage du système et les réactiver automatiquement après quelques secondes, réalisant un déchargement et rechargement complet du pilote graphique. L'écran deviendra brièvement noir et reviendra à la normale en quelques secondes. Des privilèges administrateur sont requis.",
     "restartBtn": "Redémarrer le pilote graphique",
-    "success": "Commande de redémarrage envoyée, l'écran va brièvement scintiller",
+    "success": "Pilote graphique désactivé et réactivé, l'écran peut devenir brièvement noir",
     "error": "Échec du redémarrage du pilote graphique",
-    "waiting": "Exécution de la commande de redémarrage, veuillez patienter...",
+    "waiting": "Désactivation et réactivation du pilote graphique, veuillez patienter...",
     "warningTitle": "Remarque",
-    "warningDesc": "Le redémarrage du pilote graphique provoquera un bref écran noir ou scintillement. Assurez-vous qu'aucune tâche importante (comme un jeu ou l'édition de fichiers) n'est en cours."
+    "warningDesc": "Cette opération désactive d'abord tous les pilotes graphiques, puis les réactive automatiquement. L'écran deviendra noir pendant quelques secondes. Assurez-vous qu'aucune tâche importante (comme un jeu ou l'édition de fichiers) n'est en cours. Si la réactivation échoue, vous devrez peut-être redémarrer l'ordinateur pour rétablir l'affichage. Des privilèges administrateur sont requis."
   },
   "closeDialog": {
     "title": "Confirmation de fermeture",
