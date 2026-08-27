@@ -310,7 +310,8 @@ export function MainLayout({ children }: MainLayoutProps) {
         transition="margin 0.4s cubic-bezier(0.4, 0, 0.2, 1), padding 0.4s cubic-bezier(0.4, 0, 0.2, 1)"
         px={8} 
         pr="40px" 
-        overflowY="auto" 
+        overflowY="auto"
+        overflowX="hidden"
         h="calc(100vh)"
         sx={{
           scrollbarGutter: "stable",

@@ -2,13 +2,12 @@ import {
   Box,
   Text,
   Heading,
-  VStack,
   HStack,
+  VStack,
   SimpleGrid,
   Badge,
   IconButton,
   useColorModeValue,
-  useColorMode,
   NumberInput,
   NumberInputField,
   NumberInputStepper,
@@ -21,13 +20,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, MousePointerClick, Zap } from "lucide-react";
+import { ArrowLeft, MousePointerClick, Keyboard, Zap } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
 import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { useAppStartup } from "@/contexts/app-startup-context";
+import { ThemeSwitch } from "@/components/special/theme-switch";
 
 interface AutoClickerStatus {
   running: boolean;
@@ -55,31 +56,59 @@ const HOTKEY_PRESETS: { labelKey: string; value: string }[] = [
   { labelKey: "autoclicker.presetSpace", value: "Space" },
 ];
 
-function SettingCard({ title, children }: { title: string; children: React.ReactNode }) {
+// 统一区块卡片容器（与其他页面一致：全宽大卡 p={6}，不做 hover 变色）
+function BlockCard({ children }: { children: React.ReactNode }) {
   const { liquidGlassEnabled } = useBackground();
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
-  const { colorMode } = useColorMode();
-  const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+  const inner = <VStack align="stretch" spacing={4}>{children}</VStack>;
 
   if (liquidGlassEnabled) {
     return (
-      <LiquidGlassCard p={5} h="full">
-        <VStack align="stretch" spacing={4} h="full">
-          <Text fontWeight="medium" color={headerColor}>{title}</Text>
-          {children}
-        </VStack>
+      <LiquidGlassCard w="full" p={6}>
+        {inner}
       </LiquidGlassCard>
     );
   }
 
   return (
-    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor} h="full">
-      <VStack align="stretch" spacing={4} h="full">
-        <Text fontWeight="medium" color={headerColor}>{title}</Text>
-        {children}
-      </VStack>
+    <Box
+      bg={cardBg}
+      borderRadius="xl"
+      border="1px solid"
+      borderColor={borderColor}
+      w="full"
+      p={6}
+    >
+      {inner}
     </Box>
+  );
+}
+
+// 区块头部：主题色圆底图标 + 标题 + 描述
+function SectionHeader({ icon, title, desc }: { icon: React.ReactNode; title: string; desc?: string }) {
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+
+  return (
+    <HStack spacing={3} align="center">
+      <Box p={2} borderRadius="lg" bg={getActiveColor()} flexShrink={0}>
+        <Box color={getContrastTextColor()} display="flex">
+          {icon}
+        </Box>
+      </Box>
+      <Box flex={1} minW={0}>
+        <Text fontWeight="medium" fontSize="sm" color={textColor}>
+          {title}
+        </Text>
+        {desc ? (
+          <Text fontSize="xs" color={subTextColor} mt={0.5}>
+            {desc}
+          </Text>
+        ) : null}
+      </Box>
+    </HStack>
   );
 }
 
@@ -88,20 +117,20 @@ export default function AutoClickerPage() {
   const toast = useDynamicIsland("mouse");
   const navigate = useNavigate();
   const { getActiveColor, getHoverColor, getBorderColor } = useThemeColor();
+  const { autoclickerHotkeyEnabled, saveAutoclickerHotkeyEnabled } = useAppStartup();
 
   const [running, setRunning] = useState(false);
   const [button, setButton] = useState<"left" | "right">("left");
   const [intervalMs, setIntervalMs] = useState(100);
   const [hotkey, setHotkey] = useState(DEFAULT_HOTKEY);
 
-  const isDark = useColorModeValue(false, true);
   const headingColor = useColorModeValue("black", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const themeColor = getActiveColor();
   const themeContrastText = useColorModeValue("black", "#ffffff");
-  const selectedBg = getHoverColor(isDark);
+  const selectedBg = getHoverColor();
   const selectedBorder = getBorderColor();
 
   // 加载运行状态、已保存设置与热键
@@ -224,145 +253,175 @@ export default function AutoClickerPage() {
         </Badge>
       </HStack>
 
-      {/* 等宽三列卡片 */}
-      <SimpleGrid columns={{ base: 1, md: 3 }} spacing={5} alignItems="stretch">
-        {/* 快捷键 */}
-        <SettingCard title={t("autoclicker.hotkey")}>
-          <VStack align="stretch" spacing={3} justify="space-between" h="full">
-            <Text fontSize="xs" color={subTextColor}>
-              {t("autoclicker.hotkeyPresets")}
-            </Text>
-            <SimpleGrid columns={4} spacing={2}>
-              {HOTKEY_PRESETS.map((p) => {
-                const selected = hotkey === p.value;
-                return (
-                  <Box
-                    key={p.value}
-                    as="button"
-                    py={2}
-                    textAlign="center"
-                    borderRadius="md"
-                    border="2px solid"
-                    borderColor={selected ? selectedBorder : "transparent"}
-                    bg={selected ? selectedBg : "transparent"}
-                    color={selected ? themeColor : textColor}
-                    fontSize="sm"
-                    transition="all 0.2s"
-                    _hover={{ borderColor: selectedBorder }}
-                    onClick={() => saveHotkey(p.value)}
-                  >
-                    {t(p.labelKey)}
-                  </Box>
-                );
-              })}
-            </SimpleGrid>
-            <MouseHotkeyRecorder value={hotkey} onChange={saveHotkey} />
-            <HStack spacing={2}>
-              <Box w={2} h={2} borderRadius="full" bg={running ? themeColor : "gray.400"} />
-              <Text fontSize="sm" color={running ? themeColor : textColor}>
-                {running ? t("autoclicker.running") : t("autoclicker.stopped")}
+      <VStack align="stretch" spacing={6}>
+        {/* 卡片1：连点器热键开关 + 快捷键选择 */}
+        <BlockCard>
+          <HStack justify="space-between" align="center" spacing={4}>
+            <Box flex={1} minW={0}>
+              <SectionHeader
+                icon={<Keyboard size={18} />}
+                title={t("hotkeySettings.autoclickerToggle") || "连点器热键开关"}
+                desc={t("hotkeySettings.autoclickerToggleDesc") || "使用快捷键开始或停止连点（支持中键、侧键）"}
+              />
+            </Box>
+            <ThemeSwitch
+              isChecked={autoclickerHotkeyEnabled}
+              onChange={(e) => saveAutoclickerHotkeyEnabled(e.target.checked)}
+              size="lg"
+              flexShrink={0}
+            />
+          </HStack>
+
+          <Box
+            opacity={autoclickerHotkeyEnabled ? undefined : 0.5}
+            pointerEvents={autoclickerHotkeyEnabled ? undefined : "none"}
+            userSelect={autoclickerHotkeyEnabled ? undefined : "none"}
+          >
+            <HStack spacing={3} align="center">
+              <Text fontSize="xs" color={subTextColor} whiteSpace="nowrap">
+                {t("autoclicker.hotkeyPresets")}
               </Text>
+              <SimpleGrid columns={4} spacing={2} flex={1}>
+                {HOTKEY_PRESETS.map((p) => {
+                  const selected = hotkey === p.value;
+                  return (
+                    <Box
+                      key={p.value}
+                      as="button"
+                      py={2}
+                      textAlign="center"
+                      borderRadius="md"
+                      border="2px solid"
+                      borderColor={selected ? selectedBorder : "transparent"}
+                      bg={selected ? selectedBg : "transparent"}
+                      color={selected ? themeColor : textColor}
+                      fontSize="sm"
+                      onClick={() => saveHotkey(p.value)}
+                    >
+                      {t(p.labelKey)}
+                    </Box>
+                  );
+                })}
+              </SimpleGrid>
             </HStack>
-            <Text fontSize="xs" color={subTextColor}>
+            <HStack spacing={3} mt={3}>
+              <MouseHotkeyRecorder value={hotkey} onChange={saveHotkey} />
+              <HStack spacing={2}>
+                <Box w={2} h={2} borderRadius="full" bg={running ? themeColor : "gray.400"} />
+                <Text fontSize="sm" color={running ? themeColor : textColor}>
+                  {running ? t("autoclicker.running") : t("autoclicker.stopped")}
+                </Text>
+              </HStack>
+            </HStack>
+            <Text fontSize="xs" color={subTextColor} mt={3}>
               {t("autoclicker.hotkeyHint")}
             </Text>
-          </VStack>
-        </SettingCard>
-
-        {/* 点击键位 */}
-        <SettingCard title={t("autoclicker.button")}>
-          <VStack align="stretch" spacing={3} justify="space-between" h="full">
-            <SimpleGrid columns={2} spacing={3}>
-              {(["left", "right"] as const).map((b) => {
-                const selected = button === b;
-                return (
-                  <Box
-                    key={b}
-                    as="button"
-                    py={3}
-                    textAlign="center"
-                    borderRadius="lg"
-                    border="2px solid"
-                    borderColor={selected ? selectedBorder : "transparent"}
-                    bg={selected ? selectedBg : "transparent"}
-                    color={selected ? themeColor : textColor}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: selectedBorder }}
-                    onClick={() => selectButton(b)}
-                  >
-                    {b === "left" ? t("autoclicker.left") : t("autoclicker.right")}
-                  </Box>
-                );
-              })}
-            </SimpleGrid>
-            <Text fontSize="xs" color={subTextColor}>
-              {t("autoclicker.buttonHint")}
+          </Box>
+          {!autoclickerHotkeyEnabled ? (
+            <Text fontSize="xs" color={themeColor}>
+              {t("autoclicker.enableToggleHint") || "开启上方的「连点器热键开关」后快捷键才会生效"}
             </Text>
-          </VStack>
-        </SettingCard>
+          ) : null}
+        </BlockCard>
 
-        {/* 点击频率 */}
-        <SettingCard title={t("autoclicker.interval")}>
-          <VStack align="stretch" spacing={3} justify="space-between" h="full">
-            <SimpleGrid columns={2} spacing={3}>
-              {PRESETS.map((p) => {
-                const selected = intervalMs === p.ms;
-                return (
-                  <Box
-                    key={p.cps}
-                    as="button"
-                    py={2}
-                    textAlign="center"
-                    borderRadius="lg"
-                    border="2px solid"
-                    borderColor={selected ? selectedBorder : "transparent"}
-                    bg={selected ? selectedBg : "transparent"}
-                    color={selected ? themeColor : textColor}
-                    transition="all 0.2s"
-                    _hover={{ borderColor: selectedBorder }}
-                    onClick={() => selectInterval(p.ms)}
-                  >
-                    <Text fontWeight="bold">{p.cps}</Text>
-                    <Text fontSize="xs" color={subTextColor}>{t("autoclicker.cps")}</Text>
-                  </Box>
-                );
-              })}
-            </SimpleGrid>
-            <HStack spacing={2}>
-              <Text fontSize="sm" color={subTextColor} whiteSpace="nowrap">
-                {t("autoclicker.customInterval")}
+        {/* 卡片2：点击键位 + 点击间隔 */}
+        <BlockCard>
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={6}>
+            {/* 左右键 */}
+            <Box>
+              <Text fontSize="sm" fontWeight="semibold" color={textColor} mb={2}>
+                {t("autoclicker.button")}
               </Text>
-              <NumberInput
-                value={intervalMs}
-                min={1}
-                max={10000}
-                step={10}
-                onChange={(_, v) => {
-                  if (!isNaN(v)) selectInterval(v);
-                }}
-                size="sm"
-                flex="1"
-              >
-                <NumberInputField />
-                <NumberInputStepper>
-                  <NumberIncrementStepper />
-                  <NumberDecrementStepper />
-                </NumberInputStepper>
-              </NumberInput>
-            </HStack>
-            <HStack>
-              <Zap size={16} color={themeColor} />
-              <Text fontSize="sm" color={textColor}>
-                {t("autoclicker.currentSpeed")}:{" "}
-                <Text as="span" fontWeight="bold" color={themeColor}>
-                  {cps}
-                </Text>{" "}
-                {t("autoclicker.cps")}
+              <SimpleGrid columns={2} spacing={3}>
+                {(["left", "right"] as const).map((b) => {
+                  const selected = button === b;
+                  return (
+                    <Box
+                      key={b}
+                      as="button"
+                      py={4}
+                      textAlign="center"
+                      borderRadius="lg"
+                      border="2px solid"
+                      borderColor={selected ? selectedBorder : "transparent"}
+                      bg={selected ? selectedBg : "transparent"}
+                      color={selected ? themeColor : textColor}
+                      fontWeight="medium"
+                      onClick={() => selectButton(b)}
+                    >
+                      {b === "left" ? t("autoclicker.left") : t("autoclicker.right")}
+                    </Box>
+                  );
+                })}
+              </SimpleGrid>
+              <Text fontSize="xs" color={subTextColor} mt={2}>
+                {t("autoclicker.buttonHint")}
               </Text>
-            </HStack>
-          </VStack>
-        </SettingCard>
-      </SimpleGrid>
+            </Box>
+
+            {/* 点击间隔 */}
+            <Box>
+              <Text fontSize="sm" fontWeight="semibold" color={textColor} mb={2}>
+                {t("autoclicker.interval")}
+              </Text>
+              <SimpleGrid columns={2} spacing={3}>
+                {PRESETS.map((p) => {
+                  const selected = intervalMs === p.ms;
+                  return (
+                    <Box
+                      key={p.cps}
+                      as="button"
+                      py={2}
+                      textAlign="center"
+                      borderRadius="lg"
+                      border="2px solid"
+                      borderColor={selected ? selectedBorder : "transparent"}
+                      bg={selected ? selectedBg : "transparent"}
+                      color={selected ? themeColor : textColor}
+                      onClick={() => selectInterval(p.ms)}
+                    >
+                      <Text fontWeight="bold">{p.cps}</Text>
+                      <Text fontSize="xs" color={subTextColor}>{t("autoclicker.cps")}</Text>
+                    </Box>
+                  );
+                })}
+              </SimpleGrid>
+              <HStack spacing={2} mt={3}>
+                <Text fontSize="sm" color={subTextColor} whiteSpace="nowrap">
+                  {t("autoclicker.customInterval")}
+                </Text>
+                <NumberInput
+                  value={intervalMs}
+                  min={1}
+                  max={10000}
+                  step={10}
+                  onChange={(_, v) => {
+                    if (!isNaN(v)) selectInterval(v);
+                  }}
+                  size="sm"
+                  flex="1"
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </HStack>
+              <HStack mt={2}>
+                <Zap size={16} color={themeColor} />
+                <Text fontSize="sm" color={textColor}>
+                  {t("autoclicker.currentSpeed")}:{" "}
+                  <Text as="span" fontWeight="bold" color={themeColor}>
+                    {cps}
+                  </Text>{" "}
+                  {t("autoclicker.cps")}
+                </Text>
+              </HStack>
+            </Box>
+          </SimpleGrid>
+        </BlockCard>
+      </VStack>
     </Box>
   );
 }

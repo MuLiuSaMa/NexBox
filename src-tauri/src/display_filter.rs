@@ -1899,7 +1899,7 @@ fn compose_ramps(ramps: &[[[u16; 256]; 3]]) -> [[u16; 256]; 3] {
 /// 将任意滤镜 id（内置预设 / ICC 配置文件 / 我的滤镜预设）解析为 Gamma ramp。
 /// 与前端卡片 id 空间一一对应；任一来源命中即返回。
 fn preset_id_to_ramp(id: &str) -> Option<[[u16; 256]; 3]> {
-    // 1. 内置参数化预设：优先内置 ICC 文件，失败回退参数生成
+    // 1. 内置参数化预设：优先内置 ICC 文件；解析失败或未配置 ICC 文件（如明基 benq）时回退参数生成
     if let Some(icc_filename) = preset_id_to_builtin_icc(id) {
         if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
             if let Ok(parsed) = parse_icc_file(icc_path.to_str().unwrap_or("")) {
@@ -1907,15 +1907,14 @@ fn preset_id_to_ramp(id: &str) -> Option<[[u16; 256]; 3]> {
             }
             log::warn!("preset_id_to_ramp[{}]: 内置 ICC '{}' 解析失败，回退参数生成", id, icc_filename);
         }
-        if let Ok(presets) = get_filter_presets_sync() {
-            if let Some(p) = presets.iter().find(|x| x.id == id) {
-                return Some(build_gamma_ramp(
-                    p.temperature, p.brightness, p.contrast, p.saturation,
-                    FilterMode::from_i32(p.mode), None,
-                ));
-            }
+    }
+    if let Ok(presets) = get_filter_presets_sync() {
+        if let Some(p) = presets.iter().find(|x| x.id == id) {
+            return Some(build_gamma_ramp(
+                p.temperature, p.brightness, p.contrast, p.saturation,
+                FilterMode::from_i32(p.mode), None,
+            ));
         }
-        return None;
     }
     // 1b. 内置 ICC 文件 id（形如 builtin_NexBox_*，来自单选预设/重置应用后的 active_icc_id）
     if let Some(stem) = id.strip_prefix("builtin_") {
@@ -2719,6 +2718,23 @@ pub async fn export_preset_as_icc(preset_id: String) -> Result<Option<String>, S
             let src_path = get_builtin_icc_path(&filename)?;
 
             let default_name = filename.clone();
+            let result = rfd::FileDialog::new()
+                .set_title("保存 ICC 色彩配置文件")
+                .add_filter("ICC 文件", &["icc", "icm"])
+                .set_file_name(&default_name)
+                .save_file();
+            let path = match result { Some(p) => p, None => return Ok(None) };
+            fs::copy(&src_path, &path).map_err(|e| format!("无法复制文件: {}", e))?;
+            log::info!("Builtin ICC exported: {} -> {}", src_path.display(), path.display());
+            return Ok(path.to_str().map(|s| s.to_string()));
+        }
+
+        // 若预设映射了内置 ICC 文件（如去曝光Pro参数为中性值，参数化导出无效），
+        // 直接复制内置文件导出，与应用时的效果保持一致。
+        if let Some(icc_filename) = preset_id_to_builtin_icc(&preset_id) {
+            let src_path = get_builtin_icc_path(&icc_filename)?;
+
+            let default_name = icc_filename.clone();
             let result = rfd::FileDialog::new()
                 .set_title("保存 ICC 色彩配置文件")
                 .add_filter("ICC 文件", &["icc", "icm"])

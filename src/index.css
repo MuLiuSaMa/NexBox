@@ -60,6 +60,25 @@ body {
   min-height: 100vh;
 }
 
+/* 全局隐藏滚动条（保留滚动功能）：
+   所有滚动条不再渲染，视觉上彻底消除滚动条出现/消失/闪烁（含横向滚动条闪烁）；
+   页面滚动照常工作（滚轮/拖拽/键盘均可）。 */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* 视口级禁止横向滚动（兜底）：
+   果冻弹跳动画（scale 1.05）会把 fixed 导航栏等元素瞬时放大，
+   transform 溢出计入 scrollable overflow，可能在 body/html 层产生横向滚动条。 */
+html,
+body {
+  overflow-x: hidden;
+}
+
 #root {
   width: 100%;
   height: 100vh;

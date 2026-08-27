@@ -13,12 +13,13 @@ pub fn is_hotkeys_enabled() -> bool {
     HOTKEYS_ENABLED.load(Ordering::SeqCst)
 }
 
-// ==================== 每个热键的独立开关（默认开启） ====================
+// ==================== 每个热键的独立开关 ====================
 // 单热键实际生效 = 总开关 && 该热键独立开关。
+// 默认开启；连点器热键默认为关闭（需用户手动开启）。
 
 macro_rules! define_hotkey_enabled {
-    ($static_name:ident, $get_name:ident, $set_name:ident) => {
-        static $static_name: AtomicBool = AtomicBool::new(true);
+    ($static_name:ident, $get_name:ident, $set_name:ident, $default:expr) => {
+        static $static_name: AtomicBool = AtomicBool::new($default);
         pub fn $get_name() -> bool {
             $static_name.load(Ordering::SeqCst)
         }
@@ -28,14 +29,14 @@ macro_rules! define_hotkey_enabled {
     };
 }
 
-define_hotkey_enabled!(OVERLAY_ENABLED, is_overlay_enabled, set_overlay_enabled);
-define_hotkey_enabled!(CROSSHAIR_ENABLED, is_crosshair_enabled, set_crosshair_enabled);
-define_hotkey_enabled!(FILTER_ENABLED, is_filter_enabled, set_filter_enabled);
-define_hotkey_enabled!(AUTOCLICKER_ENABLED, is_autoclicker_enabled, set_autoclicker_enabled);
-define_hotkey_enabled!(MUSIC_PREV_ENABLED, is_music_prev_enabled, set_music_prev_enabled);
-define_hotkey_enabled!(MUSIC_NEXT_ENABLED, is_music_next_enabled, set_music_next_enabled);
-define_hotkey_enabled!(MUSIC_PLAYPAUSE_ENABLED, is_music_playpause_enabled, set_music_playpause_enabled);
-define_hotkey_enabled!(LYRIC_BTN_ENABLED, is_lyric_btn_enabled, set_lyric_btn_enabled);
+define_hotkey_enabled!(OVERLAY_ENABLED, is_overlay_enabled, set_overlay_enabled, true);
+define_hotkey_enabled!(CROSSHAIR_ENABLED, is_crosshair_enabled, set_crosshair_enabled, true);
+define_hotkey_enabled!(FILTER_ENABLED, is_filter_enabled, set_filter_enabled, true);
+define_hotkey_enabled!(AUTOCLICKER_ENABLED, is_autoclicker_enabled, set_autoclicker_enabled, false);
+define_hotkey_enabled!(MUSIC_PREV_ENABLED, is_music_prev_enabled, set_music_prev_enabled, true);
+define_hotkey_enabled!(MUSIC_NEXT_ENABLED, is_music_next_enabled, set_music_next_enabled, true);
+define_hotkey_enabled!(MUSIC_PLAYPAUSE_ENABLED, is_music_playpause_enabled, set_music_playpause_enabled, true);
+define_hotkey_enabled!(LYRIC_BTN_ENABLED, is_lyric_btn_enabled, set_lyric_btn_enabled, true);
 
 /// 应用单个热键的注册/注销（以总开关与独立开关共同决定生效与否）。
 /// - shortcut 为空直接返回。
@@ -1139,7 +1140,7 @@ fn save_settings_value(app: &tauri::AppHandle, key: &str, value: serde_json::Val
 }
 
 /// 从 settings.json（前端 LazyStore 写入）读取指定 key 的值
-fn read_settings_value(app: &tauri::AppHandle, key: &str) -> Option<serde_json::Value> {
+pub(crate) fn read_settings_value(app: &tauri::AppHandle, key: &str) -> Option<serde_json::Value> {
     #[cfg(target_os = "windows")]
     {
         use tauri::Manager;
@@ -1172,11 +1173,11 @@ pub fn load_saved_hotkeys_enabled(app: &tauri::AppHandle) -> bool {
     }
 }
 
-/// 读取单个热键的独立开关，未保存时默认开启
-pub fn load_saved_hotkey_enabled(app: &tauri::AppHandle, key: &str) -> bool {
+/// 读取单个热键的独立开关，未保存时使用指定的默认值
+pub fn load_saved_hotkey_enabled(app: &tauri::AppHandle, key: &str, default: bool) -> bool {
     match read_settings_value(app, key) {
         Some(serde_json::Value::Bool(b)) => b,
-        _ => true,
+        _ => default,
     }
 }
 

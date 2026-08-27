@@ -804,29 +804,40 @@ export default function OverlayPanelPage() {
               </Button>
             </HStack>
           </HStack>
-          <HStack
-            bg={autoApplyOnStartup ? hexToRgba(getActiveColor(), 0.15) : sliderBg}
-            px={4}
-            py={2}
-            borderRadius="xl"
-            border="1px solid"
-            borderColor={autoApplyOnStartup ? getActiveColor() : "transparent"}
-            w="fit-content"
-            alignSelf="flex-end"
-          >
-            <Text color={subTextColor} fontSize="xs" fontWeight="500">
-              启动新境盒时自动启用悬浮框
-            </Text>
-            <ThemeSwitch
-              isChecked={autoApplyOnStartup}
-              onChange={(e) => {
-                const val = e.target.checked;
-                setAutoApplyOnStartup(val);
-                localStorage.setItem("nexbox_auto_overlay", val ? "true" : "false");
-                store.set("nexbox_auto_overlay", val).then(() => store.save());
-              }}
-              isDisabled={isLoading}
-            />
+          <HStack justify="space-between" align="flex-end" spacing={4}>
+            <VStack align="flex-start" spacing={1} flex={1} minW={0}>
+              <Text fontSize="xs" color={subTextColor} opacity={0.75}>
+                游戏需开启无边框模式，全屏模式会被覆盖
+              </Text>
+              <Text fontSize="xs" color={subTextColor} opacity={0.75}>
+                FPS仅适合单机游戏，网游反作弊会拦截FPS获取
+              </Text>
+            </VStack>
+            <HStack
+              bg={autoApplyOnStartup ? hexToRgba(getActiveColor(), 0.15) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={autoApplyOnStartup ? getActiveColor() : "transparent"}
+              w="fit-content"
+              alignSelf="flex-end"
+              flexShrink={0}
+            >
+              <Text color={subTextColor} fontSize="xs" fontWeight="500">
+                启动新境盒时自动启用悬浮框
+              </Text>
+              <ThemeSwitch
+                isChecked={autoApplyOnStartup}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAutoApplyOnStartup(val);
+                  localStorage.setItem("nexbox_auto_overlay", val ? "true" : "false");
+                  store.set("nexbox_auto_overlay", val).then(() => store.save());
+                }}
+                isDisabled={isLoading}
+              />
+            </HStack>
           </HStack>
         </SettingCard>
 

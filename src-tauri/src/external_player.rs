@@ -81,6 +81,18 @@ mod imp {
         }
     }
 
+    /// 媒体键转发入口（键盘媒体键开关关闭、且焦点在新境盒时由低层钩子调用）：
+    /// 把播放/暂停等命令直接发给当前外部音乐客户端的 SMTC 会话，
+    /// 绕过 WebView2 聚焦时对 WM_APPCOMMAND 的吞噬
+    pub fn forward_media_key(action: &str) {
+        match CTRL_TX.get() {
+            Some(tx) => {
+                let _ = tx.send(ControlMsg { action: action.to_string(), value_ms: 0 });
+            }
+            None => log::warn!("[MediaKeys] 外部会话控制通道未就绪，丢弃媒体键转发: {action}"),
+        }
+    }
+
     fn run_loop(app: AppHandle) {
         // WinRT 需要线程具备 COM 公寓初始化（后台线程不会自动初始化）。
         // 不初始化时 RequestAsync 会直接失败，导致外部播放永不接管。
@@ -144,8 +156,26 @@ mod imp {
         loop {
             // 处理积压的控制命令
             while let Ok(msg) = rx.try_recv() {
-                if let Some(session) = current_session.as_ref() {
-                    handle_control(session, &msg.action, msg.value_ms);
+                let mut target = current_session.as_ref().cloned();
+                if target.is_none() {
+                    // 兜底：尚未轮询到会话（如刚启动/刚切歌）时现场探测一次
+                    if pick_session(&manager, &mut current_session).is_some() {
+                        target = current_session.clone();
+                    }
+                }
+                match target.as_ref() {
+                    Some(session) => {
+                        let aumid = session
+                            .SourceAppUserModelId()
+                            .map(|v| v.to_string())
+                            .unwrap_or_default();
+                        log::info!("[MediaKeys] 转发 {} → 会话 [{aumid}]", msg.action);
+                        handle_control(session, &msg.action, msg.value_ms);
+                    }
+                    None => log::warn!(
+                        "[MediaKeys] 无可用外部音乐会话，丢弃媒体键命令: {}（确认其他播放器正在运行且属于音乐白名单）",
+                        msg.action
+                    ),
                 }
             }
 
@@ -428,3 +458,12 @@ pub fn external_player_state() -> Option<ExternalPlayback> {
 pub fn external_control(action: String, value_ms: Option<i64>) {
     imp::control(&action, value_ms.unwrap_or(0));
 }
+
+/// 媒体键转发入口（仅 Windows；由 media_keys 低层钩子调用）
+#[cfg(target_os = "windows")]
+pub fn forward_media_key(action: &str) {
+    imp::forward_media_key(action);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn forward_media_key(_action: &str) {}

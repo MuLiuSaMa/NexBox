@@ -68,6 +68,11 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!audioRef.current && typeof document !== "undefined") {
       const audio = document.createElement("audio");
+      // CORS 模式加载音频：createMediaElementSource 频谱（音域回响）需要 CORS 通过的媒体，
+      // 本地代理(127.0.0.1:port/audio)已返回 Access-Control-Allow-Origin/CORP 头。
+      // preload=metadata：只加载元数据，禁止 Chromium 预缓冲整首歌（内存平）
+      audio.crossOrigin = "anonymous";
+      audio.preload = "metadata";
       audio.style.display = "none";
       document.body.appendChild(audio);
       audioRef.current = audio;

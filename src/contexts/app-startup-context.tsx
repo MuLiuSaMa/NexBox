@@ -216,7 +216,7 @@ const AppStartupContext = createContext<AppStartupContextType>({
   saveCrosshairHotkeyEnabled: async () => {},
   filterHotkeyEnabled: true,
   saveFilterHotkeyEnabled: async () => {},
-  autoclickerHotkeyEnabled: true,
+  autoclickerHotkeyEnabled: false,
   saveAutoclickerHotkeyEnabled: async () => {},
   musicPrevHotkeyEnabled: true,
   saveMusicPrevHotkeyEnabled: async () => {},
@@ -249,7 +249,7 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [overlayHotkeyEnabled, setOverlayHotkeyEnabled] = useState(true);
   const [crosshairHotkeyEnabled, setCrosshairHotkeyEnabled] = useState(true);
   const [filterHotkeyEnabled, setFilterHotkeyEnabled] = useState(true);
-  const [autoclickerHotkeyEnabled, setAutoclickerHotkeyEnabled] = useState(true);
+  const [autoclickerHotkeyEnabled, setAutoclickerHotkeyEnabled] = useState(false);
   const [musicPrevHotkeyEnabled, setMusicPrevHotkeyEnabled] = useState(true);
   const [musicNextHotkeyEnabled, setMusicNextHotkeyEnabled] = useState(true);
   const [musicPlayPauseHotkeyEnabled, setMusicPlayPauseHotkeyEnabled] = useState(true);

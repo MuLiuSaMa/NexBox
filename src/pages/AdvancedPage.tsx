@@ -26,7 +26,10 @@ import { useTranslation } from "react-i18next";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { ThemeSwitch } from "@/components/special/theme-switch";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { store } from "@/lib/store";
+import { useMusicStore } from "@/stores/music-store";
 import {
   LuShieldCheck,
   LuCircleAlert,
@@ -35,6 +38,7 @@ import {
   LuPlus,
   LuHardDrive,
   LuDatabase,
+  LuKeyboard,
 } from "react-icons/lu";
 import { Download } from "lucide-react";
 
@@ -107,6 +111,22 @@ export default function AdvancedPage() {
   const [editGame, setEditGame] = useState<{ name: string; processName: string } | null>(null);
   const [savingGame, setSavingGame] = useState(false);
 
+  // ── 键盘媒体键控制音乐播放器 ──
+  const [mediaKeysEnabled, setMediaKeysEnabled] = useState(true);
+  const handleMediaKeysToggle = () => {
+    const newValue = !mediaKeysEnabled;
+    setMediaKeysEnabled(newValue);
+    store.set("nexbox_media_keys_enabled", newValue).then(() => store.save());
+    useMusicStore.getState().setMediaKeysEnabled(newValue);
+    invoke("set_media_keys_enabled", { enabled: newValue })
+      .then(() => {
+        // 关闭时后端已同步停用本应用 SMTC 会话（把媒体键还给其他软件）；
+        // 重新开启时立即恢复推送，无需等待下次播放事件
+        if (newValue) useMusicStore.getState().refreshSmtc();
+      })
+      .catch((e) => console.error("[MediaKeys] 设置失败:", e));
+  };
+
   const refreshSizes = useCallback(async () => {
     try {
       const result = await invoke<StorageSizes>("get_storage_sizes");
@@ -141,6 +161,13 @@ export default function AdvancedPage() {
     refreshSizes();
     refreshPawnio();
     refreshGames();
+    // 加载键盘媒体键控制开关（默认开启）
+    store
+      .get<boolean>("nexbox_media_keys_enabled")
+      .then((v) => {
+        if (v != null) setMediaKeysEnabled(v);
+      })
+      .catch(() => {});
   }, [refreshSizes, refreshPawnio, refreshGames]);
 
   const activeColor = getActiveColor();
@@ -412,6 +439,38 @@ export default function AdvancedPage() {
             </Button>
           </HStack>
         </VStack>
+      </LiquidGlassCard>
+
+      {/* 键盘媒体键控制音乐播放器 */}
+      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
+        <HStack spacing={4} align="center">
+          <Flex
+            align="center"
+            justify="center"
+            w="40px"
+            h="40px"
+            borderRadius="xl"
+            flexShrink={0}
+            bg={accentSoft}
+            border={`1px solid ${accentBorder}`}
+            color={activeColor}
+          >
+            <LuKeyboard size={20} />
+          </Flex>
+          <VStack align="flex-start" spacing={0.5} flex={1}>
+            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+              {t("settings.advanced.mediaKeysTitle", "键盘媒体键控制音乐（SMTC）")}
+            </Text>
+            <Text fontSize="xs" color={subLabelColor}>
+              {t("settings.advanced.mediaKeysDesc", "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件")}
+            </Text>
+          </VStack>
+          <ThemeSwitch
+            size="md"
+            isChecked={mediaKeysEnabled}
+            onChange={handleMediaKeysToggle}
+          />
+        </HStack>
       </LiquidGlassCard>
 
       {/* 滤镜游戏名单 */}

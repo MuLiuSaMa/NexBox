@@ -101,7 +101,7 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
         .title("NexBox Vertical Overlay")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
         .inner_size(220.0, 400.0)
         .resizable(false)
         .decorations(false)
@@ -137,7 +137,7 @@ pub fn ensure_mood_window<R: tauri::Runtime>(
         .title("心境")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
         .inner_size(1000.0, 700.0)
         .resizable(true)
         .center()
@@ -498,14 +498,15 @@ pub fn run() {
             hotkey::set_hotkeys_enabled(hotkey::load_saved_hotkeys_enabled(app.handle()));
 
             // 恢复每个热键的独立开关（在注册热键前设置，使 apply_hotkeys_enabled 能正确判断）
-            hotkey::set_overlay_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "overlay-hotkey-enabled"));
-            hotkey::set_crosshair_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "crosshair-hotkey-enabled"));
-            hotkey::set_filter_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "filter-hotkey-enabled"));
-            hotkey::set_autoclicker_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "autoclicker-hotkey-enabled"));
-            hotkey::set_music_prev_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-prev-hotkey-enabled"));
-            hotkey::set_music_next_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-next-hotkey-enabled"));
-            hotkey::set_music_playpause_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-playpause-hotkey-enabled"));
-            hotkey::set_lyric_btn_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "lyrics-btn-hotkey-enabled"));
+            // 连点器热键默认关闭，其余热键默认开启
+            hotkey::set_overlay_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "overlay-hotkey-enabled", true));
+            hotkey::set_crosshair_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "crosshair-hotkey-enabled", true));
+            hotkey::set_filter_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "filter-hotkey-enabled", true));
+            hotkey::set_autoclicker_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "autoclicker-hotkey-enabled", false));
+            hotkey::set_music_prev_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-prev-hotkey-enabled", true));
+            hotkey::set_music_next_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-next-hotkey-enabled", true));
+            hotkey::set_music_playpause_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-playpause-hotkey-enabled", true));
+            hotkey::set_lyric_btn_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "lyrics-btn-hotkey-enabled", true));
 
             let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
             let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
@@ -572,6 +573,7 @@ pub fn run() {
         external_player::external_control,
         smtc::smtc_update_state,
         smtc::smtc_clear,
+        media_keys::set_media_keys_enabled,
         music_api::music_lyric,
         music_api::music_song_comments,
         music_api::music_send_comment,

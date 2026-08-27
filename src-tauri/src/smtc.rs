@@ -24,7 +24,7 @@ mod imp {
 
 #[cfg(target_os = "windows")]
 mod imp {
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::{mpsc, Mutex, OnceLock};
 
     use tauri::{AppHandle, Emitter, Manager};
     use windows::core::{Interface, IInspectable};
@@ -53,6 +53,35 @@ mod imp {
     static CTRL: Mutex<Option<SystemMediaTransportControls>> = Mutex::new(None);
     /// 供 WinRT 事件回调线程向前端 emit 使用
     static APP: OnceLock<AppHandle> = OnceLock::new();
+
+    /// SMTC 更新命令：经常驻工作线程串行处理（避免前端每秒 push 时反复 spawn 线程，
+    /// 线程栈/内核对象频繁创建销毁会导致进程提交内存持续上涨——"播放时内存一直涨"的根因之一）
+    enum SmtcCmd {
+        Update(SmtcState),
+        Clear,
+    }
+
+    static SMTC_TX: Mutex<Option<mpsc::Sender<SmtcCmd>>> = Mutex::new(None);
+
+    /// 获取（或创建）SMTC 常驻工作线程的发送端。线程启动一次即常驻，
+    /// 后续 update/clear 只发消息，零线程创建开销。
+    fn ensure_worker() -> mpsc::Sender<SmtcCmd> {
+        let mut guard = SMTC_TX.lock().unwrap();
+        if let Some(tx) = guard.as_ref() {
+            return tx.clone();
+        }
+        let (tx, rx) = mpsc::channel::<SmtcCmd>();
+        std::thread::spawn(move || {
+            while let Ok(cmd) = rx.recv() {
+                match cmd {
+                    SmtcCmd::Update(state) => do_update(state),
+                    SmtcCmd::Clear => do_clear(),
+                }
+            }
+        });
+        *guard = Some(tx.clone());
+        tx
+    }
 
     /// 缓存：元数据键（title|artist|album），判断歌曲是否变化
     static LAST_TRACK: Mutex<Option<String>> = Mutex::new(None);
@@ -224,12 +253,14 @@ mod imp {
 
     /// 前端推送最新播放状态（标题/进度/播放状态变化时调用）
     pub fn update(state: SmtcState) {
-        // 命令可能在主线程被调用，放到后台线程避免阻塞 UI
-        std::thread::spawn(move || {
-            let controls = match CTRL.lock().unwrap().as_ref() {
-                Some(c) => c.clone(),
-                None => return,
-            };
+        let _ = ensure_worker().send(SmtcCmd::Update(state));
+    }
+
+    fn do_update(state: SmtcState) {
+        let controls = match CTRL.lock().unwrap().as_ref() {
+            Some(c) => c.clone(),
+            None => return,
+        };
 
             // 有播放内容时启用会话（未播放时禁用，避免空会话显示在浮层）
             let _ = controls.SetIsEnabled(true);
@@ -313,24 +344,25 @@ mod imp {
                     Err(e) => log::warn!("[SMTC] 创建 TimelineProperties 失败: {e}"),
                 }
             }
-        });
     }
 
     /// 停止播放/无歌时调用：会话置 Stopped + 禁用，从浮层消失
     pub fn clear() {
-        std::thread::spawn(move || {
-            let controls = match CTRL.lock().unwrap().as_ref() {
-                Some(c) => c.clone(),
-                None => return,
-            };
-            let _ = controls.SetPlaybackStatus(MediaPlaybackStatus::Stopped);
-            let _ = controls.SetIsEnabled(false);
-            if let Ok(updater) = controls.DisplayUpdater() {
-                let _ = updater.ClearAll();
-            }
-            *LAST_TRACK.lock().unwrap() = None;
-            *LAST_COVER_KEY.lock().unwrap() = None;
-        });
+        let _ = ensure_worker().send(SmtcCmd::Clear);
+    }
+
+    fn do_clear() {
+        let controls = match CTRL.lock().unwrap().as_ref() {
+            Some(c) => c.clone(),
+            None => return,
+        };
+        let _ = controls.SetPlaybackStatus(MediaPlaybackStatus::Stopped);
+        let _ = controls.SetIsEnabled(false);
+        if let Ok(updater) = controls.DisplayUpdater() {
+            let _ = updater.ClearAll();
+        }
+        *LAST_TRACK.lock().unwrap() = None;
+        *LAST_COVER_KEY.lock().unwrap() = None;
     }
 
     /// 更新 DisplayUpdater 元数据（仅在歌曲变化时调用，封面由调用方单独处理）
@@ -467,6 +499,12 @@ pub fn start(app: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn smtc_update_state(state: SmtcState) {
+    // 「设置 → 高级 → 键盘媒体键控制」关闭时：不向系统推送/启用本应用媒体会话。
+    // 启用中的 SMTC 会话会让系统把物理媒体键路由给新境盒（前端又因开关不响应），
+    // 导致其他音乐软件收不到媒体键；此处直接忽略推送，保持会话禁用。
+    if !crate::media_keys::control_enabled() {
+        return;
+    }
     imp::update(state);
 }
 

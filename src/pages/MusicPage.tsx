@@ -71,6 +71,7 @@ import {
   FileMusic,
   HeartPulse,
   Waves,
+  AudioWaveform,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -81,6 +82,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { ImmersiveLyricsView, ImmersiveRippleField } from "@/components/ImmersiveLyricsView";
+import SpectrumScene from "@/components/SpectrumScene";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { VirtualList } from "@/components/VirtualList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
@@ -115,6 +117,18 @@ const tabContentVariants = {
   visible: { opacity: 1, x: 0, transition: { duration: 0.2, ease: "easeOut" } },
   exit: { opacity: 0, x: -8, transition: { duration: 0.12, ease: "easeIn" } },
 };
+
+// 四个样式的预览图列表（用于点击切换而非单击循环；图片存放在 public/style-previews/）
+const STYLE_PREVIEWS: ReadonlyArray<{
+  key: "glass" | "modern" | "immersive" | "spectrum";
+  src: string;
+  label: string;
+}> = [
+  { key: "immersive", src: "/style-previews/immersive.png", label: "沉浸" },
+  { key: "spectrum",  src: "/style-previews/spectrum.png",  label: "音域回响" },
+  { key: "modern",    src: "/style-previews/modern.png",    label: "现代" },
+  { key: "glass",     src: "/style-previews/glass.png",     label: "通透" },
+];
 
 const scrollbarSx = (color: string) => ({
   scrollbarGutter: "stable",
@@ -793,6 +807,26 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const [uiHidden, setUiHidden] = useState(false);
   const uiIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 样式预览菜单：点击按钮从主内容区左侧弹出三个预览图，点击预览图直接切换。
+  // 弹层渲染在播放器容器内（absolute 垂直居中、固定宽度），不受底部控制栏 uiHidden 淡出影响
+  const [styleMenuOpen, setStyleMenuOpen] = useState(false);
+
+  const toggleStyleMenu = useCallback(() => {
+    setStyleMenuOpen((open) => !open);
+  }, []);
+
+  // 点击浮层与触发按钮之外任意位置时关闭预览菜单
+  useEffect(() => {
+    if (!styleMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest("[data-style-menu], [data-style-menu-trigger]")) return;
+      setStyleMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [styleMenuOpen]);
+
   const scheduleUiHide = useCallback(() => {
     setUiHidden(false);
     if (uiIdleTimerRef.current) clearTimeout(uiIdleTimerRef.current);
@@ -873,9 +907,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentStyle = isLocalSong && expandedStyle === "immersive" ? "glass" : expandedStyle;
   const isModern = currentStyle === "modern";
   const isImmersive = currentStyle === "immersive";
-  // 样式三态循环：通透 → 现代 → 沉浸（本地歌曲跳过沉浸）→ 通透
-  const nextStyle: "glass" | "modern" | "immersive" =
-    currentStyle === "glass" ? "modern" : currentStyle === "modern" ? (isLocalSong ? "glass" : "immersive") : "glass";
+  const isSpectrum = currentStyle === "spectrum";
+  // 本地歌曲跳过沉浸预览（音域回响对本地歌曲同样可用，不过滤）
+  const availableStylePreviews = isLocalSong
+    ? STYLE_PREVIEWS.filter((s) => s.key !== "immersive")
+    : STYLE_PREVIEWS;
 
   const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -883,10 +919,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
-  // 文字颜色覆写（现代模式；沉浸模式跟随主题玻璃背景）
-  const effectiveTextColor = isModern ? modernTextColor : textColor;
-  const effectiveSubTextColor = isModern ? modernSubTextColor : subTextColor;
-  const effectiveHoverBg = isModern ? modernHoverBg : hoverBg;
+  // 文字颜色覆写（现代/音域回响；音域回响背景固定深色，文字强制亮色）
+  const effectiveTextColor = isModern ? modernTextColor : isSpectrum ? "#f0f0f0" : textColor;
+  const effectiveSubTextColor = isModern ? modernSubTextColor : isSpectrum ? "rgba(255,255,255,0.6)" : subTextColor;
+  const effectiveHoverBg = isModern ? modernHoverBg : isSpectrum ? "rgba(255,255,255,0.12)" : hoverBg;
 
   // 下拉菜单配色：白底黑字
   const menuBg = "white";
@@ -935,8 +971,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       bottom={0}
       pt={pageFullscreen ? "48px" : 0}
       zIndex={pageFullscreen ? 950 : 9999}
-      bg={isModern ? modernBgFinal : isImmersive ? immersiveBgGradient : bgColor}
-      backdropFilter={isModern || isImmersive ? "none" : "blur(20px)"}
+      bg={isModern ? modernBgFinal : isSpectrum ? "#05070c" : isImmersive ? immersiveBgGradient : bgColor}
+      backdropFilter={isModern || isImmersive || isSpectrum ? "none" : "blur(20px)"}
       borderRadius={pageFullscreen ? 0 : "xl"}
       overflow="hidden"
       boxShadow={pageFullscreen ? "none" : "xl"}
@@ -956,7 +992,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         },
         display: "flex",
         flexDirection: "column",
-        WebkitBackdropFilter: isModern || isImmersive ? "none" : "blur(20px)",
+        WebkitBackdropFilter: isModern || isImmersive || isSpectrum ? "none" : "blur(20px)",
         animation: (() => {
           const slide = isClosing
             ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
@@ -982,6 +1018,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       {isImmersive && (
         <ImmersiveRippleField isPlaying={isPlaying} bgRgb={vividBg.rgb} />
       )}
+      {/* 音域回响全屏 3D 地形场景：铺满整个播放器（含顶部/底部栏区域，z=1），
+          控制栏透明悬浮其上不遮挡。常驻渲染（active 控制显隐），避免切换样式时
+          反复销毁/重建 WebGL context 导致切回无效果 */}
+      <SpectrumScene audioRef={audioRef} isPlaying={isPlaying} coverColor={vividBg} active={isSpectrum} />
       {/* 顶部栏：关闭按钮 + 沉浸模式全屏按钮（光标无移动自动隐藏） */}
       <HStack
         justify="space-between"
@@ -1022,8 +1062,11 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         </HStack>
       </HStack>
 
-      {/* 主体：沉浸模式为全屏歌词可视化；否则左（封面+信息）+ 右（歌词） */}
-      {isImmersive ? (
+      {/* 主体：音域回响为全屏 3D 地形律动场景（在播放器容器层渲染，此处留空）；
+          沉浸模式为全屏歌词可视化；否则左（封面+信息）+ 右（歌词）。
+          外层 wrapper 同时承载样式预览弹层（以主内容区为基准垂直居中，不含底部控制栏） */}
+      <Box flex={1} minH={0} position="relative" overflow="hidden" display="flex" flexDirection="column">
+      {isSpectrum ? null : isImmersive ? (
         <Box flex={1} minH={0} px={6} pb={2} overflow="hidden" display="flex" flexDirection="column">
           <ImmersiveLyricsView
             lines={karaokeLines}
@@ -1345,6 +1388,102 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       </HStack>
       )}
 
+      {/* 样式预览弹层：贴主内容区左侧、flex 垂直居中；宽度随窗口收缩（最多 248px）。
+          外层 top:0/bottom:0 拉伸提供明确高度基准，卡片超出时内部滚动——窗口小则弹窗整体缩小，不裁剪 */}
+      <Box
+        position="absolute"
+        top={0}
+        bottom={0}
+        left={12}
+        zIndex={30}
+        w="min(248px, calc(100% - 24px))"
+        display="flex"
+        alignItems="center"
+        pointerEvents="none"
+        data-style-menu
+      >
+        <AnimatePresence>
+          {styleMenuOpen && (
+            <motion.div
+              key="style-menu"
+              initial={{ opacity: 0, x: -28 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -18 }}
+              transition={{ duration: 0.24, ease: "easeOut" }}
+              style={{ width: "100%", maxHeight: "100%", display: "flex", flexDirection: "column" }}
+            >
+              <Box
+                bg="rgba(18,18,26,0.92)"
+                border="1px solid rgba(255,255,255,0.08)"
+                color="white"
+                borderRadius="xl"
+                p={1.5}
+                w="100%"
+                maxH="100%"
+                overflowY="auto"
+                pointerEvents="auto"
+                sx={{
+                  backdropFilter: "blur(14px)",
+                  WebkitBackdropFilter: "blur(14px)",
+                  // 隐藏滚动条（仍可滚动），避免视觉干扰
+                  scrollbarWidth: "none",
+                  "&::-webkit-scrollbar": { display: "none" },
+                }}
+              >
+                <VStack spacing={1.5} align="stretch">
+                  {availableStylePreviews.map((s) => {
+                    const active = currentStyle === s.key;
+                    return (
+                      <Box
+                        key={s.key}
+                        as="button"
+                        type="button"
+                        aria-label={s.label}
+                        onClick={() => {
+                          useMusicStore.getState().setExpandedStyle(s.key);
+                          setStyleMenuOpen(false);
+                        }}
+                        cursor="pointer"
+                        borderRadius="lg"
+                        p="3px"
+                        bg={active ? "rgba(255,255,255,0.1)" : "transparent"}
+                        transition="background 0.2s ease"
+                        _hover={{ bg: "rgba(255,255,255,0.14)" }}
+                        sx={{
+                          outline: active ? `2px solid ${activeColor}` : "2px solid transparent",
+                          outlineOffset: "1px",
+                        }}
+                      >
+                        <ChakraImage
+                          src={s.src}
+                          alt={s.label}
+                          w="100%"
+                          aspectRatio={16 / 10}
+                          borderRadius="lg"
+                          objectFit="cover"
+                          display="block"
+                          pointerEvents="none"
+                        />
+                        <Text
+                          fontSize="xs"
+                          textAlign="center"
+                          mt={1}
+                          color={active ? activeColor : "whiteAlpha.700"}
+                          fontWeight={active ? "semibold" : "normal"}
+                        >
+                          {s.label}
+                        </Text>
+                      </Box>
+                    );
+                  })}
+                </VStack>
+              </Box>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Box>
+      </Box>
+
       {/* 底部：播放控制 + 进度条（全宽居中，光标无移动自动隐藏） */}
       <VStack
         spacing={4}
@@ -1379,6 +1518,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 />
               </Tooltip>
             )}
+            {/* 碟片模式按钮：沉浸/音域回响（全屏场景无封面）下隐藏 */}
+            {!isImmersive && !isSpectrum && (
             <Tooltip label={coverFilmEffect ? "关闭碟片模式" : "开启碟片模式"}>
               <IconButton
                 aria-label="Toggle film effect"
@@ -1392,37 +1533,45 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 }}
               />
             </Tooltip>
-            <Box position="relative">
-            <Tooltip label={nextStyle === "glass" ? "切换通透样式" : nextStyle === "modern" ? "切换现代样式" : "切换沉浸样式"}>
-              <IconButton
-                aria-label="Toggle style"
-                icon={nextStyle === "glass" ? <Droplets size={18} /> : nextStyle === "modern" ? <Palette size={18} /> : <Waves size={18} />}
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  useMusicStore.getState().setExpandedStyle(nextStyle);
-                }}
-                sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
-              />
-            </Tooltip>
-            {/* 样式切换按钮右上角红色 NEW 标签 */}
-            <Box
-              position="absolute"
-              top="-6px"
-              right="-11px"
-              zIndex={3}
-              bg="red.500"
-              color="white"
-              fontSize="9px"
-              fontWeight="bold"
-              lineHeight="1.4"
-              px={1}
-              borderRadius="full"
-              pointerEvents="none"
-              boxShadow="0 1px 3px rgba(0,0,0,0.35)"
-            >
-              NEW
-            </Box>
+            )}
+            <Box position="relative" display="inline-flex" data-style-menu-trigger>
+              <Tooltip label="切换样式" placement="top">
+                <Button
+                  aria-label="Toggle style"
+                  size="sm"
+                  variant="ghost"
+                  leftIcon={
+                    currentStyle === "glass" ? <Droplets size={16} /> :
+                    currentStyle === "modern" ? <Palette size={16} /> :
+                    currentStyle === "spectrum" ? <AudioWaveform size={16} /> :
+                    <Waves size={16} />
+                  }
+                  onClick={toggleStyleMenu}
+                  borderRadius="lg"
+                  px={3}
+                  sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
+                >
+                  {currentStyle === "glass" ? "通透" : currentStyle === "modern" ? "现代" : currentStyle === "spectrum" ? "音域回响" : "沉浸"}
+                </Button>
+              </Tooltip>
+              {/* 样式切换按钮右上角红色 NEW 标签 */}
+              <Box
+                position="absolute"
+                top="-6px"
+                right="-11px"
+                zIndex={3}
+                bg="red.500"
+                color="white"
+                fontSize="9px"
+                fontWeight="bold"
+                lineHeight="1.4"
+                px={1}
+                borderRadius="full"
+                pointerEvents="none"
+                boxShadow="0 1px 3px rgba(0,0,0,0.35)"
+              >
+                NEW
+              </Box>
             </Box>
             {isModern && (
               <HStack spacing={1}>
@@ -1547,10 +1696,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </Box>
         </HStack>
 
-          {/* 歌词高亮颜色 + 歌词字体大小 + 音质选择 - 右侧（沉浸模式隐藏歌词高亮/字号） */}
+          {/* 歌词高亮颜色 + 歌词字体大小 + 音质选择 - 右侧（沉浸/音域回响模式隐藏歌词高亮/字号） */}
           <Box position="absolute" right={0} top="50%" transform="translateY(-50%)">
             <HStack spacing={2} align="center">
-              {!isImmersive && (
+              {!isImmersive && !isSpectrum && (
               <>
               {/* 歌词高亮颜色选择器 */}
               <Tooltip label="歌词高亮颜色">
@@ -2475,6 +2624,34 @@ const LocalSongRow = memo(function LocalSongRow({
 // SearchBox — 独立 memo 组件，管理搜索状态
 // 不订阅 currentTime/duration，播放时不会重渲染
 // ═══════════════════════════════════════════════
+
+// ── 搜索历史（localStorage 持久化，最新在前，去重，最多 10 条）──
+const SEARCH_HISTORY_KEY = "music_search_history";
+const SEARCH_HISTORY_MAX = 10;
+function loadSearchHistory(): string[] {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr)
+      ? arr.filter((x) => typeof x === "string").slice(0, SEARCH_HISTORY_MAX)
+      : [];
+  } catch {
+    return [];
+  }
+}
+function saveSearchHistory(list: string[]) {
+  try {
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
+  } catch {
+    /* 忽略存储异常 */
+  }
+}
+function addSearchHistory(keyword: string, list: string[]): string[] {
+  const v = keyword.trim();
+  if (!v) return list;
+  return [v, ...list.filter((k) => k !== v)].slice(0, SEARCH_HISTORY_MAX);
+}
+
 interface SearchBoxProps {
   onUnifiedSearch: (searchInput: string) => void;
   onArtistClick?: (artist: Artist) => void;
@@ -2498,6 +2675,9 @@ const SearchBox = memo(function SearchBox({
 
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [dropdownResults, setDropdownResults] = useState<Song[]>([]);
+  // 搜索历史：localStorage 持久化；输入为空时聚焦显示
+  const [searchHistory, setSearchHistory] = useState<string[]>(loadSearchHistory);
+  const [showHistory, setShowHistory] = useState(false);
 
   // actions 是稳定的
   const storeActionsRef = useRef(useMusicStore.getState());
@@ -2521,11 +2701,12 @@ const SearchBox = memo(function SearchBox({
   const glassInputBg = useColorModeValue("rgba(255,255,255,0.15)", "rgba(0,0,0,0.25)");
   const dropdownBorder = useColorModeValue("gray.200", "#333333");
 
-  // 点击外部关闭搜索下拉
+  // 点击外部关闭搜索下拉/历史
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
         setShowSearchDropdown(false);
+        setShowHistory(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -2546,6 +2727,8 @@ const SearchBox = memo(function SearchBox({
   // 非受控：直接从 input ref 读取值，不触发 setState
   const handleInputChange = useCallback((value: string) => {
     searchInputRef.current = value;
+    // 输入清空时显示历史，非空时隐藏历史
+    setShowHistory(!value.trim());
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!value.trim()) {
       setDropdownResults([]);
@@ -2560,6 +2743,48 @@ const SearchBox = memo(function SearchBox({
     }, 300);
   }, [storeActions]);
 
+  // ── 统一搜索（回车/搜索按钮/历史项共用）：搜歌曲+歌单+歌手，并记录搜索历史 ──
+  const runUnifiedSearch = useCallback((value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    // 记录历史（去重置顶）
+    setSearchHistory((prev) => {
+      const next = addSearchHistory(v, prev);
+      saveSearchHistory(next);
+      return next;
+    });
+    setShowHistory(false);
+    Promise.all([
+      storeActions.search(v),
+      storeActions.searchArtists(v),
+      storeActions.searchPlaylists(v),
+    ]).then(() => {
+      onUnifiedSearch(v);
+      setShowSearchDropdown(false);
+    });
+  }, [storeActions, onUnifiedSearch]);
+
+  // ── 历史交互：点击搜索 / 删除单条 / 清除全部 ──
+  const handleHistorySelect = useCallback((kw: string) => {
+    searchInputRef.current = kw;
+    if (inputRef.current) inputRef.current.value = kw;
+    runUnifiedSearch(kw);
+  }, [runUnifiedSearch]);
+
+  const removeHistoryItem = useCallback((kw: string) => {
+    setSearchHistory((prev) => {
+      const next = prev.filter((k) => k !== kw);
+      saveSearchHistory(next);
+      return next;
+    });
+  }, []);
+
+  const clearSearchHistory = useCallback(() => {
+    setSearchHistory([]);
+    saveSearchHistory([]);
+  }, []);
+
   // 为了让 Input 有稳定的 onChange handler（防止失焦），将它提取为 useCallback
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     handleInputChange(e.currentTarget.value);
@@ -2567,33 +2792,13 @@ const SearchBox = memo(function SearchBox({
 
   // ── 回车：统一搜索，同时搜歌曲、歌单和歌手 ──
   const handleSearchEnter = useCallback(() => {
-    const value = searchInputRef.current;
-    if (!value.trim()) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    Promise.all([
-      storeActions.search(value),
-      storeActions.searchArtists(value),
-      storeActions.searchPlaylists(value),
-    ]).then(() => {
-      onUnifiedSearch(value);
-      setShowSearchDropdown(false);
-    });
-  }, [storeActions, onUnifiedSearch]);
+    runUnifiedSearch(searchInputRef.current);
+  }, [runUnifiedSearch]);
 
   // ── 搜索按钮：统一搜索 ──
   const handleSearchButtonClick = useCallback(() => {
-    const value = searchInputRef.current;
-    if (!value.trim()) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    Promise.all([
-      storeActions.search(value),
-      storeActions.searchArtists(value),
-      storeActions.searchPlaylists(value),
-    ]).then(() => {
-      onUnifiedSearch(value);
-      setShowSearchDropdown(false);
-    });
-  }, [storeActions, onUnifiedSearch]);
+    runUnifiedSearch(searchInputRef.current);
+  }, [runUnifiedSearch]);
 
   // ── 回调函数（稳定引用）──
   const onPlay = useCallback((song: Song, queue: Song[]) => {
@@ -2641,6 +2846,7 @@ const SearchBox = memo(function SearchBox({
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: "easeOut" }}
+        style={{ position: "relative", zIndex: 31 }}
       >
       <HStack spacing={2}>
         <InputGroup size="md">
@@ -2654,6 +2860,7 @@ const SearchBox = memo(function SearchBox({
             placeholder="搜索歌曲和歌手... (回车查看全部)"
             defaultValue=""
             onChange={handleSearchChange}
+            onFocus={() => setShowHistory(true)}
             onKeyDown={(e) => e.key === "Enter" && handleSearchEnter()}
             bg={liquidGlassEnabled ? glassInputBg : bgColor}
             borderColor={liquidGlassEnabled ? themeBorder : borderColor}
@@ -2661,6 +2868,66 @@ const SearchBox = memo(function SearchBox({
             transition="border-color 0.2s, box-shadow 0.2s"
             _focus={{ borderColor: activeColor, boxShadow: `0 0 0 2px ${activeColor}33, 0 0 0 1px ${activeColor}` }}
           />
+          {/* 搜索历史下拉：输入为空且聚焦时显示；宽度=输入框（不延伸至搜索按钮） */}
+          <AnimatePresence>
+            {showHistory && searchHistory.length > 0 && !searchInputRef.current.trim() && (
+              <motion.div
+                key="search-history"
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.15 }}
+                style={{
+                  padding: "6px",
+                  position: "absolute",
+                  top: "44px",
+                  left: 0,
+                  right: 0,
+                  zIndex: 30,
+                  maxHeight: "280px",
+                  overflowY: "auto",
+                  background: dropdownBg,
+                  borderRadius: "0.5rem",
+                  boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+                }}
+              >
+                <HStack justify="space-between" px={2} py={1}>
+                  <Text fontSize="xs" color={subTextColor} fontWeight="semibold">搜索历史</Text>
+                  <Button size="xs" variant="ghost" color="red.400" onClick={clearSearchHistory} _hover={{ color: "red.300", bg: "rgba(255,0,0,0.08)" }}>
+                    全部清除
+                  </Button>
+                </HStack>
+                <VStack spacing={0} align="stretch">
+                  {searchHistory.map((kw, i) => (
+                    <HStack
+                      key={kw}
+                      spacing={1}
+                      px={2}
+                      py={1.5}
+                      borderRadius="md"
+                      cursor="pointer"
+                      onClick={() => handleHistorySelect(kw)}
+                      _hover={{ bg: itemHoverBg }}
+                    >
+                      <Text fontSize="xs" color={subTextColor} w={5} textAlign="left" flexShrink={0}>{i + 1}.</Text>
+                      <Text fontSize="sm" color={textColor} flex={1} noOfLines={1}>{kw}</Text>
+                      <IconButton
+                        size="xs"
+                        variant="ghost"
+                        aria-label="删除搜索历史"
+                        icon={<X size={12} />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeHistoryItem(kw);
+                        }}
+                        _hover={{ bg: "transparent", color: "red.400" }}
+                      />
+                    </HStack>
+                  ))}
+                </VStack>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </InputGroup>
         <Button
           leftIcon={<Search size={16} />}
@@ -2814,6 +3081,18 @@ export default function MusicPage() {
     }
   }, [musicToast, toast]);
 
+  // ── 内存诊断（临时）：区分 JS 堆 vs 渲染/媒体层，定位 WebView2 进程内存持续涨 ──
+  useEffect(() => {
+    const mem = (performance as unknown as { memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number } }).memory;
+    if (!mem) return;
+    const t = setInterval(() => {
+      const used = (mem.usedJSHeapSize / 1048576).toFixed(1);
+      const limit = (mem.jsHeapSizeLimit / 1048576).toFixed(0);
+      console.log(`[mem] JS heap ${used}MB / ${limit}MB`);
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
   // actions 是稳定的，用 useRef 只获取一次，避免每次渲染重新创建导致 useCallback 失效
   const storeActionsRef = useRef(useMusicStore.getState());
   const storeActions = storeActionsRef.current;
@@ -2930,6 +3209,10 @@ export default function MusicPage() {
     const storeState = useMusicStore.getState();
     const audio = storeState.audioRef ?? new Audio();
     const isExisting = !!storeState.audioRef;
+
+    // CORS 模式加载音频（createMediaElementSource 频谱依赖）；preload=metadata 防预缓冲整首
+    if (!audio.crossOrigin) audio.crossOrigin = "anonymous";
+    if (audio.preload !== "metadata") audio.preload = "metadata";
 
     audioRef.current = audio;
     storeActions.setAudioRef(audio);

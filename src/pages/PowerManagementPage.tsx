@@ -116,11 +116,11 @@ function SystemPlanCard({
             >
               <Cpu size={16} />
             </Box>
-            <Box flex={1}>
-              <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+            <Box flex={1} minW={0}>
+              <Text fontSize="sm" fontWeight="bold" color={headingColor} noOfLines={1}>
                 {plan.name}
               </Text>
-              <Text fontSize="xs" color={descColor} mt={0.5} fontFamily="mono">
+              <Text fontSize="xs" color={descColor} mt={0.5} fontFamily="mono" noOfLines={1}>
                 {plan.guid}
               </Text>
             </Box>
@@ -218,11 +218,11 @@ function BuiltinPlanCard({
             >
               <Zap size={16} />
             </Box>
-            <Box flex={1}>
-              <Text fontSize="sm" fontWeight="bold" color={headingColor}>
+            <Box flex={1} minW={0}>
+              <Text fontSize="sm" fontWeight="bold" color={headingColor} noOfLines={1}>
                 {plan.name}
               </Text>
-              <Text fontSize="xs" color={descColor} mt={0.5}>
+              <Text fontSize="xs" color={descColor} mt={0.5} noOfLines={2}>
                 {plan.description}
               </Text>
             </Box>
@@ -557,7 +557,7 @@ export default function PowerManagementPage() {
   const transitionMode = useTransitionMode();
 
   const content = (
-    <VStack align="stretch" spacing={6} pt={8}>
+    <VStack align="stretch" spacing={6} pt={8} w="full">
       <HStack justifyContent="space-between" alignItems="center" w="full">
         <Button
           variant="ghost"
@@ -595,14 +595,14 @@ export default function PowerManagementPage() {
                 >
                   <Battery size={22} />
                 </Box>
-                <VStack align="start" spacing={0} flex={1}>
+                <VStack align="start" spacing={0} flex={1} minW={0}>
                   <Text fontSize="xs" color={subTextColor}>
                     {t("optimization.powerManagement.currentPlan")}
                   </Text>
-                  <Text fontSize="md" fontWeight="bold" color={headingColor}>
+                  <Text fontSize="md" fontWeight="bold" color={headingColor} noOfLines={1}>
                     {activePlan.name}
                   </Text>
-                  <Text fontSize="xs" color={subTextColor} fontFamily="mono">
+                  <Text fontSize="xs" color={subTextColor} fontFamily="mono" noOfLines={1}>
                     {activePlan.guid}
                   </Text>
                 </VStack>
@@ -640,7 +640,7 @@ export default function PowerManagementPage() {
 
           <HStack align="stretch" spacing={6} w="full">
             {/* 左侧：系统电源计划 */}
-            <Box flex={1}>
+            <Box flex={1} minW={0}>
               <Box mb={3}>
                 <Text fontWeight="600" color={headingColor} fontSize="md">
                   {t("optimization.powerManagement.systemPlans") || "系统电源计划"}
@@ -672,12 +672,12 @@ export default function PowerManagementPage() {
             <Divider orientation="vertical" h="auto" />
 
             {/* 右侧：内置电源计划 */}
-            <Box flex={1}>
+            <Box flex={1} minW={0}>
               <HStack justify="space-between" align="center" mb={3}>
-                <Text fontWeight="600" color={headingColor} fontSize="md">
+                <Text fontWeight="600" color={headingColor} fontSize="md" minW={0} noOfLines={1}>
                   {t("optimization.powerManagement.builtinPlans")}
                 </Text>
-                <HStack spacing={2}>
+                <HStack spacing={2} flexShrink={0}>
                   <LiquidGlassButton
                     size="sm"
                     leftIcon={

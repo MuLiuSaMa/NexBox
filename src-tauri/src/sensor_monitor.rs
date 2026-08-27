@@ -17,7 +17,7 @@ pub fn ensure_sensor_monitor_window(
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("sensor-monitor".into()))
         .title("NexBox 传感器监控")
         // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
         .inner_size(1000.0, 700.0)
         .min_inner_size(600.0, 400.0)
         .resizable(true)

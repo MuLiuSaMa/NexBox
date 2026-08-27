@@ -697,7 +697,7 @@ async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
     )
     .title("网易云音乐登录")
     // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
     .inner_size(940.0, 760.0)
     .min_inner_size(780.0, 580.0)
     .build()
@@ -780,7 +780,7 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
     )
     .title("酷狗音乐登录")
     // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
     .inner_size(900.0, 720.0)
     .min_inner_size(760.0, 560.0)
     .build()
@@ -890,7 +890,7 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
     )
     .title("QQ 音乐登录")
     // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling")
+    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
     .inner_size(900.0, 720.0)
     .min_inner_size(760.0, 560.0)
     .build()

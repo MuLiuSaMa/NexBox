@@ -21,6 +21,8 @@ import type {
   SmtcState,
 } from "@/types/music";
 import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
+import { store } from "@/lib/store";
+import { ensureAudioContextActive } from "@/lib/audio-spectrum";
 
 // 模块级：无版权自动跳过控制
 let isAutoSkipping = false;
@@ -42,6 +44,8 @@ interface MusicState {
   heartbeatLoading: boolean;
   // 心动模式已播放过的歌曲 ID（用于去重，避免相似歌曲重复播放）
   heartbeatPlayedIds: Set<string>;
+  // 实际成功播放的历史栈（末尾为最近一首）：「上一首」按此回溯真实播放顺序，会话级不持久化
+  playHistory: Song[];
 
   // 本地导入歌曲
   localSongs: Song[];
@@ -135,9 +139,11 @@ interface MusicState {
   loadingLeftTracks: boolean;
   loadingRightTracks: boolean;
   loadingLyrics: boolean;
-  expandedStyle: "glass" | "modern" | "immersive";
+  expandedStyle: "glass" | "modern" | "immersive" | "spectrum";
   dynamicEnabled: boolean;
   coverFilmEffect: boolean;
+  // 键盘媒体键控制内置播放器（设置 → 高级 → 媒体键控制）
+  mediaKeysEnabled: boolean;
 
   // Toast 通知
   musicToast: { type: "warning"; message: string } | null;
@@ -166,7 +172,7 @@ interface MusicState {
   loadAlbumDetail: (albumId: string) => Promise<void>;
   clearArtistState: () => void;
   searchPlaylists: (keywords: string) => Promise<void>;
-  playSong: (song: Song, queue?: Song[]) => Promise<void>;
+  playSong: (song: Song, queue?: Song[], opts?: { fromHistory?: boolean }) => Promise<void>;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -179,9 +185,13 @@ interface MusicState {
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
   setLyricsHighlightColor: (color: string) => Promise<void>;
-  setExpandedStyle: (style: "glass" | "modern" | "immersive") => Promise<void>;
+  setExpandedStyle: (style: "glass" | "modern" | "immersive" | "spectrum") => Promise<void>;
   setDynamicEnabled: (enabled: boolean) => Promise<void>;
   setCoverFilmEffect: (enabled: boolean) => Promise<void>;
+  // 键盘媒体键控制（仅更新内存态）
+  setMediaKeysEnabled: (enabled: boolean) => void;
+  // 立即重推一次 SMTC 播放状态（重新开启媒体键后马上恢复系统媒体会话）
+  refreshSmtc: () => void;
   setCurrentTime: (t: number) => void;
   setDuration: (d: number) => void;
 
@@ -613,6 +623,26 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
 
 let playSongSeq = 0;
 
+// 播放历史上限：防止长期运行内存无限增长
+const MAX_PLAY_HISTORY = 100;
+
+// 最后一次真正成功播放的歌曲（模块级）：无版权跳过的中间曲不会更新此值，
+// 确保历史栈记录的是用户实际听过的播放顺序
+let lastPlayedSong: Song | null = null;
+
+/** 播放成功后记录历史：把上一次实际播放的歌入栈；历史回溯与同曲重播不入栈 */
+function recordPlayHistory(newSong: Song, fromHistory: boolean) {
+  const prev = lastPlayedSong;
+  lastPlayedSong = newSong;
+  if (fromHistory || !prev || prev.id === newSong.id) return;
+  useMusicStore.setState((st) => {
+    const next = [...st.playHistory, prev];
+    return next.length > MAX_PLAY_HISTORY
+      ? { playHistory: next.slice(next.length - MAX_PLAY_HISTORY) }
+      : { playHistory: next };
+  });
+}
+
 export const useMusicStore = create<MusicState>((set, get) => ({
   currentSong: null,
   isPlaying: false,
@@ -626,6 +656,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   heartbeatQueue: [],
   heartbeatLoading: false,
   heartbeatPlayedIds: new Set(),
+  playHistory: [],
 
   localSongs: [],
   importingLocal: false,
@@ -686,6 +717,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   musicToast: null,
   dynamicEnabled: false,
   coverFilmEffect: false,
+  mediaKeysEnabled: true,
   proxyPort: 0,
 
   // 评论系统
@@ -832,8 +864,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (fontSize != null) set({ lyricsFontSize: fontSize });
       const expStyle = await store.get<string>("expandedStyle");
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
-      // 恢复播放器样式（glass/modern/immersive 都需还原，否则切换后重启会退回默认 modern）
-      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive") set({ expandedStyle: expStyle });
+      // 恢复播放器样式（modern/glass/immersive/spectrum 都需还原，否则切换后重启会退回默认 modern）
+      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive" || expStyle === "spectrum") set({ expandedStyle: expStyle });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
       const filmEffect = await store.get<boolean>("coverFilmEffect");
@@ -856,6 +888,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
       // 确保内存状态与持久化一致
       set({ desktopLyricsLocked: false });
+    } catch {
+      // ignore
+    }
+
+    // 键盘媒体键控制开关（设置 → 高级 → 媒体键控制，存于 settings.json）
+    try {
+      const mediaKeys = await store.get<boolean>("nexbox_media_keys_enabled");
+      if (mediaKeys != null) set({ mediaKeysEnabled: mediaKeys });
     } catch {
       // ignore
     }
@@ -944,6 +984,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       await listen<{ action: string; positionMs?: number }>("smtc:control", (event) => {
         const { action, positionMs } = event.payload;
         if (!shouldHandleSmtc(action)) return;
+        // 设置 → 高级 → 键盘媒体键控制 关闭时不响应任何系统媒体控制事件
+        if (!get().mediaKeysEnabled) return;
         switch (action) {
           case "play-pause":
             get().togglePlay();
@@ -1261,10 +1303,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  playSong: async (song, queue) => {
+  playSong: async (song, queue, opts) => {
     const state = get();
     const audio = state.audioRef;
     if (!audio) return;
+
+    // 用户手势内激活 AudioContext（点击播放歌曲；音域回响真实频谱依赖）
+    void ensureAudioContextActive();
 
     // 立即停止当前播放，防止旧歌在新 URL 获取期间播完并触发 ended → nextTrack 竞态
     // 同时递增序列号，使任何正在飞行中的 playSong 调用被忽略
@@ -1333,6 +1378,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           if (mySeq !== playSongSeq) return;
           set({ isPlaying: true, currentQuality: "本地", currentBitrate: 0 });
           pushSmtc(true);
+          recordPlayHistory(song, !!opts?.fromHistory);
         } catch (err) {
           if (mySeq !== playSongSeq) return;
           console.error("Play local song failed:", err);
@@ -1418,6 +1464,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
       set({ isPlaying: true, proxyPort: state.proxyPort || get().proxyPort, currentQuality: result.quality, currentBitrate: result.br });
       pushSmtc(true);
+      recordPlayHistory(song, !!opts?.fromHistory);
       // 推送桌面歌词状态
       // 歌词数据已由 loadLyricsForSong 并行加载完成后自动 emit，此处不再重复 emitDesktopLyricsData
       // 避免 loadLyricsForSong 未完成时推送旧歌词
@@ -1442,6 +1489,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
       }
     } else {
+      // 用户手势内激活 AudioContext：音域回响真实频谱依赖它（resume 成功后才接管 audio）
+      void ensureAudioContextActive();
       try {
         await audioRef.play();
         set({ isPlaying: true });
@@ -1546,7 +1595,13 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
     let next: number;
     if (playMode === "shuffle") {
-      next = Math.floor(Math.random() * playQueue.length);
+      // 随机只作用于「下一首」：队列多于一首时排除当前曲目，避免随机到正在播放的同一首
+      if (playQueue.length > 1 && currentIndex >= 0) {
+        next = Math.floor(Math.random() * (playQueue.length - 1));
+        if (next >= currentIndex) next += 1;
+      } else {
+        next = Math.floor(Math.random() * playQueue.length);
+      }
     } else {
       next = currentIndex + 1;
       if (next >= playQueue.length) next = 0;
@@ -1559,6 +1614,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   },
 
   prevTrack: () => {
+    // 「上一首」不受随机影响：优先回溯真实播放历史栈，连按可逐级回退
+    const history = get().playHistory;
+    if (history.length > 0) {
+      const prevSong = history[history.length - 1];
+      set({ playHistory: history.slice(0, -1) });
+      get().playSong(prevSong, undefined, { fromHistory: true });
+      return;
+    }
+    // 无历史（如刚启动）时回退队列顺序
     const { playQueue, currentIndex } = get();
     if (playQueue.length === 0) return;
     let prev = currentIndex - 1;
@@ -1733,6 +1797,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setCoverFilmEffect: async (enabled) => {
     set({ coverFilmEffect: enabled });
     getStore().then((s) => s.set("coverFilmEffect", enabled).then(() => s.save()));
+  },
+
+  // 键盘媒体键控制（仅更新内存态；持久化由设置页「高级」开关负责）
+  setMediaKeysEnabled: (enabled) => {
+    set({ mediaKeysEnabled: enabled });
+  },
+
+  // 立即重推一次当前播放状态到系统媒体会话（无歌时清除会话）
+  refreshSmtc: () => {
+    pushSmtc(true);
   },
 
   // ══ 桌面歌词 Actions ══

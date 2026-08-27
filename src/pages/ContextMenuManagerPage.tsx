@@ -23,6 +23,7 @@ import {
   IconButton,
   Tooltip,
   Badge,
+  Image,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { motion } from "framer-motion";
@@ -51,6 +52,7 @@ interface ContextMenuItem {
   hive: string;
   category: string;
   reg_path: string;
+  icon: string;
   is_hidden: boolean;
 }
 
@@ -518,6 +520,16 @@ export default function ContextMenuManagerPage() {
                           >
                             <Td px={4} py={3}>
                               <Flex align="center" gap={2}>
+                                {item.icon && (
+                                  <Image
+                                    src={item.icon}
+                                    alt=""
+                                    boxSize="20px"
+                                    objectFit="contain"
+                                    flexShrink={0}
+                                    draggable={false}
+                                  />
+                                )}
                                 <Text
                                   color={item.is_hidden ? pathColor : headingColor}
                                   fontWeight="medium"

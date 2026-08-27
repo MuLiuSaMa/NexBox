@@ -13,6 +13,13 @@ use winreg::reg_value::RegValue;
 use winreg::RegKey;
 use windows_sys::Win32::System::Registry::REG_SAM_FLAGS as RegAccess;
 
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::Shell::SHDefExtractIconW;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+use base64::Engine;
+
 /// 右键菜单项
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextMenuItem {
@@ -28,6 +35,8 @@ pub struct ContextMenuItem {
     pub category: String,
     /// 指向 shell 键的完整相对路径，如 r"*\shell"
     pub reg_path: String,
+    /// 图标 data URI（PNG），空字符串表示无图标
+    pub icon: String,
     pub is_hidden: bool,
 }
 
@@ -186,12 +195,151 @@ fn delete_key(root: &RegKey, parent_path: &str, name: &str) -> Result<(), String
         .map_err(|e| format!("Failed to delete '{parent_path}\\{name}': {e}"))
 }
 
+// ---------- 图标提取 ----------
+
+/// 从 HICON 绘制 PNG 字节（复用 startup_manager 的实现逻辑）
+#[cfg(target_os = "windows")]
+fn draw_hicon_to_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        BITMAPINFO, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject,
+        SelectObject, ReleaseDC, GetDC,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::DrawIconEx;
+
+    unsafe {
+        let hdc_screen = GetDC(std::ptr::null_mut());
+        if hdc_screen.is_null() {
+            return None;
+        }
+        let hdc = CreateCompatibleDC(hdc_screen);
+        if hdc.is_null() {
+            ReleaseDC(std::ptr::null_mut(), hdc_screen);
+            return None;
+        }
+
+        let mut bmi: BITMAPINFO = std::mem::zeroed();
+        bmi.bmiHeader.biSize =
+            std::mem::size_of::<windows_sys::Win32::Graphics::Gdi::BITMAPINFOHEADER>() as u32;
+        bmi.bmiHeader.biWidth = size;
+        bmi.bmiHeader.biHeight = -size;
+        bmi.bmiHeader.biPlanes = 1;
+        bmi.bmiHeader.biBitCount = 32;
+        bmi.bmiHeader.biCompression = 0;
+
+        let mut bits: *mut std::ffi::c_void = std::ptr::null_mut();
+        let hbmp = CreateDIBSection(hdc, &bmi, 0, &mut bits, std::ptr::null_mut(), 0);
+        if hbmp.is_null() || bits.is_null() {
+            DeleteDC(hdc);
+            ReleaseDC(std::ptr::null_mut(), hdc_screen);
+            return None;
+        }
+
+        let old = SelectObject(hdc, hbmp as *mut std::ffi::c_void);
+        DrawIconEx(
+            hdc, 0, 0, hicon, size, size, 0, std::ptr::null_mut(), 0x0003,
+        );
+
+        let total = (size * size * 4) as usize;
+        let src = std::slice::from_raw_parts(bits as *const u8, total);
+        let mut rgba = Vec::with_capacity(total);
+        for i in 0..(size * size) as usize {
+            rgba.push(src[i * 4 + 2]);
+            rgba.push(src[i * 4 + 1]);
+            rgba.push(src[i * 4]);
+            rgba.push(src[i * 4 + 3]);
+        }
+
+        SelectObject(hdc, old);
+        DeleteObject(hbmp);
+        DeleteDC(hdc);
+        ReleaseDC(std::ptr::null_mut(), hdc_screen);
+
+        let img = image::RgbaImage::from_raw(size as u32, size as u32, rgba)?;
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut out, image::ImageFormat::Png)
+            .ok()?;
+        Some(out.into_inner())
+    }
+}
+
+/// 从 exe/dll 指定索引提取图标并返回 data URI
+fn extract_icon_by_index(file_path: &str, icon_index: i32) -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let wide: Vec<u16> = file_path
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+
+        let size = 64i32;
+        let mut hicon: *mut std::ffi::c_void = std::ptr::null_mut();
+        let bytes = unsafe {
+            let hr = SHDefExtractIconW(
+                wide.as_ptr(),
+                icon_index,
+                0,
+                &mut hicon,
+                std::ptr::null_mut(),
+                size as u32,
+            );
+            if hr == 0 && !hicon.is_null() {
+                let result = draw_hicon_to_png(hicon, size);
+                DestroyIcon(hicon);
+                result
+            } else {
+                None
+            }
+        };
+
+        if let Some(png_bytes) = bytes {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&png_bytes);
+            return Some(format!("data:image/png;base64,{b64}"));
+        }
+        None
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (file_path, icon_index);
+        None
+    }
+}
+
 // ---------- 右键菜单 ----------
 
-/// 读取一个 shell verb 子键的显示名（(Default) -> MUIVerb -> verb 名），并解析资源字符串
-fn resolve_verb_name(root: &RegKey, verb: &str) -> (String, String) {
+/// 从注册表 Icon 值解析出文件路径和图标索引
+/// 格式: "C:\path\to\file.exe,0" 或 "C:\path\to\file.dll,-100" 或 "@dll,-id"
+fn parse_icon_value(raw: &str) -> Option<(String, i32)> {
+    let expanded = expand_env_vars(raw).trim().to_string();
+    if expanded.is_empty() {
+        return None;
+    }
+    // 处理 @dll,-id 间接字符串格式
+    if expanded.starts_with('@') {
+        if let Some(resolved) = sh_load_indirect(&expanded) {
+            return parse_icon_value(&resolved);
+        }
+        return None;
+    }
+    // 分离路径和索引（最后一个逗号分隔）
+    if let Some(pos) = expanded.rfind(',') {
+        let path = expanded[..pos].trim().to_string();
+        let index_str = expanded[pos + 1..].trim().to_string();
+        if let Ok(index) = index_str.parse::<i32>() {
+            return Some((path, index));
+        }
+        // 索引解析失败，尝试只用路径
+        return Some((expanded, 0));
+    }
+    // 无逗号，整个字符串就是路径
+    Some((expanded, 0))
+}
+
+/// 读取一个 shell verb 子键的显示名、命令和图标
+fn resolve_verb_info(root: &RegKey, verb: &str) -> (String, String, String) {
     let mut name = String::new();
     let mut command = String::new();
+    let mut icon = String::new();
     if let Ok(key) = root.open_subkey_with_flags(verb, KEY_READ) {
         let def = read_string(&key, "").trim().to_string();
         if !def.is_empty() && !def.eq_ignore_ascii_case("(default)") {
@@ -205,8 +353,17 @@ fn resolve_verb_name(root: &RegKey, verb: &str) -> (String, String) {
         if let Ok(cmd) = key.open_subkey_with_flags("command", KEY_READ) {
             command = read_string(&cmd, "").trim().to_string();
         }
+        // 读取 Icon 值
+        let icon_raw = read_string(&key, "Icon").trim().to_string();
+        if !icon_raw.is_empty() {
+            if let Some((path, index)) = parse_icon_value(&icon_raw) {
+                if let Some(data_uri) = extract_icon_by_index(&path, index) {
+                    icon = data_uri;
+                }
+            }
+        }
     }
-    (name, command)
+    (name, command, icon)
 }
 
 /// 扫描一个关联类下的 shell verb（可见 + 隐藏）
@@ -221,7 +378,7 @@ fn scan_shell_assoc(
 
     if let Ok(shell) = root.open_subkey_with_flags(&shell_path, KEY_READ) {
         for k in shell.enum_keys().flatten() {
-            let (name, command) = resolve_verb_name(&shell, &k);
+            let (name, command, icon) = resolve_verb_info(&shell, &k);
             items.push(ContextMenuItem {
                 name: if name.is_empty() { k.clone() } else { name },
                 verb: k,
@@ -229,13 +386,14 @@ fn scan_shell_assoc(
                 hive: "HKCR".to_string(),
                 category: category.to_string(),
                 reg_path: shell_path.clone(),
+                icon,
                 is_hidden: false,
             });
         }
     }
     if let Ok(hidden) = root.open_subkey_with_flags(&hidden_path, KEY_READ) {
         for k in hidden.enum_keys().flatten() {
-            let (name, command) = resolve_verb_name(&hidden, &k);
+            let (name, command, icon) = resolve_verb_info(&hidden, &k);
             items.push(ContextMenuItem {
                 name: if name.is_empty() { k.clone() } else { name },
                 verb: k,
@@ -243,6 +401,7 @@ fn scan_shell_assoc(
                 hive: "HKCR".to_string(),
                 category: category.to_string(),
                 reg_path: shell_path.clone(),
+                icon,
                 is_hidden: true,
             });
         }

@@ -4264,105 +4264,116 @@ pub fn restart_graphics_driver() -> Result<PerfTweakResult, String> {
 
     use std::mem::size_of;
     use std::time::Duration;
+    use windows::core::{GUID, HRESULT};
     use windows::Win32::Devices::DeviceAndDriverInstallation::{
         DICS_DISABLE, DICS_ENABLE, DICS_FLAG_GLOBAL, DIF_PROPERTYCHANGE, DIGCF_PRESENT,
         SetupDiCallClassInstaller, SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo,
-        SetupDiGetClassDevsW, SetupDiSetClassInstallParamsW, SP_CLASSINSTALL_HEADER,
+        SetupDiGetClassDevsW, SetupDiSetClassInstallParamsW, HDEVINFO, SP_CLASSINSTALL_HEADER,
         SP_DEVINFO_DATA, SP_PROPCHANGE_PARAMS,
     };
-    use windows::core::GUID;
     use windows::Win32::Foundation::HWND;
 
     // 显示适配器设备类 GUID：{4d36e968-e325-11ce-bfc1-08002be10318}
     const DISPLAY_CLASS_GUID: GUID = GUID::from_u128(0x4d36e968e32511cebfc108002be10318);
-    // 枚举结束错误码 ERROR_NO_MORE_ITEMS (259)
-    const ERROR_NO_MORE_ITEMS: i32 = 259;
+    // 枚举结束错误码 ERROR_NO_MORE_ITEMS (259) 的 HRESULT 形式（0x80070103）
+    const HRESULT_NO_MORE_ITEMS: HRESULT = HRESULT::from_win32(259);
+    // 权限不足错误码 ERROR_ACCESS_DENIED (5) 的 HRESULT 形式（0x80070005）
+    const HRESULT_ACCESS_DENIED: HRESULT = HRESULT::from_win32(5);
 
-    /// 对全部显示适配器执行 禁用/启用，返回成功操作的设备数量
-    fn set_display_state(enable: bool) -> Result<usize, String> {
-        let devs = unsafe {
-            SetupDiGetClassDevsW(
-                Some(&DISPLAY_CLASS_GUID),
-                None,
-                HWND::default(),
-                DIGCF_PRESENT,
+    /// 对单个设备执行 禁用/启用 属性更改
+    fn set_device_state(
+        devs: HDEVINFO,
+        dev_info: &SP_DEVINFO_DATA,
+        enable: bool,
+    ) -> Result<(), String> {
+        let mut params = SP_PROPCHANGE_PARAMS::default();
+        params.ClassInstallHeader.cbSize = size_of::<SP_CLASSINSTALL_HEADER>() as u32;
+        params.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
+        params.StateChange = if enable { DICS_ENABLE } else { DICS_DISABLE };
+        params.Scope = DICS_FLAG_GLOBAL;
+        params.HwProfile = 0;
+
+        unsafe {
+            SetupDiSetClassInstallParamsW(
+                devs,
+                Some(dev_info),
+                Some(&params.ClassInstallHeader),
+                size_of::<SP_PROPCHANGE_PARAMS>() as u32,
             )
-            .map_err(|e| format!("枚举显示适配器失败: {}", e))?
-        };
-
-        let mut changed = 0usize;
-        let mut index = 0u32;
-        loop {
-            let mut dev_info = SP_DEVINFO_DATA::default();
-            dev_info.cbSize = size_of::<SP_DEVINFO_DATA>() as u32;
-
-            if let Err(e) = unsafe { SetupDiEnumDeviceInfo(devs, index, &mut dev_info) } {
-                if e.code().0 == ERROR_NO_MORE_ITEMS {
-                    break;
-                }
-                unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
-                return Err(format!("枚举显示适配器失败: {}", e));
-            }
-
-            let mut params = SP_PROPCHANGE_PARAMS::default();
-            params.ClassInstallHeader.cbSize = size_of::<SP_CLASSINSTALL_HEADER>() as u32;
-            params.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
-            params.StateChange = if enable { DICS_ENABLE } else { DICS_DISABLE };
-            params.Scope = DICS_FLAG_GLOBAL;
-            params.HwProfile = 0;
-
-            if let Err(e) = unsafe {
-                SetupDiSetClassInstallParamsW(
-                    devs,
-                    Some(&dev_info),
-                    Some(&params.ClassInstallHeader),
-                    size_of::<SP_PROPCHANGE_PARAMS>() as u32,
-                )
-            } {
-                unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
-                return Err(format!(
+            .map_err(|e| {
+                format!(
                     "设置{}参数失败: {}",
                     if enable { "启用" } else { "禁用" },
                     e
-                ));
-            }
+                )
+            })?;
 
-            match unsafe { SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, Some(&dev_info)) } {
-                Ok(()) => changed += 1,
-                Err(e) => {
-                    unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
-                    let action = if enable { "启用" } else { "禁用" };
-                    if e.code().0 == 5 {
-                        // ERROR_ACCESS_DENIED
-                        return Err(format!(
-                            "{}显示适配器失败：权限不足，请以管理员身份运行 NexBox 后重试（{}）",
-                            action, e
-                        ));
-                    }
-                    return Err(format!("{}显示适配器失败: {}", action, e));
+            SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, Some(dev_info)).map_err(|e| {
+                let action = if enable { "启用" } else { "禁用" };
+                if e.code() == HRESULT_ACCESS_DENIED {
+                    format!(
+                        "{}显示适配器失败：权限不足，请以管理员身份运行 NexBox 后重试（{}）",
+                        action, e
+                    )
+                } else {
+                    format!("{}显示适配器失败: {}", action, e)
                 }
-            }
-            index += 1;
+            })
         }
-
-        unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
-        Ok(changed)
     }
 
-    // 1. 禁用全部显示适配器（当前输出屏幕会短暂黑屏）
-    let disabled = set_display_state(false)?;
-    if disabled == 0 {
+    // 1. 一次性枚举并保存全部显示适配器。
+    //    禁用后重新枚举（DIGCF_PRESENT）会枚举不到已禁用的设备，导致无法自动启用，
+    //    因此禁用/启用都必须基于这同一份快照，而不是重新枚举。
+    let devs = unsafe {
+        SetupDiGetClassDevsW(
+            Some(&DISPLAY_CLASS_GUID),
+            None,
+            HWND::default(),
+            DIGCF_PRESENT,
+        )
+        .map_err(|e| format!("枚举显示适配器失败: {}", e))?
+    };
+
+    let mut devices: Vec<SP_DEVINFO_DATA> = Vec::new();
+    let mut index = 0u32;
+    loop {
+        let mut dev_info = SP_DEVINFO_DATA::default();
+        dev_info.cbSize = size_of::<SP_DEVINFO_DATA>() as u32;
+        match unsafe { SetupDiEnumDeviceInfo(devs, index, &mut dev_info) } {
+            Ok(()) => {
+                devices.push(dev_info);
+                index += 1;
+            }
+            Err(e) if e.code() == HRESULT_NO_MORE_ITEMS => break,
+            Err(e) => {
+                unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+                return Err(format!("枚举显示适配器失败: {}", e));
+            }
+        }
+    }
+    if devices.is_empty() {
+        unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
         return Err("未找到可操作的显示适配器".to_string());
     }
 
-    // 2. 等待驱动完整卸载
-    std::thread::sleep(Duration::from_secs(3));
-
-    // 3. 重新启用全部显示适配器
-    let enabled = set_display_state(true)?;
-    if enabled == 0 {
-        return Err("显卡已被禁用，但重新启用失败，请重启电脑恢复显示".to_string());
-    }
+    // 2. 禁用全部显示适配器（当前输出屏幕会短暂黑屏）-> 等待驱动卸载 -> 自动重新启用
+    let mut disabled = 0usize;
+    let mut enabled = 0usize;
+    let step_result = (|| -> Result<(), String> {
+        for dev in &devices {
+            set_device_state(devs, dev, false)?;
+            disabled += 1;
+        }
+        std::thread::sleep(Duration::from_secs(3));
+        for dev in &devices {
+            set_device_state(devs, dev, true)?;
+            enabled += 1;
+        }
+        Ok(())
+    })();
+    unsafe { SetupDiDestroyDeviceInfoList(devs).ok(); }
+    step_result?;
 
     Ok(PerfTweakResult {
         success: true,

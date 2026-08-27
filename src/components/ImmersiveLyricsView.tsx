@@ -271,6 +271,12 @@ function ImmersiveLyricsViewInner({
   const fgTextShadow = isLightText
     ? "0 2px 20px rgba(255,255,255,0.4)"
     : "0 2px 28px rgba(0,0,0,0.5)";
+  // 阴影透明版（与 fgTextShadow 同结构），供入场/退场动画插值：
+  // 若直接带满不透明度阴影跑 blur 动画，filter 会把 text-shadow 一起放大，
+  // 在歌词轮廓外闪出一圈黑线（黑阴影）或白线（白阴影）
+  const fgShadowTransparent = isLightText
+    ? "0 2px 20px rgba(255,255,255,0)"
+    : "0 2px 28px rgba(0,0,0,0)";
   const fgSubColor = isLightText ? "rgba(31,36,48,0.55)" : "rgba(255,255,255,0.55)";
 
   // 前景主歌词字号：跟随窗口高度缩放（约 11% 容器高），并考虑歌词字号设置
@@ -367,6 +373,14 @@ function ImmersiveLyricsViewInner({
                 fontFamily: LYRIC_FONT,
                 color: fgTextColor,
                 textShadow: fgTextShadow,
+                // 阴影动画与内层 blur 动画同节奏：入场从透明渐显（blur 收尾后才显影）、
+                // 退场提前淡出，避免 filter blur 把 text-shadow 放大成轮廓外的黑线
+                animation:
+                  st.phase === "exit"
+                    ? "immersiveShadowOut 0.52s ease-in forwards"
+                    : isSpread
+                      ? "immersiveShadowIn 0.8s cubic-bezier(0.22,0.8,0.36,1) forwards"
+                      : "immersiveShadowIn 0.72s cubic-bezier(0.25,0.8,0.35,1) forwards",
                 lineHeight: 1.35,
                 whiteSpace: "pre-wrap",
                 wordBreak: "keep-all",
@@ -383,6 +397,13 @@ function ImmersiveLyricsViewInner({
                   fontFamily: LYRIC_FONT,
                   color: fgSubColor,
                   textShadow: fgTextShadow,
+                  // 翻译行与主歌词同步处理阴影渐显/淡出，避免 blur 动画期间黑线闪烁
+                  animation:
+                    st.phase === "exit"
+                      ? "immersiveShadowOut 0.52s ease-in forwards"
+                      : isSpread
+                        ? "immersiveShadowIn 0.8s cubic-bezier(0.22,0.8,0.36,1) forwards"
+                        : "immersiveShadowIn 0.72s cubic-bezier(0.25,0.8,0.35,1) forwards",
                 }}
               >
                 {st.translation}
@@ -423,6 +444,18 @@ function ImmersiveLyricsViewInner({
         "@keyframes immersiveExit": {
           "0%": { filter: "blur(0)", opacity: 1 },
           "100%": { filter: "blur(20px)", opacity: 0 },
+        },
+        // ── 阴影淡入：入场时阴影保持透明，blur 收尾（约 60% 进度）后才渐显。
+        // 若全程带满不透明度阴影，filter blur 会把 text-shadow 一起放大成轮廓黑线 ──
+        "@keyframes immersiveShadowIn": {
+          "0%": { textShadow: fgShadowTransparent },
+          "60%": { textShadow: fgShadowTransparent },
+          "100%": { textShadow: fgTextShadow },
+        },
+        // ── 阴影淡出：退场时阴影先于文字消失，避免旧句黑雾罩住正在入场的新句 ──
+        "@keyframes immersiveShadowOut": {
+          "0%": { textShadow: fgTextShadow },
+          "100%": { textShadow: fgShadowTransparent },
         },
         // ── 重影入场：与前景同款（旋转 + 模糊变清晰），方向相反、幅度稍大 ──
         "@keyframes immersiveGhostEnter": {
@@ -501,7 +534,10 @@ function hsla(h: number, s: number, l: number, a: number): string {
   return `hsla(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%, ${a})`;
 }
 
-const MAX_RIPPLES = 10;
+// 波纹容量：动画最长约 5.6s、最短生成间隔约 0.5s，峰值并发约 22 个。
+// 10 太小会导致新波纹把仍在扩散中的旧波纹（尤其首波最大那个）从 DOM 踢掉 → 瞬间消失，
+// 提高到 24 让所有波纹都能走完渐隐动画后再被 setTimeout 移除。
+const MAX_RIPPLES = 24;
 
 export const ImmersiveRippleField = memo(function ImmersiveRippleField({
   isPlaying,
@@ -619,18 +655,21 @@ export const ImmersiveRippleField = memo(function ImmersiveRippleField({
       pointerEvents="none"
       overflow="hidden"
       sx={{
-        // ── 左水波扩散：圆心贴左窗口边缘，向右扩进画面，缓慢淡出（起步即较大） ──
+        // ── 左水波扩散：圆心贴左窗口边缘，向右扩进画面。
+        // 淡出从约 60% 开始分段渐隐（先缓后急再缓），末尾平滑收尾，避免最后一段瞬时消失 ──
         "@keyframes rippleLeft": {
           "0%": { transform: "translate(-50%, -50%) scale(0.3)", opacity: 0 },
-          "12%": { opacity: 1 },
-          "70%": { opacity: 1 },
+          "10%": { opacity: 1 },
+          "60%": { opacity: 0.92 },
+          "85%": { opacity: 0.38 },
           "100%": { transform: "translate(-50%, -50%) scale(1)", opacity: 0 },
         },
-        // ── 右水波扩散：圆心贴右窗口边缘，向左扩进画面，缓慢淡出（起步即较大） ──
+        // ── 右水波扩散：圆心贴右窗口边缘，向左扩进画面（同左波纹渐变） ──
         "@keyframes rippleRight": {
           "0%": { transform: "translate(50%, -50%) scale(0.3)", opacity: 0 },
-          "12%": { opacity: 1 },
-          "70%": { opacity: 1 },
+          "10%": { opacity: 1 },
+          "60%": { opacity: 0.92 },
+          "85%": { opacity: 0.38 },
           "100%": { transform: "translate(50%, -50%) scale(1)", opacity: 0 },
         },
       }}
@@ -649,9 +688,11 @@ export const ImmersiveRippleField = memo(function ImmersiveRippleField({
             transform: r.side === "left" ? "translate(-50%, -50%)" : "translate(50%, -50%)",
             // 左波纹加深背景，右波纹变浅背景（背景色自身深浅，非黑白）
             background: r.side === "left" ? leftWaveGradient : rightWaveGradient,
-            filter: "blur(3px)",
-            animationDelay: `${r.delay}s`,
-            animation: `${r.side === "left" ? "rippleLeft" : "rippleRight"} ${r.duration}s cubic-bezier(0.12, 0.5, 0.35, 1) both`,
+            // 不用 filter blur：radial-gradient 本身柔和；blur 会强制 Chromium 为每个波纹
+            // 创建离屏渲染层（24 个常驻 + 替换时频繁分配/释放层缓冲）→ 内存持续涨
+            // delay 必须并入 animation 简写：单独的 animation-delay 会被后写的
+            // animation 简写重置为 0s，导致错峰失效、波纹同步涌现同步收尾
+            animation: `${r.side === "left" ? "rippleLeft" : "rippleRight"} ${r.duration}s cubic-bezier(0.25, 0.6, 0.4, 1) ${r.delay}s both`,
           }}
         />
       ))}

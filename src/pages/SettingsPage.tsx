@@ -3100,7 +3100,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "9.0.0";
+  const currentVersion = "9.1.5";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3683,7 +3683,7 @@ function HotkeySettings() {
           <HStack justify="space-between">
             <Box flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                {t("hotkeySettings.autoclickerToggle") || "切换连点器"}
+                {t("hotkeySettings.autoclickerToggle") || "连点器热键开关"}
               </Text>
               <Text fontSize="xs" color={subLabelColor} mt={0.5}>
                 {t("hotkeySettings.autoclickerToggleDesc") || "使用快捷键开始或停止连点（支持中键、侧键）"}

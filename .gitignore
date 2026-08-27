@@ -143,3 +143,6 @@ NexBox-Tools/
 # FreeBuff 内部工具工作副本（含完整仓库嵌套，不随主程序提交）
 .freebuff/
 
+
+# QQ音乐调试临时文件
+.tmp_yqq_*

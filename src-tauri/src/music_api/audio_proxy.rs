@@ -120,6 +120,7 @@ async fn audio_proxy(Query(query): Query<ProxyQuery>, headers: HeaderMap) -> Res
 
     out_headers.insert("Content-Type", HeaderValue::from_static(content_type_for(audio_url)));
     out_headers.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
+    out_headers.insert("Cross-Origin-Resource-Policy", HeaderValue::from_static("cross-origin"));
     out_headers.insert("Accept-Ranges", HeaderValue::from_static("bytes"));
 
     if let Some(cl) = resp.headers().get("content-length") {

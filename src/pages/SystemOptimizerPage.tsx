@@ -269,6 +269,39 @@ const CategorySection = memo(function CategorySection({
   );
 });
 
+// 收集所有需要扫描的 reg 文件名（select 类型扫描其全部选项）
+function collectScanNames(): string[] {
+  const names: string[] = [];
+  for (const item of optimizerItems) {
+    if (item.type === "select") {
+      for (const opt of item.options ?? []) names.push(opt.regName);
+    } else {
+      names.push(item.regName);
+    }
+  }
+  return names;
+}
+
+// 由注册表扫描结果构建各优化项状态
+function buildScanStates(results: { name: string; applied: boolean }[]) {
+  const map = new Map(results.map((r) => [r.name, r.applied]));
+  const states: Record<string, boolean | string> = {};
+  let optimizedCount = 0;
+  for (const item of optimizerItems) {
+    if (item.type === "select") {
+      const matched = (item.options ?? []).find((opt) => map.get(opt.regName) === true);
+      const val = matched?.value ?? item.defaultSelectValue ?? "";
+      states[item.id] = val;
+      if (val !== item.defaultSelectValue) optimizedCount++;
+    } else {
+      const applied = map.get(item.regName) === true;
+      states[item.id] = applied;
+      if (applied) optimizedCount++;
+    }
+  }
+  return { states, optimizedCount };
+}
+
 // ============ 页面主组件 ============
 
 export default function SystemOptimizerPage() {
@@ -311,32 +344,48 @@ export default function SystemOptimizerPage() {
     return map;
   }, []);
 
-  // 加载保存的状态
+  // 初始化：并行加载保存状态 + 扫描注册表真实状态（每次进入页面都会自动扫描）
   useEffect(() => {
     let cancelled = false;
     async function init() {
       const startTime = Date.now();
-      const savedResult = await Promise.allSettled([
+      const [savedResult, noticeResult, scanResult] = await Promise.allSettled([
         store.get<Record<string, boolean | string>>(STORE_KEY),
         store.get<boolean>(NOTICE_KEY),
+        invoke<{ name: string; applied: boolean }[]>("scan_registry_tweaks", {
+          names: collectScanNames(),
+        }),
       ]);
       if (cancelled) return;
-      const saved = savedResult[0].status === "fulfilled" && savedResult[0].value
-        ? savedResult[0].value
-        : {};
       // 未确认过提示则弹出（保存到 appdata，确认一次后不再弹出）
-      const noticeAgreed = savedResult[1].status === "fulfilled" && savedResult[1].value;
+      const noticeAgreed = noticeResult.status === "fulfilled" && noticeResult.value;
       if (!noticeAgreed) {
         setShowNotice(true);
         setNoticeCountdown(NOTICE_COUNTDOWN_SECONDS);
       }
+      // 已保存的状态（扫描失败时的兜底）
+      const saved = savedResult.status === "fulfilled" && savedResult.value
+        ? savedResult.value
+        : {};
+      // 扫描结果优先；扫描失败时回退到保存的状态，保证开关仍能显示
+      const scanned = scanResult.status === "fulfilled" && scanResult.value
+        ? buildScanStates(scanResult.value).states
+        : null;
+      const finalStates = scanned ?? saved;
       // 确保 loading 至少显示 400ms
       const remaining = Math.max(0, 400 - (Date.now() - startTime));
       if (remaining > 0) {
         await new Promise((r) => setTimeout(r, remaining));
       }
       if (cancelled) return;
-      setSavedStates(saved);
+      setSavedStates(finalStates);
+      // 扫描成功时把真实状态同步持久化，避免下次进入读到陈旧数据
+      if (scanned) {
+        try {
+          await store.set(STORE_KEY, scanned);
+          await store.save();
+        } catch {}
+      }
       setIsLoading(false);
     }
     init();
@@ -375,34 +424,11 @@ export default function SystemOptimizerPage() {
     async (showToast = true) => {
       setIsScanning(true);
       try {
-        // 收集所有需要扫描的 reg 文件（select 类型扫描其全部选项）
-        const names: string[] = [];
-        for (const item of optimizerItems) {
-          if (item.type === "select") {
-            for (const opt of item.options ?? []) names.push(opt.regName);
-          } else {
-            names.push(item.regName);
-          }
-        }
         const results = await invoke<{ name: string; applied: boolean }[]>(
           "scan_registry_tweaks",
-          { names },
+          { names: collectScanNames() },
         );
-        const map = new Map(results.map((r) => [r.name, r.applied]));
-        const newSaved: Record<string, boolean | string> = {};
-        let optimizedCount = 0;
-        for (const item of optimizerItems) {
-          if (item.type === "select") {
-            const matched = (item.options ?? []).find((opt) => map.get(opt.regName) === true);
-            const val = matched?.value ?? item.defaultSelectValue ?? "";
-            newSaved[item.id] = val;
-            if (val !== item.defaultSelectValue) optimizedCount++;
-          } else {
-            const applied = map.get(item.regName) === true;
-            newSaved[item.id] = applied;
-            if (applied) optimizedCount++;
-          }
-        }
+        const { states: newSaved, optimizedCount } = buildScanStates(results);
         setSavedStates(newSaved);
         persistStates(newSaved);
         if (showToast) {
@@ -433,14 +459,6 @@ export default function SystemOptimizerPage() {
     },
     [persistStates, setSavedStates, toast, t],
   );
-
-  // 加载完成后自动扫描一次优化项真实状态（不弹提示）
-  const didAutoScan = useRef(false);
-  useEffect(() => {
-    if (isLoading || didAutoScan.current) return;
-    didAutoScan.current = true;
-    handleScan(false);
-  }, [isLoading, handleScan]);
 
   // 执行单个优化项（乐观更新：立即翻转开关状态以获得流畅动画，后台执行注册表写入）
   const toggleItem = useCallback(
