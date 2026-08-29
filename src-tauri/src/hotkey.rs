@@ -77,7 +77,12 @@ pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
     if enabled {
         // 总开关开启：逐个按独立开关处理（help 内部以总开关 = true）。
         apply_single_hotkey(app_handle, &get_overlay_shortcut(), is_overlay_enabled());
-        apply_single_hotkey(app_handle, &get_crosshair_shortcut(), is_crosshair_enabled());
+        if crate::crosshair_hold::is_hold_enabled() {
+            // 按住模式：由 crosshair_hold 按其自身门控启动/停止监听
+            crate::crosshair_hold::apply(app_handle);
+        } else {
+            apply_single_hotkey(app_handle, &get_crosshair_shortcut(), is_crosshair_enabled());
+        }
         apply_single_hotkey(app_handle, &get_filter_shortcut(), is_filter_enabled());
         apply_single_hotkey(app_handle, &get_autoclicker_shortcut(), is_autoclicker_enabled());
         apply_single_hotkey(app_handle, &get_music_prev_shortcut(), is_music_prev_enabled());
@@ -115,6 +120,9 @@ pub fn apply_hotkeys_enabled(app_handle: &tauri::AppHandle, enabled: bool) {
         {
             let _ = app_handle;
         }
+
+        // 按住模式监听随总开关状态启停
+        crate::crosshair_hold::apply(app_handle);
     }
 }
 
@@ -224,6 +232,12 @@ pub fn init_crosshair(app_handle: &tauri::AppHandle, shortcut: &str) -> Result<(
         return Ok(());
     }
 
+    // 按住模式开启时，切换热键不再注册（改用 crosshair_hold 按住监听线程）
+    if crate::crosshair_hold::is_hold_enabled() {
+        log::info!("准心按住模式开启，跳过切换热键注册: {}", shortcut);
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
@@ -249,17 +263,20 @@ pub fn update_crosshair(app_handle: &tauri::AppHandle, new_shortcut: &str) -> Re
     {
         use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-        if !old_shortcut.is_empty() {
-            let _ = app_handle.global_shortcut().unregister(old_shortcut.as_str());
-        }
+        // 按住模式开启时不注册切换热键，仅保存快捷键值
+        if !crate::crosshair_hold::is_hold_enabled() {
+            if !old_shortcut.is_empty() {
+                let _ = app_handle.global_shortcut().unregister(old_shortcut.as_str());
+            }
 
-        if !new_shortcut.is_empty() {
-            if let Err(e) = app_handle.global_shortcut().register(new_shortcut) {
-                // 注册失败：回滚旧热键，保证状态一致
-                if !old_shortcut.is_empty() {
-                    let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
+            if !new_shortcut.is_empty() {
+                if let Err(e) = app_handle.global_shortcut().register(new_shortcut) {
+                    // 注册失败：回滚旧热键，保证状态一致
+                    if !old_shortcut.is_empty() {
+                        let _ = app_handle.global_shortcut().register(old_shortcut.as_str());
+                    }
+                    return Err(hotkey_register_error("注册准心热键", new_shortcut, e));
                 }
-                return Err(hotkey_register_error("注册准心热键", new_shortcut, e));
             }
         }
     }
@@ -1015,7 +1032,12 @@ pub fn get_overlay_hotkey_enabled() -> bool {
 pub fn set_crosshair_hotkey_enabled(app_handle: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     set_crosshair_enabled(enabled);
     if is_hotkeys_enabled() {
-        apply_single_hotkey(&app_handle, &get_crosshair_shortcut(), enabled);
+        if crate::crosshair_hold::is_hold_enabled() {
+            // 按住模式：由其自身门控统一处理监听启停
+            crate::crosshair_hold::apply(&app_handle);
+        } else {
+            apply_single_hotkey(&app_handle, &get_crosshair_shortcut(), enabled);
+        }
     }
     save_settings_value(&app_handle, "crosshair-hotkey-enabled", serde_json::Value::Bool(enabled));
     log::info!("准心热键开关: {}", if enabled { "开启" } else { "关闭" });
@@ -1113,7 +1135,7 @@ pub fn get_music_playpause_hotkey_enabled() -> bool {
 static SETTINGS_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// 将指定 key 写入 settings.json（保留文件中的其他 key，兼容前端 LazyStore）
-fn save_settings_value(app: &tauri::AppHandle, key: &str, value: serde_json::Value) {
+pub(crate) fn save_settings_value(app: &tauri::AppHandle, key: &str, value: serde_json::Value) {
     #[cfg(target_os = "windows")]
     {
         use tauri::Manager;

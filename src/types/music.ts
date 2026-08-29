@@ -22,6 +22,8 @@ export interface Song {
   res_hash?: string;
   // === QQ 音乐扩展字段 ===
   qq_song_id?: number;
+  // === 咪咕扩展字段 (id 存 copyrightId，播放用 contentId) ===
+  content_id?: string;
   // === 本地导入扩展字段 ===
   _localPath?: string;
   _localCoverPath?: string;
@@ -157,7 +159,7 @@ export type PlayMode = "list" | "heartbeat" | "shuffle" | "one";
 export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "standard";
 
 /// 音乐平台类型
-export type MusicProvider = "netease" | "kugou" | "qqmusic";
+export type MusicProvider = "netease" | "kugou" | "qqmusic" | "migu";
 
 /// 外部客户端播放状态（SMTC 接管，非登录平台）
 export interface ExternalTrack {

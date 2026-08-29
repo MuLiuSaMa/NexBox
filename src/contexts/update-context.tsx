@@ -20,7 +20,7 @@ import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 
-const CURRENT_VERSION = "v9.1.5";
+const CURRENT_VERSION = "v9.2.5";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";
@@ -316,6 +316,9 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
             return;
           }
           setDownloadedFilePath(filePath);
+          // 下载完成后延迟 1 秒再进入"点击重启"态：sync_all 之后给磁盘落盘
+          // 与杀软首次扫描留出缓冲，避免文件尚未就绪就显示重启安装导致安装失败
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           targetProgressRef.current = 100;
           setDownloadProgress(100);
           // 同步置完成标记，杜绝延迟进度事件回写

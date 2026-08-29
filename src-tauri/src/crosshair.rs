@@ -8,6 +8,15 @@ use tauri::Manager;
 
 static CROSSHAIR_ACTIVE: AtomicBool = AtomicBool::new(false);
 static CROSSHAIR_HANDLE: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
+/// 准星窗口线程句柄，start 时等待旧线程完全退出，防止快速启停时出现双窗口
+static WINDOW_THREAD: Mutex<Option<thread::JoinHandle<()>>> = Mutex::new(None);
+/// 准星启停生命周期锁，避免按下/松开边沿与手动开关并发触发
+static LIFECYCLE_LOCK: Mutex<()> = Mutex::new(());
+
+/// 当前准星是否处于激活状态（供 crosshair_hold 按住模式查询）
+pub(crate) fn is_active() -> bool {
+    CROSSHAIR_ACTIVE.load(Ordering::SeqCst)
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CrosshairSettings {
@@ -82,7 +91,8 @@ pub struct CrosshairResult {
 
 static CURRENT_SETTINGS: Mutex<Option<CrosshairSettings>> = Mutex::new(None);
 
-fn get_settings() -> CrosshairSettings {
+/// 读取当前生效的准星参数（供 crosshair_hold 按住模式使用）
+pub(crate) fn get_settings() -> CrosshairSettings {
     let lock = CURRENT_SETTINGS.lock().unwrap();
     lock.as_ref().cloned().unwrap_or_default()
 }
@@ -948,11 +958,19 @@ mod win32 {
 pub fn start(settings: CrosshairSettings) -> Result<CrosshairResult, String> {
     use windows_sys::Win32::UI::WindowsAndMessaging::*;
 
+    // 生命周期锁：保证 start/stop 与并发按下边沿互斥
+    let _guard = LIFECYCLE_LOCK.lock().unwrap();
+
     if CROSSHAIR_ACTIVE.load(Ordering::SeqCst) {
         return Ok(CrosshairResult {
             success: true,
             message: "准心已处于启用状态".to_string(),
         });
+    }
+
+    // 等待上一窗口线程完全退出，防止快速启停时出现双窗口
+    if let Some(handle) = WINDOW_THREAD.lock().unwrap().take() {
+        let _ = handle.join();
     }
 
     CROSSHAIR_ACTIVE.store(true, Ordering::SeqCst);
@@ -962,7 +980,7 @@ pub fn start(settings: CrosshairSettings) -> Result<CrosshairResult, String> {
         *settings_lock = Some(settings.clone());
     }
 
-    thread::spawn(move || unsafe {
+    let handle = thread::spawn(move || unsafe {
         match win32::create_window(&settings) {
             Ok(hwnd) => {
                 CROSSHAIR_HANDLE.store(hwnd, Ordering::SeqCst);
@@ -997,6 +1015,7 @@ pub fn start(settings: CrosshairSettings) -> Result<CrosshairResult, String> {
             }
         }
     });
+    *WINDOW_THREAD.lock().unwrap() = Some(handle);
 
     Ok(CrosshairResult {
         success: true,
@@ -1012,6 +1031,9 @@ pub fn start(_settings: CrosshairSettings) -> Result<CrosshairResult, String> {
 #[cfg(target_os = "windows")]
 pub fn stop() -> Result<CrosshairResult, String> {
     use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+
+    // 生命周期锁：保证 start/stop 与并发按下边沿互斥
+    let _guard = LIFECYCLE_LOCK.lock().unwrap();
 
     if !CROSSHAIR_ACTIVE.load(Ordering::SeqCst) {
         return Ok(CrosshairResult {

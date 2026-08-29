@@ -32,6 +32,12 @@ interface KaraokeLyricsViewProps {
   scrollbarSx: Record<string, unknown>;
   audioRef?: HTMLAudioElement | null;
   isPlaying: boolean;
+  /** 滚动容器最大高度，默认 65vh（透明彩胶等铺满容器的场景传 "100%"） */
+  maxHeight?: string;
+  /** 歌词行文字对齐，默认居中 */
+  align?: "center" | "left";
+  /** 当前行是否放大强调（scale 1.02），默认开启；透明彩胶等只要卡拉OK效果的场景传 false */
+  lineScale?: boolean;
 }
 
 /**
@@ -58,6 +64,9 @@ function KaraokeLyricsViewInner({
   scrollbarSx,
   audioRef,
   isPlaying,
+  maxHeight = "65vh",
+  align = "center",
+  lineScale = true,
 }: KaraokeLyricsViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -157,7 +166,7 @@ function KaraokeLyricsViewInner({
     <Box
       ref={scrollRef}
       flex={1}
-      maxH="65vh"
+      maxH={maxHeight}
       overflowY="auto"
       overflowX="hidden"
       sx={{
@@ -186,9 +195,9 @@ function KaraokeLyricsViewInner({
                 py={1}
                 flexShrink={0}
                 sx={{
-                  transition: "all 0.3s ease",
+                  transition: "opacity 0.3s ease",
                   opacity: isActive ? 1 : 0.55,
-                  transform: isActive ? "scale(1.02)" : "scale(1)",
+                  ...(lineScale ? { transform: isActive ? "scale(1.02)" : "scale(1)" } : {}),
                 }}
               >
                 <KaraokeLyricLine
@@ -202,6 +211,7 @@ function KaraokeLyricsViewInner({
                   textColor={textColor}
                   subTextColor={subTextColor}
                   audioRef={audioRef}
+                  align={align}
                 />
               </Box>
             );

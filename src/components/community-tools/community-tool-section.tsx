@@ -435,7 +435,7 @@ export function CommunityToolSection() {
 
       {!loading && filtered.length > 0 && (
         <Grid
-          templateColumns={{ base: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" }}
+          templateColumns="repeat(auto-fill, minmax(240px, 1fr))"
           gap={4}
           alignItems="stretch"
         >

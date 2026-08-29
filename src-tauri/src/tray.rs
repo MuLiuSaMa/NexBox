@@ -140,7 +140,7 @@ pub fn init_tray<R: Runtime>(app: &AppHandle<R>) -> Result<TrayIcon<R>, Box<dyn 
                             .outer_size()
                             .ok()
                             .map(|s| (s.width as i32, s.height as i32))
-                            .unwrap_or((190, 140));
+                            .unwrap_or((190, 184));
 
                         // 默认：菜单底部对齐托盘图标顶部（任务栏在屏幕下方）
                         let mut x = px + sw / 2 - mw / 2;

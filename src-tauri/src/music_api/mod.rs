@@ -2,6 +2,7 @@ pub mod audio_proxy;
 pub mod cookie;
 pub mod crypto;
 pub mod kugou;
+pub mod migu;
 pub mod models;
 pub mod netease;
 pub mod qqmusic;
@@ -499,6 +500,103 @@ pub async fn qq_like_toggle(app: AppHandle, song: Song, like: bool) -> Result<bo
 }
 
 // ============================================================
+//  Tauri Commands - 咪咕音乐
+// ============================================================
+
+#[tauri::command]
+pub async fn migu_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    let cookie = load_provider_cookie(&app, "migu").await;
+    migu::search(&keywords, limit.unwrap_or(30), &cookie).await
+}
+
+#[tauri::command]
+pub async fn migu_playlist_search(app: AppHandle, keywords: String, limit: Option<u32>) -> Result<Vec<Playlist>, String> {
+    let _ = load_provider_cookie(&app, "migu").await;
+    migu::playlist_search(&keywords, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn migu_artist_search(keywords: String, limit: Option<u32>) -> Result<Vec<Artist>, String> {
+    migu::artist_search(&keywords, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn migu_artist_songs(artist_name: String, limit: Option<u32>, offset: Option<u32>) -> Result<Vec<Song>, String> {
+    migu::artist_songs(&artist_name, limit.unwrap_or(50), offset.unwrap_or(0)).await
+}
+
+#[tauri::command]
+pub async fn migu_song_url(
+    app: AppHandle,
+    content_id: String,
+    copyright_id: String,
+    quality: Option<String>,
+) -> Result<SongUrlResult, String> {
+    let cookie = load_provider_cookie(&app, "migu").await;
+    let uid = load_migu_uid(&app).await;
+    migu::song_url(
+        &cookie,
+        &uid,
+        &content_id,
+        &copyright_id,
+        &quality.unwrap_or_else(|| "lossless".into()),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn migu_lyric(app: AppHandle, content_id: String, copyright_id: String) -> Result<Lyrics, String> {
+    let cookie = load_provider_cookie(&app, "migu").await;
+    let uid = load_migu_uid(&app).await;
+    migu::lyric(&cookie, &uid, &content_id, &copyright_id).await
+}
+
+#[tauri::command]
+pub async fn migu_login_status(app: AppHandle) -> Result<LoginInfo, String> {
+    let cookie = load_provider_cookie(&app, "migu").await;
+    migu::login_info(&cookie).await
+}
+
+#[tauri::command]
+pub async fn migu_logout(app: AppHandle) -> Result<(), String> {
+    cookie::clear_cookie(&app, "migu")?;
+    set_provider_cookie("migu", String::new()).await;
+    set_migu_uid(String::new()).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn migu_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, String> {
+    let cookie = load_provider_cookie(&app, "migu").await;
+    migu::user_playlists(&cookie).await
+}
+
+#[tauri::command]
+pub async fn migu_playlist_tracks(id: String) -> Result<(Playlist, Vec<Song>), String> {
+    migu::playlist_tracks(&id).await
+}
+
+#[tauri::command]
+pub async fn migu_playlist_tracks_range(id: String, start: usize, count: usize) -> Result<Vec<Song>, String> {
+    migu::playlist_tracks_range(&id, start, count).await
+}
+
+#[tauri::command]
+pub async fn migu_rank_list() -> Result<Vec<Playlist>, String> {
+    Ok(migu::rank_list().await)
+}
+
+#[tauri::command]
+pub async fn migu_rank_songs(rank_id: String, limit: Option<u32>) -> Result<Vec<Song>, String> {
+    migu::rank_songs(&rank_id, limit.unwrap_or(30)).await
+}
+
+#[tauri::command]
+pub async fn migu_recommend_playlists() -> Result<Vec<Playlist>, String> {
+    migu::recommend_playlists().await
+}
+
+// ============================================================
 //  Tauri Commands - 多平台管理
 // ============================================================
 
@@ -508,8 +606,9 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
     let netease_cookie = load_provider_cookie(&app, "netease").await;
     let kugou_cookie = load_provider_cookie(&app, "kugou").await;
     let qq_cookie = load_provider_cookie(&app, "qqmusic").await;
+    let migu_cookie = load_provider_cookie(&app, "migu").await;
 
-    let (netease_result, kugou_result, qq_result) = tokio::join!(
+    let (netease_result, kugou_result, qq_result, migu_result) = tokio::join!(
         async {
             if !netease_cookie.is_empty() {
                 netease::login_status(&netease_cookie).await.ok()
@@ -525,12 +624,18 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
                 qqmusic::login_info(&qq_cookie).await.ok()
             } else { None }
         },
+        async {
+            if !migu_cookie.is_empty() {
+                migu::login_info(&migu_cookie).await.ok()
+            } else { None }
+        },
     );
 
     let mut result = HashMap::new();
     if let Some(info) = netease_result { result.insert("netease".into(), info); }
     if let Some(info) = kugou_result { result.insert("kugou".into(), info); }
     if let Some(info) = qq_result { result.insert("qqmusic".into(), info); }
+    if let Some(info) = migu_result { result.insert("migu".into(), info); }
     Ok(result)
 }
 
@@ -538,7 +643,7 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
 #[tauri::command]
 pub async fn music_switch_provider(app: AppHandle, provider: String) -> Result<(), String> {
     match provider.as_str() {
-        "netease" | "kugou" | "qqmusic" => {}
+        "netease" | "kugou" | "qqmusic" | "migu" => {}
         _ => return Err(format!("Unknown provider: {}", provider)),
     }
     let store = app.store("music-cookies.json").map_err(|e| e.to_string())?;
@@ -612,6 +717,18 @@ const QQ_COOKIE_PRIORITY: &[&str] = &[
     "RK",
 ];
 
+/// 咪咕登录 cookie 优先级 (登录判定靠 queryUserInfo 接口校验，此处仅影响拼接顺序)
+const MIGU_COOKIE_PRIORITY: &[&str] = &[
+    "MUSIC_SESSION",
+    "migu_cookie_id",
+    "ESAFEID",
+    "mtfk",
+    "P_CID",
+    "migu_music_tail",
+    "migu_userid",
+    "SSON",
+];
+
 /// 检查域名是否属于网易云
 fn is_netease_domain(domain: &str) -> bool {
     let d = domain.trim_start_matches('.').to_lowercase();
@@ -630,6 +747,12 @@ fn is_kugou_domain(domain: &str) -> bool {
 fn is_qq_domain(domain: &str) -> bool {
     let d = domain.trim_start_matches('.').to_lowercase();
     d == "qq.com" || d.ends_with(".qq.com") || d.ends_with("qqmusic.qq.com")
+}
+
+/// 检查域名是否属于咪咕
+fn is_migu_domain(domain: &str) -> bool {
+    let d = domain.trim_start_matches('.').to_lowercase();
+    d == "migu.cn" || d.ends_with(".migu.cn")
 }
 
 /// 从 webview cookies 构建指定平台的 cookie 字符串
@@ -671,6 +794,7 @@ pub async fn music_open_login_window(app: AppHandle, provider: String) -> Result
         "netease" => open_netease_login_window(&app).await,
         "kugou" => open_kugou_login_window(&app).await,
         "qqmusic" => open_qq_login_window(&app).await,
+        "migu" => open_migu_login_window(&app).await,
         _ => Err(format!("Unknown provider: {}", provider)),
     }
 }
@@ -972,6 +1096,108 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
     Ok("window_created".into())
 }
 
+/// 打开咪咕登录窗口
+/// 咪咕没有可判定的固定登录 cookie 名，改为「cookie 串变化时调 queryUserInfo 校验 userId」，
+/// 校验通过即视为登录完成 (URL 为用户指定的 music.migu.cn/v5/ 网页登录)
+async fn open_migu_login_window(app: &AppHandle) -> Result<String, String> {
+    use tauri::WebviewUrl;
+
+    let url = "https://music.migu.cn/v5/";
+    let label = "migu-login";
+
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.clear_all_browsing_data();
+        let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+        let _ = existing.navigate(login_url);
+        let _ = existing.set_focus();
+        return Ok("window_refreshed".into());
+    }
+
+    let login_window = tauri::WebviewWindowBuilder::new(
+        app,
+        label,
+        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+    )
+    .title("咪咕音乐登录")
+    // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
+    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
+    .inner_size(900.0, 720.0)
+    .min_inner_size(760.0, 560.0)
+    .build()
+    .map_err(|e| format!("Failed to create login window: {e}"))?;
+
+    let _ = login_window.clear_all_browsing_data();
+    let login_url = url.parse::<Url>().map_err(|e| e.to_string())?;
+    let _ = login_window.navigate(login_url);
+
+    let win = login_window.clone();
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // 等待页面加载
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let mut last_cookie = String::new();
+
+        for _ in 0..150 {
+            match win.cookies() {
+                Ok(cookies) => {
+                    let cookie_str = build_cookie_from_webview(&cookies, MIGU_COOKIE_PRIORITY, is_migu_domain);
+
+                    // 仅在 cookie 串变化时调接口校验，避免轮询打爆 queryUserInfo
+                    if !cookie_str.is_empty() && cookie_str != last_cookie {
+                        last_cookie = cookie_str.clone();
+                        match migu::login_info(&cookie_str).await {
+                            Ok(info) if info.logged_in => {
+                                log::info!("[MiguLogin] login validated, uid={}", info.user_id);
+                                let _ = cookie::save_cookie(&app_handle, "migu", &cookie_str);
+                                let _ = cookie::save_user_id(&app_handle, "migu", &info.user_id);
+                                set_provider_cookie("migu", cookie_str).await;
+                                set_migu_uid(info.user_id.clone()).await;
+                                let _ = win.close();
+                                let _ = app_handle.emit("migu-login-success", &info);
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("[MiguLogin] Failed to read cookies from webview: {e}");
+                    // 窗口可能已被用户关闭，检测到后停止轮询
+                    if !win.is_visible().unwrap_or(false) {
+                        log::info!("[MiguLogin] Login window closed, stop polling");
+                        break;
+                    }
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(1200)).await;
+        }
+
+        // 超时 — 最后再校验一次
+        if let Ok(cookies) = win.cookies() {
+            let cookie_str = build_cookie_from_webview(&cookies, MIGU_COOKIE_PRIORITY, is_migu_domain);
+            if !cookie_str.is_empty() {
+                if let Ok(info) = migu::login_info(&cookie_str).await {
+                    if info.logged_in {
+                        log::info!("[MiguLogin] Timeout but login validated, saving cookie");
+                        let _ = cookie::save_cookie(&app_handle, "migu", &cookie_str);
+                        let _ = cookie::save_user_id(&app_handle, "migu", &info.user_id);
+                        set_provider_cookie("migu", cookie_str).await;
+                        set_migu_uid(info.user_id.clone()).await;
+                        let _ = win.close();
+                        let _ = app_handle.emit("migu-login-success", &info);
+                        return;
+                    }
+                }
+            }
+        }
+        let _ = app_handle.emit("migu-login-failed", "登录超时或未完成登录");
+        log::warn!("[MiguLogin] Polling timed out after 5 minutes");
+    });
+
+    Ok("window_created".into())
+}
+
 // ============================================================
 //  全局 Cookie 缓存 (多平台, 内存中)
 // ============================================================
@@ -979,6 +1205,9 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
 static APP_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 static KUGOU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 static QQ_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
+static MIGU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
+/// 咪咕 uid (listen 接口请求头需要)
+static MIGU_UID: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 
 /// 获取网易云 cookie (向后兼容)
 async fn get_app_cookie() -> String {
@@ -1012,6 +1241,7 @@ async fn get_provider_cookie(provider: &str) -> String {
         "netease" => APP_COOKIE.read().await.clone(),
         "kugou" => KUGOU_COOKIE.read().await.clone(),
         "qqmusic" => QQ_COOKIE.read().await.clone(),
+        "migu" => MIGU_COOKIE.read().await.clone(),
         _ => String::new(),
     }
 }
@@ -1031,8 +1261,43 @@ async fn set_provider_cookie(provider: &str, cookie: String) {
             let mut guard = QQ_COOKIE.write().await;
             *guard = cookie;
         }
+        "migu" => {
+            let mut guard = MIGU_COOKIE.write().await;
+            *guard = cookie;
+        }
         _ => {}
     }
+}
+
+async fn set_migu_uid(uid: String) {
+    let mut guard = MIGU_UID.write().await;
+    *guard = uid;
+}
+
+/// 加载咪咕 uid (缓存 → store → 兜底用 cookie 现查 queryUserInfo 并持久化)
+async fn load_migu_uid(app: &AppHandle) -> String {
+    let cached = MIGU_UID.read().await.clone();
+    if !cached.is_empty() {
+        return cached;
+    }
+    if let Ok(uid) = cookie::load_user_id(app, "migu") {
+        if !uid.is_empty() {
+            set_migu_uid(uid.clone()).await;
+            return uid;
+        }
+    }
+    let cookie = get_provider_cookie("migu").await;
+    if cookie.is_empty() {
+        return String::new();
+    }
+    if let Ok(info) = migu::login_info(&cookie).await {
+        if info.logged_in && !info.user_id.is_empty() {
+            let _ = cookie::save_user_id(app, "migu", &info.user_id);
+            set_migu_uid(info.user_id.clone()).await;
+            return info.user_id;
+        }
+    }
+    String::new()
 }
 
 /// 加载指定平台的 cookie (先检查内存缓存, 再从 store 加载)
@@ -1060,5 +1325,11 @@ pub async fn init_cookie_cache(app: &AppHandle) {
     }
     if let Ok(c) = cookie::load_cookie(app, "qqmusic") {
         set_provider_cookie("qqmusic", c).await;
+    }
+    if let Ok(c) = cookie::load_cookie(app, "migu") {
+        set_provider_cookie("migu", c).await;
+    }
+    if let Ok(uid) = cookie::load_user_id(app, "migu") {
+        set_migu_uid(uid).await;
     }
 }

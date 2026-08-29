@@ -55,7 +55,8 @@
     "custom": "自訂",
     "runtimeRepair": "執行庫修復",
     "hiddenFeatures": "Windows 隱藏功能",
-    "downloadAccelerator": "下載器"
+    "downloadAccelerator": "下載器",
+    "nvidiaRecording": "N卡錄製管理"
   },
   "customPage": {
     "title": "自訂頁面",
@@ -915,6 +916,17 @@
   "crosshair": {
     "title": "輔助準心",
     "enableCrosshair": "啟用準心",
+    "holdMode": "按住時啟用",
+    "holdKey": "熱鍵",
+    "holdKeyNone": "無",
+    "holdKeyRecording": "按下按鍵...",
+    "holdModeOn": "按住模式已開啟",
+    "holdModeOff": "按住模式已關閉",
+    "mouseLeft": "滑鼠左鍵",
+    "mouseRight": "滑鼠右鍵",
+    "mouseMiddle": "滑鼠中鍵",
+    "mouseX1": "滑鼠側鍵1",
+    "mouseX2": "滑鼠側鍵2",
     "statusEnabled": "已啟用",
     "statusDisabled": "已關閉",
     "style": "準心樣式",
@@ -947,7 +959,11 @@
       "crossDot": "十字+點",
       "circleCross": "圓形+十字",
       "dotBox": "點+方框"
-    }
+    },
+    "holdDelay": "輸入延遲",
+    "holdDelayDesc": "按住熱鍵後延遲該時長才顯示準星，鬆開立即關閉（0 = 立即顯示）",
+    "holdDelaySaved": "延遲已儲存",
+    "hotkeySaved": "快捷鍵已儲存"
   },
   "hardwareReport": {
     "export": "匯出報告",
@@ -1202,7 +1218,8 @@
     "screenRecordDesc": "高效能螢幕錄製（硬體編碼）",
     "audioEqDesc": "系統級音訊等化器調音",
     "runtimeRepairDesc": "偵測並修復缺失的 VC++ / .NET / DirectX 執行庫",
-    "downloadAcceleratorDesc": "多執行緒動態分段下載，充分跑滿頻寬"
+    "downloadAcceleratorDesc": "多執行緒動態分段下載，充分跑滿頻寬",
+    "nvidiaRecordingDesc": "自動掃描 N卡錄製影片，按時間管理、預覽與清理"
   },
   "gameProcessOptimize": {
     "title": "遊戲進程最佳化",
@@ -1362,6 +1379,11 @@
     "sponsor": "贊助",
     "navigation": "導航欄",
     "about": "關於",
+    "advanced": {
+      "popnull": {
+        "title": "NexBoxPopNull 彈窗攔截"
+      }
+    },
     "generalSettings": {
       "title": "一般設定",
       "language": "語言",
@@ -1870,5 +1892,53 @@
     "islandDownloading": "下載中",
     "islandComplete": "下載完成",
     "islandFailed": "下載失敗"
+  },
+  "nvidiaRecording": {
+    "title": "N卡錄製管理",
+    "scan": "重新掃描",
+    "scanning": "正在掃描錄製影片...",
+    "scanError": "掃描失敗",
+    "addFolder": "新增資料夾",
+    "addFolderError": "新增資料夾失敗",
+    "noVideosHint": "暫無錄製影片，可點擊右上角「新增資料夾」手動新增目錄",
+    "today": "今天",
+    "yesterday": "昨天",
+    "preview": "預覽",
+    "openWithPlayer": "開啟系統播放器",
+    "revealInFolder": "在資料夾中顯示",
+    "delete": "刪除",
+    "deleteTitle": "永久刪除影片？",
+    "deleteBody": "刪除後不可復原，確定要永久刪除以下影片嗎？",
+    "deleteConfirm": "確認刪除",
+    "deleteSuccess": "影片已刪除",
+    "deleteError": "刪除失敗",
+    "cancel": "取消",
+    "close": "關閉",
+    "loading": "解析中...",
+    "unknown": "未知",
+    "previewError": "影片載入失敗",
+    "previewUnsupported": "該影片編碼格式無法在此預覽，建議使用系統播放器開啟",
+    "fileName": "檔案名稱",
+    "filePath": "完整路徑",
+    "size": "大小",
+    "modified": "修改時間",
+    "created": "建立時間",
+    "duration": "時長",
+    "resolution": "解析度",
+    "format": "格式",
+    "allFolders": "全部目錄",
+    "folderEmpty": "該目錄暫無影片",
+    "folderRemoved": "已移除資料夾",
+    "removeFolderError": "移除資料夾失敗",
+    "details": "詳情",
+    "batchAction": "批次操作",
+    "exitBatch": "退出批次操作",
+    "selectedCount": "已選 {{n}} 個",
+    "copy": "複製",
+    "copySuccess": "已複製 {{n}} 個影片",
+    "copyError": "複製失敗",
+    "deleteSuccessMulti": "已刪除 {{n}} 個影片",
+    "deleteBodyMulti": "刪除後不可復原，確定要永久刪除選中的 {{n}} 個影片嗎？",
+    "andMore": "等 {{n}} 個"
   }
 }

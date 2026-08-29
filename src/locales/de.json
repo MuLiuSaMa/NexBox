@@ -55,7 +55,8 @@
     "custom": "Benutzerdefiniert",
     "runtimeRepair": "Laufzeitbibliotheken reparieren",
     "hiddenFeatures": "Versteckte Windows-Funktionen",
-    "downloadAccelerator": "Downloader"
+    "downloadAccelerator": "Downloader",
+    "nvidiaRecording": "NVIDIA-Aufnahmeverwaltung"
   },
   "customPage": {
     "title": "Benutzerdefinierte Seite",
@@ -926,6 +927,17 @@
   "crosshair": {
     "title": "Fadenkreuzassistent",
     "enableCrosshair": "Fadenkreuz aktivieren",
+    "holdMode": "Beim Halten aktivieren",
+    "holdKey": "Hotkey",
+    "holdKeyNone": "Keine",
+    "holdKeyRecording": "Taste drücken...",
+    "holdModeOn": "Haltemodus aktiviert",
+    "holdModeOff": "Haltemodus deaktiviert",
+    "mouseLeft": "Linke Maustaste",
+    "mouseRight": "Rechte Maustaste",
+    "mouseMiddle": "Mittlere Maustaste",
+    "mouseX1": "Seitentaste 1",
+    "mouseX2": "Seitentaste 2",
     "statusEnabled": "Aktiviert",
     "statusDisabled": "Deaktiviert",
     "style": "Fadenkreuzstil",
@@ -958,7 +970,11 @@
       "crossDot": "Kreuz+Punkt",
       "circleCross": "Kreis+Kreuz",
       "dotBox": "Punkt+Rechteck"
-    }
+    },
+    "holdDelay": "Eingabeverzögerung",
+    "holdDelayDesc": "Zeigt das Fadenkreuz erst nach dieser Haltezeit an; beim Loslassen sofort ausblenden (0 = sofort)",
+    "holdDelaySaved": "Verzögerung gespeichert",
+    "hotkeySaved": "Tastenkürzel gespeichert"
   },
   "hardwareReport": {
     "export": "Bericht exportieren",
@@ -1213,7 +1229,8 @@
     "screenRecordDesc": "Hochleistungs-Bildschirmaufnahme (Hardware-Codierung)",
     "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung",
     "runtimeRepairDesc": "Fehlende VC++ / .NET / DirectX-Laufzeitbibliotheken erkennen und reparieren",
-    "downloadAcceleratorDesc": "Mehrthreadige segmentierte Downloads für volle Bandbreite"
+    "downloadAcceleratorDesc": "Mehrthreadige segmentierte Downloads für volle Bandbreite",
+    "nvidiaRecordingDesc": "NVIDIA-Aufnahmen automatisch scannen, nach Zeit sortiert verwalten, Vorschau und Bereinigung"
   },
   "gameProcessOptimize": {
     "title": "Spielprozess-Optimierung",
@@ -1373,6 +1390,11 @@
     "sponsor": "Unterstützen",
     "navigation": "Navigation",
     "about": "Über",
+    "advanced": {
+      "popnull": {
+        "title": "NexBoxPopNull Popup-Blocker"
+      }
+    },
     "generalSettings": {
       "title": "Allgemeine Einstellungen",
       "language": "Sprache",
@@ -1879,5 +1901,53 @@
     "islandDownloading": "Wird geladen",
     "islandComplete": "Download abgeschlossen",
     "islandFailed": "Download fehlgeschlagen"
+  },
+  "nvidiaRecording": {
+    "title": "NVIDIA-Aufnahmeverwaltung",
+    "scan": "Erneut scannen",
+    "scanning": "Aufnahmen werden gescannt...",
+    "scanError": "Scan fehlgeschlagen",
+    "addFolder": "Ordner hinzufügen",
+    "addFolderError": "Hinzufügen fehlgeschlagen",
+    "noVideosHint": "Noch keine Aufnahmen. Über „Ordner hinzufügen“ oben rechts können Sie ein Verzeichnis hinzufügen.",
+    "today": "Heute",
+    "yesterday": "Gestern",
+    "preview": "Vorschau",
+    "openWithPlayer": "Im Player öffnen",
+    "revealInFolder": "Im Ordner anzeigen",
+    "delete": "Löschen",
+    "deleteTitle": "Video endgültig löschen?",
+    "deleteBody": "Dies kann nicht rückgängig gemacht werden. Möchten Sie das folgende Video endgültig löschen?",
+    "deleteConfirm": "Löschen",
+    "deleteSuccess": "Video gelöscht",
+    "deleteError": "Löschen fehlgeschlagen",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "loading": "Wird analysiert...",
+    "unknown": "Unbekannt",
+    "previewError": "Video konnte nicht geladen werden",
+    "previewUnsupported": "Dieses Videoformat kann hier nicht in der Vorschau angezeigt werden. Öffnen Sie es bitte mit dem Systemplayer.",
+    "fileName": "Dateiname",
+    "filePath": "Vollständiger Pfad",
+    "size": "Größe",
+    "modified": "Geändert",
+    "created": "Erstellt",
+    "duration": "Dauer",
+    "resolution": "Auflösung",
+    "format": "Format",
+    "allFolders": "Alle Ordner",
+    "folderEmpty": "Keine Videos in diesem Ordner",
+    "folderRemoved": "Ordner entfernt",
+    "removeFolderError": "Ordner konnte nicht entfernt werden",
+    "details": "Details",
+    "batchAction": "Stapel",
+    "exitBatch": "Stapelmodus beenden",
+    "selectedCount": "{{n}} ausgewählt",
+    "copy": "Kopieren",
+    "copySuccess": "{{n}} Videos kopiert",
+    "copyError": "Kopieren fehlgeschlagen",
+    "deleteSuccessMulti": "{{n}} Videos gelöscht",
+    "deleteBodyMulti": "Dies kann nicht rückgängig gemacht werden. {{n}} ausgewählte Videos endgültig löschen?",
+    "andMore": "und {{n}} weitere"
   }
 }

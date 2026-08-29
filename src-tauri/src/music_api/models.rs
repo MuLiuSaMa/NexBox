@@ -35,6 +35,9 @@ pub struct Song {
     // === QQ 音乐扩展字段 ===
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub qq_song_id: Option<i64>,
+    // === 咪咕扩展字段 (id 存 copyrightId，播放用 contentId) ===
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub content_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

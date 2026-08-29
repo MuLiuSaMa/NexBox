@@ -72,6 +72,7 @@ import {
   HeartPulse,
   Waves,
   AudioWaveform,
+  Aperture,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -83,7 +84,9 @@ import { buildKaraokeLines } from "@/lib/karaoke-lyrics";
 import { KaraokeLyricsView } from "@/components/KaraokeLyricsView";
 import { ImmersiveLyricsView, ImmersiveRippleField } from "@/components/ImmersiveLyricsView";
 import SpectrumScene from "@/components/SpectrumScene";
+import { VinylDisc } from "@/components/VinylDisc";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
+import { hexToHsv, hsvToHex } from "@/lib/color-utils";
 import { VirtualList } from "@/components/VirtualList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
 import { useCoverColor } from "@/hooks/use-cover-color";
@@ -118,12 +121,13 @@ const tabContentVariants = {
   exit: { opacity: 0, x: -8, transition: { duration: 0.12, ease: "easeIn" } },
 };
 
-// 四个样式的预览图列表（用于点击切换而非单击循环；图片存放在 public/style-previews/）
+// 五个样式的预览图列表（用于点击切换而非单击循环；图片存放在 public/style-previews/）
 const STYLE_PREVIEWS: ReadonlyArray<{
-  key: "glass" | "modern" | "immersive" | "spectrum";
+  key: "glass" | "modern" | "immersive" | "spectrum" | "vinyl";
   src: string;
   label: string;
 }> = [
+  { key: "vinyl",     src: "/style-previews/vinyl.png",     label: "透明彩胶" },
   { key: "immersive", src: "/style-previews/immersive.png", label: "沉浸" },
   { key: "spectrum",  src: "/style-previews/spectrum.png",  label: "音域回响" },
   { key: "modern",    src: "/style-previews/modern.png",    label: "现代" },
@@ -791,6 +795,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const lyricsFontSize = useMusicStore((s) => s.lyricsFontSize);
   const lyricsHighlightColor = useMusicStore((s) => s.lyricsHighlightColor);
+  const vinylColorMode = useMusicStore((s) => s.vinylColorMode);
+  const vinylCustomColor = useMusicStore((s) => s.vinylCustomColor);
   const expandedStyle = useMusicStore((s) => s.expandedStyle);
   const dynamicEnabled = useMusicStore((s) => s.dynamicEnabled);
   const coverFilmEffect = useMusicStore((s) => s.coverFilmEffect);
@@ -908,10 +914,18 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const isModern = currentStyle === "modern";
   const isImmersive = currentStyle === "immersive";
   const isSpectrum = currentStyle === "spectrum";
-  // 本地歌曲跳过沉浸预览（音域回响对本地歌曲同样可用，不过滤）
+  const isVinyl = currentStyle === "vinyl";
+  // 本地歌曲跳过沉浸预览（音域回响/透明彩胶对本地歌曲同样可用，不过滤）
   const availableStylePreviews = isLocalSong
     ? STYLE_PREVIEWS.filter((s) => s.key !== "immersive")
     : STYLE_PREVIEWS;
+
+  // 透明彩胶主色：auto 跟随封面提取色（钳制饱和/亮度保证白底上可读），custom 用手动固定色
+  const vinylAccent = useMemo(() => {
+    if (vinylColorMode === "custom") return vinylCustomColor;
+    const { h, s, v } = hexToHsv(coverColor.hex);
+    return hsvToHex(h, Math.min(92, Math.max(48, s)), Math.min(66, Math.max(34, v)));
+  }, [vinylColorMode, vinylCustomColor, coverColor.hex]);
 
   const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
@@ -919,10 +933,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
-  // 文字颜色覆写（现代/音域回响；音域回响背景固定深色，文字强制亮色）
-  const effectiveTextColor = isModern ? modernTextColor : isSpectrum ? "#f0f0f0" : textColor;
-  const effectiveSubTextColor = isModern ? modernSubTextColor : isSpectrum ? "rgba(255,255,255,0.6)" : subTextColor;
-  const effectiveHoverBg = isModern ? modernHoverBg : isSpectrum ? "rgba(255,255,255,0.12)" : hoverBg;
+  // 文字颜色覆写（现代/音域回响；音域回响背景固定深色，文字强制亮色；透明彩胶浅灰底，文字强制深灰）
+  const effectiveTextColor = isModern ? modernTextColor : isSpectrum ? "#f0f0f0" : isVinyl ? "#333338" : textColor;
+  const effectiveSubTextColor = isModern ? modernSubTextColor : isSpectrum ? "rgba(255,255,255,0.6)" : isVinyl ? "rgba(51,51,56,0.55)" : subTextColor;
+  const effectiveHoverBg = isModern ? modernHoverBg : isSpectrum ? "rgba(255,255,255,0.12)" : isVinyl ? "rgba(0,0,0,0.07)" : hoverBg;
 
   // 下拉菜单配色：白底黑字
   const menuBg = "white";
@@ -971,8 +985,16 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       bottom={0}
       pt={pageFullscreen ? "48px" : 0}
       zIndex={pageFullscreen ? 950 : 9999}
-      bg={isModern ? modernBgFinal : isSpectrum ? "#05070c" : isImmersive ? immersiveBgGradient : bgColor}
-      backdropFilter={isModern || isImmersive || isSpectrum ? "none" : "blur(20px)"}
+      bg={isModern
+        ? modernBgFinal
+        : isSpectrum
+          ? "#05070c"
+          : isImmersive
+            ? immersiveBgGradient
+            : isVinyl
+              ? "linear-gradient(160deg, #dfdfe2 0%, #d8d8dc 55%, #d1d1d6 100%)"
+              : bgColor}
+      backdropFilter={isModern || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)"}
       borderRadius={pageFullscreen ? 0 : "xl"}
       overflow="hidden"
       boxShadow={pageFullscreen ? "none" : "xl"}
@@ -992,7 +1014,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         },
         display: "flex",
         flexDirection: "column",
-        WebkitBackdropFilter: isModern || isImmersive || isSpectrum ? "none" : "blur(20px)",
+        WebkitBackdropFilter: isModern || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)",
         animation: (() => {
           const slide = isClosing
             ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
@@ -1017,6 +1039,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       {/* 沉浸模式全屏水波层：铺满整个播放器（z=1），上下栏与歌词在其上层 */}
       {isImmersive && (
         <ImmersiveRippleField isPlaying={isPlaying} bgRgb={vividBg.rgb} />
+      )}
+      {/* 透明彩胶：右上角伸出的半透明彩色胶片 + 光晕（z=1），歌词与控制栏在其上层 */}
+      {isVinyl && (
+        <VinylDisc isPlaying={isPlaying} accentColor={vinylAccent} coverUrl={coverUrl} />
       )}
       {/* 音域回响全屏 3D 地形场景：铺满整个播放器（含顶部/底部栏区域，z=1），
           控制栏透明悬浮其上不遮挡。常驻渲染（active 控制显隐），避免切换样式时
@@ -1075,6 +1101,51 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             isPlaying={isPlaying}
             coverColor={vividBg}
             baseFontSize={lyricsFontSize}
+          />
+        </Box>
+      ) : isVinyl ? (
+        // 透明彩胶：左侧歌名 + 歌词列表（当前行高亮色 = 胶片颜色），右侧留给胶片
+        <Box
+          flex={1}
+          minH={0}
+          position="relative"
+          zIndex={2}
+          px={{ base: 10, lg: "8vw" }}
+          pb={2}
+          pt={2}
+          overflow="hidden"
+          display="flex"
+          flexDirection="column"
+          w="52%"
+        >
+          <VStack spacing={1} align="flex-start" mb={4} flexShrink={0}>
+            <Text
+              fontSize={{ base: "26px", lg: "32px" }}
+              fontWeight="900"
+              color={effectiveTextColor}
+              lineHeight={1.25}
+              noOfLines={1}
+            >
+              {currentSong.name}
+            </Text>
+            <Text fontSize="md" color={effectiveSubTextColor} noOfLines={1}>
+              {currentSong.artist}
+            </Text>
+          </VStack>
+          <KaraokeLyricsView
+            lines={karaokeLines}
+            loading={loadingLyrics}
+            fontSize={lyricsFontSize}
+            activeColor={vinylAccent}
+            highlightColor={vinylAccent}
+            textColor="#45454c"
+            subTextColor="rgba(66,66,74,0.5)"
+            scrollbarSx={memoScrollbarSx}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            maxHeight="100%"
+            align="left"
+            lineScale={false}
           />
         </Box>
       ) : (
@@ -1518,8 +1589,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 />
               </Tooltip>
             )}
-            {/* 碟片模式按钮：沉浸/音域回响（全屏场景无封面）下隐藏 */}
-            {!isImmersive && !isSpectrum && (
+            {/* 碟片模式按钮：沉浸/音域回响（全屏场景无封面）与透明彩胶（自带胶片）下隐藏 */}
+            {!isImmersive && !isSpectrum && !isVinyl && (
             <Tooltip label={coverFilmEffect ? "关闭碟片模式" : "开启碟片模式"}>
               <IconButton
                 aria-label="Toggle film effect"
@@ -1544,6 +1615,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     currentStyle === "glass" ? <Droplets size={16} /> :
                     currentStyle === "modern" ? <Palette size={16} /> :
                     currentStyle === "spectrum" ? <AudioWaveform size={16} /> :
+                    currentStyle === "vinyl" ? <Disc3 size={16} /> :
                     <Waves size={16} />
                   }
                   onClick={toggleStyleMenu}
@@ -1551,7 +1623,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   px={3}
                   sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
                 >
-                  {currentStyle === "glass" ? "通透" : currentStyle === "modern" ? "现代" : currentStyle === "spectrum" ? "音域回响" : "沉浸"}
+                  {currentStyle === "glass" ? "通透" : currentStyle === "modern" ? "现代" : currentStyle === "spectrum" ? "音域回响" : currentStyle === "vinyl" ? "透明彩胶" : "沉浸"}
                 </Button>
               </Tooltip>
               {/* 样式切换按钮右上角红色 NEW 标签 */}
@@ -1701,16 +1773,37 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             <HStack spacing={2} align="center">
               {!isImmersive && !isSpectrum && (
               <>
-              {/* 歌词高亮颜色选择器 */}
-              <Tooltip label="歌词高亮颜色">
+              {/* 歌词高亮颜色选择器（透明彩胶下联动胶片颜色：选色即固定为手动色） */}
+              <Tooltip label={isVinyl ? "胶片/歌词颜色" : "歌词高亮颜色"}>
                 <Box>
                   <CustomColorPicker
-                    color={lyricsHighlightColor}
-                    onChange={(c) => useMusicStore.getState().setLyricsHighlightColor(c)}
+                    color={isVinyl ? (vinylColorMode === "custom" ? vinylCustomColor : vinylAccent) : lyricsHighlightColor}
+                    onChange={(c) => {
+                      if (isVinyl) {
+                        const st = useMusicStore.getState();
+                        st.setVinylCustomColor(c);
+                        st.setVinylColorMode("custom");
+                      } else {
+                        useMusicStore.getState().setLyricsHighlightColor(c);
+                      }
+                    }}
                     compact
                   />
                 </Box>
               </Tooltip>
+              {/* 透明彩胶：手动颜色模式下提供一键切回跟随封面 */}
+              {isVinyl && vinylColorMode === "custom" && (
+                <Tooltip label="跟随封面颜色">
+                  <IconButton
+                    aria-label="Follow cover color"
+                    icon={<Aperture size={16} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => useMusicStore.getState().setVinylColorMode("auto")}
+                    sx={{ color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg, color: effectiveTextColor } }}
+                  />
+                </Tooltip>
+              )}
               <Tooltip label={`歌词字号: ${lyricsFontSize}px`}>
                 <HStack spacing={1} align="center">
                   <Text fontSize="xs" color={effectiveSubTextColor} fontWeight="bold" flexShrink={0}>A</Text>
@@ -3038,6 +3131,7 @@ export default function MusicPage() {
       netease: "网易云音乐",
       kugou: "酷狗音乐",
       qqmusic: "QQ 音乐",
+      migu: "咪咕音乐",
     };
     return map[playbackSource] ?? playbackSource;
   }, [playbackSource]);
@@ -3455,18 +3549,18 @@ storeActions.loadRightPlaylistTracks(pl.id);
 setRightPanelView("tracks");
 }, [storeActions]);
 
-// ── 官方榜单点击：QQ 榜单走榜单歌曲接口，其他平台走歌单歌曲接口 ──
+// ── 官方榜单点击：QQ/咪咕榜单走榜单歌曲接口，其他平台走歌单歌曲接口 ──
 const handleChartClick = useCallback((pl: Playlist) => {
   useMusicStore.setState({ rightPlaylistMeta: pl });
   setRightPanelView("tracks");
-  if (playbackSource === "qqmusic") {
+  if (playbackSource === "qqmusic" || playbackSource === "migu") {
     storeActions.loadRightRankTracks(pl.id);
   } else {
     storeActions.loadRightPlaylistTracks(pl.id);
   }
 }, [playbackSource, storeActions]);
 
-// 榜单平铺：酷狗/QQ 用网格铺满面板，网易云保持横向滚动
+// 榜单平铺：酷狗/QQ 用网格铺满面板，网易云/咪咕保持横向滚动小卡片
 const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
 
   const handleBackToRecommendations = useCallback(() => {
@@ -3491,6 +3585,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     try {
       const cmd = pl.provider === "kugou" ? "kugou_playlist_tracks"
         : pl.provider === "qqmusic" ? "qq_playlist_tracks"
+        : pl.provider === "migu" ? "migu_playlist_tracks"
         : "music_playlist_tracks";
       const result = await invoke<[Playlist, Song[]]>(cmd, { id: pl.id });
       setSearchExpandedTracks(result[1]);
@@ -3645,7 +3740,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
           {pl.name}
         </Text>
         <Text color={subTextColor} fontSize="xs">
-          {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
+          {[pl.track_count > 0 ? `${pl.track_count} 首` : "", pl.creator ? `· ${pl.creator}` : ""].filter(Boolean).join(" ")}
         </Text>
       </VStack>
       {loginInfo?.logged_in && pl.provider === "netease" && !isOwnPlaylist(pl) && (
@@ -4338,7 +4433,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 {searchExpandedPlaylist.name}
               </Text>
               <Text color={subTextColor} fontSize="xs">
-                {searchExpandedPlaylist.track_count} 首 {searchExpandedPlaylist.creator ? `· ${searchExpandedPlaylist.creator}` : ""}
+                {[searchExpandedPlaylist.track_count > 0 ? `${searchExpandedPlaylist.track_count} 首` : "", searchExpandedPlaylist.creator ? `· ${searchExpandedPlaylist.creator}` : ""].filter(Boolean).join(" ")}
               </Text>
             </VStack>
           </HStack>
@@ -4512,7 +4607,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                               {pl.name}
                             </Text>
                             <Text color={subTextColor} fontSize="xs">
-                              {pl.track_count} 首 {pl.creator ? `· ${pl.creator}` : ""}
+                              {[pl.track_count > 0 ? `${pl.track_count} 首` : "", pl.creator ? `· ${pl.creator}` : ""].filter(Boolean).join(" ")}
                             </Text>
                           </VStack>
                           {loginInfo?.logged_in && pl.provider === "netease" && (
@@ -5263,18 +5358,35 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           overflow="hidden"
                           sx={{ aspectRatio: "1 / 1" }}
                         >
-                          <ChakraImage
-                            src={coverProxyUrl(chart.cover, proxyPort)}
-                            alt=""
-                            w="100%"
-                            h="100%"
-                            objectFit="cover"
-                            fallback={
-                              <Box w="100%" h="100%" bg="gray.700" display="flex" alignItems="center" justifyContent="center">
-                                <TrendingUp size={14} color={subTextColor} />
-                              </Box>
-                            }
-                          />
+                          {playbackSource === "migu" ? (
+                            /* 咪咕: 榜单无可用封面，直接把榜单名写在主题色渐变卡片上 */
+                            <Box
+                              w="100%"
+                              h="100%"
+                              display="flex"
+                              alignItems="center"
+                              justifyContent="center"
+                              p={1}
+                              bg={`linear-gradient(160deg, ${activeColor}55 0%, ${activeColor}18 100%)`}
+                            >
+                              <Text fontSize="2xs" fontWeight="bold" color={textColor} noOfLines={3} textAlign="center" lineHeight="1.25">
+                                {chart.name}
+                              </Text>
+                            </Box>
+                          ) : (
+                            <ChakraImage
+                              src={coverProxyUrl(chart.cover, proxyPort)}
+                              alt=""
+                              w="100%"
+                              h="100%"
+                              objectFit="cover"
+                              fallback={
+                                <Box w="100%" h="100%" bg="gray.700" display="flex" alignItems="center" justifyContent="center">
+                                  <Text fontSize="lg" fontWeight="bold" color="#fff">{chart.name.slice(0, 1)}</Text>
+                                </Box>
+                              }
+                            />
+                          )}
                         </Box>
                         <Text color={textColor} fontSize="xs" fontWeight="medium" noOfLines={1} textAlign="center">
                           {chart.name}

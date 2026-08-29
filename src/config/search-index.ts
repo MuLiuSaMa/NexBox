@@ -15,6 +15,7 @@ import {
   MousePointerClick,
   Monitor,
   Download,
+  Video,
   Network,
   Bot,
   Volume2,
@@ -41,6 +42,7 @@ import {
   LineChart,
   ShieldCheck,
   FlaskConical,
+  Ban,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -129,7 +131,7 @@ export const searchIndex: SearchItem[] = [
     path: "/music",
     icon: Music,
     category: "page",
-    keywords: ["音乐", "播放器", "music", "player", "网易云", "netease"],
+    keywords: ["音乐", "播放器", "music", "player", "网易云", "netease", "咪咕", "migu", "酷狗", "kugou", "QQ音乐"],
   },
   {
     id: "sponsor",
@@ -226,6 +228,14 @@ export const searchIndex: SearchItem[] = [
     icon: Download,
     category: "builtin-tool",
     keywords: ["nvidia", "驱动下载", "显卡驱动", "下载驱动", "下载", "历史版本", "geforce", "driver", "download", "英伟达"],
+  },
+  {
+    id: "nvidia-recording",
+    nameKey: "sidebar.nvidiaRecording",
+    path: "/nvidia-recording",
+    icon: Video,
+    category: "builtin-tool",
+    keywords: ["n卡", "nvidia", "英伟达", "录制", "录制管理", "回放", "高光", "视频", "instant replay", "recording", "清理"],
   },
   {
     id: "memory-limit",
@@ -378,6 +388,18 @@ export const searchIndex: SearchItem[] = [
     icon: Download,
     category: "builtin-tool",
     keywords: ["下载加速", "多线程下载", "下载器", "分段下载", "满速", "下载", "download", "accelerator", "idm", "多线程"],
+  },
+  {
+    id: "nexbox-popnull",
+    nameKey: "settings.advanced.popnull.title",
+    path: "/settings?section=advanced",
+    icon: Ban,
+    category: "page",
+    keywords: [
+      "弹窗", "拦截", "广告", "弹窗拦截", "拒弹窗", "popup", "popnull",
+      "黑名单", "白名单", "blacklist", "whitelist", "拦广告",
+      "flashcenter", "minipage", "热点", "NexBoxPopNull",
+    ],
   },
 ];
 

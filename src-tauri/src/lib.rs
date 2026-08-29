@@ -7,6 +7,7 @@ mod autoclicker;
 mod music_api;
 mod cpu_scheduler;
 mod crosshair;
+mod crosshair_hold;
 mod dattorro;
 mod delta_force;
 mod disk_optimize;
@@ -40,10 +41,12 @@ mod network_optimize;
 mod netease_lyrics;
 mod nvapi;
 mod nvidia_driver_download;
+mod nvidia_recording;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
 mod power_settings;
+mod popup_blocker;
 mod vertical_overlay;
 mod vtx_virtualization;
 
@@ -508,6 +511,19 @@ pub fn run() {
             hotkey::set_music_playpause_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "music-playpause-hotkey-enabled", true));
             hotkey::set_lyric_btn_enabled(hotkey::load_saved_hotkey_enabled(app.handle(), "lyrics-btn-hotkey-enabled", true));
 
+            // 准星「按住打开」模式：先载入持久化配置（按住模式下 init_crosshair 会跳过切换热键注册）
+            let crosshair_hold_enabled = hotkey::read_settings_value(app.handle(), "crosshair-hold-enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let crosshair_hold_key = hotkey::read_settings_value(app.handle(), "crosshair-hold-key")
+                .and_then(|v| v.as_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| "MouseRight".to_string());
+            let crosshair_hold_delay = hotkey::read_settings_value(app.handle(), "crosshair-hold-delay")
+                .and_then(|v| v.as_u64())
+                .map(|v| v.min(10_000) as u32)
+                .unwrap_or(0);
+            crosshair_hold::init(app.handle(), crosshair_hold_enabled, &crosshair_hold_key, crosshair_hold_delay);
+
             let _ = hotkey::init_overlay(app.handle(), &overlay_hotkey);
             let _ = hotkey::init_crosshair(app.handle(), &crosshair_hotkey);
             let _ = hotkey::init_filter(app.handle(), &filter_hotkey);
@@ -530,6 +546,9 @@ pub fn run() {
 
             // 键盘物理媒体键统一捕获（前台聚焦时 WebView2 会抢键，必须用低层钩子在 WebView2 之前接管）
             media_keys::start(app.handle().clone());
+
+            // NexBoxPopNull 弹窗拦截（读取持久化配置并启动 WinEvent 钩子线程）
+            popup_blocker::init(app.handle().clone());
 
             Ok(())
         })
@@ -574,6 +593,10 @@ pub fn run() {
         smtc::smtc_update_state,
         smtc::smtc_clear,
         media_keys::set_media_keys_enabled,
+        popup_blocker::popnull_get_state,
+        popup_blocker::popnull_set_enabled,
+        popup_blocker::popnull_set_rules,
+        popup_blocker::popnull_list_windows,
         music_api::music_lyric,
         music_api::music_song_comments,
         music_api::music_send_comment,
@@ -626,6 +649,21 @@ pub fn run() {
         music_api::music_qq_recommend_playlists,
         music_api::qq_liked_hashes,
         music_api::qq_like_toggle,
+        // === 咪咕音乐 ===
+        music_api::migu_search,
+        music_api::migu_playlist_search,
+        music_api::migu_artist_search,
+        music_api::migu_artist_songs,
+        music_api::migu_song_url,
+        music_api::migu_lyric,
+        music_api::migu_login_status,
+        music_api::migu_logout,
+        music_api::migu_user_playlists,
+        music_api::migu_playlist_tracks,
+        music_api::migu_playlist_tracks_range,
+        music_api::migu_rank_list,
+        music_api::migu_rank_songs,
+        music_api::migu_recommend_playlists,
         // === 多平台管理 ===
         music_api::music_get_login_statuses,
         music_api::music_switch_provider,
@@ -942,6 +980,12 @@ pub fn run() {
         crosshair::pick_crosshair_image,
         crosshair::get_preset_crosshair_path,
         crosshair::get_crosshair_presets,
+        crosshair_hold::get_crosshair_hold_enabled,
+        crosshair_hold::set_crosshair_hold_enabled,
+        crosshair_hold::get_crosshair_hold_key,
+        crosshair_hold::set_crosshair_hold_key,
+        crosshair_hold::get_crosshair_hold_delay,
+        crosshair_hold::set_crosshair_hold_delay,
 
         delta_force::get_delta_passwords,
         delta_force::cache_delta_image,
@@ -988,6 +1032,15 @@ pub fn run() {
         // === NVIDIA 驱动下载 ===
         nvidia_driver_download::fetch_nvidia_drivers,
         nvidia_driver_download::detect_current_nvidia_gpu,
+        // === N卡录制管理 ===
+        nvidia_recording::scan_nvidia_recordings,
+        nvidia_recording::add_nvidia_recording_folder,
+        nvidia_recording::remove_nvidia_recording_folder,
+        nvidia_recording::delete_nvidia_recording_video,
+        nvidia_recording::copy_nvidia_recording_videos,
+        nvidia_recording::get_video_thumbnails,
+        nvidia_recording::open_video_with_system_player,
+        nvidia_recording::reveal_video_in_explorer,
         // === 运行库补全/修复 ===
         runtime_repair::get_runtime_statuses,
         runtime_repair::repair_runtime,
@@ -1119,6 +1172,7 @@ pub fn run() {
                 game_mode::shutdown();
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
+                crosshair_hold::cleanup();
                 autoclicker::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();

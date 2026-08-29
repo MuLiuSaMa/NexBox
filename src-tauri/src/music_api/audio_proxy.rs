@@ -55,6 +55,8 @@ fn referer_for(url: &str) -> &'static str {
         "https://y.qq.com/"
     } else if url.contains("kugou.com") {
         "https://www.kugou.com/"
+    } else if url.contains("migu.cn") || url.contains("miguvideo.com") {
+        "https://music.migu.cn/"
     } else {
         "https://music.163.com/"
     }

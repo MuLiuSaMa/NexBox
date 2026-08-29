@@ -22,6 +22,7 @@ import {
   ShieldCheck,
   FlaskConical,
   DownloadCloud,
+  Video,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import { useTranslation } from "react-i18next";
@@ -179,6 +180,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.downloadAccelerator",
     descriptionKey: "builtinTools.downloadAcceleratorDesc",
     color: "#00C896",
+  },
+  {
+    id: "nvidia-recording",
+    path: "/nvidia-recording",
+    icon: Video,
+    titleKey: "sidebar.nvidiaRecording",
+    descriptionKey: "builtinTools.nvidiaRecordingDesc",
+    color: "#76B900",
   },
 ];
 

@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Input,
+  IconButton,
   Spinner,
   Divider,
   useColorModeValue,
@@ -26,6 +27,7 @@ import { useTranslation } from "react-i18next";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 import { store } from "@/lib/store";
@@ -39,6 +41,7 @@ import {
   LuHardDrive,
   LuDatabase,
   LuKeyboard,
+  LuBan,
 } from "react-icons/lu";
 import { Download } from "lucide-react";
 
@@ -57,6 +60,14 @@ interface GameFilterStatus {
 interface StorageSizes {
   cache_size: number;
   data_size: number;
+}
+
+/** NexBoxPopNull 拦截规则（与后端 popup_blocker::Rule 字段一致） */
+interface PopNullRule {
+  list: string; // "B" 黑名单 / "W" 白名单
+  field: string; // "exe" | "path" | "title" | "class"
+  mode: string; // "contains" | "exact" | "wildcard"
+  pattern: string;
 }
 
 /** 字节数格式化为可读大小 */
@@ -127,6 +138,72 @@ export default function AdvancedPage() {
       .catch((e) => console.error("[MediaKeys] 设置失败:", e));
   };
 
+  // ── NexBoxPopNull 弹窗拦截 ──
+  const [popnullEnabled, setPopnullEnabled] = useState(false);
+  const [popnullRules, setPopnullRules] = useState<PopNullRule[]>([]);
+  const [popnullList, setPopnullList] = useState("B");
+  const [popnullField, setPopnullField] = useState("exe");
+  const [popnullMode, setPopnullMode] = useState("contains");
+  const [popnullPattern, setPopnullPattern] = useState("");
+
+  const popnullFieldLabel = (f: string) =>
+    ({ exe: t("settings.advanced.popnull.fieldExe", "进程"), path: t("settings.advanced.popnull.fieldPath", "路径"), title: t("settings.advanced.popnull.fieldTitle", "标题"), class: t("settings.advanced.popnull.fieldClass", "类名") })[f] ?? f;
+  const popnullModeLabel = (m: string) =>
+    ({ contains: t("settings.advanced.popnull.modeContains", "包含"), exact: t("settings.advanced.popnull.modeExact", "精确"), wildcard: t("settings.advanced.popnull.modeWildcard", "通配符") })[m] ?? m;
+
+  const popnullRuleKey = (r: PopNullRule) => `${r.list}|${r.field}|${r.mode}|${r.pattern}`;
+
+  /** 更新规则：写 store（settings.json）+ 同步后端内存 */
+  const publishPopnullRules = useCallback(
+    (rules: PopNullRule[]) => {
+      setPopnullRules(rules);
+      store
+        .set("nexbox_popnull_rules", rules)
+        .then(() => store.save())
+        .catch(() => {});
+      invoke("popnull_set_rules", { rules }).catch((e) => console.error("[PopNull] 同步规则失败:", e));
+    },
+    []
+  );
+
+  const handlePopnullToggle = () => {
+    const newValue = !popnullEnabled;
+    setPopnullEnabled(newValue);
+    store
+      .set("nexbox_popnull_enabled", newValue)
+      .then(() => store.save())
+      .catch(() => {});
+    invoke("popnull_set_enabled", { enabled: newValue })
+      .then(() => {
+        if (newValue) {
+          // 开启时同时把当前规则同步到引擎，确保预设/已保存规则立即生效
+          invoke("popnull_set_rules", { rules: popnullRules }).catch(() => {});
+        }
+      })
+      .catch((e) => {
+        setPopnullEnabled(!newValue);
+        toast({ title: t("settings.advanced.error", "操作失败"), description: String(e), status: "error", duration: 3000, isClosable: true });
+      });
+  };
+
+  const handlePopnullAddRule = () => {
+    const pattern = popnullPattern.trim().toLowerCase();
+    if (!pattern) return;
+    const rule: PopNullRule = { list: popnullList, field: popnullField, mode: popnullMode, pattern };
+    const key = popnullRuleKey(rule);
+    if (popnullRules.some((r) => popnullRuleKey(r) === key)) {
+      toast({ title: t("settings.advanced.popnull.duplicate", "规则已存在"), status: "error", duration: 2500, isClosable: true });
+      return;
+    }
+    publishPopnullRules([rule, ...popnullRules]);
+    setPopnullPattern("");
+    toast({ title: t("settings.advanced.popnull.ruleAdded", "已添加规则"), status: "success", duration: 2000, isClosable: true });
+  };
+
+  const handlePopnullRemoveRule = (index: number) => {
+    publishPopnullRules(popnullRules.filter((_, i) => i !== index));
+  };
+
   const refreshSizes = useCallback(async () => {
     try {
       const result = await invoke<StorageSizes>("get_storage_sizes");
@@ -168,7 +245,28 @@ export default function AdvancedPage() {
         if (v != null) setMediaKeysEnabled(v);
       })
       .catch(() => {});
-  }, [refreshSizes, refreshPawnio, refreshGames]);
+    // NexBoxPopNull：从引擎获取 enabled/规则（首次规则为内置预设时落库 store）
+    store
+      .get<boolean>("nexbox_popnull_enabled")
+      .then((v) => {
+        if (v != null) setPopnullEnabled(v);
+      })
+      .catch(() => {});
+    invoke<{ enabled: boolean; rules: PopNullRule[] }>("popnull_get_state")
+      .then((state) => {
+        setPopnullEnabled(state.enabled);
+        setPopnullRules(state.rules);
+        store
+          .get<PopNullRule[] | null>("nexbox_popnull_rules")
+          .then((saved) => {
+            if (saved == null || saved.length === 0) {
+              publishPopnullRules(state.rules);
+            }
+          })
+          .catch(() => {});
+      })
+      .catch((e) => console.error("[PopNull] 获取状态失败:", e));
+  }, [refreshSizes, refreshPawnio, refreshGames, publishPopnullRules]);
 
   const activeColor = getActiveColor();
   const accent = getContrastTextColor();
@@ -474,7 +572,7 @@ export default function AdvancedPage() {
       </LiquidGlassCard>
 
       {/* 滤镜游戏名单 */}
-      <LiquidGlassCard px={4} py={4} boxShadow="sm">
+      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
         <VStack spacing={4} align="stretch">
           <HStack spacing={4} align="center">
             <VStack align="flex-start" spacing={0.5} flex={1}>
@@ -527,6 +625,164 @@ export default function AdvancedPage() {
             </VStack>
           )}
         </VStack>
+      </LiquidGlassCard>
+
+      {/* NexBoxPopNull 弹窗拦截 */}
+      <LiquidGlassCard px={4} py={4} boxShadow="sm">
+        <HStack spacing={4} align="center">
+          <Flex
+            align="center"
+            justify="center"
+            w="40px"
+            h="40px"
+            borderRadius="xl"
+            flexShrink={0}
+            bg={accentSoft}
+            border={`1px solid ${accentBorder}`}
+            color={activeColor}
+          >
+            <LuBan size={20} />
+          </Flex>
+          <VStack align="flex-start" spacing={0.5} flex={1}>
+            <HStack spacing={2}>
+              <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+                {t("settings.advanced.popnull.title", "NexBoxPopNull 弹窗拦截")}
+              </Text>
+              <Badge fontSize="xs" variant="solid" color={accent} bg={activeColor} textTransform="none">
+                BETA
+              </Badge>
+              <Badge
+                variant="solid"
+                bg={popnullEnabled ? activeColor : useColorModeValue("gray.300", "#3a3a3a")}
+                color={popnullEnabled ? accent : useColorModeValue("gray.700", "#cccccc")}
+                fontSize="xs"
+                borderRadius="full"
+                px={2.5}
+                py={0.5}
+                textTransform="none"
+              >
+                {popnullEnabled
+                  ? t("settings.advanced.popnull.blocking", "弹窗拦截中")
+                  : t("settings.advanced.popnull.disabled", "未启用")}
+              </Badge>
+            </HStack>
+            <Text fontSize="xs" color={subLabelColor}>
+              {t("settings.advanced.popnull.desc", "按黑白名单自动拦截广告弹窗：命中黑名单即关闭窗口并结束进程，白名单优先放行，系统进程不受影响")}
+            </Text>
+          </VStack>
+          <ThemeSwitch size="md" isChecked={popnullEnabled} onChange={handlePopnullToggle} />
+        </HStack>
+
+        {popnullEnabled && (
+          <>
+            <Divider borderColor={dividerColor} my={3} />
+            {/* 添加规则 */}
+            <Flex wrap="wrap" gap={2} align="center" mb={3}>
+              <CustomSelect
+                value={popnullList}
+                onChange={setPopnullList}
+                options={[
+                  { value: "B", label: t("settings.advanced.popnull.listBlack", "黑名单") },
+                  { value: "W", label: t("settings.advanced.popnull.listWhite", "白名单") },
+                ]}
+                width="110px"
+              />
+              <CustomSelect
+                value={popnullField}
+                onChange={setPopnullField}
+                options={[
+                  { value: "exe", label: t("settings.advanced.popnull.fieldExe", "进程") },
+                  { value: "path", label: t("settings.advanced.popnull.fieldPath", "路径") },
+                  { value: "title", label: t("settings.advanced.popnull.fieldTitle", "标题") },
+                  { value: "class", label: t("settings.advanced.popnull.fieldClass", "类名") },
+                ]}
+                width="100px"
+              />
+              <CustomSelect
+                value={popnullMode}
+                onChange={setPopnullMode}
+                options={[
+                  { value: "contains", label: t("settings.advanced.popnull.modeContains", "包含") },
+                  { value: "exact", label: t("settings.advanced.popnull.modeExact", "精确") },
+                  { value: "wildcard", label: t("settings.advanced.popnull.modeWildcard", "通配符") },
+                ]}
+                width="100px"
+              />
+              <Input
+                flex={1}
+                minW="120px"
+                size="sm"
+                value={popnullPattern}
+                onChange={(e) => setPopnullPattern(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handlePopnullAddRule();
+                }}
+                placeholder={t("settings.advanced.popnull.patternPlaceholder", "如 flashcenter.exe 或 *pop*")}
+                bg={useColorModeValue("white", "#111111")}
+                color={labelColor}
+                borderColor={accentBorder}
+                _focus={{
+                  borderColor: activeColor,
+                  boxShadow: `0 0 0 1px ${activeColor}`,
+                }}
+              />
+              <Button
+                size="sm"
+                bg={activeColor}
+                color={accent}
+                _hover={{ bg: activeColor, opacity: 0.85 }}
+                leftIcon={<LuPlus size={14} />}
+                onClick={handlePopnullAddRule}
+                isDisabled={!popnullPattern.trim()}
+              >
+                {t("settings.advanced.popnull.addRule", "添加")}
+              </Button>
+            </Flex>
+
+            {/* 规则列表 */}
+            {popnullRules.length === 0 ? (
+              <Text fontSize="sm" color={subLabelColor}>
+                {t("settings.advanced.popnull.noRules", "暂无规则，添加第一条规则开始拦截")}
+              </Text>
+            ) : (
+              <VStack spacing={2} align="stretch" maxH="260px" overflowY="auto">
+                {popnullRules.map((rule, i) => (
+                  <HStack key={popnullRuleKey(rule)} spacing={3}>
+                    <Badge
+                      variant="solid"
+                      bg={rule.list === "W" ? "green.500" : "red.500"}
+                      color="#fff"
+                      fontSize="xs"
+                      borderRadius="full"
+                      px={2}
+                      py={0.5}
+                      flexShrink={0}
+                      textTransform="none"
+                    >
+                      {rule.list === "W"
+                        ? t("settings.advanced.popnull.listWhite", "白名单")
+                        : t("settings.advanced.popnull.listBlack", "黑名单")}
+                    </Badge>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium" flex={1} isTruncated>
+                      {rule.pattern}
+                    </Text>
+                    <Text fontSize="xs" color={subLabelColor} flexShrink={0}>
+                      {popnullFieldLabel(rule.field)} · {popnullModeLabel(rule.mode)}
+                    </Text>
+                    <IconButton
+                      size="xs"
+                      variant="ghost"
+                      aria-label={t("settings.advanced.popnull.delete", "删除")}
+                      color={subLabelColor}
+                      icon={<LuTrash2 size={13} />}
+                      onClick={() => handlePopnullRemoveRule(i)}
+                    />
+                  </HStack>
+                ))}
+              </VStack>
+            )}
+          </>
+        )}
       </LiquidGlassCard>
 
       {/* 清除数据确认框 */}

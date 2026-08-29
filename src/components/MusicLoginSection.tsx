@@ -68,6 +68,13 @@ const PROVIDERS: ProviderOption[] = [
     color: "#FEC135",
     logo: "/music-providers/qqmusic.png",
   },
+  {
+    id: "migu",
+    name: "咪咕音乐",
+    desc: "华语曲库 · 臻品音质",
+    color: "#FF69B4",
+    logo: "/music-providers/migu.webp",
+  },
 ];
 
 /** 平台 Logo 圆角图片容器（用于选择 Modal 与下拉菜单） */

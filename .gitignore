@@ -90,6 +90,9 @@ nvidiaProfileInspector.exe.config
 # CodeFlicker
 .codeflicker/
 
+# ZCode
+.zcode/
+
 # Video directory
 video/
 

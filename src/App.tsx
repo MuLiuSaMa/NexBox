@@ -55,6 +55,7 @@ import GameProcessOptimizePage from "./pages/GameProcessOptimizePage";
 import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
+import NvidiaRecordingPage from "./pages/NvidiaRecordingPage";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -494,6 +495,14 @@ function App() {
                       </AnimatedPage>
                     }
                   />
+                  <Route
+                    path="/nvidia-recording"
+                    element={
+                      <AnimatedPage>
+                        <NvidiaRecordingPage />
+                      </AnimatedPage>
+                    }
+                  />
                 </Routes>
               </AnimatePresence>
             ) : (
@@ -839,6 +848,14 @@ function App() {
                   element={
                     <AnimatedPage>
                       <DownloadAcceleratorPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/nvidia-recording"
+                  element={
+                    <AnimatedPage>
+                      <NvidiaRecordingPage />
                     </AnimatedPage>
                   }
                 />

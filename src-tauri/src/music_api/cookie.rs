@@ -26,7 +26,24 @@ pub fn load_cookie(app: &AppHandle, provider: &str) -> Result<String, String> {
 pub fn clear_cookie(app: &AppHandle, provider: &str) -> Result<(), String> {
     let store = get_store(app)?;
     store.delete(format!("cookie_{provider}"));
+    store.delete(format!("uid_{provider}"));
     store.save().map_err(|e| format!("Failed to clear cookie: {e}"))
+}
+
+/// 保存平台用户 id (咪咕 listen 接口需要 uid 请求头)
+pub fn save_user_id(app: &AppHandle, provider: &str, user_id: &str) -> Result<(), String> {
+    let store = get_store(app)?;
+    store.set(format!("uid_{provider}"), user_id);
+    store.save().map_err(|e| format!("Failed to save user id: {e}"))
+}
+
+/// 加载平台用户 id
+pub fn load_user_id(app: &AppHandle, provider: &str) -> Result<String, String> {
+    let store = get_store(app)?;
+    Ok(store
+        .get(format!("uid_{provider}"))
+        .map(|v| v.as_str().unwrap_or("").to_string())
+        .unwrap_or_default())
 }
 
 pub fn parse_cookie_string(cookie: &str) -> HashMap<String, String> {

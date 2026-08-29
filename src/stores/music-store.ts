@@ -122,6 +122,10 @@ interface MusicState {
   // 歌词高亮颜色
   lyricsHighlightColor: string;
 
+  // 透明彩胶样式：胶片颜色模式（auto=跟随封面主色 / custom=手动固定色）与手动颜色
+  vinylColorMode: "auto" | "custom";
+  vinylCustomColor: string;
+
   // 桌面歌词设置
   desktopLyricsVisible: boolean;
   desktopLyricsFontSize: number;
@@ -139,7 +143,7 @@ interface MusicState {
   loadingLeftTracks: boolean;
   loadingRightTracks: boolean;
   loadingLyrics: boolean;
-  expandedStyle: "glass" | "modern" | "immersive" | "spectrum";
+  expandedStyle: "glass" | "modern" | "immersive" | "spectrum" | "vinyl";
   dynamicEnabled: boolean;
   coverFilmEffect: boolean;
   // 键盘媒体键控制内置播放器（设置 → 高级 → 媒体键控制）
@@ -185,7 +189,9 @@ interface MusicState {
   setPlaybackQuality: (quality: PlaybackQuality) => Promise<void>;
   setLyricsFontSize: (size: number) => Promise<void>;
   setLyricsHighlightColor: (color: string) => Promise<void>;
-  setExpandedStyle: (style: "glass" | "modern" | "immersive" | "spectrum") => Promise<void>;
+  setVinylColorMode: (mode: "auto" | "custom") => Promise<void>;
+  setVinylCustomColor: (color: string) => Promise<void>;
+  setExpandedStyle: (style: "glass" | "modern" | "immersive" | "spectrum" | "vinyl") => Promise<void>;
   setDynamicEnabled: (enabled: boolean) => Promise<void>;
   setCoverFilmEffect: (enabled: boolean) => Promise<void>;
   // 键盘媒体键控制（仅更新内存态）
@@ -519,12 +525,16 @@ function shouldHandleSmtc(action: string): boolean {
  * 计算 SMTC 封面来源，交给后端下载（后端 reqwest 带防盗链 Referer，无 CORS 限制）：
  * - data URI：后端直接解码
  * - 本地歌曲：传封面缓存文件绝对路径（file:// 前缀，后端读文件）
- * - 在线歌曲：传原始封面 URL，后端带 Referer 下载（绕过防盗链）
+ * - 在线歌曲：传原始封面 URL，后端带 Referer 下载（绕过防盗链）；网易云封面追加
+ *   ?param=1024y1024 尺寸参数让 CDN 直接返回缩图（高清原图可达 5MB+，SMTC 只需 ~1024px）
  */
 function smtcCoverSource(song: Song): string {
   if (!song.cover) return "";
   if (song.cover.startsWith("data:")) return song.cover;
   if (song._localCoverPath) return `file://${song._localCoverPath}`;
+  if (/music\.126\.net\//.test(song.cover) && !song.cover.includes("?")) {
+    return `${song.cover}?param=1024y1024`;
+  }
   return song.cover;
 }
 
@@ -662,7 +672,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   importingLocal: false,
 
   loginInfo: null,
-  loginInfos: { netease: null, kugou: null, qqmusic: null },
+  loginInfos: { netease: null, kugou: null, qqmusic: null, migu: null },
   playbackSource: "netease",
 
   externalTrack: null,
@@ -713,6 +723,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   currentBitrate: 0,
   lyricsFontSize: 18,
   lyricsHighlightColor: "#fff0b8",
+  vinylColorMode: "auto",
+  vinylCustomColor: "#E8B04B",
   expandedStyle: "modern",
   musicToast: null,
   dynamicEnabled: false,
@@ -864,8 +876,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (fontSize != null) set({ lyricsFontSize: fontSize });
       const expStyle = await store.get<string>("expandedStyle");
       if (highlightColor) set({ lyricsHighlightColor: highlightColor });
-      // 恢复播放器样式（modern/glass/immersive/spectrum 都需还原，否则切换后重启会退回默认 modern）
-      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive" || expStyle === "spectrum") set({ expandedStyle: expStyle });
+      const vinylMode = await store.get<"auto" | "custom">("vinylColorMode");
+      const vinylColor = await store.get<string>("vinylCustomColor");
+      if (vinylMode === "auto" || vinylMode === "custom") set({ vinylColorMode: vinylMode });
+      if (vinylColor) set({ vinylCustomColor: vinylColor });
+      // 恢复播放器样式（modern/glass/immersive/spectrum/vinyl 都需还原，否则切换后重启会退回默认 modern）
+      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive" || expStyle === "spectrum" || expStyle === "vinyl") set({ expandedStyle: expStyle });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
       const filmEffect = await store.get<boolean>("coverFilmEffect");
@@ -900,11 +916,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       // ignore
     }
 
-    // 加载缓存的官方榜单（优先显示缓存）
+    // 加载缓存的官方榜单（优先显示缓存；封面全空的旧缓存直接弃用，
+    // 避免启动时闪现无封面榜单，等 loadOfficialCharts 拉到新数据）
     try {
       const s = await getStore();
       const cached = await s.get<Playlist[]>("officialCharts");
-      if (cached && cached.length > 0) {
+      if (cached && cached.length > 0 && cached.some((c) => c.cover)) {
         set({ officialCharts: cached });
       }
     } catch {}
@@ -1125,6 +1142,33 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       })
     );
 
+    // 监听咪咕登录成功事件
+    unlistenFns.push(
+      await listen<LoginInfo>("migu-login-success", async (event) => {
+        console.log("[Music] Migu login success", event.payload);
+        const info = event.payload;
+        if (info && info.logged_in) {
+          const currentInfo = get().loginInfos[get().playbackSource];
+          const shouldSwitch = !currentInfo?.logged_in;
+          if (shouldSwitch) {
+            set({ playbackSource: "migu" });
+            try { await invoke("music_switch_provider", { provider: "migu" }); } catch {}
+          }
+          set((s) => ({
+            loginInfo: (shouldSwitch || s.playbackSource === "migu") ? info : s.loginInfo,
+            loginInfos: { ...s.loginInfos, migu: info }
+          }));
+          get().loadUserPlaylists();
+          get().loadOfficialCharts();
+        }
+      })
+    );
+    unlistenFns.push(
+      await listen<string>("migu-login-failed", (event) => {
+        console.error("[Music] Migu login failed:", event.payload);
+      })
+    );
+
     // 加载所有平台登录状态
     await get().loadAllLoginStatuses();
     // 加载当前播放源的歌单
@@ -1141,6 +1185,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       } else if (get().playbackSource === "qqmusic") {
         await get().loadLikedList();
         get().loadOfficialCharts();
+      } else if (get().playbackSource === "migu") {
+        get().loadOfficialCharts();
+        get().loadRecommendations();
       }
     }
   },
@@ -1168,6 +1215,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_search"
         : provider === "qqmusic" ? "qq_search"
+        : provider === "migu" ? "migu_search"
         : "music_search";
       const results = await invoke<Song[]>(cmd, { keywords, limit: 30 });
       set({ searchResults: results });
@@ -1183,6 +1231,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     set({ searchingArtists: true, artistSearchResults: [], selectedArtist: null, artistSongs: [] });
     try {
             const provider = get().playbackSource;
+      if (provider === "migu") {
+        // 咪咕歌手搜索 (search_all.do singerResultData，无头像)
+        const results = await invoke<Artist[]>("migu_artist_search", { keywords, limit: 30 });
+        set({ artistSearchResults: results });
+        return;
+      }
       const cmd = provider === "kugou" ? "kugou_artist_search"
         : provider === "qqmusic" ? "qq_artist_search"
         : "music_artist_search";
@@ -1200,6 +1254,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     set({ loadingArtistSongs: true });
     try {
             const provider = get().playbackSource;
+      if (provider === "migu") {
+        // 咪咕歌手歌曲接口已失效：按歌手名搜索并精确匹配过滤
+        const name = get().selectedArtist?.name || "";
+        const songs = await invoke<Song[]>("migu_artist_songs", { artistName: name, limit: 50, offset });
+        set((state) => ({
+          artistSongs: offset === 0 ? songs : [...state.artistSongs, ...songs],
+        }));
+        return;
+      }
       const cmd = provider === "kugou" ? "kugou_artist_songs"
         : provider === "qqmusic" ? "qq_artist_songs"
         : "music_artist_songs";
@@ -1286,6 +1349,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_search"
         : provider === "qqmusic" ? "qq_playlist_search"
+        : provider === "migu" ? "migu_playlist_search"
         : "music_playlist_search";
       const results = await invoke<Playlist[]>(cmd, { keywords, limit: 30 });
       // 同步已收藏状态
@@ -1405,6 +1469,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         ? await invoke<SongUrlResult>("qq_song_url", {
             mid: song.mid || song.id,
             mediaMid: song.media_mid,
+            quality: state.playbackQuality,
+          })
+        : song.provider === "migu"
+        ? await invoke<SongUrlResult>("migu_song_url", {
+            contentId: song.content_id || song.id,
+            copyrightId: song.id,
             quality: state.playbackQuality,
           })
         : await invoke<SongUrlResult>("music_song_url", {
@@ -1540,6 +1610,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
               ? await invoke<SongUrlResult>("qq_song_url", {
                   mid: song.mid || song.id,
                   mediaMid: song.media_mid,
+                  quality: state.playbackQuality,
+                })
+              : song.provider === "migu"
+              ? await invoke<SongUrlResult>("migu_song_url", {
+                  contentId: song.content_id || song.id,
+                  copyrightId: song.id,
                   quality: state.playbackQuality,
                 })
               : await invoke<SongUrlResult>("music_song_url", {
@@ -1755,6 +1831,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
               mediaMid: song.media_mid,
               quality,
             })
+          : song.provider === "migu"
+          ? await invoke<SongUrlResult>("migu_song_url", {
+              contentId: song.content_id || song.id,
+              copyrightId: song.id,
+              quality,
+            })
           : await invoke<SongUrlResult>("music_song_url", {
               id: song.id,
               quality,
@@ -1787,6 +1869,16 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   setExpandedStyle: async (style) => {
     set({ expandedStyle: style });
     getStore().then((s) => s.set("expandedStyle", style).then(() => s.save()));
+  },
+
+  setVinylColorMode: async (mode) => {
+    set({ vinylColorMode: mode });
+    getStore().then((s) => s.set("vinylColorMode", mode).then(() => s.save()));
+  },
+
+  setVinylCustomColor: async (color) => {
+    set({ vinylCustomColor: color });
+    getStore().then((s) => s.set("vinylCustomColor", color).then(() => s.save()));
   },
 
   setDynamicEnabled: async (enabled) => {
@@ -1958,7 +2050,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   loginStatusFor: async (provider) => {
     try {
-      const cmd = provider === "kugou" ? "kugou_login_status" : "music_login_status";
+      const cmd = provider === "kugou" ? "kugou_login_status"
+        : provider === "qqmusic" ? "qq_login_status"
+        : provider === "migu" ? "migu_login_status"
+        : "music_login_status";
       const info = await invoke<LoginInfo>(cmd);
       set((s) => ({
         loginInfos: { ...s.loginInfos, [provider]: info },
@@ -1980,6 +2075,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         netease: statuses.netease || null,
         kugou: statuses.kugou || null,
         qqmusic: statuses.qqmusic || null,
+        migu: statuses.migu || null,
       };
       set({
         loginInfos,
@@ -2017,6 +2113,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
     const cmd = provider === "kugou" ? "kugou_logout"
       : provider === "qqmusic" ? "qq_logout"
+      : provider === "migu" ? "migu_logout"
       : "music_logout";
     await invoke(cmd);
       set((s) => ({
@@ -2071,6 +2168,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       } else if (provider === "qqmusic") {
         await get().loadLikedList();
         get().loadOfficialCharts();
+      } else if (provider === "migu") {
+        get().loadOfficialCharts();
+        get().loadRecommendations();
       }
     }
   },
@@ -2084,14 +2184,15 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     try {
       const cmd = provider === "kugou" ? "kugou_user_playlists"
         : provider === "qqmusic" ? "qq_user_playlists"
+        : provider === "migu" ? "migu_user_playlists"
         : "music_user_playlist";
       const playlists = await invoke<Playlist[]>(cmd);
       set({ userPlaylists: playlists, userPlaylistsError: "" });
     } catch (e) {
       const msg = typeof e === "string" && e ? e : "歌单获取失败，登录可能已过期";
       set({ userPlaylists: [], userPlaylistsError: msg });
-      // 酷狗/QQ 登录态失效时刷新登录状态，让界面提示重新登录
-      if (provider === "kugou" || provider === "qqmusic") {
+      // 酷狗/QQ/咪咕 登录态失效时刷新登录状态，让界面提示重新登录
+      if (provider === "kugou" || provider === "qqmusic" || provider === "migu") {
         get().loginStatusFor(provider);
       }
     } finally {
@@ -2105,6 +2206,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_tracks"
         : provider === "qqmusic" ? "qq_playlist_tracks"
+        : provider === "migu" ? "migu_playlist_tracks"
         : "music_playlist_tracks";
       const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ leftPlaylistMeta: meta, leftPlaylistTracks: songs });
@@ -2132,6 +2234,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_tracks_range"
         : provider === "qqmusic" ? "qq_playlist_tracks_range"
+        : provider === "migu" ? "migu_playlist_tracks_range"
         : "music_playlist_tracks_range";
       const songs = await invoke<Song[]>(cmd, { id, start, count: 50 });
       set((s) => {
@@ -2172,6 +2275,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_tracks_range"
         : provider === "qqmusic" ? "qq_playlist_tracks_range"
+        : provider === "migu" ? "migu_playlist_tracks_range"
         : "music_playlist_tracks_range";
       // 循环拉取剩余所有页；任一页返回空或报错即退出，避免死循环
       for (;;) {
@@ -2201,6 +2305,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_tracks"
         : provider === "qqmusic" ? "qq_playlist_tracks"
+        : provider === "migu" ? "migu_playlist_tracks"
         : "music_playlist_tracks";
       const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ rightPlaylistMeta: meta, rightPlaylistTracks: songs });
@@ -2214,11 +2319,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
-  // QQ 榜单歌曲加载 (榜单不是普通歌单, 走 qq_rank_songs; meta 由前端提供)
+  // QQ/咪咕榜单歌曲加载 (榜单不是普通歌单, 走各自榜单歌曲接口; meta 由前端提供)
   loadRightRankTracks: async (rankId) => {
     set({ loadingRightTracks: true, rightPlaylistTracks: [] });
     try {
-      const songs = await invoke<Song[]>("qq_rank_songs", { rankId, limit: 99999 });
+      const provider = get().playbackSource;
+      const songs = provider === "migu"
+        ? await invoke<Song[]>("migu_rank_songs", { rankId, limit: 100 })
+        : await invoke<Song[]>("qq_rank_songs", { rankId, limit: 99999 });
       set({ rightPlaylistTracks: songs });
     } catch {
       set({ rightPlaylistTracks: [] });
@@ -2239,6 +2347,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       const provider = get().playbackSource;
       const cmd = provider === "kugou" ? "kugou_playlist_tracks_range"
         : provider === "qqmusic" ? "qq_playlist_tracks_range"
+        : provider === "migu" ? "migu_playlist_tracks_range"
         : "music_playlist_tracks_range";
       const songs = await invoke<Song[]>(cmd, { id, start, count: 50 });
       set((s) => {
@@ -2278,6 +2387,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         const mids = await invoke<string[]>("qq_liked_hashes").catch(() => []);
         console.log("[Music] qq liked songs loaded:", mids.length);
         set({ likedSongIds: new Set(mids) });
+      } else if (provider === "migu") {
+        // 咪咕暂不支持红心读取
+        set({ likedSongIds: new Set() });
       } else {
         const ids = await invoke<string[]>("music_likelist");
         console.log("[Music] liked songs loaded:", ids.length);
@@ -2293,6 +2405,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // QQ 音乐暂不支持写回红心
     if (provider === "qqmusic") {
       set({ musicToast: { type: "warning", message: "QQ 音乐当前仅支持读取账号收藏，暂不支持写回" } });
+      return;
+    }
+    // 咪咕暂不支持红心
+    if (provider === "migu") {
+      set({ musicToast: { type: "warning", message: "咪咕音乐暂不支持红心收藏" } });
       return;
     }
     const liked = get().likedSongIds.has(songId);
@@ -2419,6 +2536,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             mid: song.mid || song.id,
             id: song.id,
           })
+        : song.provider === "migu"
+        ? await invoke<Lyrics>("migu_lyric", {
+            contentId: song.content_id || song.id,
+            copyrightId: song.id,
+          })
         : await invoke<Lyrics>("music_lyric", { id: song.id });
       set({ currentLyrics: lyrics });
       if (get().desktopLyricsVisible) {
@@ -2483,6 +2605,10 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (provider === "kugou" || provider === "qqmusic") {
         // 酷狗/QQ 不显示推荐歌单 (QQ 推荐歌单接口受限, 与酷狗一致只显示榜单)
         set({ recommendations: [], recommendSongs: [], dailyRecommendPlaylists: [] });
+      } else if (provider === "migu") {
+        // 咪咕: 歌单广场推荐 (填入 dailyRecommendPlaylists 由推荐区渲染)
+        const playlists = await invoke<Playlist[]>("migu_recommend_playlists").catch(() => []);
+        set({ recommendations: [], recommendSongs: [], dailyRecommendPlaylists: playlists });
       } else {
         const [songs, dailyPlaylists] = await Promise.all([
           invoke<Song[]>("music_recommend_songs").catch(() => []),
@@ -2518,6 +2644,21 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         const charts = await invoke<Playlist[]>("qq_rank_list").catch(() => []);
         set({ officialCharts: charts });
         // 持久化缓存
+        try {
+          const s = await getStore();
+          await s.set("officialCharts", charts);
+          await s.save();
+        } catch {}
+      } catch {
+        set({ officialCharts: [] });
+      }
+      return;
+    }
+    // 咪咕: 三个内置榜单 (热歌/新歌/原创)
+    if (get().playbackSource === "migu") {
+      try {
+        const charts = await invoke<Playlist[]>("migu_rank_list").catch(() => []);
+        set({ officialCharts: charts });
         try {
           const s = await getStore();
           await s.set("officialCharts", charts);

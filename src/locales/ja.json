@@ -56,7 +56,8 @@
     "runtimeRepair": "ランタイム修復",
     "vtxVirtualization": "VT-X 仮想化修復",
     "hiddenFeatures": "Windows 隠し機能",
-    "downloadAccelerator": "ダウンロード"
+    "downloadAccelerator": "ダウンロード",
+    "nvidiaRecording": "NVIDIA録画管理"
   },
   "customPage": {
     "title": "カスタムページ",
@@ -970,6 +971,17 @@
   "crosshair": {
     "title": "クロスヘアアシスタント",
     "enableCrosshair": "クロスヘアを有効化",
+    "holdMode": "押している間有効化",
+    "holdKey": "ホットキー",
+    "holdKeyNone": "なし",
+    "holdKeyRecording": "キーを押してください...",
+    "holdModeOn": "ホールドモードが有効になりました",
+    "holdModeOff": "ホールドモードが無効になりました",
+    "mouseLeft": "マウス左ボタン",
+    "mouseRight": "マウス右ボタン",
+    "mouseMiddle": "マウス中ボタン",
+    "mouseX1": "サイドボタン1",
+    "mouseX2": "サイドボタン2",
     "statusEnabled": "有効化",
     "statusDisabled": "無効化",
     "style": "クロスヘアスタイル",
@@ -1002,7 +1014,11 @@
       "crossDot": "十字+ドット",
       "circleCross": "円+十字",
       "dotBox": "ドット+四角"
-    }
+    },
+    "holdDelay": "入力遅延",
+    "holdDelayDesc": "ホットキーを押してからこの時間だけ待って照準を表示し、離すとすぐに非表示になります（0 = 即時）",
+    "holdDelaySaved": "遅延を保存しました",
+    "hotkeySaved": "ショートカットを保存しました"
   },
   "hardwareReport": {
     "export": "レポートをエクスポート",
@@ -1258,7 +1274,8 @@
     "runtimeRepairDesc": "不足している VC++ / .NET / DirectX ランタイムを検出・修復",
     "vtxVirtualizationDesc": "メモリ整合性とHyper-Vを無効/復元して仮想化ポップアップを修正",
     "hiddenFeaturesDesc": "Windows の隠し A/B 実験機能フラグの確認・有効化・無効化",
-    "downloadAcceleratorDesc": "マルチスレッド分割ダウンロードで帯域を最大限に活用"
+    "downloadAcceleratorDesc": "マルチスレッド分割ダウンロードで帯域を最大限に活用",
+    "nvidiaRecordingDesc": "NVIDIA 録画を自動スキャンし、日付ごとに管理・プレビュー・削除"
   },
   "vtxVirtualization": {
     "title": "VT-X 仮想化修復",
@@ -1723,6 +1740,11 @@
     "sponsor": "スポンサー",
     "navigation": "ナビゲーション",
     "about": "について",
+    "advanced": {
+      "popnull": {
+        "title": "NexBoxPopNull ポップアップブロッカー"
+      }
+    },
     "generalSettings": {
       "title": "一般設定",
       "language": "言語",
@@ -2304,5 +2326,53 @@
     "islandDownloading": "ダウンロード中",
     "islandComplete": "ダウンロード完了",
     "islandFailed": "ダウンロード失敗"
+  },
+  "nvidiaRecording": {
+    "title": "NVIDIA録画管理",
+    "scan": "再スキャン",
+    "scanning": "録画をスキャン中...",
+    "scanError": "スキャンに失敗しました",
+    "addFolder": "フォルダを追加",
+    "addFolderError": "フォルダの追加に失敗しました",
+    "noVideosHint": "録画がまだありません。右上の「フォルダを追加」から手動で追加できます",
+    "today": "今日",
+    "yesterday": "昨日",
+    "preview": "プレビュー",
+    "openWithPlayer": "システムプレーヤーで開く",
+    "revealInFolder": "フォルダに表示",
+    "delete": "削除",
+    "deleteTitle": "動画を完全に削除しますか？",
+    "deleteBody": "削除後は復元できません。以下の動画を完全に削除しますか？",
+    "deleteConfirm": "削除",
+    "deleteSuccess": "動画を削除しました",
+    "deleteError": "削除に失敗しました",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "loading": "解析中...",
+    "unknown": "不明",
+    "previewError": "動画の読み込みに失敗しました",
+    "previewUnsupported": "この動画のコーデックはアプリ内でプレビューできません。システムプレーヤーで開くことをお勧めします",
+    "fileName": "ファイル名",
+    "filePath": "フルパス",
+    "size": "サイズ",
+    "modified": "変更日時",
+    "created": "作成日時",
+    "duration": "時間",
+    "resolution": "解像度",
+    "format": "形式",
+    "allFolders": "すべてのフォルダー",
+    "folderEmpty": "このフォルダーに動画はありません",
+    "folderRemoved": "フォルダーを削除しました",
+    "removeFolderError": "フォルダーの削除に失敗しました",
+    "details": "詳細",
+    "batchAction": "一括操作",
+    "exitBatch": "一括操作を終了",
+    "selectedCount": "{{n}} 件選択中",
+    "copy": "コピー",
+    "copySuccess": "{{n}} 件の動画をコピーしました",
+    "copyError": "コピーに失敗しました",
+    "deleteSuccessMulti": "{{n}} 件の動画を削除しました",
+    "deleteBodyMulti": "元に戻せません。選択した {{n}} 件の動画を完全に削除しますか？",
+    "andMore": "他 {{n}} 件"
   }
 }

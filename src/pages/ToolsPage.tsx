@@ -478,11 +478,7 @@ function ToolSection({
       </HStack>
       <Divider borderColor={dividerColor} mb={4} />
       <Grid
-        templateColumns={{
-          base: "1fr",
-          sm: "repeat(2, 1fr)",
-          md: "repeat(3, 1fr)",
-        }}
+        templateColumns="repeat(auto-fill, minmax(240px, 1fr))"
         gap={4}
         alignItems="stretch"
       >
@@ -690,11 +686,7 @@ function OfficialToolSection({
       </HStack>
       <Divider borderColor={dividerColor} mb={4} />
       <Grid
-        templateColumns={{
-          base: "1fr",
-          sm: "repeat(2, 1fr)",
-          md: "repeat(3, 1fr)",
-        }}
+        templateColumns="repeat(auto-fill, minmax(240px, 1fr))"
         gap={4}
         alignItems="stretch"
       >
@@ -1537,11 +1529,7 @@ function ThirdPartyToolSection({
       </HStack>
       <Divider borderColor={dividerColor} mb={4} />
       <Grid
-        templateColumns={{
-          base: "1fr",
-          sm: "repeat(2, 1fr)",
-          md: "repeat(3, 1fr)",
-        }}
+        templateColumns="repeat(auto-fill, minmax(240px, 1fr))"
         gap={4}
         alignItems="stretch"
       >

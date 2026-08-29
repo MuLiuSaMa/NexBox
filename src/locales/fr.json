@@ -55,7 +55,8 @@
     "custom": "Personnalisé",
     "runtimeRepair": "Réparation des bibliothèques",
     "hiddenFeatures": "Fonctionnalités masquées",
-    "downloadAccelerator": "Téléchargeur"
+    "downloadAccelerator": "Téléchargeur",
+    "nvidiaRecording": "Gestion des enregistrements NVIDIA"
   },
   "customPage": {
     "title": "Page Personnalisée",
@@ -926,6 +927,17 @@
   "crosshair": {
     "title": "Réticule d'assistance",
     "enableCrosshair": "Activer le réticule",
+    "holdMode": "Activer en maintenant",
+    "holdKey": "Raccourci",
+    "holdKeyNone": "Aucun",
+    "holdKeyRecording": "Appuyez sur une touche...",
+    "holdModeOn": "Mode maintien activé",
+    "holdModeOff": "Mode maintien désactivé",
+    "mouseLeft": "Bouton gauche",
+    "mouseRight": "Bouton droit",
+    "mouseMiddle": "Bouton du milieu",
+    "mouseX1": "Bouton latéral 1",
+    "mouseX2": "Bouton latéral 2",
     "statusEnabled": "Activé",
     "statusDisabled": "Désactivé",
     "style": "Style du réticule",
@@ -958,7 +970,11 @@
       "crossDot": "Croix+Point",
       "circleCross": "Cercle+Croix",
       "dotBox": "Point+Rectangle"
-    }
+    },
+    "holdDelay": "Délai d'entrée",
+    "holdDelayDesc": "Affiche le réticule après ce délai de maintien ; masquage instantané au relâchement (0 = immédiat)",
+    "holdDelaySaved": "Délai enregistré",
+    "hotkeySaved": "Raccourci enregistré"
   },
   "hardwareReport": {
     "export": "Exporter le rapport",
@@ -1213,7 +1229,8 @@
     "screenRecordDesc": "Enregistrement d'écran haute performance (encodage matériel)",
     "audioEqDesc": "Réglage d'égaliseur audio au niveau système",
     "runtimeRepairDesc": "Détecter et réparer les bibliothèques d'exécution VC++ / .NET / DirectX manquantes",
-    "downloadAcceleratorDesc": "Téléchargements segmentés multithreads pour saturer votre bande passante"
+    "downloadAcceleratorDesc": "Téléchargements segmentés multithreads pour saturer votre bande passante",
+    "nvidiaRecordingDesc": "Analyse automatique des enregistrements NVIDIA, gestion, aperçu et nettoyage par date"
   },
   "gameProcessOptimize": {
     "title": "Optimisation des processus de jeu",
@@ -1373,6 +1390,11 @@
     "sponsor": "Soutenir",
     "navigation": "Navigation",
     "about": "À propos",
+    "advanced": {
+      "popnull": {
+        "title": "NexBoxPopNull Bloqueur de popups"
+      }
+    },
     "generalSettings": {
       "title": "Paramètres généraux",
       "language": "Langue",
@@ -1879,5 +1901,53 @@
     "islandDownloading": "Téléchargement",
     "islandComplete": "Téléchargement terminé",
     "islandFailed": "Échec du téléchargement"
+  },
+  "nvidiaRecording": {
+    "title": "Gestion des enregistrements NVIDIA",
+    "scan": "Analyser à nouveau",
+    "scanning": "Analyse des enregistrements...",
+    "scanError": "Échec de l'analyse",
+    "addFolder": "Ajouter un dossier",
+    "addFolderError": "Échec de l'ajout du dossier",
+    "noVideosHint": "Aucun enregistrement pour le moment. Utilisez « Ajouter un dossier » pour ajouter un répertoire.",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "preview": "Aperçu",
+    "openWithPlayer": "Ouvrir dans le lecteur",
+    "revealInFolder": "Afficher dans le dossier",
+    "delete": "Supprimer",
+    "deleteTitle": "Supprimer définitivement la vidéo ?",
+    "deleteBody": "Cette action est irréversible. Supprimer définitivement la vidéo suivante ?",
+    "deleteConfirm": "Supprimer",
+    "deleteSuccess": "Vidéo supprimée",
+    "deleteError": "Échec de la suppression",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "loading": "Analyse en cours...",
+    "unknown": "Inconnu",
+    "previewError": "Échec du chargement de la vidéo",
+    "previewUnsupported": "Ce codec vidéo ne peut pas être prévisualisé ici. Utilisez le lecteur système.",
+    "fileName": "Nom du fichier",
+    "filePath": "Chemin complet",
+    "size": "Taille",
+    "modified": "Modifié",
+    "created": "Créé",
+    "duration": "Durée",
+    "resolution": "Résolution",
+    "format": "Format",
+    "allFolders": "Tous les dossiers",
+    "folderEmpty": "Aucune vidéo dans ce dossier",
+    "folderRemoved": "Dossier supprimé",
+    "removeFolderError": "Échec de la suppression du dossier",
+    "details": "Détails",
+    "batchAction": "Lot",
+    "exitBatch": "Quitter le mode lot",
+    "selectedCount": "{{n}} sélectionnée(s)",
+    "copy": "Copier",
+    "copySuccess": "{{n}} vidéos copiées",
+    "copyError": "Échec de la copie",
+    "deleteSuccessMulti": "{{n}} vidéos supprimées",
+    "deleteBodyMulti": "Action irréversible. Supprimer définitivement les {{n}} vidéos sélectionnées ?",
+    "andMore": "et {{n}} autres"
   }
 }

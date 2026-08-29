@@ -35,6 +35,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useNavigate } from "react-router-dom";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
+import { HoldKeyRecorder } from "@/components/hold-key-recorder";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { hexToRgba } from "@/lib/color-utils";
@@ -172,6 +173,10 @@ export default function CrosshairPage() {
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
   const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
+  const [holdEnabled, setHoldEnabled] = useState(false);
+  const [holdKey, setHoldKey] = useState("MouseRight");
+  const [holdDelay, setHoldDelay] = useState(0);
+  const [holdDelayInput, setHoldDelayInput] = useState("0");
 
   useEffect(() => {
     (async () => {
@@ -205,6 +210,7 @@ export default function CrosshairPage() {
 
   useEffect(() => {
     loadSettings();
+    loadHoldSettings();
     // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
     const timer = setTimeout(() => loadDisplays(), 200);
     return () => clearTimeout(timer);
@@ -250,6 +256,92 @@ export default function CrosshairPage() {
       setDisplays(list);
     } catch (error) {
       console.error("Failed to load displays:", error);
+    }
+  };
+
+  const loadHoldSettings = async () => {
+    try {
+      const enabled = await invoke<boolean>("get_crosshair_hold_enabled");
+      setHoldEnabled(enabled);
+      const key = await invoke<string>("get_crosshair_hold_key");
+      if (key) setHoldKey(key);
+      const delay = await invoke<number>("get_crosshair_hold_delay");
+      setHoldDelay(delay || 0);
+      setHoldDelayInput(String((delay || 0) / 1000));
+    } catch (error) {
+      console.error("Failed to load crosshair hold settings:", error);
+    }
+  };
+
+  const toggleHoldMode = async (enabled: boolean) => {
+    setHoldEnabled(enabled);
+    try {
+      await invoke("set_crosshair_hold_enabled", { enabled });
+      toast({
+        title: enabled
+          ? t("crosshair.holdModeOn")
+          : t("crosshair.holdModeOff") || "按住模式已关闭",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to set crosshair hold mode:", error);
+      setHoldEnabled(!enabled);
+      toast({
+        title: t("crosshair.updateFailed"),
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // 保存按住显示延迟（输入单位为秒，内部以毫秒落盘），失焦/回车时提交
+  const commitHoldDelay = async () => {
+    const seconds = Number(holdDelayInput) || 0;
+    const parsed = Math.max(0, Math.min(10, seconds));
+    const delayMs = Math.round(parsed * 1000);
+    setHoldDelayInput(String(delayMs / 1000));
+    if (delayMs === holdDelay) return;
+    setHoldDelay(delayMs);
+    try {
+      await invoke("set_crosshair_hold_delay", { delayMs });
+      toast({
+        title: t("crosshair.holdDelaySaved") || "延迟已保存",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to save hold delay:", error);
+      toast({
+        title: t("crosshair.updateFailed"),
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const saveHoldKey = async (val: string) => {
+    setHoldKey(val);
+    try {
+      await invoke("set_crosshair_hold_key", { key: val });
+      toast({
+        title: t("crosshair.hotkeySaved") || "快捷键已保存",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to save hold key:", error);
+      toast({
+        title: t("crosshair.updateFailed"),
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
     }
   };
 
@@ -446,6 +538,70 @@ export default function CrosshairPage() {
                   }}
                   isDisabled={isLoading}
                 />
+              </HStack>
+              <HStack
+                px={4}
+                py={2}
+                borderRadius="xl"
+                justify="space-between"
+                flexWrap="wrap"
+                spacing={3}
+              >
+                <HStack spacing={2}>
+                  <Text color={textColor} fontSize="sm" fontWeight="500" whiteSpace="nowrap">
+                    {t("crosshair.holdMode")}
+                  </Text>
+                  <ThemeSwitch
+                    isChecked={holdEnabled}
+                    onChange={(e) => toggleHoldMode(e.target.checked)}
+                    isDisabled={isLoading}
+                  />
+                </HStack>
+                <HStack
+                  spacing={2}
+                  opacity={holdEnabled ? undefined : 0.5}
+                  pointerEvents={holdEnabled ? undefined : "none"}
+                  userSelect={holdEnabled ? undefined : "none"}
+                >
+                  <Text color={subTextColor} fontSize="xs" whiteSpace="nowrap">
+                    {t("crosshair.holdKey")}
+                  </Text>
+                  <HoldKeyRecorder value={holdKey} onChange={saveHoldKey} />
+                  <Text color={subTextColor} fontSize="xs" whiteSpace="nowrap" ml={2}>
+                    {t("crosshair.holdDelay")}
+                  </Text>
+                  <Input
+                    value={holdDelayInput}
+                    onChange={(e) => {
+                      // 允许输入小数秒，去掉非法字符并只保留一个小数点
+                      const cleaned = e.target.value.replace(/[^\d.]/g, "");
+                      const firstDot = cleaned.indexOf(".");
+                      const normalized =
+                        firstDot === -1
+                          ? cleaned
+                          : cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+                      setHoldDelayInput(normalized);
+                    }}
+                    onBlur={commitHoldDelay}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                    }}
+                    w="72px"
+                    h="30px"
+                    size="sm"
+                    textAlign="center"
+                    bg={inputBg}
+                    color={textColor}
+                    borderColor={getActiveColor()}
+                    _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                    placeholder="0"
+                    isDisabled={!holdEnabled || isLoading}
+                    title={t("crosshair.holdDelayDesc") || undefined}
+                  />
+                  <Text color={subTextColor} fontSize="xs" whiteSpace="nowrap">
+                    s
+                  </Text>
+                </HStack>
               </HStack>
             </VStack>
           </SettingCard>

@@ -48,6 +48,12 @@ mod imp {
     const TICK_PER_MS: i64 = 10_000;
     /// 封面下载 UA（与 cover 代理一致）
     const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    /// 同一封面来源解析失败后的重试退避
+    const COVER_FAIL_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);
+    /// SMTC 缩略图目标最大边长（系统浮层/锁屏显示远小于此）
+    const THUMBNAIL_MAX_PX: u32 = 1024;
+    /// 原始封面超过该字节数才解码缩图（≤1MB 的封面尺寸已合理，免解码开销）
+    const THUMBNAIL_RESIZE_THRESHOLD: usize = 1024 * 1024;
 
     /// 控制台会话句柄（全局唯一）
     static CTRL: Mutex<Option<SystemMediaTransportControls>> = Mutex::new(None);
@@ -86,8 +92,11 @@ mod imp {
     /// 缓存：元数据键（title|artist|album），判断歌曲是否变化
     static LAST_TRACK: Mutex<Option<String>> = Mutex::new(None);
     /// 缓存：最近一次成功设置的封面来源（data URI / 代理 URL / file:// 路径）。
-    /// 失败时不记录 → 下次 update 自动重试，直到成功。
+    /// 失败时不记录 → 下次 update 自动重试（带 COVER_FAIL_BACKOFF 退避），直到成功。
     static LAST_COVER_KEY: Mutex<Option<String>> = Mutex::new(None);
+    /// 封面解析失败退避：(封面来源, 最近失败时刻)。前端每秒推送一次播放状态，
+    /// 失败若无退避会以每秒一次的频率重复下载大图并刷警告日志。
+    static LAST_COVER_FAIL: Mutex<Option<(String, std::time::Instant)>> = Mutex::new(None);
 
     /// 启动时注册本应用媒体会话（在 Tauri setup 中调用一次）
     pub fn start(app: AppHandle) {
@@ -269,10 +278,16 @@ mod imp {
             let cover_src = state.cover.clone().unwrap_or_default();
 
             // 歌曲变化 → 重建元数据（歌名/歌手/专辑）；封面来源变化 → 重新设置封面。
-            // 两者相互独立：封面失败时不记录 LAST_COVER_KEY，下次 update 自动重试。
+            // 两者相互独立：封面失败时不记录 LAST_COVER_KEY，退避 30 秒后自动重试。
             let track_changed = LAST_TRACK.lock().unwrap().as_deref() != Some(track_key.as_str());
+            // 同一封面来源 30 秒内失败过则暂不重试（退避），避免每秒推送触发重复下载
+            let cover_backoff_active = match LAST_COVER_FAIL.lock().unwrap().as_ref() {
+                Some((key, at)) => key == &cover_src && at.elapsed() < COVER_FAIL_BACKOFF,
+                None => false,
+            };
             let cover_changed = !cover_src.is_empty()
-                && LAST_COVER_KEY.lock().unwrap().as_deref() != Some(cover_src.as_str());
+                && LAST_COVER_KEY.lock().unwrap().as_deref() != Some(cover_src.as_str())
+                && !cover_backoff_active;
 
             if track_changed || cover_changed {
                 let updater: Option<SystemMediaTransportControlsDisplayUpdater> =
@@ -292,16 +307,24 @@ mod imp {
                         }
                     }
                     if cover_changed {
-                        if let Some(bytes) = resolve_cover_bytes(&cover_src) {
-                            match set_cover_thumbnail(updater, &bytes) {
+                        match resolve_cover_bytes(&cover_src) {
+                            Some(bytes) => match set_cover_thumbnail(updater, &bytes) {
                                 Ok(()) => {
                                     log::info!("[SMTC] 封面已设置 ({} 字节)", bytes.len());
                                     *LAST_COVER_KEY.lock().unwrap() = Some(cover_src);
+                                    *LAST_COVER_FAIL.lock().unwrap() = None;
                                 }
-                                Err(e) => log::warn!("[SMTC] 设置封面失败: {e}"),
+                                Err(e) => {
+                                    log::warn!("[SMTC] 设置封面失败: {e}");
+                                    *LAST_COVER_FAIL.lock().unwrap() =
+                                        Some((cover_src.clone(), std::time::Instant::now()));
+                                }
+                            },
+                            None => {
+                                log::warn!("[SMTC] 封面来源无法解析: {cover_src}");
+                                *LAST_COVER_FAIL.lock().unwrap() =
+                                    Some((cover_src.clone(), std::time::Instant::now()));
                             }
-                        } else {
-                            log::warn!("[SMTC] 封面来源无法解析: {cover_src}");
                         }
                     }
                     if let Err(e) = updater.Update() {
@@ -363,6 +386,7 @@ mod imp {
         }
         *LAST_TRACK.lock().unwrap() = None;
         *LAST_COVER_KEY.lock().unwrap() = None;
+        *LAST_COVER_FAIL.lock().unwrap() = None;
     }
 
     /// 更新 DisplayUpdater 元数据（仅在歌曲变化时调用，封面由调用方单独处理）
@@ -385,67 +409,106 @@ mod imp {
         Ok(())
     }
 
-    /// 解析封面来源为图片字节：
+    /// 解析封面来源为图片字节（过大时先缩图）：
     /// - `data:` base64 data URI → 直接解码
     /// - `http(s)://` URL → 后端 reqwest 下载（带防盗链 Referer，无 CORS 限制）
     /// - `file://` 本地路径 → 直接读文件（本地导入歌曲的封面缓存）
     fn resolve_cover_bytes(cover: &str) -> Option<Vec<u8>> {
-        if cover.starts_with("data:") {
-            decode_data_uri(cover)
+        let raw = if cover.starts_with("data:") {
+            decode_data_uri(cover)?
         } else if let Some(path) = cover.strip_prefix("file://") {
-            std::fs::read(path).ok()
+            std::fs::read(path).ok()?
         } else if cover.starts_with("http://") || cover.starts_with("https://") {
-            // 与 cover 代理一致的防盗链 Referer（按域名判断；QQ 封面含 y.qq.com/qpic.cn/gtimg.cn）
-            let referer = if cover.contains("qq.com")
-                || cover.contains("qpic.cn")
-                || cover.contains("gtimg.cn")
-            {
-                "https://y.qq.com/"
-            } else if cover.contains("kugou.com") {
-                "https://www.kugou.com/"
-            } else {
-                "https://music.163.com/"
-            };
-            let client = match reqwest::blocking::Client::builder()
-                .timeout(std::time::Duration::from_secs(15))
-                .build()
-            {
-                Ok(c) => c,
-                Err(e) => {
-                    log::warn!("[SMTC] 构建封面下载客户端失败: {e}");
-                    return None;
-                }
-            };
-            let resp = match client
-                .get(cover)
-                .header("User-Agent", UA)
-                .header("Referer", referer)
-                .send()
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    log::warn!("[SMTC] 封面下载请求失败: {e} (url={cover})");
-                    return None;
-                }
-            };
-            if !resp.status().is_success() {
-                log::warn!("[SMTC] 封面下载非 200: {} (url={cover})", resp.status());
-                return None;
-            }
-            let bytes = match resp.bytes() {
-                Ok(b) => b.to_vec(),
-                Err(e) => {
-                    log::warn!("[SMTC] 封面读取失败: {e}");
-                    return None;
-                }
-            };
-            // SMTC 缩略图大小上限保护
-            if bytes.len() > 5 * 1024 * 1024 {
-                return None;
-            }
-            Some(bytes)
+            download_cover(cover)?
         } else {
-            None
+            return None;
+        };
+        let bytes = normalize_cover_thumbnail(raw);
+        // SMTC 缩略图大小上限保护（缩图失败时的兜底）
+        if bytes.len() > 5 * 1024 * 1024 {
+            log::warn!("[SMTC] 封面过大且无法缩图 ({} 字节): {cover}", bytes.len());
+            return None;
+        }
+        Some(bytes)
+    }
+
+    /// 下载网络封面（带防盗链 Referer，按域名判断；QQ 封面含 y.qq.com/qpic.cn/gtimg.cn）
+    fn download_cover(cover: &str) -> Option<Vec<u8>> {
+        let referer = if cover.contains("qq.com")
+            || cover.contains("qpic.cn")
+            || cover.contains("gtimg.cn")
+        {
+            "https://y.qq.com/"
+        } else if cover.contains("kugou.com") {
+            "https://www.kugou.com/"
+        } else if cover.contains("migu.cn") || cover.contains("miguvideo.com") {
+            "https://music.migu.cn/"
+        } else {
+            "https://music.163.com/"
+        };
+        let client = match reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()
+        {
+            Ok(c) => c,
+            Err(e) => {
+                log::warn!("[SMTC] 构建封面下载客户端失败: {e}");
+                return None;
+            }
+        };
+        let resp = match client
+            .get(cover)
+            .header("User-Agent", UA)
+            .header("Referer", referer)
+            .send()
+        {
+            Ok(r) => r,
+            Err(e) => {
+                log::warn!("[SMTC] 封面下载请求失败: {e} (url={cover})");
+                return None;
+            }
+        };
+        if !resp.status().is_success() {
+            log::warn!("[SMTC] 封面下载非 200: {} (url={cover})", resp.status());
+            return None;
+        }
+        let bytes = match resp.bytes() {
+            Ok(b) => b.to_vec(),
+            Err(e) => {
+                log::warn!("[SMTC] 封面读取失败: {e}");
+                return None;
+            }
+        };
+        Some(bytes)
+    }
+
+    /// 过大封面缩图为最大边 THUMBNAIL_MAX_PX 的 JPEG（网易云高清封面可达 5MB+，
+    /// 超出 SMTC 缩略图大小上限且系统浮层/锁屏显示用不到原图）。
+    /// 解码/编码失败或尺寸已足够小时原样返回（交由调用方大小上限兜底）；
+    /// 输出固定 JPEG（RGBA 透明通道被丢弃，对系统缩略图可接受）。
+    fn normalize_cover_thumbnail(data: Vec<u8>) -> Vec<u8> {
+        use image::{GenericImageView, ImageEncoder};
+        if data.len() <= THUMBNAIL_RESIZE_THRESHOLD {
+            return data;
+        }
+        let Ok(img) = image::load_from_memory(&data) else {
+            log::warn!("[SMTC] 封面解码失败，按原始字节处理 ({} 字节)", data.len());
+            return data;
+        };
+        let (w, h) = img.dimensions();
+        if w.max(h) <= THUMBNAIL_MAX_PX {
+            return data;
+        }
+        let resized = img
+            .resize(THUMBNAIL_MAX_PX, THUMBNAIL_MAX_PX, image::imageops::FilterType::Triangle)
+            .to_rgb8();
+        let mut out = Vec::new();
+        let mut writer = std::io::Cursor::new(&mut out);
+        let encode = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut writer, 85)
+            .write_image(resized.as_raw(), resized.width(), resized.height(), image::ExtendedColorType::Rgb8);
+        match encode {
+            Ok(()) if !out.is_empty() => out,
+            _ => data,
         }
     }
 
