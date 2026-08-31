@@ -633,21 +633,6 @@ export default function MemoryCleanupPage() {
                         </Text>
                       </Box>
                     </HStack>
-                    {listSizes && !listSizes.available && (
-                      <HStack
-                        w="full"
-                        p={3}
-                        bg="rgba(255, 165, 0, 0.08)"
-                        borderLeft="4px solid"
-                        borderColor="orange.400"
-                        borderRadius="lg"
-                        spacing={2}
-                      >
-                        <Text fontSize="xs" color="orange.300">
-                          {t("optimization.memoryCleanup.adminHint", "以管理员权限运行可显示各区域实时容量，且清理才完全生效")}
-                        </Text>
-                      </HStack>
-                    )}
                     <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} w="full">
                       {cleanItemDefs.map((item) => {
                         const checked = selectedItems.includes(item.key);
@@ -695,14 +680,14 @@ export default function MemoryCleanupPage() {
                                 </Text>
                               </VStack>
                             </HStack>
-                            {item.sizeKey && listSizes && (
+                            {item.sizeKey && listSizes && listSizes.available && (
                               <Text
                                 fontSize="sm"
                                 fontWeight="600"
                                 color={sizeMb > 0 ? "green.400" : subTextColor}
                                 whiteSpace="nowrap"
                               >
-                                {listSizes.available ? formatMemory(sizeMb) : "--"}
+                                {formatMemory(sizeMb)}
                               </Text>
                             )}
                           </HStack>
