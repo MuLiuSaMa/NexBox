@@ -12,7 +12,8 @@ use winreg::enums::*;
 use winreg::RegKey;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
 use windows_sys::Win32::System::ProcessStatus::{
-    EmptyWorkingSet, K32EnumProcesses, K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS,
+    EmptyWorkingSet, K32EnumProcesses, K32GetProcessImageFileNameW, K32GetProcessMemoryInfo,
+    PROCESS_MEMORY_COUNTERS,
 };
 use windows_sys::Win32::System::Memory::SetSystemFileCacheSize;
 use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
@@ -44,6 +45,47 @@ const PROCESS_MEMORY_PRIORITY_NEW: u32 = 0;
 const PROCESS_MEMORY_PRIORITY_OLD: u32 = 11;
 const MEMORY_PRIORITY_VERY_LOW: u32 = 1;
 
+// ===== 内存列表清理（NtSetSystemInformation / NtQuerySystemInformation）=====
+// SystemMemoryListInformation 的各类命令值，与 Mem Reduct 等主流工具一致
+const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
+const SYSTEM_COMBINE_PHYSICAL_MEMORY_INFORMATION: u32 = 130;
+const SYSTEM_REGISTRY_RECONCILIATION_INFORMATION: u32 = 149;
+const MEMORY_FLUSH_MODIFIED_LIST: u32 = 3;
+const MEMORY_PURGE_STANDBY_LIST: u32 = 4;
+const MEMORY_PURGE_LOW_PRIORITY_STANDBY_LIST: u32 = 5;
+
+/// 受保护的系统关键进程（工作集整理时跳过，避免 UI 闪烁 / 服务卡顿）
+const PROTECTED_SYSTEM_PROCESSES: &[&str] = &[
+    "system",
+    "registry",
+    "memory compression",
+    "smss",
+    "csrss",
+    "wininit",
+    "winlogon",
+    "services",
+    "lsass",
+    "fontdrvhost",
+    "dwm",
+    "explorer",
+    "svchost",
+    "dllhost",
+    "conhost",
+    "sihost",
+    "taskhostw",
+    "ctfmon",
+    "SearchIndexer",
+    "MsMpEng",
+    "NisSrv",
+    "WmiPrvSE",
+    "SecurityHealthService",
+    "RuntimeBroker",
+    "ShellExperienceHost",
+    "StartMenuExperienceHost",
+    "TextInputHost",
+    "backgroundTaskHost",
+];
+
 #[link(name = "ntdll")]
 extern "system" {
     fn NtSetInformationProcess(
@@ -57,6 +99,17 @@ extern "system" {
         ProcessInformationClass: u32,
         ProcessInformation: *mut std::ffi::c_void,
         ProcessInformationSize: u32,
+        ReturnLength: *mut u32,
+    ) -> i32;
+    fn NtSetSystemInformation(
+        InformationClass: u32,
+        Information: *const std::ffi::c_void,
+        Length: u32,
+    ) -> i32;
+    fn NtQuerySystemInformation(
+        SystemInformationClass: u32,
+        SystemInformation: *mut std::ffi::c_void,
+        SystemInformationLength: u32,
         ReturnLength: *mut u32,
     ) -> i32;
 }
@@ -1206,6 +1259,127 @@ pub struct MemoryCleanupResult {
     pub freed_mb: u64,
 }
 
+/// 各内存列表的实时大小（页数换算为 MB），用于清理项勾选前的容量展示
+/// available=false 表示当前进程权限不足（需管理员运行），容量不可见
+#[derive(serde::Serialize)]
+pub struct MemoryListSizes {
+    pub available: bool,
+    pub zeroed_mb: u64,
+    pub free_mb: u64,
+    pub standby_mb: u64,
+    pub modified_mb: u64,
+    pub combined_mb: u64,
+}
+
+/// NtQuerySystemInformation(SystemMemoryListInformation=80) 返回的结构（winternl.h 公开定义）
+#[repr(C)]
+struct SystemMemoryListInformation {
+    zero_page_count: usize,
+    free_page_count: usize,
+    modified_page_count: usize,
+    modified_no_write_page_count: usize,
+    standby_page_count: usize,
+    standby_cache_normal_priority: usize,
+    standby_cache_system_priority: usize,
+    standby_cache_reserve_priority: usize,
+    standby_cache_code_priority: usize,
+    modified_no_write_cache_normal_priority: usize,
+    modified_no_write_cache_system_priority: usize,
+    modified_no_write_cache_reserve_priority: usize,
+    modified_no_write_cache_code_priority: usize,
+    standby_repurposed_count: usize,
+    combines_page_count: usize,
+}
+
+const PAGE_SIZE: usize = 4096;
+
+fn pages_to_mb(pages: usize) -> u64 {
+    (pages as u64) * (PAGE_SIZE as u64) / 1024 / 1024
+}
+
+/// 启用 SeProfileSingleProcessPrivilege（查询/下发内存列表命令所需，管理员进程持有但默认禁用）
+fn enable_profile_single_process_privilege() -> bool {
+    use windows_sys::Win32::Security::{
+        AdjustTokenPrivileges, LookupPrivilegeValueW, LUID_AND_ATTRIBUTES, SE_PRIVILEGE_ENABLED,
+        TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    };
+    use windows_sys::Win32::System::Threading::OpenProcessToken;
+    unsafe {
+        let mut token: HANDLE = std::mem::zeroed();
+        if OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
+            &mut token,
+        ) == 0
+        {
+            return false;
+        }
+        let mut luid: windows_sys::Win32::Foundation::LUID = std::mem::zeroed();
+        let name: Vec<u16> = "SeProfileSingleProcessPrivilege".encode_utf16().collect();
+        if LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) == 0 {
+            CloseHandle(token);
+            return false;
+        }
+        let mut tp = TOKEN_PRIVILEGES {
+            PrivilegeCount: 1,
+            Privileges: [LUID_AND_ATTRIBUTES {
+                Luid: luid,
+                Attributes: SE_PRIVILEGE_ENABLED,
+            }],
+        };
+        let ok = AdjustTokenPrivileges(
+            token,
+            0,
+            &mut tp,
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        CloseHandle(token);
+        ok != 0 && GetLastError() == 0
+    }
+}
+
+/// 查询各内存列表大小（待机 / 修改 / 组合 / 空闲），失败返回 available=false
+#[tauri::command]
+pub async fn get_memory_list_sizes() -> Result<MemoryListSizes, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    unsafe {
+        // 查询系统内存列表需要 SeProfileSingleProcessPrivilege，先尝试启用
+        enable_profile_single_process_privilege();
+
+        let mut info: SystemMemoryListInformation = std::mem::zeroed();
+        let mut ret_len: u32 = 0;
+        let status = NtQuerySystemInformation(
+            SYSTEM_MEMORY_LIST_INFORMATION,
+            &mut info as *mut _ as *mut std::ffi::c_void,
+            std::mem::size_of::<SystemMemoryListInformation>() as u32,
+            &mut ret_len,
+        );
+        if status < 0 {
+            // 权限不足（非管理员运行）时返回 available=false，前端显示 "--" 而非误导性的 0
+            return Ok(MemoryListSizes {
+                available: false,
+                zeroed_mb: 0,
+                free_mb: 0,
+                standby_mb: 0,
+                modified_mb: 0,
+                combined_mb: 0,
+            });
+        }
+        Ok(MemoryListSizes {
+            available: true,
+            zeroed_mb: pages_to_mb(info.zero_page_count),
+            free_mb: pages_to_mb(info.free_page_count),
+            standby_mb: pages_to_mb(info.standby_page_count),
+            modified_mb: pages_to_mb(info.modified_page_count + info.modified_no_write_page_count),
+            combined_mb: pages_to_mb(info.combines_page_count),
+        })
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AutoCleanConfig {
     pub enabled: bool,
@@ -1296,28 +1470,60 @@ struct MemoryPurgeStandbyListCommand {
     command: u32,
 }
 
-/// 原生清空待机列表（standby list），需要管理员权限，失败返回 false
-fn purge_standby_list_native() -> bool {
-    #[link(name = "ntdll")]
-    extern "system" {
-        fn NtSetSystemInformation(
-            InformationClass: u32,
-            Information: *const std::ffi::c_void,
-            Length: u32,
-        ) -> i32;
-    }
+/// 执行一条内存列表清理命令（SystemMemoryListInformation 下发给内核），需要管理员权限
+fn purge_memory_list_command(command: u32) -> bool {
     unsafe {
-        const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
-        const MEMORY_PURGE_STANDBY_LIST: u32 = 4;
         let mut cmd = MemoryPurgeStandbyListCommand {
             next: std::ptr::null_mut(),
-            command: MEMORY_PURGE_STANDBY_LIST,
+            command,
         };
         NtSetSystemInformation(
             SYSTEM_MEMORY_LIST_INFORMATION,
             &mut cmd as *mut _ as *const std::ffi::c_void,
             std::mem::size_of::<MemoryPurgeStandbyListCommand>() as u32,
         ) == 0
+    }
+}
+
+/// 原生清空待机列表（standby list），需要管理员权限，失败返回 false
+fn purge_standby_list_native() -> bool {
+    purge_memory_list_command(MEMORY_PURGE_STANDBY_LIST)
+}
+
+/// 合并内存列表（Win10+，物理内存去重）
+fn combine_memory_lists_native() -> bool {
+    unsafe {
+        #[repr(C)]
+        struct MemoryCombineInformationEx {
+            pages_combined: usize,
+            pages_combined_failures: usize,
+        }
+        let mut info: MemoryCombineInformationEx = std::mem::zeroed();
+        NtSetSystemInformation(
+            SYSTEM_COMBINE_PHYSICAL_MEMORY_INFORMATION,
+            &mut info as *mut _ as *const std::ffi::c_void,
+            std::mem::size_of::<MemoryCombineInformationEx>() as u32,
+        ) == 0
+    }
+}
+
+/// 刷新注册表缓存（Win8.1+）
+fn flush_registry_cache_native() -> bool {
+    unsafe {
+        NtSetSystemInformation(
+            SYSTEM_REGISTRY_RECONCILIATION_INFORMATION,
+            std::ptr::null(),
+            0,
+        ) == 0
+    }
+}
+
+/// 回收系统文件缓存（压低上限再恢复）
+fn reclaim_file_cache_native() {
+    unsafe {
+        SetSystemFileCacheSize(usize::MAX, usize::MAX, 0);
+        thread::sleep(Duration::from_millis(400));
+        SetSystemFileCacheSize(usize::MAX, usize::MAX, 1);
     }
 }
 
@@ -1328,15 +1534,11 @@ fn clean_standby_memory_inner() -> u64 {
     // 1) 清空待机列表（管理员权限下生效）
     let purged = purge_standby_list_native();
 
-    unsafe {
-        // 2) 临时把系统文件缓存上限压到最低，强制回收文件缓存页（usize::MAX 即 -1，表示恢复系统默认）
-        SetSystemFileCacheSize(usize::MAX, usize::MAX, 0);
-        // 给系统一点时间回收
-        thread::sleep(Duration::from_millis(400));
-        // 恢复默认文件缓存上限
-        SetSystemFileCacheSize(usize::MAX, usize::MAX, 1);
+    // 2) 回收系统文件缓存
+    reclaim_file_cache_native();
 
-        if !purged {
+    if !purged {
+        unsafe {
             // 权限不足时回退：收紧当前进程工作集（原逻辑兜底，保证至少执行一次清理动作）
             let handle = GetCurrentProcess();
             SetProcessWorkingSetSize(handle, usize::MAX, usize::MAX);
@@ -1351,8 +1553,66 @@ fn clean_standby_memory_inner() -> u64 {
     }
 }
 
+/// 按勾选项执行内存清理，返回释放的 MB。items 支持：
+/// standby / low_pri_standby / modified / registry / combined / file_cache / working_set
+fn clean_items_inner(items: &[String]) -> u64 {
+    let before = get_memory_info();
+
+    let mut purge_cmds: Vec<u32> = Vec::new();
+    let mut has_file_cache = false;
+    let mut has_working_set = false;
+
+    for item in items {
+        match item.as_str() {
+            "standby" => purge_cmds.push(MEMORY_PURGE_STANDBY_LIST),
+            "low_pri_standby" => purge_cmds.push(MEMORY_PURGE_LOW_PRIORITY_STANDBY_LIST),
+            "modified" => purge_cmds.push(MEMORY_FLUSH_MODIFIED_LIST),
+            "registry" => {
+                flush_registry_cache_native();
+            }
+            "combined" => {
+                combine_memory_lists_native();
+            }
+            "file_cache" => has_file_cache = true,
+            "working_set" => has_working_set = true,
+            _ => {}
+        }
+    }
+
+    for cmd in purge_cmds {
+        purge_memory_list_command(cmd);
+    }
+    if has_file_cache {
+        reclaim_file_cache_native();
+    }
+    if has_working_set {
+        trim_working_set_inner();
+    }
+
+    let after = get_memory_info();
+    if after.available > before.available {
+        after.available - before.available
+    } else {
+        0
+    }
+}
+
+/// 进程名是否在受保护名单内（小写比较，不含 .exe）
+fn is_protected_process_name(name: &str) -> bool {
+    let name = name.trim_end_matches(".exe").trim().to_lowercase();
+    PROTECTED_SYSTEM_PROCESSES
+        .iter()
+        .any(|p| name == *p)
+}
+
 /// 原生遍历所有进程并 EmptyWorkingSet（收紧工作集），无需 PowerShell
+/// 跳过：自身、游戏进程（滤镜名单）、受保护的系统关键进程
 fn trim_working_set_inner() -> u64 {
+    // 收集正在运行的滤镜名单游戏进程，避免游戏刚启动就被砍工作集
+    let mut sys = System::new();
+    sys.refresh_processes();
+    let game_pids = crate::game_filter::running_game_pids(&sys);
+
     unsafe {
         let mut pids: [u32; 4096] = [0; 4096];
         let mut needed: u32 = 0;
@@ -1371,12 +1631,27 @@ fn trim_working_set_inner() -> u64 {
         let mut freed_mb: u64 = 0;
 
         for &pid in &pids[..count] {
-            if pid == 0 || pid == self_pid {
+            if pid == 0 || pid == self_pid || game_pids.contains(&pid) {
                 continue;
             }
             let handle = OpenProcess(access, 0, pid);
             if handle.is_null() {
                 continue;
+            }
+            // 受保护的系统关键进程跳过（explorer / dwm / svchost / lsass 等）
+            let mut name_buf: [u16; 260] = [0; 260];
+            let name_len =
+                K32GetProcessImageFileNameW(handle, name_buf.as_mut_ptr(), name_buf.len() as u32);
+            if name_len > 0 && name_len < name_buf.len() as u32 {
+                let path = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+                let stem = std::path::Path::new(&path)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if is_protected_process_name(&stem) {
+                    CloseHandle(handle);
+                    continue;
+                }
             }
             let mut pmc_before: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
             if K32GetProcessMemoryInfo(handle, &mut pmc_before, pmc_size) == 0 {
@@ -1433,6 +1708,30 @@ pub async fn trim_system_working_set() -> Result<MemoryCleanupResult, String> {
     })
 }
 
+/// 按勾选项执行内存清理。items 支持：
+/// standby / low_pri_standby / modified / registry / combined / file_cache / working_set
+#[tauri::command]
+pub async fn clean_memory_selected(items: Vec<String>) -> Result<MemoryCleanupResult, String> {
+    if !cfg!(target_os = "windows") {
+        return Err("此功能仅支持 Windows 系统".to_string());
+    }
+    if items.is_empty() {
+        return Err("未选择任何清理项".to_string());
+    }
+
+    let freed = clean_items_inner(&items);
+
+    Ok(MemoryCleanupResult {
+        success: true,
+        message: if freed > 0 {
+            format!("内存清理完成，释放 {} MB", freed)
+        } else {
+            "内存已清理".to_string()
+        },
+        freed_mb: freed,
+    })
+}
+
 fn auto_clean_loop(config: AutoCleanConfig, generation: u64) {
     use std::time::Instant;
 
@@ -1474,6 +1773,18 @@ fn auto_clean_loop(config: AutoCleanConfig, generation: u64) {
                 "working_set" => {
                     trim_working_set_inner();
                 }
+                "items" => {
+                    // 跟随用户勾选的清理项
+                    let items = {
+                        let cfg = MEMORY_CLEAN_CONFIG
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner());
+                        cfg.as_ref()
+                            .map(|c| c.items.clone())
+                            .unwrap_or_else(default_memory_clean_items)
+                    };
+                    clean_items_inner(&items);
+                }
                 _ => {}
             }
             last_clean_time = Instant::now();
@@ -1508,6 +1819,98 @@ pub async fn stop_auto_clean() -> Result<(), String> {
 pub async fn get_auto_clean_config() -> Result<Option<AutoCleanConfig>, String> {
     let cfg = AUTO_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
     Ok(cfg.clone())
+}
+
+// ===== 内存清理勾选项配置（持久化到 memory_clean_config.json）=====
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct MemoryCleanConfig {
+    #[serde(default)]
+    pub items: Vec<String>,
+}
+
+static MEMORY_CLEAN_CONFIG: Mutex<Option<MemoryCleanConfig>> = Mutex::new(None);
+
+/// 默认勾选项：待机列表 + 系统文件缓存 + 低优先级待机（安全、不砍进程工作集）
+fn default_memory_clean_items() -> Vec<String> {
+    vec![
+        "standby".to_string(),
+        "file_cache".to_string(),
+        "low_pri_standby".to_string(),
+    ]
+}
+
+fn load_memory_clean_config(app: &tauri::AppHandle) -> MemoryCleanConfig {
+    match app.store("memory_clean_config.json") {
+        Ok(store) => {
+            if let Some(value) = store.get("config") {
+                if let Ok(config) = serde_json::from_value::<MemoryCleanConfig>(value) {
+                    return config;
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to open memory_clean_config store: {}", e);
+        }
+    }
+    MemoryCleanConfig {
+        items: default_memory_clean_items(),
+    }
+}
+
+fn save_memory_clean_config(app: &tauri::AppHandle, config: &MemoryCleanConfig) {
+    match app.store("memory_clean_config.json") {
+        Ok(store) => {
+            store.set("config", serde_json::to_value(config).unwrap());
+            if let Err(e) = store.save() {
+                log::error!("Failed to save memory_clean_config: {}", e);
+            }
+        }
+        Err(e) => {
+            log::error!("Failed to open memory_clean_config store for saving: {}", e);
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_memory_clean_config(
+    _app: tauri::AppHandle,
+) -> Result<MemoryCleanConfig, String> {
+    let cfg = MEMORY_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+    Ok(cfg.clone().unwrap_or_else(|| MemoryCleanConfig {
+        items: default_memory_clean_items(),
+    }))
+}
+
+#[tauri::command]
+pub async fn set_memory_clean_config(
+    app: tauri::AppHandle,
+    items: Vec<String>,
+) -> Result<MemoryCleanConfig, String> {
+    // 空数组视为恢复默认
+    let items = if items.is_empty() {
+        default_memory_clean_items()
+    } else {
+        items
+    };
+    let config = MemoryCleanConfig { items };
+    {
+        let mut lock = MEMORY_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+        *lock = Some(config.clone());
+    }
+    save_memory_clean_config(&app, &config);
+    Ok(config)
+}
+
+/// 应用启动时调用：恢复持久化的勾选项配置
+pub async fn init_memory_clean_config(app: tauri::AppHandle) -> Result<(), String> {
+    let config = load_memory_clean_config(&app);
+    {
+        let mut lock = MEMORY_CLEAN_CONFIG.lock().map_err(|e| e.to_string())?;
+        *lock = Some(config.clone());
+    }
+    log::info!("[内存清理] 已恢复勾选项配置: {:?}", config.items);
+    Ok(())
 }
 
 // ===== 游戏启动时自动清理内存 =====
@@ -1575,16 +1978,15 @@ fn game_start_clean_loop(generation: u64) {
         system.refresh_processes();
         let running = crate::game_filter::any_game_running(&system);
         if running && !was_running {
-            // 完整清理：待机缓存 + 工作集收紧 并行执行
-            thread::scope(|s| {
-                s.spawn(|| {
-                    clean_standby_memory_inner();
-                });
-                s.spawn(|| {
-                    trim_working_set_inner();
-                });
-            });
-            log::info!("[游戏启动清理] 检测到滤镜名单游戏启动，已自动清理一次内存");
+            // 按用户勾选的清理项执行（工作集整理已带白名单，游戏进程不会被砍）
+            let items = {
+                let cfg = MEMORY_CLEAN_CONFIG.lock().unwrap_or_else(|e| e.into_inner());
+                cfg.as_ref()
+                    .map(|c| c.items.clone())
+                    .unwrap_or_else(default_memory_clean_items)
+            };
+            clean_items_inner(&items);
+            log::info!("[游戏启动清理] 检测到滤镜名单游戏启动，已按勾选项自动清理一次内存");
         }
         was_running = running;
     }
@@ -3919,8 +4321,15 @@ fn apply_reg_content(content: &str) -> Result<(), String> {
         // "ValueName"=dword:00000001 — DWORD 值
         // "ValueName"="string"        — 字符串值
         // "ValueName"=-                — 删除值
+        // @="string"                  — 默认值（键的空名值）
         if let Some(ref key) = current_key {
-            if let Some(rest) = line.strip_prefix('"') {
+            if let Some(value) = line.strip_prefix("@=") {
+                if let Some(inner) = value.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+                    let val = inner.replace("\\\"", "\"");
+                    key.set_value("", &val)
+                        .map_err(|e| format!("写入注册表默认值失败: {}", e))?;
+                }
+            } else if let Some(rest) = line.strip_prefix('"') {
                 if let Some(eq_pos) = rest.find("\"=") {
                     let name = &rest[..eq_pos];
                     // 反转义 .reg 中的双引号 \"
@@ -4064,7 +4473,16 @@ fn scan_reg_content(content: &str) -> Result<bool, String> {
             continue;
         }
 
-        if let Some(rest) = line.strip_prefix('"') {
+        // @="string" — 默认值（键的空名值）
+        if let Some(value) = line.strip_prefix("@=") {
+            let matched = match &current_key {
+                Some(key) => check_reg_entry_matches(key, "", value),
+                None => false,
+            };
+            if !matched {
+                all_match = false;
+            }
+        } else if let Some(rest) = line.strip_prefix('"') {
             if let Some(eq_pos) = rest.find("\"=") {
                 let name = rest[..eq_pos].replace("\\\"", "\"");
                 let value = &rest[eq_pos + 2..];

@@ -381,6 +381,12 @@ pub fn run() {
                 let _ = optimization::init_game_start_clean(app_handle_for_game_start_clean).await;
             });
 
+            // 初始化内存清理勾选项配置（读取持久化配置，供定时/游戏启动清理使用）
+            let app_handle_for_memory_clean = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = optimization::init_memory_clean_config(app_handle_for_memory_clean).await;
+            });
+
             // 初始化游戏启动时禁用 Win 键（读取持久化配置并启动后台轮询）
             let app_handle_for_game_win_key = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -703,8 +709,12 @@ pub fn run() {
         optimization::set_memory_limit,
         optimization::restore_memory_limit,
         optimization::get_detailed_memory_status,
+        optimization::get_memory_list_sizes,
         optimization::clean_standby_memory,
         optimization::trim_system_working_set,
+        optimization::clean_memory_selected,
+        optimization::get_memory_clean_config,
+        optimization::set_memory_clean_config,
         optimization::start_auto_clean,
         optimization::stop_auto_clean,
         optimization::get_auto_clean_config,
@@ -770,6 +780,7 @@ pub fn run() {
         network_optimize::restore_adapter_power_saving,
         network_optimize::set_dns_servers,
         network_optimize::restore_dns_servers,
+        network_optimize::test_dns_latency,
         network_optimize::clear_dns_cache,
         network_optimize::reset_network,
         network_optimize::fix_dhcp,
