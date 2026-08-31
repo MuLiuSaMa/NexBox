@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复窗口摇晃为系统默认（删除自定义值）
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"DisallowShaking"=-

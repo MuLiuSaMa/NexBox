@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 CDP（客户数据平台/连接设备平台）
+; 阻止客户数据平台收集和使用数据进行分析与定向推荐
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
+"EnableCdp"=dword:00000000

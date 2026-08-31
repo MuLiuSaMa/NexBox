@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 禁用查找我的设备
+; 关闭设备定位上报，丢失设备时将无法远程定位
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\FindMyDevice]
+"AllowFindMyDevice"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice]
+"LocationSyncEnabled"=dword:00000000

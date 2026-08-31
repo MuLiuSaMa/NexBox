@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用输入个性化
+; 通过策略关闭输入法云个性化（预测文本、自动修正学习）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\InputPersonalization]
+"AllowInputPersonalization"=dword:00000000

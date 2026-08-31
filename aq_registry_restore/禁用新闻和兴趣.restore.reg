@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; 恢复任务栏新闻和兴趣（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Dsh]
+"AllowNewsAndInterests"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds]
+"EnableFeeds"=-

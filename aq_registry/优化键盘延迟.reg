@@ -1,0 +1,13 @@
+Windows Registry Editor Version 5.00
+
+; 优化键盘延迟
+; 重复延迟设为最短（0），重复速度设为最快（31），获得最快的输入响应
+; 同时写入 HKEY_USERS\.DEFAULT 让登录界面同样生效
+
+[HKEY_CURRENT_USER\Control Panel\Keyboard]
+"KeyboardDelay"="0"
+"KeyboardSpeed"="31"
+
+[HKEY_USERS\.DEFAULT\Control Panel\Keyboard]
+"KeyboardDelay"="0"
+"KeyboardSpeed"="31"

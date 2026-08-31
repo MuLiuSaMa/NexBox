@@ -369,7 +369,9 @@
         "secondary": "Sekundärer DNS",
         "apply": "DNS anwenden",
         "applied": "Angewendet",
-        "restore": "Automatischen DNS wiederherstellen"
+        "restore": "Automatischen DNS wiederherstellen",
+        "latencyTimeout": "Zeitüberschreitung",
+        "hijacked": "Gekapert"
       },
       "dnsRequired": "Bitte geben Sie mindestens die primäre DNS-Adresse ein",
       "dnsCacheCleared": "DNS-Cache geleert",
@@ -1510,6 +1512,8 @@
       "liquidGlassModeReal": "Transparentes Flüssiges Glas",
       "liquidGlassModeNormalDesc": "Simuliert Glastextur mit Unschärfe und Transparenz, Unschärfe einstellbar",
       "liquidGlassModeRealDesc": "Verwendet SVG-Brechungsfilter für Kantenbrechung und Chromatische Aberration, transparenter aber GPU-intensiver",
+      "islandLiquidGlassLabel": "Dynamic Island Flüssiges Glas",
+      "islandLiquidGlassDesc": "Wendet den SVG-Brechungseffekt (transparentes Glas) auf Dynamic-Island-Benachrichtigungen an",
       "jellyBounce": "Gelee-Wackeln",
       "jellyBounceLabel": "Gelee-Wackel-Effekt",
       "jellyBounceDesc": "Wenn aktiviert, haben alle Karten, Menüs und die Navigationsleiste eine elastische Skalierungsanimation bei Interaktionen und Zustandswechseln",

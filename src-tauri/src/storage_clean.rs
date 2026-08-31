@@ -1,10 +1,7 @@
+use crate::storage_scan::{current_user_visible_size, empty_all_recycle_bins};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
-use std::process::Command;
-
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CleanItem {
@@ -93,23 +90,6 @@ fn get_windows_dir() -> PathBuf {
     PathBuf::from("C:\\Windows")
 }
 
-fn get_recycle_bin_size() -> u64 {
-    let drives = ["C:", "D:", "E:", "F:"];
-    let mut total = 0u64;
-
-    for drive in &drives {
-        let recycle_path = PathBuf::from(drive).join("$Recycle.Bin");
-        total += get_dir_size(&recycle_path);
-    }
-
-    if total == 0 {
-        let c_recycle = PathBuf::from("C:\\$Recycle.Bin");
-        total += get_dir_size(&c_recycle);
-    }
-
-    total
-}
-
 #[allow(dead_code)]
 fn get_thumbs_db_size(drive: &str) -> u64 {
     let mut total = 0;
@@ -174,7 +154,9 @@ pub async fn scan_storage_items() -> Result<ScanResult, String> {
         name: "回收站".to_string(),
         path: "各磁盘 $Recycle.Bin".to_string(),
         exists: true,
-        size_bytes: get_recycle_bin_size(),
+        // 只统计当前用户可见条目($I/$R 配对),与清理口径一致:
+        // desktop.ini、其他 SID 与孤儿元数据清不掉,也不展示。
+        size_bytes: current_user_visible_size(),
         requires_admin: false,
         description: "已删除文件的暂存区，清空后释放磁盘空间".to_string(),
     });
@@ -312,18 +294,6 @@ fn clean_single_file(path: &PathBuf) -> (u64, Vec<String>) {
     }
 }
 
-fn empty_recycle_bin_via_powershell() -> bool {
-    let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "Clear-RecycleBin -Force -ErrorAction SilentlyContinue"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
-
-    match result {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
-    }
-}
-
 fn clean_thumbs_db_files(drive: &str) -> (u64, Vec<String>) {
     let mut freed = 0u64;
     let mut skipped = Vec::new();
@@ -391,10 +361,12 @@ pub async fn clean_storage_items(item_ids: Vec<String>) -> Result<CleanResult, S
                 clean_dir_contents(&get_windows_temp())
             }
             "recycle_bin" => {
-                if empty_recycle_bin_via_powershell() {
-                    (0, Vec::new())
-                } else {
-                    (0, vec!["回收站清理失败".to_string()])
+                // Shell 标准流程清空全部磁盘回收站;释放量按清理前的可见条目统计,
+                // 与扫描口径一致。desktop.ini 等不可清理项本来就不计入。
+                let size = current_user_visible_size();
+                match empty_all_recycle_bins() {
+                    Ok(_) => (size, Vec::new()),
+                    Err(error) => (0, vec![format!("清空回收站失败: {}", error)]),
                 }
             }
             "thumbnail_cache" => {
@@ -499,15 +471,15 @@ pub async fn clean_storage_items(item_ids: Vec<String>) -> Result<CleanResult, S
 
 #[tauri::command]
 pub async fn empty_recycle_bin_cmd() -> Result<CleanResult, String> {
-    if empty_recycle_bin_via_powershell() {
-        Ok(CleanResult {
+    let size = current_user_visible_size();
+    match empty_all_recycle_bins() {
+        Ok(_) => Ok(CleanResult {
             success: true,
             message: "回收站已清空".to_string(),
-            freed_bytes: 0,
+            freed_bytes: size,
             skipped_files: Vec::new(),
-        })
-    } else {
-        Err("清空回收站失败".to_string())
+        }),
+        Err(error) => Err(format!("清空回收站失败: {}", error)),
     }
 }
 

@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 移除右键菜单中的"复制到文件夹"和"移动到文件夹"
+
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Copy To]
+
+[-HKEY_LOCAL_MACHINE\SOFTWARE\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Move To]

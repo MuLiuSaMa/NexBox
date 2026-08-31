@@ -190,7 +190,147 @@ pub async fn restore_adapter_power_saving() -> Result<PerfTweakResult, String> {
     })
 }
 
-// === 5. DNS 优化 ===
+// === 5. DNS 延迟探测(真实 DNS 查询,UDP 直连,无进程启动开销) ===
+
+/// DNS 探测结果
+#[derive(serde::Serialize)]
+pub struct DnsProbeResult {
+    /// 往返延迟(毫秒,微秒精度保留小数,本地劫持时可能小于 1)
+    pub latency_ms: f64,
+    /// 实际应答的来源 IP(≠ 查询目标即被本地代理/安全软件劫持)
+    pub responder: String,
+    /// 到达目标实际经过的网卡名(TUN 虚拟网卡/安全软件驱动会在此现形)
+    pub via_interface: Option<String>,
+}
+
+/// 查询到达目标 IPv4 所走网卡的友好名称。
+#[cfg(windows)]
+fn route_interface_name(ip: std::net::Ipv4Addr) -> Option<String> {
+    use winapi::um::iphlpapi::{GetAdaptersAddresses, GetBestInterface};
+    use winapi::um::iptypes::IP_ADAPTER_ADDRESSES;
+
+    const ERROR_BUFFER_OVERFLOW: u32 = 111;
+
+    let mut best_if: u32 = 0;
+    // GetBestInterface 需要网络字节序的 IPv4 地址
+    let dest = u32::from(ip).to_be();
+    unsafe {
+        if GetBestInterface(dest, &mut best_if) != 0 {
+            return None;
+        }
+    }
+
+    // 标准两次调用模式:AF_INET=2,缓冲区不足(111)时按返回大小重试
+    const AF_INET: u32 = 2;
+    let mut size: u32 = 16 * 1024;
+    let mut buffer;
+    loop {
+        buffer = vec![0u8; size as usize];
+        let rc = unsafe {
+            GetAdaptersAddresses(
+                AF_INET,
+                0,
+                std::ptr::null_mut(),
+                buffer.as_mut_ptr() as *mut IP_ADAPTER_ADDRESSES,
+                &mut size,
+            )
+        };
+        if rc == 0 {
+            break;
+        }
+        if rc == ERROR_BUFFER_OVERFLOW {
+            continue;
+        }
+        return None;
+    }
+
+    let mut node = buffer.as_ptr() as *const IP_ADAPTER_ADDRESSES;
+    while !node.is_null() {
+        let adapter = unsafe { &*node };
+        if unsafe { adapter.u.s().IfIndex } as u32 == best_if {
+            let name = adapter.FriendlyName;
+            let mut len = 0usize;
+            unsafe {
+                while *name.add(len) != 0 {
+                    len += 1;
+                }
+            }
+            return Some(unsafe { String::from_utf16_lossy(std::slice::from_raw_parts(name, len)) });
+        }
+        node = adapter.Next;
+    }
+    None
+}
+
+#[cfg(not(windows))]
+fn route_interface_name(_ip: std::net::Ipv4Addr) -> Option<String> {
+    None
+}
+
+/// 测量指定 DNS 服务器的查询往返延迟。
+///
+/// 发送一个最小 DNS 查询(根域 "." 的 NS 记录,任何解析器都能从缓存直接应答,
+/// 不依赖具体域名)到 UDP 53 端口,以收到合法应答的时间差作为延迟;
+/// 超时或应答不合法视为失败。
+#[tauri::command]
+pub async fn test_dns_latency(ip: String) -> Result<DnsProbeResult, String> {
+    use std::net::{IpAddr, SocketAddr, UdpSocket};
+    use std::time::{Duration, Instant};
+
+    let addr = ip
+        .parse::<IpAddr>()
+        .map_err(|_| format!("无效的 DNS 地址: {}", ip))?;
+    let timeout = Duration::from_millis(1000);
+
+    tokio::task::spawn_blocking(move || {
+        let via_interface = match addr {
+            IpAddr::V4(v4) => route_interface_name(v4),
+            IpAddr::V6(_) => None,
+        };
+        let bind_addr = if addr.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" };
+        let socket = UdpSocket::bind(bind_addr).map_err(|e| format!("创建 UDP 套接字失败: {}", e))?;
+        socket
+            .set_read_timeout(Some(timeout))
+            .map_err(|e| format!("设置读取超时失败: {}", e))?;
+        socket
+            .set_write_timeout(Some(timeout))
+            .map_err(|e| format!("设置发送超时失败: {}", e))?;
+
+        // 报文:事务 ID(2) + 标志 RD=1(2) + QDCOUNT=1(2) + 其余计数 0(6)
+        //      + 根域 "." 标签 0x00(1) + QTYPE=NS(2) + QCLASS=IN(2)
+        let mut query = [0u8; 17];
+        query[0] = 0x4E;
+        query[1] = 0x58;
+        query[2] = 0x01;
+        query[5] = 0x01;
+        query[13] = 0x02;
+        query[16] = 0x01;
+
+        let started = Instant::now();
+        socket
+            .send_to(&query, SocketAddr::new(addr, 53))
+            .map_err(|e| format!("发送 DNS 查询失败: {}", e))?;
+
+        let mut response = [0u8; 512];
+        let (received, source) = socket
+            .recv_from(&mut response)
+            .map_err(|e| format!("DNS 无响应: {}", e))?;
+        let latency_ms = started.elapsed().as_micros() as f64 / 1000.0;
+        if received < 12 || response[0] != query[0] || response[1] != query[1] {
+            return Err("DNS 应答无效".to_string());
+        }
+
+        Ok(DnsProbeResult {
+            latency_ms,
+            responder: source.ip().to_string(),
+            via_interface,
+        })
+    })
+    .await
+    .map_err(|e| format!("DNS 测速任务异常: {}", e))?
+}
+
+// === 6. DNS 优化 ===
 
 #[tauri::command]
 pub async fn set_dns_servers(dns_primary: String, dns_secondary: String) -> Result<PerfTweakResult, String> {

@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 CDP 客户数据平台（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
+"EnableCdp"=-

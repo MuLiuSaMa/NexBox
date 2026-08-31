@@ -674,23 +674,48 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
 }
 
 fn get_gpu_info() -> Vec<GpuInfo> {
-    // 优先级：NVML（NVIDIA）→ LHML（AMD / Intel / 通用）。
+    // NVML（NVIDIA）+ LHML（AMD / Intel / 通用）合并，不再"NVML 命中即返回"。
+    // 之前 NVML 有结果时直接 return，会导致 NVIDIA + AMD 组合（核显或双独显）下
+    // AMD 显卡只在顶部状态卡出现（顶部走 LHML 全量分组，保留 AMD）、底部没有显卡卡。
     // 两者都提供真实显存，修复 AMD 显卡 >4GB 显存被 WMI AdapterRAM(Uint32) 溢出吞掉的问题。
-    // WMI 不再作为本函数的数据源，仅由 get_static_hardware_info 兜底并补充静态字段。
 
-    // 1. 尝试用 NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本；已过滤 vGPU）
-    let nvml_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
-    match nvml_result {
-        Ok(Ok(gpus)) if !gpus.is_empty() => return gpus,
-        Ok(Ok(_)) | Ok(Err(_)) => {} // NVML 返回空或查询失败，继续下一方案
-        Err(_) => log::warn!("NVML 检测崩溃，已跳过"),
-    }
+    // 1. NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本；已过滤 vGPU）
+    let nvml_gpus = match std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml()) {
+        Ok(Ok(gpus)) => gpus,
+        Ok(Err(e)) => {
+            log::debug!("NVML 查询失败，仅用 LHML: {}", e);
+            Vec::new()
+        }
+        Err(_) => {
+            log::warn!("NVML 检测崩溃，已跳过");
+            Vec::new()
+        }
+    };
 
-    // 2. 通用 LHML 兜底（支持所有厂商：AMD / Intel / NVIDIA），并过滤虚拟显卡
-    get_gpus_from_lhml()
+    // 2. LHML 获取 AMD / Intel / 其它显卡（内部已有"存在 NVIDIA 独显时跳过 Intel 核显"逻辑，并过滤虚拟显卡）
+    let lhml_gpus: Vec<GpuInfo> = get_gpus_from_lhml()
         .into_iter()
         .filter(|g| !is_virtual_gpu_by_name(&g.name))
-        .collect()
+        .collect();
+
+    // 3. 合并去重：NVIDIA 卡通常同时出现在两个来源（NVAPI 与 NVML 名称一致），
+    //    按归一化名称去重，保留 NVML 条目（含驱动版本）。
+    //    只对 NVML 部分去重：LHML 自身可能存在同名的多张卡（按总线号区分），不能互相去重。
+    let mut merged = nvml_gpus;
+    let nvml_count = merged.len();
+    for g in lhml_gpus {
+        let norm = normalize_gpu_name(&g.name);
+        let dup = !norm.is_empty()
+            && merged[..nvml_count]
+                .iter()
+                .any(|m| normalize_gpu_name(&m.name) == norm);
+        if dup {
+            log::debug!("显卡去重(LHML 与 NVML 同名): {}", g.name);
+        } else {
+            merged.push(g);
+        }
+    }
+    merged
 }
 
 /// 将 WMI 的静态字段补充到动态 GPU 列表（NVML/LHML）上。
@@ -866,7 +891,7 @@ fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Optio
 }
 
 // 获取CPU的动态数据（占用）- 使用 sysinfo 库
-fn get_cpu_dynamic_info() -> Option<u16> {
+pub(crate) fn get_cpu_dynamic_info() -> Option<u16> {
     use sysinfo::CpuRefreshKind;
     use std::thread;
     use std::time::Duration;
@@ -899,6 +924,59 @@ fn get_cpu_dynamic_info() -> Option<u16> {
     
     log::debug!("CPU占用 (sysinfo): {}%", usage);
     Some(usage)
+}
+
+/// 免驱动读取当前 CPU 频率（MHz），取所有逻辑处理器的最大值。
+/// CallNtPowerInformation(ProcessorInformation) 用户态即可调用，任何 CPU 都支持。
+/// 用于 LHML 无 CPU 频率传感器时的兜底：
+/// AMD FX/Bulldozer (family 15h/16h) 被 LibreHardwareMonitor 0.9.6 禁用支持
+/// （PawnIO 模块在该平台有死机问题，上游注释掉了 Amd10Cpu），这类 CPU 没有任何 LHML CPU 传感器。
+#[cfg(windows)]
+pub(crate) fn get_cpu_clock_mhz_fallback() -> Option<u32> {
+    use windows_sys::Win32::System::Power::{
+        CallNtPowerInformation, ProcessorInformation, PROCESSOR_POWER_INFORMATION,
+    };
+    use windows_sys::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};
+
+    unsafe {
+        let mut sys_info: SYSTEM_INFO = std::mem::zeroed();
+        GetSystemInfo(&mut sys_info);
+        let proc_count = sys_info.dwNumberOfProcessors as usize;
+        if proc_count == 0 {
+            return None;
+        }
+
+        let mut buffer = vec![PROCESSOR_POWER_INFORMATION {
+            Number: 0,
+            MaxMhz: 0,
+            CurrentMhz: 0,
+            MhzLimit: 0,
+            MaxIdleState: 0,
+            CurrentIdleState: 0,
+        }; proc_count];
+
+        let status = CallNtPowerInformation(
+            ProcessorInformation,
+            std::ptr::null(),
+            0,
+            buffer.as_mut_ptr() as *mut _,
+            (proc_count * std::mem::size_of::<PROCESSOR_POWER_INFORMATION>()) as u32,
+        );
+        if status != 0 {
+            return None;
+        }
+
+        buffer
+            .iter()
+            .map(|p| p.CurrentMhz)
+            .max()
+            .filter(|mhz| *mhz > 0)
+    }
+}
+
+#[cfg(not(windows))]
+pub(crate) fn get_cpu_clock_mhz_fallback() -> Option<u32> {
+    None
 }
 
 fn architecture_name(code: Option<u16>) -> String {
@@ -1493,9 +1571,15 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         monitor,
     };
 
-    {
+    // 仅在 LHML（NexBoxMonitor）至少成功读取过一次后才写入静态缓存。
+    // 首次调用可能发生在启动头几秒：此时 NVML 可能只有 NVIDIA、LHML 未就绪只剩 WMI 兜底，
+    // 若把这份不完整的 GPU 列表缓存住，顶部状态卡后来出现的 AMD/核显在底部会整个会话缺失。
+    // 不写缓存时下次 get_hardware 会重新构建，自愈成完整列表。
+    if crate::sensor::LHM_EVER_SUCCEEDED.load(std::sync::atomic::Ordering::Relaxed) {
         let mut cache = STATIC_HARDWARE_CACHE.lock().unwrap();
         *cache = Some(static_info.clone());
+    } else {
+        log::info!("NexBoxMonitor 尚未就绪，本次静态硬件信息不写入缓存");
     }
 
     log::info!("静态硬件信息并行获取完成");

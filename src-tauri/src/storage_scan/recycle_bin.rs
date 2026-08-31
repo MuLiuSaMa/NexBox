@@ -51,29 +51,40 @@ fn get_drive_letters() -> Vec<char> {
         .collect()
 }
 
+/// 一个有效回收站条目:配对的 $I 元数据与 $R 数据。
 #[cfg(windows)]
-fn collect_drive_entries(sid_path: &Path, category: &JunkCategory, entries: &mut Vec<FileInfo>) {
-    let directory_entries = match fs::read_dir(sid_path) {
-        Ok(entries) => entries,
-        Err(error) => {
-            debug!("无法读取回收站目录 {:?}: {}", sid_path, error);
-            return;
-        }
+struct VisibleEntry {
+    logical_size: u64,
+    data_path: PathBuf,
+    original_path: String,
+    deleted_at: i64,
+    is_dir: bool,
+}
+
+/// 枚举一个 SID 目录下的有效条目。
+///
+/// Windows 回收站条目由 $I 元数据和同后缀的 $R 数据组成;
+/// desktop.ini、其他文件与缺失 $R 的孤儿元数据都不是可见条目,
+/// Shell 清空 API 也不会处理它们,因此一律排除在统计之外。
+#[cfg(windows)]
+fn collect_visible_entries(sid_path: &Path) -> Vec<VisibleEntry> {
+    let Ok(directory_entries) = fs::read_dir(sid_path) else {
+        debug!("无法读取回收站目录 {:?}", sid_path);
+        return Vec::new();
     };
 
+    let mut entries = Vec::new();
     for directory_entry in directory_entries.filter_map(Result::ok) {
         let metadata_path = directory_entry.path();
         let Some(metadata_name) = metadata_path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
 
-        // Windows 回收站条目由 $I 元数据和同后缀的 $R 数据组成,其他文件不是可见条目。
         if !metadata_name.starts_with("$I") || metadata_name.len() <= 2 {
             continue;
         }
 
-        let data_name = format!("$R{}", &metadata_name[2..]);
-        let data_path = sid_path.join(data_name);
+        let data_path = sid_path.join(format!("$R{}", &metadata_name[2..]));
         if !data_path.exists() {
             // 缺失 $R 数据的 $I 文件是孤儿元数据,Explorer 不会将其展示为回收站条目。
             continue;
@@ -83,23 +94,70 @@ fn collect_drive_entries(sid_path: &Path, category: &JunkCategory, entries: &mut
             continue;
         };
 
-        let visible_name = Path::new(&original_path)
+        let is_dir = data_path.is_dir();
+
+        entries.push(VisibleEntry {
+            logical_size,
+            data_path,
+            original_path,
+            deleted_at,
+            is_dir,
+        });
+    }
+    entries
+}
+
+#[cfg(windows)]
+fn collect_drive_entries(sid_path: &Path, category: &JunkCategory, entries: &mut Vec<FileInfo>) {
+    for entry in collect_visible_entries(sid_path) {
+        let visible_name = Path::new(&entry.original_path)
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
             .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| original_path.clone());
+            .unwrap_or_else(|| entry.original_path.clone());
 
         entries.push(
             FileInfo::new(
-                data_path.to_string_lossy().into_owned(),
+                entry.data_path.to_string_lossy().into_owned(),
                 visible_name,
-                logical_size,
-                deleted_at,
-                data_path.is_dir(),
+                entry.logical_size,
+                entry.deleted_at,
+                entry.is_dir,
                 category.clone(),
             )
-            .with_original_path(original_path),
+            .with_original_path(entry.original_path),
         );
+    }
+}
+
+/// 统计当前用户可见条目的逻辑大小(快速清理的展示与释放口径)。
+///
+/// 必须与清理口径一致:desktop.ini、其他 SID 目录与孤儿元数据
+/// 不会被 Shell 清空 API 删除,因此不计入可清理大小,避免"清完总剩一点"。
+pub fn current_user_visible_size() -> u64 {
+    #[cfg(windows)]
+    {
+        let Some(user_sid) = current_user_sid() else {
+            warn!("无法获取当前用户 SID，回收站大小按 0 统计");
+            return 0;
+        };
+
+        get_drive_letters()
+            .into_iter()
+            .map(|drive_letter| {
+                let sid_path =
+                    PathBuf::from(format!("{}:\\$Recycle.Bin\\{}", drive_letter, user_sid));
+                collect_visible_entries(&sid_path)
+                    .into_iter()
+                    .map(|entry| entry.logical_size)
+                    .sum::<u64>()
+            })
+            .sum()
+    }
+
+    #[cfg(not(windows))]
+    {
+        0
     }
 }
 

@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用云优化内容
+; 阻止应用更新和文件同步等云优化内容，减少互联网带宽占用
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent]
+"DisableCloudOptimizedContent"=dword:00000001

@@ -45,12 +45,14 @@ import {
   Boxes,
   Globe,
   Layers,
+  Keyboard,
 } from "lucide-react";
 
 export type OptimizerCategory =
   | "gaming"
   | "nvidia"
   | "amd"
+  | "intel"
   | "performance"
   | "privacy"
   | "ai"
@@ -66,7 +68,8 @@ export interface OptimizerItem {
   color: string;
   titleKey: string;
   descKey: string;
-  requiresReboot: boolean;
+  /** 风险等级：low 低风险 | medium 中风险 | high 高风险 */
+  risk: "low" | "medium" | "high";
   /** 渲染类型：toggle（默认开关）| select（下拉选择） */
   type?: "toggle" | "select";
   /** select 类型的选项列表 */
@@ -96,7 +99,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.gaming.mmcssGameConfig",
     descKey: "systemOptimizer.gaming.mmcssGameConfigDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "gamePriority",
@@ -106,17 +109,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.gaming.gamePriority",
     descKey: "systemOptimizer.gaming.gamePriorityDesc",
-    requiresReboot: true,
-  },
-  {
-    id: "networkSRResponse",
-    regName: "改进网络和 SR 响应能力",
-    category: "gaming",
-    icon: Network,
-    color: COLORS[2],
-    titleKey: "systemOptimizer.gaming.networkSRResponse",
-    descKey: "systemOptimizer.gaming.networkSRResponseDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "directXAutoHDR",
@@ -126,7 +119,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.gaming.directXAutoHDR",
     descKey: "systemOptimizer.gaming.directXAutoHDRDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "directXFlipModel",
@@ -136,7 +129,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.gaming.directXFlipModel",
     descKey: "systemOptimizer.gaming.directXFlipModelDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "directXVRR",
@@ -146,7 +139,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.gaming.directXVRR",
     descKey: "systemOptimizer.gaming.directXVRRDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableDXMaxWindow",
@@ -156,7 +149,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.gaming.disableDXMaxWindow",
     descKey: "systemOptimizer.gaming.disableDXMaxWindowDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableGPUPreemption",
@@ -166,7 +159,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.gaming.disableGPUPreemption",
     descKey: "systemOptimizer.gaming.disableGPUPreemptionDesc",
-    requiresReboot: false,
+    risk: "medium",
   },
   {
     id: "disableGameBar",
@@ -176,7 +169,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.gaming.disableGameBar",
     descKey: "systemOptimizer.gaming.disableGameBarDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableGameDVR",
@@ -186,7 +179,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[9],
     titleKey: "systemOptimizer.gaming.disableGameDVR",
     descKey: "systemOptimizer.gaming.disableGameDVRDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableBcastDVR",
@@ -196,7 +189,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[10],
     titleKey: "systemOptimizer.gaming.disableBcastDVR",
     descKey: "systemOptimizer.gaming.disableBcastDVRDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableAutoColorMgmt",
@@ -206,7 +199,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[11],
     titleKey: "systemOptimizer.gaming.disableAutoColorMgmt",
     descKey: "systemOptimizer.gaming.disableAutoColorMgmtDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "gameMode",
@@ -216,7 +209,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[12],
     titleKey: "systemOptimizer.gaming.gameMode",
     descKey: "systemOptimizer.gaming.gameModeDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "win32Priority",
@@ -226,7 +219,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[13],
     titleKey: "systemOptimizer.gaming.win32Priority",
     descKey: "systemOptimizer.gaming.win32PriorityDesc",
-    requiresReboot: false,
+    risk: "low",
     type: "select",
     defaultSelectValue: "program",
     options: [
@@ -240,6 +233,11 @@ export const optimizerItems: OptimizerItem[] = [
         labelKey: "systemOptimizer.gaming.win32PriorityBackground",
         regName: "调整处理器以获得最佳性能-后台服务",
       },
+      {
+        value: "extreme",
+        labelKey: "systemOptimizer.gaming.win32PriorityExtreme",
+        regName: "调整处理器以获得最佳性能-极致前台",
+      },
     ],
   },
   {
@@ -250,7 +248,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[14],
     titleKey: "systemOptimizer.gaming.systemResponsiveness",
     descKey: "systemOptimizer.gaming.systemResponsivenessDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "hags",
@@ -260,7 +258,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.gaming.hags",
     descKey: "systemOptimizer.gaming.hagsDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "backgroundServices",
@@ -270,7 +268,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.gaming.backgroundServices",
     descKey: "systemOptimizer.gaming.backgroundServicesDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableMpo",
@@ -280,7 +278,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.gaming.disableMpo",
     descKey: "systemOptimizer.gaming.disableMpoDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
 
   // ============== NVIDIA 显卡优化（11 项） ==============
@@ -292,7 +290,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.nvidia.lowLatencyThreshold",
     descKey: "systemOptimizer.nvidia.lowLatencyThresholdDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "perCpuDPC",
@@ -302,7 +300,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.nvidia.perCpuDPC",
     descKey: "systemOptimizer.nvidia.perCpuDCPDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "imageSharpening",
@@ -312,7 +310,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.nvidia.imageSharpening",
     descKey: "systemOptimizer.nvidia.imageSharpeningDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableGpuPowerMgmt",
@@ -322,7 +320,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.nvidia.disableGpuPowerMgmt",
     descKey: "systemOptimizer.nvidia.disableGpuPowerMgmtDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableHDCP",
@@ -332,7 +330,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.nvidia.disableHDCP",
     descKey: "systemOptimizer.nvidia.disableHDCPDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableWriteCombining",
@@ -342,7 +340,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.nvidia.disableWriteCombining",
     descKey: "systemOptimizer.nvidia.disableWriteCombiningDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableClockGating",
@@ -352,7 +350,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.nvidia.disableClockGating",
     descKey: "systemOptimizer.nvidia.disableClockGatingDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "disableTelemetry",
@@ -362,7 +360,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.nvidia.disableTelemetry",
     descKey: "systemOptimizer.nvidia.disableTelemetryDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableDriverLog",
@@ -372,7 +370,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.nvidia.disableDriverLog",
     descKey: "systemOptimizer.nvidia.disableDriverLogDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "lockPState0",
@@ -382,7 +380,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[9],
     titleKey: "systemOptimizer.nvidia.lockPState0",
     descKey: "systemOptimizer.nvidia.lockPState0Desc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "disableMiracastOverlay",
@@ -392,10 +390,10 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[10],
     titleKey: "systemOptimizer.nvidia.disableMiracastOverlay",
     descKey: "systemOptimizer.nvidia.disableMiracastOverlayDesc",
-    requiresReboot: true,
+    risk: "low",
   },
 
-  // ============== AMD 显卡优化（1 项） ==============
+  // ============== AMD 显卡优化 ==============
   {
     id: "shaderCache",
     regName: "强制启用AMD Shader Cache",
@@ -404,7 +402,29 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.amd.shaderCache",
     descKey: "systemOptimizer.amd.shaderCacheDesc",
-    requiresReboot: false,
+    risk: "low",
+  },
+  {
+    id: "amdPowerOptimization",
+    regName: "AMD显卡功耗优化",
+    category: "amd",
+    icon: Zap,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.amd.amdPowerOptimization",
+    descKey: "systemOptimizer.amd.amdPowerOptimizationDesc",
+    risk: "medium",
+  },
+
+  // ============== Intel 显卡优化 ==============
+  {
+    id: "intelGraphicsOptimization",
+    regName: "Intel显卡优化",
+    category: "intel",
+    icon: Monitor,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.intel.intelGraphicsOptimization",
+    descKey: "systemOptimizer.intel.intelGraphicsOptimizationDesc",
+    risk: "medium",
   },
 
   // ============== 系统性能调优（8 项） ==============
@@ -416,7 +436,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.performance.intelTSX",
     descKey: "systemOptimizer.performance.intelTSXDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "mergeSvcHost",
@@ -426,7 +446,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.performance.mergeSvcHost",
     descKey: "systemOptimizer.performance.mergeSvcHostDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "shortenTaskTimeout",
@@ -436,7 +456,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.performance.shortenTaskTimeout",
     descKey: "systemOptimizer.performance.shortenTaskTimeoutDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "shortenServiceTimeout",
@@ -446,7 +466,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.performance.shortenServiceTimeout",
     descKey: "systemOptimizer.performance.shortenServiceTimeoutDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "mouseHoverDelay",
@@ -456,7 +476,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.performance.mouseHoverDelay",
     descKey: "systemOptimizer.performance.mouseHoverDelayDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableStartupDelay",
@@ -466,7 +486,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.performance.disableStartupDelay",
     descKey: "systemOptimizer.performance.disableStartupDelayDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disablePowerSaving",
@@ -476,7 +496,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.performance.disablePowerSaving",
     descKey: "systemOptimizer.performance.disablePowerSavingDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "nvmeTuning",
@@ -486,7 +506,87 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.performance.nvmeTuning",
     descKey: "systemOptimizer.performance.nvmeTuningDesc",
-    requiresReboot: true,
+    risk: "low",
+  },
+  {
+    id: "disableMenuDelay",
+    regName: "禁用菜单显示延迟",
+    category: "performance",
+    icon: MousePointer,
+    color: COLORS[9],
+    titleKey: "systemOptimizer.performance.disableMenuDelay",
+    descKey: "systemOptimizer.performance.disableMenuDelayDesc",
+    risk: "low",
+  },
+  {
+    id: "keyboardLatency",
+    regName: "优化键盘延迟",
+    category: "performance",
+    icon: Keyboard,
+    color: COLORS[10],
+    titleKey: "systemOptimizer.performance.keyboardLatency",
+    descKey: "systemOptimizer.performance.keyboardLatencyDesc",
+    risk: "low",
+  },
+  {
+    id: "disableAutoComplete",
+    regName: "禁用自动完成",
+    category: "performance",
+    icon: Search,
+    color: COLORS[11],
+    titleKey: "systemOptimizer.performance.disableAutoComplete",
+    descKey: "systemOptimizer.performance.disableAutoCompleteDesc",
+    risk: "low",
+  },
+  {
+    id: "disableWindowShake",
+    regName: "禁用窗口摇晃",
+    category: "performance",
+    icon: Monitor,
+    color: COLORS[12],
+    titleKey: "systemOptimizer.performance.disableWindowShake",
+    descKey: "systemOptimizer.performance.disableWindowShakeDesc",
+    risk: "low",
+  },
+  {
+    id: "enableLowDiskCheck",
+    regName: "启用低磁盘空间检查",
+    category: "performance",
+    icon: HardDrive,
+    color: COLORS[13],
+    titleKey: "systemOptimizer.performance.enableLowDiskCheck",
+    descKey: "systemOptimizer.performance.enableLowDiskCheckDesc",
+    risk: "low",
+  },
+  {
+    id: "disableLinkResolve",
+    regName: "禁用链接解析",
+    category: "performance",
+    icon: Network,
+    color: COLORS[14],
+    titleKey: "systemOptimizer.performance.disableLinkResolve",
+    descKey: "systemOptimizer.performance.disableLinkResolveDesc",
+    risk: "low",
+  },
+  {
+    id: "excludeWUDrivers",
+    regName: "从Windows更新中排除驱动程序",
+    category: "performance",
+    icon: Cpu,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.performance.excludeWUDrivers",
+    descKey: "systemOptimizer.performance.excludeWUDriversDesc",
+    risk: "medium",
+  },
+  {
+    id: "ifeoProcessTuning",
+    regName: "IFEO系统进程优化",
+    category: "performance",
+    icon: Cog,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.performance.ifeoProcessTuning",
+    descKey: "systemOptimizer.performance.ifeoProcessTuningDesc",
+    risk: "medium",
   },
 
   // ============== 隐私与遥测（10 项） ==============
@@ -498,7 +598,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.privacy.disableTelemetrySvc",
     descKey: "systemOptimizer.privacy.disableTelemetrySvcDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableCEIP",
@@ -508,7 +608,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.privacy.disableCEIP",
     descKey: "systemOptimizer.privacy.disableCEIPDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableDotNetTelemetry",
@@ -518,7 +618,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.privacy.disableDotNetTelemetry",
     descKey: "systemOptimizer.privacy.disableDotNetTelemetryDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAppImpactTelemetry",
@@ -528,7 +628,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.privacy.disableAppImpactTelemetry",
     descKey: "systemOptimizer.privacy.disableAppImpactTelemetryDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAppImpactTelemetryAgent",
@@ -538,7 +638,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.privacy.disableAppImpactTelemetryAgent",
     descKey: "systemOptimizer.privacy.disableAppImpactTelemetryAgentDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableLicenseTelemetry",
@@ -548,7 +648,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.privacy.disableLicenseTelemetry",
     descKey: "systemOptimizer.privacy.disableLicenseTelemetryDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableScheduledDiag",
@@ -558,7 +658,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.privacy.disableScheduledDiag",
     descKey: "systemOptimizer.privacy.disableScheduledDiagDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableWebcamTelemetry",
@@ -568,7 +668,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.privacy.disableWebcamTelemetry",
     descKey: "systemOptimizer.privacy.disableWebcamTelemetryDesc",
-    requiresReboot: false,
+    risk: "medium",
   },
   {
     id: "disableWritingFeedback",
@@ -578,7 +678,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.privacy.disableWritingFeedback",
     descKey: "systemOptimizer.privacy.disableWritingFeedbackDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableErrorReporting",
@@ -588,7 +688,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[9],
     titleKey: "systemOptimizer.privacy.disableErrorReporting",
     descKey: "systemOptimizer.privacy.disableErrorReportingDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAdvertisingId",
@@ -598,7 +698,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[10],
     titleKey: "systemOptimizer.privacy.disableAdvertisingId",
     descKey: "systemOptimizer.privacy.disableAdvertisingIdDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAdsPromotional",
@@ -608,7 +708,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[11],
     titleKey: "systemOptimizer.privacy.disableAdsPromotional",
     descKey: "systemOptimizer.privacy.disableAdsPromotionalDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableOnlineSpeechRecognition",
@@ -618,7 +718,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[12],
     titleKey: "systemOptimizer.privacy.disableOnlineSpeechRecognition",
     descKey: "systemOptimizer.privacy.disableOnlineSpeechRecognitionDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableTailoredExperiences",
@@ -628,7 +728,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[13],
     titleKey: "systemOptimizer.privacy.disableTailoredExperiences",
     descKey: "systemOptimizer.privacy.disableTailoredExperiencesDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableMsaCloudSearch",
@@ -638,7 +738,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[14],
     titleKey: "systemOptimizer.privacy.disableMsaCloudSearch",
     descKey: "systemOptimizer.privacy.disableMsaCloudSearchDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableLockScreenSpotlight",
@@ -648,7 +748,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.privacy.disableLockScreenSpotlight",
     descKey: "systemOptimizer.privacy.disableLockScreenSpotlightDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableInkingDictionary",
@@ -658,7 +758,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.privacy.disableInkingDictionary",
     descKey: "systemOptimizer.privacy.disableInkingDictionaryDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableFeedbackRequests",
@@ -668,7 +768,187 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.privacy.disableFeedbackRequests",
     descKey: "systemOptimizer.privacy.disableFeedbackRequestsDesc",
-    requiresReboot: false,
+    risk: "low",
+  },
+  {
+    id: "disableCortana",
+    regName: "禁用Cortana",
+    category: "privacy",
+    icon: MicOff,
+    color: COLORS[4],
+    titleKey: "systemOptimizer.privacy.disableCortana",
+    descKey: "systemOptimizer.privacy.disableCortanaDesc",
+    risk: "low",
+  },
+  {
+    id: "disableNewsAndInterests",
+    regName: "禁用新闻和兴趣",
+    category: "privacy",
+    icon: Megaphone,
+    color: COLORS[5],
+    titleKey: "systemOptimizer.privacy.disableNewsAndInterests",
+    descKey: "systemOptimizer.privacy.disableNewsAndInterestsDesc",
+    risk: "low",
+  },
+  {
+    id: "disableCloudOptimizedContent",
+    regName: "禁用云优化内容",
+    category: "privacy",
+    icon: CloudOff,
+    color: COLORS[6],
+    titleKey: "systemOptimizer.privacy.disableCloudOptimizedContent",
+    descKey: "systemOptimizer.privacy.disableCloudOptimizedContentDesc",
+    risk: "low",
+  },
+  {
+    id: "disableEdgeTelemetry",
+    regName: "禁用Edge遥测",
+    category: "privacy",
+    icon: Chrome,
+    color: COLORS[7],
+    titleKey: "systemOptimizer.privacy.disableEdgeTelemetry",
+    descKey: "systemOptimizer.privacy.disableEdgeTelemetryDesc",
+    risk: "medium",
+  },
+  {
+    id: "disableVisualStudioTelemetry",
+    regName: "禁用VisualStudio遥测",
+    category: "privacy",
+    icon: Code,
+    color: COLORS[8],
+    titleKey: "systemOptimizer.privacy.disableVisualStudioTelemetry",
+    descKey: "systemOptimizer.privacy.disableVisualStudioTelemetryDesc",
+    risk: "low",
+  },
+  {
+    id: "disableChromeTelemetry",
+    regName: "禁用Chrome遥测",
+    category: "privacy",
+    icon: Chrome,
+    color: COLORS[9],
+    titleKey: "systemOptimizer.privacy.disableChromeTelemetry",
+    descKey: "systemOptimizer.privacy.disableChromeTelemetryDesc",
+    risk: "low",
+  },
+  {
+    id: "disableFirefoxTelemetry",
+    regName: "禁用Firefox遥测",
+    category: "privacy",
+    icon: Globe,
+    color: COLORS[10],
+    titleKey: "systemOptimizer.privacy.disableFirefoxTelemetry",
+    descKey: "systemOptimizer.privacy.disableFirefoxTelemetryDesc",
+    risk: "low",
+  },
+  {
+    id: "disableActivityFeed",
+    regName: "禁用活动反馈",
+    category: "privacy",
+    icon: Activity,
+    color: COLORS[11],
+    titleKey: "systemOptimizer.privacy.disableActivityFeed",
+    descKey: "systemOptimizer.privacy.disableActivityFeedDesc",
+    risk: "low",
+  },
+  {
+    id: "disableCdp",
+    regName: "禁用CDP客户数据平台",
+    category: "privacy",
+    icon: Boxes,
+    color: COLORS[12],
+    titleKey: "systemOptimizer.privacy.disableCdp",
+    descKey: "systemOptimizer.privacy.disableCdpDesc",
+    risk: "medium",
+  },
+  {
+    id: "disableDiagnosticsToast",
+    regName: "禁用诊断弹窗",
+    category: "privacy",
+    icon: AlertTriangle,
+    color: COLORS[13],
+    titleKey: "systemOptimizer.privacy.disableDiagnosticsToast",
+    descKey: "systemOptimizer.privacy.disableDiagnosticsToastDesc",
+    risk: "low",
+  },
+  {
+    id: "disableHandwritingSharing",
+    regName: "禁用手写数据共享",
+    category: "privacy",
+    icon: Pen,
+    color: COLORS[14],
+    titleKey: "systemOptimizer.privacy.disableHandwritingSharing",
+    descKey: "systemOptimizer.privacy.disableHandwritingSharingDesc",
+    risk: "low",
+  },
+  {
+    id: "disableTextInputCollection",
+    regName: "禁用文本输入数据收集",
+    category: "privacy",
+    icon: Pen,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.privacy.disableTextInputCollection",
+    descKey: "systemOptimizer.privacy.disableTextInputCollectionDesc",
+    risk: "low",
+  },
+  {
+    id: "disableInputPersonalization",
+    regName: "禁用输入个性化",
+    category: "privacy",
+    icon: Cog,
+    color: COLORS[1],
+    titleKey: "systemOptimizer.privacy.disableInputPersonalization",
+    descKey: "systemOptimizer.privacy.disableInputPersonalizationDesc",
+    risk: "low",
+  },
+  {
+    id: "disableActivityUploads",
+    regName: "禁用活动上传",
+    category: "privacy",
+    icon: CloudOff,
+    color: COLORS[2],
+    titleKey: "systemOptimizer.privacy.disableActivityUploads",
+    descKey: "systemOptimizer.privacy.disableActivityUploadsDesc",
+    risk: "low",
+  },
+  {
+    id: "disableMessageSync",
+    regName: "禁用消息同步",
+    category: "privacy",
+    icon: MessageSquare,
+    color: COLORS[3],
+    titleKey: "systemOptimizer.privacy.disableMessageSync",
+    descKey: "systemOptimizer.privacy.disableMessageSyncDesc",
+    risk: "low",
+  },
+  {
+    id: "disableSettingSync",
+    regName: "禁用设置同步",
+    category: "privacy",
+    icon: Layers,
+    color: COLORS[4],
+    titleKey: "systemOptimizer.privacy.disableSettingSync",
+    descKey: "systemOptimizer.privacy.disableSettingSyncDesc",
+    risk: "medium",
+  },
+  {
+    id: "disableVoiceActivation",
+    regName: "禁用语音激活",
+    category: "privacy",
+    icon: MicOff,
+    color: COLORS[5],
+    titleKey: "systemOptimizer.privacy.disableVoiceActivation",
+    descKey: "systemOptimizer.privacy.disableVoiceActivationDesc",
+    risk: "low",
+  },
+  {
+    id: "disableFindMyDevice",
+    regName: "禁用查找我的设备",
+    category: "privacy",
+    icon: MapIcon,
+    color: COLORS[6],
+    titleKey: "systemOptimizer.privacy.disableFindMyDevice",
+    descKey: "systemOptimizer.privacy.disableFindMyDeviceDesc",
+    risk: "medium",
   },
 
   // ============== Windows AI 优化（9 项） ==============
@@ -680,7 +960,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.ai.disableCopilot",
     descKey: "systemOptimizer.ai.disableCopilotDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableRecallSnapshots",
@@ -690,7 +970,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.ai.disableRecallSnapshots",
     descKey: "systemOptimizer.ai.disableRecallSnapshotsDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "blockRecallEnablement",
@@ -700,7 +980,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.ai.blockRecallEnablement",
     descKey: "systemOptimizer.ai.blockRecallEnablementDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAiDataAnalysis",
@@ -710,7 +990,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.ai.disableAiDataAnalysis",
     descKey: "systemOptimizer.ai.disableAiDataAnalysisDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableClickToDo",
@@ -720,7 +1000,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.ai.disableClickToDo",
     descKey: "systemOptimizer.ai.disableClickToDoDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAiSettingsAgent",
@@ -730,7 +1010,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.ai.disableAiSettingsAgent",
     descKey: "systemOptimizer.ai.disableAiSettingsAgentDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAgentConnectors",
@@ -740,7 +1020,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.ai.disableAgentConnectors",
     descKey: "systemOptimizer.ai.disableAgentConnectorsDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAgentWorkspaces",
@@ -750,7 +1030,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.ai.disableAgentWorkspaces",
     descKey: "systemOptimizer.ai.disableAgentWorkspacesDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableRemoteAgentConnectors",
@@ -760,7 +1040,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.ai.disableRemoteAgentConnectors",
     descKey: "systemOptimizer.ai.disableRemoteAgentConnectorsDesc",
-    requiresReboot: false,
+    risk: "low",
   },
 
   // ============== 系统服务精简（11 项） ==============
@@ -772,7 +1052,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.services.disableSensorSvc",
     descKey: "systemOptimizer.services.disableSensorSvcDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableFaxSvc",
@@ -782,7 +1062,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.services.disableFaxSvc",
     descKey: "systemOptimizer.services.disableFaxSvcDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disablePrintSvc",
@@ -792,7 +1072,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.services.disablePrintSvc",
     descKey: "systemOptimizer.services.disablePrintSvcDesc",
-    requiresReboot: true,
+    risk: "medium",
   },
   {
     id: "disableMapsBroker",
@@ -802,7 +1082,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.services.disableMapsBroker",
     descKey: "systemOptimizer.services.disableMapsBrokerDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableUCPD",
@@ -812,7 +1092,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.services.disableUCPD",
     descKey: "systemOptimizer.services.disableUCPDDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableDCOM",
@@ -822,7 +1102,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.services.disableDCOM",
     descKey: "systemOptimizer.services.disableDCOMDesc",
-    requiresReboot: false,
+    risk: "high",
   },
   {
     id: "disableStorageSense",
@@ -832,7 +1112,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[6],
     titleKey: "systemOptimizer.services.disableStorageSense",
     descKey: "systemOptimizer.services.disableStorageSenseDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableAutoMaintenance",
@@ -842,7 +1122,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[7],
     titleKey: "systemOptimizer.services.disableAutoMaintenance",
     descKey: "systemOptimizer.services.disableAutoMaintenanceDesc",
-    requiresReboot: false,
+    risk: "medium",
   },
   {
     id: "disableAppCompat",
@@ -852,7 +1132,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[8],
     titleKey: "systemOptimizer.services.disableAppCompat",
     descKey: "systemOptimizer.services.disableAppCompatDesc",
-    requiresReboot: false,
+    risk: "medium",
   },
   {
     id: "disableStepRecorder",
@@ -862,7 +1142,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[9],
     titleKey: "systemOptimizer.services.disableStepRecorder",
     descKey: "systemOptimizer.services.disableStepRecorderDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disablePerfTips",
@@ -872,7 +1152,57 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[10],
     titleKey: "systemOptimizer.services.disablePerfTips",
     descKey: "systemOptimizer.services.disablePerfTipsDesc",
-    requiresReboot: false,
+    risk: "low",
+  },
+  {
+    id: "disableRemoteRegistry",
+    regName: "禁用远程注册表",
+    category: "services",
+    icon: Server,
+    color: COLORS[11],
+    titleKey: "systemOptimizer.services.disableRemoteRegistry",
+    descKey: "systemOptimizer.services.disableRemoteRegistryDesc",
+    risk: "low",
+  },
+  {
+    id: "disableSysMain",
+    regName: "禁用SysMain",
+    category: "services",
+    icon: Server,
+    color: COLORS[12],
+    titleKey: "systemOptimizer.services.disableSysMain",
+    descKey: "systemOptimizer.services.disableSysMainDesc",
+    risk: "low",
+  },
+  {
+    id: "disableSystemRestore",
+    regName: "禁用系统还原",
+    category: "services",
+    icon: ShieldOff,
+    color: COLORS[13],
+    titleKey: "systemOptimizer.services.disableSystemRestore",
+    descKey: "systemOptimizer.services.disableSystemRestoreDesc",
+    risk: "medium",
+  },
+  {
+    id: "disableSMBv1",
+    regName: "禁用SMBv1",
+    category: "services",
+    icon: Server,
+    color: COLORS[14],
+    titleKey: "systemOptimizer.services.disableSMBv1",
+    descKey: "systemOptimizer.services.disableSMBv1Desc",
+    risk: "low",
+  },
+  {
+    id: "disableSMBv2",
+    regName: "禁用SMBv2",
+    category: "services",
+    icon: Server,
+    color: COLORS[0],
+    titleKey: "systemOptimizer.services.disableSMBv2",
+    descKey: "systemOptimizer.services.disableSMBv2Desc",
+    risk: "high",
   },
 
   // ============== 磁盘与文件系统（5 项） ==============
@@ -884,7 +1214,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.disk.disable8dot3",
     descKey: "systemOptimizer.disk.disable8dot3Desc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableNtfsEncryption",
@@ -894,7 +1224,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.disk.disableNtfsEncryption",
     descKey: "systemOptimizer.disk.disableNtfsEncryptionDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableLastAccess",
@@ -904,7 +1234,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.disk.disableLastAccess",
     descKey: "systemOptimizer.disk.disableLastAccessDesc",
-    requiresReboot: true,
+    risk: "low",
   },
   {
     id: "disableReservedStorage",
@@ -914,7 +1244,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.disk.disableReservedStorage",
     descKey: "systemOptimizer.disk.disableReservedStorageDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableFullFsSearch",
@@ -924,7 +1254,17 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.disk.disableFullFsSearch",
     descKey: "systemOptimizer.disk.disableFullFsSearchDesc",
-    requiresReboot: false,
+    risk: "low",
+  },
+  {
+    id: "ntfsMftZone",
+    regName: "NTFS MFT区域保留",
+    category: "disk",
+    icon: HardDrive,
+    color: COLORS[5],
+    titleKey: "systemOptimizer.disk.ntfsMftZone",
+    descKey: "systemOptimizer.disk.ntfsMftZoneDesc",
+    risk: "medium",
   },
 
   // ============== 应用与界面（4 项） ==============
@@ -936,7 +1276,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.apps.disableBackgroundApps",
     descKey: "systemOptimizer.apps.disableBackgroundAppsDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableEdgeStartupBoost",
@@ -946,7 +1286,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.apps.disableEdgeStartupBoost",
     descKey: "systemOptimizer.apps.disableEdgeStartupBoostDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "slimEdgeAds",
@@ -956,7 +1296,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[2],
     titleKey: "systemOptimizer.apps.slimEdgeAds",
     descKey: "systemOptimizer.apps.slimEdgeAdsDesc",
-    requiresReboot: false,
+    risk: "low",
   },
   {
     id: "disableSearchWebView2",
@@ -966,7 +1306,27 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.apps.disableSearchWebView2",
     descKey: "systemOptimizer.apps.disableSearchWebView2Desc",
-    requiresReboot: false,
+    risk: "low",
+  },
+  {
+    id: "addCopyMoveContextMenu",
+    regName: "添加复制移动上下文菜单",
+    category: "apps",
+    icon: Layout,
+    color: COLORS[4],
+    titleKey: "systemOptimizer.apps.addCopyMoveContextMenu",
+    descKey: "systemOptimizer.apps.addCopyMoveContextMenuDesc",
+    risk: "low",
+  },
+  {
+    id: "disableStoreAutoUpdate",
+    regName: "禁用商店自动更新",
+    category: "apps",
+    icon: Chrome,
+    color: COLORS[5],
+    titleKey: "systemOptimizer.apps.disableStoreAutoUpdate",
+    descKey: "systemOptimizer.apps.disableStoreAutoUpdateDesc",
+    risk: "medium",
   },
 ];
 
@@ -974,6 +1334,7 @@ export const categoryLabels: Record<OptimizerCategory, string> = {
   gaming: "systemOptimizer.category.gaming",
   nvidia: "systemOptimizer.category.nvidia",
   amd: "systemOptimizer.category.amd",
+  intel: "systemOptimizer.category.intel",
   performance: "systemOptimizer.category.performance",
   privacy: "systemOptimizer.category.privacy",
   ai: "systemOptimizer.category.ai",
@@ -986,6 +1347,7 @@ export const categoryOrder: OptimizerCategory[] = [
   "gaming",
   "nvidia",
   "amd",
+  "intel",
   "performance",
   "privacy",
   "ai",

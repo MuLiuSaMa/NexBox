@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用语音激活
+; 通过策略强制拒绝应用的语音激活权限，防止应用监听语音命令
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\AppPrivacy]
+"LetAppsActivateWithVoice"=dword:00000002

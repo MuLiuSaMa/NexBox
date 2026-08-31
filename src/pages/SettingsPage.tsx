@@ -1593,6 +1593,8 @@ function AppearanceSettings() {
     setLiquidGlassBlur,
     liquidGlassMode,
     setLiquidGlassMode,
+    islandLiquidGlassEnabled,
+    setIslandLiquidGlassEnabled,
     backgroundBlur,
     setBackgroundBlur,
     activePresetIndex,
@@ -1619,6 +1621,7 @@ function AppearanceSettings() {
   const modeButtonActiveColor = useColorModeValue("gray.800", "white");
   const modeButtonInactiveBg = useColorModeValue("gray.100", "#1a1a1a");
   const modeButtonInactiveBorder = useColorModeValue("gray.200", "#333333");
+  const glassSectionBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
   const toast = useDynamicIsland("settings");
 
   const themeOptions = [
@@ -1931,6 +1934,25 @@ function AppearanceSettings() {
                 </SliderTrack>
                 <SliderThumb />
               </Slider>
+            </Box>
+          )}
+          {liquidGlassEnabled && (
+            <Box mt={4} pt={3} borderTop="1px solid" borderColor={glassSectionBorder}>
+              <HStack justify="space-between">
+                <Box flex={1}>
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.appearanceSettings.islandLiquidGlassLabel")}
+                  </Text>
+                  <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                    {t("settings.appearanceSettings.islandLiquidGlassDesc")}
+                  </Text>
+                </Box>
+                <ThemeSwitch
+                  size="md"
+                  isChecked={islandLiquidGlassEnabled}
+                  onChange={() => setIslandLiquidGlassEnabled(!islandLiquidGlassEnabled)}
+                />
+              </HStack>
             </Box>
           )}
         </LiquidGlassCard>
@@ -3100,7 +3122,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "9.2.5";
+  const currentVersion = "9.4.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

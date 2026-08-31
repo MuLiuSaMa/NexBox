@@ -143,7 +143,7 @@ interface MusicState {
   loadingLeftTracks: boolean;
   loadingRightTracks: boolean;
   loadingLyrics: boolean;
-  expandedStyle: "glass" | "modern" | "immersive" | "spectrum" | "vinyl";
+  expandedStyle: "glass" | "modern" | "immersive" | "spectrum" | "vinyl" | "cover";
   dynamicEnabled: boolean;
   coverFilmEffect: boolean;
   // 键盘媒体键控制内置播放器（设置 → 高级 → 媒体键控制）
@@ -191,7 +191,7 @@ interface MusicState {
   setLyricsHighlightColor: (color: string) => Promise<void>;
   setVinylColorMode: (mode: "auto" | "custom") => Promise<void>;
   setVinylCustomColor: (color: string) => Promise<void>;
-  setExpandedStyle: (style: "glass" | "modern" | "immersive" | "spectrum" | "vinyl") => Promise<void>;
+  setExpandedStyle: (style: "glass" | "modern" | "immersive" | "spectrum" | "vinyl" | "cover") => Promise<void>;
   setDynamicEnabled: (enabled: boolean) => Promise<void>;
   setCoverFilmEffect: (enabled: boolean) => Promise<void>;
   // 键盘媒体键控制（仅更新内存态）
@@ -395,11 +395,11 @@ function startTimeSync() {
   if (timeSyncTimer) return;
   timeSyncTimer = setInterval(() => {
     const state = useMusicStore.getState();
-    // 仅桌面歌词可见且正在播放时同步时间，暂停时跳过以节省 CPU
-    if (state.audioRef && state.desktopLyricsVisible && state.isPlaying) {
+    // 仅桌面歌词可见且音频实际出声时同步（含暂停缓出期间，桌面歌词需跟随渐弱的音乐）
+    if (state.audioRef && state.desktopLyricsVisible && !state.audioRef.paused) {
       emit("desktop-lyrics:time", {
         currentTime: state.audioRef.currentTime,
-        isPlaying: state.isPlaying,
+        isPlaying: true,
       });
     }
   }, 200);
@@ -632,6 +632,46 @@ async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalC
 }
 
 let playSongSeq = 0;
+
+// ── 播放/暂停音量缓入缓出 ──
+// 进度按已流逝时间计算：定时器被后台节流时只会跳变到终点，不会卡在半途
+const VOLUME_FADE_MS = 350;
+const VOLUME_FADE_TICK_MS = 16;
+let volumeFadeTimer: ReturnType<typeof setInterval> | null = null;
+let volumeFadeSeq = 0;
+// 当前渐变是否为「渐出后暂停」：渐出中途调音量时需立即补上暂停，避免"已暂停"状态下仍出声
+let volumeFadeIsPause = false;
+
+function cancelVolumeFade() {
+  volumeFadeSeq++;
+  if (volumeFadeTimer) {
+    clearInterval(volumeFadeTimer);
+    volumeFadeTimer = null;
+  }
+}
+
+/** 音量从当前值渐变到 to（smoothstep 缓入缓出曲线），结束时回调 onDone（如渐出后 pause） */
+function startVolumeFade(audio: HTMLAudioElement, to: number, onDone?: () => void) {
+  cancelVolumeFade();
+  const seq = ++volumeFadeSeq;
+  const from = audio.volume;
+  const start = performance.now();
+  volumeFadeTimer = setInterval(() => {
+    if (seq !== volumeFadeSeq) {
+      clearInterval(volumeFadeTimer!);
+      volumeFadeTimer = null;
+      return;
+    }
+    const t = Math.min(1, (performance.now() - start) / VOLUME_FADE_MS);
+    const eased = t * t * (3 - 2 * t);
+    audio.volume = from + (to - from) * eased;
+    if (t >= 1) {
+      clearInterval(volumeFadeTimer!);
+      volumeFadeTimer = null;
+      onDone?.();
+    }
+  }, VOLUME_FADE_TICK_MS);
+}
 
 // 播放历史上限：防止长期运行内存无限增长
 const MAX_PLAY_HISTORY = 100;
@@ -881,7 +921,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       if (vinylMode === "auto" || vinylMode === "custom") set({ vinylColorMode: vinylMode });
       if (vinylColor) set({ vinylCustomColor: vinylColor });
       // 恢复播放器样式（modern/glass/immersive/spectrum/vinyl 都需还原，否则切换后重启会退回默认 modern）
-      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive" || expStyle === "spectrum" || expStyle === "vinyl") set({ expandedStyle: expStyle });
+      if (expStyle === "modern" || expStyle === "glass" || expStyle === "immersive" || expStyle === "spectrum" || expStyle === "vinyl" || expStyle === "cover") set({ expandedStyle: expStyle });
       const dynamic = await store.get<boolean>("dynamicEnabled");
       if (dynamic) set({ dynamicEnabled: true });
       const filmEffect = await store.get<boolean>("coverFilmEffect");
@@ -1014,7 +1054,12 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             get().nextTrack();
             break;
           case "stop":
+            cancelVolumeFade();
             get().audioRef?.pause();
+            // 直接暂停不经过缓出，需立即推送桌面歌词暂停态，否则副窗口会持续插值漂移
+            if (get().desktopLyricsVisible) {
+              emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+            }
             break;
           case "seek":
             if (typeof positionMs === "number") {
@@ -1378,6 +1423,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 立即停止当前播放，防止旧歌在新 URL 获取期间播完并触发 ended → nextTrack 竞态
     // 同时递增序列号，使任何正在飞行中的 playSong 调用被忽略
     const mySeq = ++playSongSeq;
+    // 取消进行中的音量渐变，防止旧定时器在切歌后拉低新歌音量甚至误暂停
+    cancelVolumeFade();
     audio.pause();
     audio.src = "";
 
@@ -1552,17 +1599,32 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     const { audioRef, isPlaying } = get();
     if (!audioRef) return;
     if (isPlaying) {
-      audioRef.pause();
+      // 缓出：UI 立即翻转为暂停态，音量渐弱结束后才真正 pause；
+      // 渐弱期间再次点播放会取消本次渐变并从当前音量继续渐入
+      volumeFadeIsPause = true;
+      startVolumeFade(audioRef, 0, () => {
+        audioRef.pause();
+        volumeFadeIsPause = false;
+        // 恢复音量，避免未走渐入的播放路径（如单曲循环重播）静音
+        audioRef.volume = useMusicStore.getState().volume;
+        // 真正暂停后才推送桌面歌词暂停态（缓出期间歌词继续跟随音乐）
+        if (get().desktopLyricsVisible) {
+          emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+        }
+      });
       set({ isPlaying: false });
       pushSmtc(true);
-      if (get().desktopLyricsVisible) {
-        emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
-      }
+      // 桌面歌词状态延迟到真正暂停时才推送 isPlaying:false：
+      // 缓出期间副窗口保持插值与逐字填充，歌词跟随渐弱的音乐（时间校正如常）
     } else {
       // 用户手势内激活 AudioContext：音域回响真实频谱依赖它（resume 成功后才接管 audio）
       void ensureAudioContextActive();
+      // 从暂停恢复：从 0 渐入；渐出中途恢复：从当前音量继续渐入
+      if (audioRef.paused) audioRef.volume = 0;
+      volumeFadeIsPause = false;
       try {
         await audioRef.play();
+        startVolumeFade(audioRef, get().volume);
         set({ isPlaying: true });
         pushSmtc(true);
         if (get().desktopLyricsVisible) {
@@ -1570,6 +1632,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         }
       } catch {
         // 播放失败，URL 可能已过期，尝试重新获取
+        cancelVolumeFade();
+        audioRef.volume = get().volume;
         const state = get();
         const song = state.currentSong;
         if (song) {
@@ -1738,7 +1802,17 @@ export const useMusicStore = create<MusicState>((set, get) => ({
 
   setVolume: (v) => {
     const { audioRef, prevVolume } = get();
-    if (audioRef) audioRef.volume = v;
+    if (audioRef) {
+      if (volumeFadeTimer && volumeFadeIsPause && !audioRef.paused) {
+        // 渐出暂停中途调音量：视为放弃渐出，立即暂停并应用新音量
+        cancelVolumeFade();
+        audioRef.pause();
+      } else {
+        // 渐入中途/无渐变：直接应用新音量
+        cancelVolumeFade();
+      }
+      audioRef.volume = v;
+    }
     set({ volume: v, prevVolume: v > 0 ? v : prevVolume });
     getStore().then((s) => s.set("volume", v).then(() => s.save()));
     // 桌面歌词可见时回推音量，保持调节条状态同步

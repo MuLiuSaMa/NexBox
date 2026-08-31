@@ -4,3 +4,4 @@ Windows Registry Editor Version 5.00
 "HungAppTimeout"="5000"
 "WaitToKillAppTimeout"="20000"
 "LowLevelHooksTimeout"=-
+"AutoEndTasks"=-

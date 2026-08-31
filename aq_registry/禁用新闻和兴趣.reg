@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 禁用任务栏新闻和兴趣信息流
+; 移除任务栏天气/新闻/资讯推送，减少后台活动和干扰
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Dsh]
+"AllowNewsAndInterests"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Feeds]
+"EnableFeeds"=dword:00000000

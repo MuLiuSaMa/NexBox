@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "9.2.5",
+  "version": "9.4.0",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",

@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 SMBv2 协议
+; 注意：禁用后局域网文件共享/打印共享将无法使用，仅在确有安全需求时开启
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters]
+"SMB2"=dword:00000000

@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 调整处理器以获得最佳性能 —— 极致前台
+; Win32PrioritySeparation = 0x2A（42）：短时间片 + 最高前台提升，游戏/前台应用优先级最大化
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\PriorityControl]
+"Win32PrioritySeparation"=dword:0000002a

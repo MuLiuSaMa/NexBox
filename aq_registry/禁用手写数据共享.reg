@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用手写数据共享
+; 阻止手写样本与 Microsoft 服务共享，增强隐私
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\TabletPc]
+"PreventHandwritingDataSharing"=dword:00000001

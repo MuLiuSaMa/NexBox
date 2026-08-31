@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 启用低磁盘空间自动检查
+; 确保 NoLowDiskSpaceChecks 为 0（开启检查），防止磁盘写满导致性能问题
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer]
+"NoLowDiskSpaceChecks"=dword:00000000

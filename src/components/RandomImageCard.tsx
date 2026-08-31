@@ -36,7 +36,8 @@ export default function RandomImageCard() {
   const { t } = useTranslation();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  // react-icons 的 color 不经 Chakra 解析，必须用真实色值（token 在浅色下会退化成白色）
+  const textColor = useColorModeValue("#1a202c", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "#ffffff");
 
   return (

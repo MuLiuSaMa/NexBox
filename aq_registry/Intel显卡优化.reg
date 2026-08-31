@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Intel 显卡优化
+; 禁用异步翻转（AsyncFlip）与自适应垂直同步，减少显示延迟与画面撕裂
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000]
+"Display1_DisableAsyncFlips"=dword:00000001
+"AdaptiveVsyncEnable"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001]
+"Display1_DisableAsyncFlips"=dword:00000001
+"AdaptiveVsyncEnable"=dword:00000000

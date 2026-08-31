@@ -149,7 +149,7 @@ export default function MemoryCleanupPage() {
     },
   ];
 
-  const defaultItems = ["standby", "file_cache", "low_pri_standby"];
+  const defaultItems = ["standby", "file_cache", "low_pri_standby", "working_set"];
 
   const fetchMemoryData = useCallback(async () => {
     try {

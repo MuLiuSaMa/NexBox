@@ -487,7 +487,8 @@ fn map_qq_track(track: &Value, fallback: &Song) -> Song {
         artists: if !artists.is_empty() { artists } else { fallback.artists.clone() },
         album: album_name,
         cover: {
-            let c = qq_album_cover(&album_mid, 300);
+            // 800x800：封面渐染/大图场景需要高分辨率，300 会放大到模糊
+            let c = qq_album_cover(&album_mid, 800);
             if !c.is_empty() { c } else { fallback.cover.clone() }
         },
         duration,
@@ -598,7 +599,7 @@ fn map_qq_playlist_track(raw: &Value) -> Song {
         artist: artist_str,
         artists,
         album: album_name,
-        cover: qq_album_cover(&album_mid, 300),
+        cover: qq_album_cover(&album_mid, 800),
         duration,
         fee,
         playable: false,

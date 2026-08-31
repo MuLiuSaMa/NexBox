@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用文本输入数据收集
+; 阻止 Windows 存储和分析输入的语言数据
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\TextInput]
+"AllowLinguisticDataCollection"=dword:00000000

@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 SMBv2 协议（删除自定义值，回系统默认）
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters]
+"SMB2"=-

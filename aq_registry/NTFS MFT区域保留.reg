@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 优化 NTFS MFT（主文件表）区域保留
+; 值 2 = 预留 25%-37% 磁盘空间给 MFT，减少大容量盘碎片，提升文件系统性能
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem]
+"NtfsMftZoneReservation"=dword:00000002

@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; 禁用资源管理器/运行对话框的自动完成与自动建议
+; 删除 "Append Completion" 与 "AutoSuggest" 值（不存在即视为禁用），减少输入干扰
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoComplete]
+"Append Completion"=-
+"AutoSuggest"=-

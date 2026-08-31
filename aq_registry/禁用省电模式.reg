@@ -14,4 +14,9 @@ Windows Registry Editor Version 5.00
 [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Power]
 "HibernateEnabledDefault"=dword:00000000
 
+; 禁用 USB 意外拔出后的电源恢复尝试，避免 USB 设备掉电后反复重置
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\USB\AutomaticSurpriseRemoval]
+"AttemptRecoveryFromUsbPowerDrain"=dword:00000000
+
 !MADE BY OGTech!

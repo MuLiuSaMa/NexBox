@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback, useRef } from "react";
 import {
   Box,
   Heading,
@@ -132,10 +132,15 @@ const OptimizeCard = memo(function OptimizeCard({
   );
 });
 
+/** DNS 延迟:毫秒(含小数)+ 实际应答来源 + 路由网卡;"timeout" 表示超时/无响应。
+ *  responder 与查询目标不一致、或延迟 <1ms,说明查询被本地拦截(TUN/安全软件/路由器) */
+type DnsLatency = { ms: number; responder?: string; via?: string | null } | "timeout";
+
 interface DnsCardProps {
   preset: DnsPreset;
   currentDns: { primary: string; secondary: string };
   applyingId: string | null;
+  latency?: DnsLatency;
   onApply: (preset: DnsPreset) => void;
   headingColor: string;
   subTextColor: string;
@@ -152,6 +157,7 @@ const DnsCard = memo(function DnsCard({
   preset,
   currentDns,
   applyingId,
+  latency,
   onApply,
   headingColor,
   subTextColor,
@@ -167,6 +173,29 @@ const DnsCard = memo(function DnsCard({
     currentDns.primary === preset.primary &&
     currentDns.secondary === preset.secondary;
   const isLoading = applyingId === preset.id;
+
+  // 劫持判定:应答来源与查询目标不一致,或延迟 < 1ms。
+  // 公网 DNS 往返物理上不可能低于 1ms;TUN 代理会伪造源 IP 应答,
+  // 所以来源校验之外还要用亚毫秒阈值兜底(本地拦截往返约 0.1~0.5ms)。
+  const hijacked =
+    latency !== undefined &&
+    (latency === "timeout"
+      ? false
+      : latency.responder !== undefined && latency.responder !== preset.primary
+        ? true
+        : latency.ms < 1);
+
+  // 延迟颜色按可用性分档:优(绿) / 一般(橙) / 差(红),超时/劫持用弱化文字色
+  const latencyColor =
+    latency === undefined || latency === "timeout"
+      ? subTextColor
+      : hijacked
+        ? "#DD6B20"
+        : latency.ms < 80
+          ? "#38A169"
+          : latency.ms < 200
+            ? "#DD6B20"
+            : "#E53E3E";
 
   const cardContent = (
     <VStack align="start" spacing={2} w="full">
@@ -196,6 +225,30 @@ const DnsCard = memo(function DnsCard({
             )}
           </HStack>
         </Box>
+        {latency !== undefined && (
+          <Text
+            color={latencyColor}
+            fontSize="xs"
+            fontWeight="bold"
+            flexShrink={0}
+            marginLeft="auto"
+            title={
+              hijacked && latency !== "timeout"
+                ? latency.responder && latency.responder !== preset.primary
+                  ? `响应来自 ${latency.responder}${latency.via ? `，经网卡「${latency.via}」路由` : ""}`
+                  : `延迟低于 1ms${latency.via ? `（经网卡「${latency.via}」路由）` : ""}，查询未真正到达目标服务器`
+                : latency !== "timeout" && latency.via
+                  ? `经网卡「${latency.via}」路由`
+                  : undefined
+            }
+          >
+            {latency === "timeout"
+              ? t("networkOptimize.dns.latencyTimeout")
+              : hijacked
+                ? t("networkOptimize.dns.hijacked")
+                : `${Math.round(latency.ms)} ms`}
+          </Text>
+        )}
       </HStack>
       <VStack align="start" spacing={0} w="full" px={1}>
         <Text color={subTextColor} fontSize="xs">
@@ -293,6 +346,46 @@ export default function NetworkOptimizerPage() {
   const [publicIp, setPublicIp] = useState("");
   const [isLoadingIp, setIsLoadingIp] = useState(false);
   const [ipLoadFailed, setIpLoadFailed] = useState(false);
+
+  // DNS 延迟自动测速:每 1s 对所有预设的首选 DNS 发起真实查询,按卡片展示
+  const [dnsLatency, setDnsLatency] = useState<Record<string, DnsLatency>>({});
+  const dnsLatencyInFlight = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    let cancelled = false;
+    const probe = (preset: DnsPreset) => {
+      // 上一次查询未返回时跳过,避免超时服务器堆积并发请求
+      if (dnsLatencyInFlight.current.has(preset.id)) return;
+      dnsLatencyInFlight.current.add(preset.id);
+      invoke<{ latency_ms: number; responder: string; via_interface: string | null }>(
+        "test_dns_latency",
+        { ip: preset.primary },
+      )
+        .then((r) => {
+          if (!cancelled) {
+            setDnsLatency((prev) => ({
+              ...prev,
+              [preset.id]: { ms: r.latency_ms, responder: r.responder, via: r.via_interface },
+            }));
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDnsLatency((prev) => ({ ...prev, [preset.id]: "timeout" }));
+          }
+        })
+        .finally(() => {
+          dnsLatencyInFlight.current.delete(preset.id);
+        });
+    };
+    const probeAll = () => dnsPresets.forEach(probe);
+    probeAll();
+    const timer = setInterval(probeAll, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -1022,6 +1115,7 @@ export default function NetworkOptimizerPage() {
               preset={preset}
               currentDns={currentDns}
               applyingId={applyingDnsId}
+              latency={dnsLatency[preset.id]}
               onApply={handleApplyPreset}
               headingColor={headingColor}
               subTextColor={subTextColor}

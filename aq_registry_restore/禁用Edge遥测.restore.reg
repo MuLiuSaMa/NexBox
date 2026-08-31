@@ -1,0 +1,25 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 Edge 遥测（删除策略值，更新服务恢复为手动）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Edge]
+"PersonalizationReportingEnabled"=-
+"UserFeedbackAllowed"=-
+"MetricsReportingEnabled"=-
+
+[HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\Edge]
+"PersonalizationReportingEnabled"=-
+"UserFeedbackAllowed"=-
+"MetricsReportingEnabled"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\MicrosoftEdge\BooksLibrary]
+"EnableExtendedBooksTelemetry"=-
+
+[HKEY_CURRENT_USER\SOFTWARE\Policies\Microsoft\MicrosoftEdge\BooksLibrary]
+"EnableExtendedBooksTelemetry"=-
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\edgeupdate]
+"Start"=dword:00000003
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\edgeupdatem]
+"Start"=dword:00000003

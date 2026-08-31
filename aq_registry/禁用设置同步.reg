@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 禁用设置同步（凭据 + 应用设置）
+; 阻止凭据与应用设置跨设备同步
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\SettingSync]
+"DisableCredentialsSettingSync"=dword:00000002
+"DisableCredentialsSettingSyncUserOverride"=dword:00000001
+"DisableApplicationSettingSync"=dword:00000002
+"DisableApplicationSettingSyncUserOverride"=dword:00000001

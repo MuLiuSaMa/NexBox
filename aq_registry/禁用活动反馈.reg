@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用活动反馈（时间线）
+; 关闭活动源，不再记录和显示最近使用的活动
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
+"EnableActivityFeed"=dword:00000000

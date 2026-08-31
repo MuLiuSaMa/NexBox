@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复菜单显示延迟为系统默认（删除自定义值）
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"MenuShowDelay"=-

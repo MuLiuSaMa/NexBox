@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复远程注册表服务为手动启动（默认 3）
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\RemoteRegistry]
+"Start"=dword:00000003

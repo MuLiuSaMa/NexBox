@@ -73,6 +73,7 @@ import {
   Waves,
   AudioWaveform,
   Aperture,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -89,7 +90,8 @@ import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { hexToHsv, hsvToHex } from "@/lib/color-utils";
 import { VirtualList } from "@/components/VirtualList";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
-import { useCoverColor } from "@/hooks/use-cover-color";
+import { useCoverColor, useCoverEdgeColor } from "@/hooks/use-cover-color";
+import { isOverlayOpen } from "@/hooks/use-esc-back";
 import { motion, AnimatePresence } from "framer-motion";
 
 // ═══════════════════════════════════════════════
@@ -121,12 +123,13 @@ const tabContentVariants = {
   exit: { opacity: 0, x: -8, transition: { duration: 0.12, ease: "easeIn" } },
 };
 
-// 五个样式的预览图列表（用于点击切换而非单击循环；图片存放在 public/style-previews/）
+// 六个样式的预览图列表（用于点击切换而非单击循环；图片存放在 public/style-previews/）
 const STYLE_PREVIEWS: ReadonlyArray<{
-  key: "glass" | "modern" | "immersive" | "spectrum" | "vinyl";
+  key: "glass" | "modern" | "immersive" | "spectrum" | "vinyl" | "cover";
   src: string;
   label: string;
 }> = [
+  { key: "cover",     src: "/style-previews/cover.png",     label: "封面渐染" },
   { key: "vinyl",     src: "/style-previews/vinyl.png",     label: "透明彩胶" },
   { key: "immersive", src: "/style-previews/immersive.png", label: "沉浸" },
   { key: "spectrum",  src: "/style-previews/spectrum.png",  label: "音域回响" },
@@ -770,6 +773,44 @@ function makeVividColor(cr: number, cg: number, cb: number): {
   };
 }
 
+// 封面渐染样式：左侧满铺封面图层（伸到顶栏/控制栏下方），歌词条压在羽化区上。
+// 右缘用 mask 羽化融入"封面最右缘主导色"背景——羽化末端的像素色与背景色天然一致，无接缝；
+// 顶/底各叠一层与文字方案同向的轻渐变（浅缘配白雾、深缘配黑雾），保证悬浮图标可读
+function CoverBleedLayer({ coverUrl, scrim }: { coverUrl: string; scrim: string }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <Box
+      position="absolute"
+      top={0}
+      bottom={0}
+      left={0}
+      w="58vw"
+      zIndex={1}
+      pointerEvents="none"
+      sx={{
+        maskImage: "linear-gradient(90deg, black 78%, transparent 98%)",
+        WebkitMaskImage: "linear-gradient(90deg, black 78%, transparent 98%)",
+      }}
+    >
+      <Box
+        as="img"
+        src={coverUrl}
+        alt=""
+        w="100%"
+        h="100%"
+        objectFit="cover"
+        draggable={false}
+        onLoad={() => setLoaded(true)}
+        sx={{ opacity: loaded ? 1 : 0, transition: "opacity 0.45s ease" }}
+      />
+      <Box position="absolute" top={0} left={0} right={0} h="110px"
+        sx={{ background: `linear-gradient(180deg, ${scrim} 0%, transparent 100%)` }} />
+      <Box position="absolute" bottom={0} left={0} right={0} h="130px"
+        sx={{ background: `linear-gradient(0deg, ${scrim} 0%, transparent 100%)` }} />
+    </Box>
+  );
+}
+
 const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerProps) {
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
@@ -805,6 +846,13 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const currentIndex = useMusicStore((s) => s.currentIndex);
 
   const [isClosing, setIsClosing] = useState(false);
+  // 关闭动画定时器，防止组件卸载后定时器仍触发
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
   const [rightTab, setRightTab] = useState<"lyrics" | "comments">("lyrics");
   // 页面级全屏：播放器放大铺满整个窗口，其他组件被覆盖淡出（非系统窗口全屏）
   const [pageFullscreen, setPageFullscreen] = useState(false);
@@ -878,6 +926,28 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     };
   }, []);
 
+  const handleCloseWithAnimation = useCallback(() => {
+    setIsClosing(true);
+    setPageFullscreen(false);
+    // 同步标题栏：退出全屏恢复搜索框/游戏模式
+    window.dispatchEvent(new CustomEvent("immersive-page-fullscreen", { detail: false }));
+    closeTimerRef.current = setTimeout(() => onClose(), 300);
+  }, [onClose]);
+
+  // Esc 关闭展开播放器：浮层比全局 Esc 返回更上层，优先响应；
+  // 有弹窗/菜单打开时让位给它们自己的 Esc 处理
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (isOverlayOpen()) return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleCloseWithAnimation();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleCloseWithAnimation]);
+
   // 音乐控制热键（用于按钮 tooltip 展示）
   const { musicPrevHotkey, musicNextHotkey, musicPlayPauseHotkey } = useAppStartup();
 
@@ -915,6 +985,12 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const isImmersive = currentStyle === "immersive";
   const isSpectrum = currentStyle === "spectrum";
   const isVinyl = currentStyle === "vinyl";
+  const isCover = currentStyle === "cover";
+  // 封面渐染专用：封面最右缘主导色做右侧背景（与封面右缘相融，网易云做法）；非该样式不加载图片
+  const coverEdge = useCoverEdgeColor(isCover && coverUrl ? coverUrl : "");
+  const coverTextColor = coverEdge.isLight ? "#1a1a2e" : "#f0f0f0";
+  const coverSubTextColor = coverEdge.isLight ? "#4a4a5e" : "#b0b0b0";
+  const coverHoverBg = coverEdge.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
   // 本地歌曲跳过沉浸预览（音域回响/透明彩胶对本地歌曲同样可用，不过滤）
   const availableStylePreviews = isLocalSong
     ? STYLE_PREVIEWS.filter((s) => s.key !== "immersive")
@@ -933,10 +1009,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
-  // 文字颜色覆写（现代/音域回响；音域回响背景固定深色，文字强制亮色；透明彩胶浅灰底，文字强制深灰）
-  const effectiveTextColor = isModern ? modernTextColor : isSpectrum ? "#f0f0f0" : isVinyl ? "#333338" : textColor;
-  const effectiveSubTextColor = isModern ? modernSubTextColor : isSpectrum ? "rgba(255,255,255,0.6)" : isVinyl ? "rgba(51,51,56,0.55)" : subTextColor;
-  const effectiveHoverBg = isModern ? modernHoverBg : isSpectrum ? "rgba(255,255,255,0.12)" : isVinyl ? "rgba(0,0,0,0.07)" : hoverBg;
+  // 文字颜色覆写（现代/封面渐染/音域回响；封面渐染按封面右缘色判断明暗，音域回响固定亮色，透明彩胶固定深灰）
+  const effectiveTextColor = isModern ? modernTextColor : isCover ? coverTextColor : isSpectrum ? "#f0f0f0" : isVinyl ? "#333338" : textColor;
+  const effectiveSubTextColor = isModern ? modernSubTextColor : isCover ? coverSubTextColor : isSpectrum ? "rgba(255,255,255,0.6)" : isVinyl ? "rgba(51,51,56,0.55)" : subTextColor;
+  const effectiveHoverBg = isModern ? modernHoverBg : isCover ? coverHoverBg : isSpectrum ? "rgba(255,255,255,0.12)" : isVinyl ? "rgba(0,0,0,0.07)" : hoverBg;
 
   // 下拉菜单配色：白底黑字
   const menuBg = "white";
@@ -956,25 +1032,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     return buildKaraokeLines(currentLyrics);
   }, [currentLyrics]);
 
-  // 关闭动画定时器清理，防止组件卸载后定时器仍触发
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    };
-  }, []);
-
   if (!currentSong) return null;
 
   const isLiked = likedSongIds.has(currentSong.id);
-
-  const handleCloseWithAnimation = useCallback(() => {
-    setIsClosing(true);
-    setPageFullscreen(false);
-    // 同步标题栏：退出全屏恢复搜索框/游戏模式
-    window.dispatchEvent(new CustomEvent("immersive-page-fullscreen", { detail: false }));
-    closeTimerRef.current = setTimeout(() => onClose(), 300);
-  }, [onClose]);
 
   const playerEl = (
     <Box
@@ -987,14 +1047,16 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       zIndex={pageFullscreen ? 950 : 9999}
       bg={isModern
         ? modernBgFinal
-        : isSpectrum
-          ? "#05070c"
-          : isImmersive
-            ? immersiveBgGradient
-            : isVinyl
-              ? "linear-gradient(160deg, #dfdfe2 0%, #d8d8dc 55%, #d1d1d6 100%)"
-              : bgColor}
-      backdropFilter={isModern || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)"}
+        : isCover
+          ? (coverUrl ? coverEdge.hex : modernBgFinal)
+          : isSpectrum
+            ? "#05070c"
+            : isImmersive
+              ? immersiveBgGradient
+              : isVinyl
+                ? "linear-gradient(160deg, #dfdfe2 0%, #d8d8dc 55%, #d1d1d6 100%)"
+                : bgColor}
+      backdropFilter={isModern || isCover || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)"}
       borderRadius={pageFullscreen ? 0 : "xl"}
       overflow="hidden"
       boxShadow={pageFullscreen ? "none" : "xl"}
@@ -1014,7 +1076,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         },
         display: "flex",
         flexDirection: "column",
-        WebkitBackdropFilter: isModern || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)",
+        WebkitBackdropFilter: isModern || isCover || isImmersive || isSpectrum || isVinyl ? "none" : "blur(20px)",
         animation: (() => {
           const slide = isClosing
             ? "expandedPlayerSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards"
@@ -1043,6 +1105,13 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
       {/* 透明彩胶：右上角伸出的半透明彩色胶片 + 光晕（z=1），歌词与控制栏在其上层 */}
       {isVinyl && (
         <VinylDisc isPlaying={isPlaying} accentColor={vinylAccent} coverUrl={coverUrl} />
+      )}
+      {/* 封面渐染：左侧满铺封面原图（z=1，伸到顶栏/控制栏下方），右缘羽化融入右缘主导色背景 */}
+      {isCover && coverUrl && (
+        <CoverBleedLayer
+          coverUrl={coverUrl}
+          scrim={coverEdge.isLight ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.32)"}
+        />
       )}
       {/* 音域回响全屏 3D 地形场景：铺满整个播放器（含顶部/底部栏区域，z=1），
           控制栏透明悬浮其上不遮挡。常驻渲染（active 控制显隐），避免切换样式时
@@ -1140,6 +1209,53 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             highlightColor={vinylAccent}
             textColor="#45454c"
             subTextColor="rgba(66,66,74,0.5)"
+            scrollbarSx={memoScrollbarSx}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            maxHeight="100%"
+            align="left"
+            lineScale={false}
+          />
+        </Box>
+      ) : isCover ? (
+        // 封面渐染：左侧为满铺封面图层（在容器层渲染），歌名 + 左对齐歌词压在封面羽化区上
+        <Box
+          flex={1}
+          minH={0}
+          position="relative"
+          zIndex={2}
+          ml="auto"
+          w="50%"
+          pr={{ base: 8, lg: "5vw" }}
+          pl={2}
+          pt={2}
+          pb={2}
+          overflow="hidden"
+          display="flex"
+          flexDirection="column"
+        >
+          <VStack spacing={1} align="flex-start" mb={4} flexShrink={0}>
+            <Text
+              fontSize={{ base: "26px", lg: "32px" }}
+              fontWeight="900"
+              color={effectiveTextColor}
+              lineHeight={1.25}
+              noOfLines={1}
+            >
+              {currentSong.name}
+            </Text>
+            <Text fontSize="md" color={effectiveSubTextColor} noOfLines={1}>
+              {currentSong.artist}
+            </Text>
+          </VStack>
+          <KaraokeLyricsView
+            lines={karaokeLines}
+            loading={loadingLyrics}
+            fontSize={lyricsFontSize}
+            activeColor={activeColor}
+            highlightColor={lyricsHighlightColor}
+            textColor={effectiveTextColor}
+            subTextColor={effectiveSubTextColor}
             scrollbarSx={memoScrollbarSx}
             audioRef={audioRef}
             isPlaying={isPlaying}
@@ -1589,8 +1705,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 />
               </Tooltip>
             )}
-            {/* 碟片模式按钮：沉浸/音域回响（全屏场景无封面）与透明彩胶（自带胶片）下隐藏 */}
-            {!isImmersive && !isSpectrum && !isVinyl && (
+            {/* 碟片模式按钮：沉浸/音域回响（全屏场景无封面）、透明彩胶（自带胶片）与封面渐染（左侧已是满铺封面）下隐藏 */}
+            {!isImmersive && !isSpectrum && !isVinyl && !isCover && (
             <Tooltip label={coverFilmEffect ? "关闭碟片模式" : "开启碟片模式"}>
               <IconButton
                 aria-label="Toggle film effect"
@@ -1616,6 +1732,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     currentStyle === "modern" ? <Palette size={16} /> :
                     currentStyle === "spectrum" ? <AudioWaveform size={16} /> :
                     currentStyle === "vinyl" ? <Disc3 size={16} /> :
+                    currentStyle === "cover" ? <ImageIcon size={16} /> :
                     <Waves size={16} />
                   }
                   onClick={toggleStyleMenu}
@@ -1623,7 +1740,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   px={3}
                   sx={{ color: effectiveTextColor, _hover: { bg: effectiveHoverBg } }}
                 >
-                  {currentStyle === "glass" ? "通透" : currentStyle === "modern" ? "现代" : currentStyle === "spectrum" ? "音域回响" : currentStyle === "vinyl" ? "透明彩胶" : "沉浸"}
+                  {currentStyle === "glass" ? "通透" : currentStyle === "modern" ? "现代" : currentStyle === "spectrum" ? "音域回响" : currentStyle === "vinyl" ? "透明彩胶" : currentStyle === "cover" ? "封面渐染" : "沉浸"}
                 </Button>
               </Tooltip>
               {/* 样式切换按钮右上角红色 NEW 标签 */}

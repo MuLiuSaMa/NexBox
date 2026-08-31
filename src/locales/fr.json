@@ -369,7 +369,9 @@
         "secondary": "DNS secondaire",
         "apply": "Appliquer DNS",
         "applied": "Appliqué",
-        "restore": "Restaurer DNS automatique"
+        "restore": "Restaurer DNS automatique",
+        "latencyTimeout": "Délai dépassé",
+        "hijacked": "Détourné"
       },
       "dnsRequired": "Veuillez entrer au moins l'adresse DNS principale",
       "dnsCacheCleared": "Cache DNS vidé",
@@ -1510,6 +1512,8 @@
       "liquidGlassModeReal": "Verre liquide transparent",
       "liquidGlassModeNormalDesc": "Simule la texture du verre avec flou et transparence, intensité réglable",
       "liquidGlassModeRealDesc": "Utilise un filtre de réfraction SVG pour la réfraction des bords et l'aberration chromatique, plus transparent mais nécessite plus de GPU",
+      "islandLiquidGlassLabel": "Île dynamique Verre liquide",
+      "islandLiquidGlassDesc": "Applique l'effet de verre transparent à réfraction SVG aux notifications de l'île dynamique",
       "jellyBounce": "Rebond Gélatine",
       "jellyBounceLabel": "Effet Rebond Gélatine",
       "jellyBounceDesc": "Lorsque activé, toutes les cartes, menus et la barre de navigation auront une animation d'échelle élastique lors des interactions et des changements d'état",

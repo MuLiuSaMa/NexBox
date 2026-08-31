@@ -370,7 +370,9 @@
         "secondary": "セカンダリDNS",
         "apply": "DNSを適用",
         "applied": "適用済み",
-        "restore": "自動取得に戻す"
+        "restore": "自動取得に戻す",
+        "latencyTimeout": "タイムアウト",
+        "hijacked": "ハイジャック"
       },
       "dnsRequired": "プライマリDNSアドレスを入力してください",
       "dnsCacheCleared": "DNSキャッシュをクリアしました",
@@ -1490,6 +1492,7 @@
       "gaming": "ゲーム＆グラフィック",
       "nvidia": "NVIDIA GPU",
       "amd": "AMD GPU",
+      "intel": "Intel GPU",
       "performance": "システムパフォーマンス",
       "privacy": "プライバシー＆テレメトリ",
       "ai": "Windows AI 最適化",
@@ -1502,8 +1505,6 @@
       "mmcssGameConfigDesc": "ゲームタスク最高優先度、GPU優先度8、レイジーモード無効",
       "gamePriority": "ゲームタスク優先",
       "gamePriorityDesc": "MMCSS Games タスク優先度を向上し、CPUリソースを確保",
-      "networkSRResponse": "ネットワーク＆SR応答性",
-      "networkSRResponseDesc": "ネットワークスロットリング無効、SystemResponsiveness=0",
       "directXAutoHDR": "DirectX AutoHDR有効化",
       "directXAutoHDRDesc": "DirectX自動高ダイナミックレンジを有効化",
       "directXFlipModel": "DirectX Flip Model有効化",
@@ -1528,14 +1529,15 @@
       "win32PriorityDesc": "フォアグラウンドアプリとバックグラウンドサービスの間でCPU時間をどのように割り当てるかを設定します。プログラム優先の方が応答性が高い（推奨）",
       "win32PriorityProgram": "プログラム",
       "win32PriorityBackground": "バックグラウンドサービス",
+      "win32PriorityExtreme": "最高フォアグラウンド",
       "systemResponsiveness": "ゲーム向けシステム応答性",
-      "systemResponsivenessDesc": "MMCSSがバックグラウンドに確保するCPU時間を減らし、ゲームにより多くのCPUリソースを割り当てます。注意：「ネットワークとSR応答性の改善」と同じ値を共有するため、どちらか一方のみ使用",
+      "systemResponsivenessDesc": "MMCSSがバックグラウンドに確保するCPU時間を減らし、ゲームにより多くのCPUリソースを割り当てます",
       "hags": "ハードウェアアクセラレータGPUスケジューリング",
-      "hagsDesc": "GPUが自身のメモリとスケジューリングを管理できるようにし、遅延を低減します（再起動が必要）",
+      "hagsDesc": "GPUが自身のメモリとスケジューリングを管理できるようにし、遅延を低減します",
       "backgroundServices": "バックグラウンドサービスの最適化",
       "backgroundServicesDesc": "Windowsサービスの起動タイムアウトを60秒から30秒に短縮し、起動を少し高速化します",
       "disableMpo": "MPO（マルチプレーンオーバーレイ）無効",
-      "disableMpoDesc": "マルチプレーンオーバーレイ合成を無効化し、マルチモニター環境でのちらつき、黒画面、カクつきを修正します（再起動が必要）"
+      "disableMpoDesc": "マルチプレーンオーバーレイ合成を無効化し、マルチモニター環境でのちらつき、黒画面、カクつきを修正します"
     },
     "nvidia": {
       "lowLatencyThreshold": "NVIDIA低レイテンシしきい値",
@@ -1563,7 +1565,13 @@
     },
     "amd": {
       "shaderCache": "AMD Shader Cache強制有効",
-      "shaderCacheDesc": "シェーダーキャッシュを強制有効化、ゲームカクつき削減"
+      "shaderCacheDesc": "シェーダーキャッシュを強制有効化、ゲームカクつき削減",
+      "amdPowerOptimization": "AMD GPU電源最適化",
+      "amdPowerOptimizationDesc": "ULPS・ゲーティング・動的P-Stateを無効化し、電源状態切り替えの遅延を削減"
+    },
+    "intel": {
+      "intelGraphicsOptimization": "Intel GPU最適化",
+      "intelGraphicsOptimizationDesc": "非同期フリップとアダプティブVSyncを無効化し、表示遅延とテアリングを削減"
     },
     "performance": {
       "intelTSX": "Intel TSX有効化",
@@ -1581,7 +1589,23 @@
       "disablePowerSaving": "省電力モード無効",
       "disablePowerSavingDesc": "PowerThrottlingと休止を無効化（ノートPC非推奨）",
       "nvmeTuning": "NVMeチューニング",
-      "nvmeTuningDesc": "連続メモリ割り当て、ログとアイドル省電力を無効化"
+      "nvmeTuningDesc": "連続メモリ割り当て、ログとアイドル省電力を無効化",
+      "disableMenuDelay": "メニュー表示遅延を無効化",
+      "disableMenuDelayDesc": "メニューがホバーですぐ開く（MenuShowDelay=0）、応答速度向上",
+      "keyboardLatency": "キーボード遅延を最適化",
+      "keyboardLatencyDesc": "リピート遅延を最短、リピート速度を最速に設定し、入力応答を向上",
+      "disableAutoComplete": "自動補完を無効化",
+      "disableAutoCompleteDesc": "ファイル名を指定して実行やエクスプローラーの自動補完・自動候補を無効化",
+      "disableWindowShake": "ウィンドウシェイクを無効化",
+      "disableWindowShakeDesc": "タイトルバーを揺らしても他のウィンドウを最小化しない",
+      "enableLowDiskCheck": "低ディスク容量チェックを有効化",
+      "enableLowDiskCheckDesc": "ディスク残量不足の自動チェックを有効にし、ディスク満杯によるパフォーマンス低下を防止",
+      "disableLinkResolve": "リンク解決を無効化",
+      "disableLinkResolveDesc": "壊れたショートカットがディスク全体検索やWeb検索をしないようにし、開く速度を向上",
+      "excludeWUDrivers": "Windows Updateからドライバーを除外",
+      "excludeWUDriversDesc": "Windows Updateがドライバーを自動配信するのを防ぎ、互換性問題を回避",
+      "ifeoProcessTuning": "IFEOシステムプロセス最適化",
+      "ifeoProcessTuningDesc": "IFEOで互換性テレメトリプロセスをブロックし、バックグラウンドプロセスの優先度を下げる"
     },
     "privacy": {
       "disableTelemetrySvc": "テレメトリサービス無効",
@@ -1619,7 +1643,43 @@
       "disableInkingDictionary": "手書き＆入力辞書無効",
       "disableInkingDictionaryDesc": "入力履歴と手書きパターンを使用したパーソナライズ辞書の作成を防止",
       "disableFeedbackRequests": "Windowsフィードバック要求無効",
-      "disableFeedbackRequestsDesc": "Windowsが定期的にフィードバックを求めることを停止"
+      "disableFeedbackRequestsDesc": "Windowsが定期的にフィードバックを求めることを停止",
+      "disableCortana": "Cortanaを無効化",
+      "disableCortanaDesc": "Cortana、Bingウェブ検索、検索履歴を無効化",
+      "disableNewsAndInterests": "ニュースとインタレストを無効化",
+      "disableNewsAndInterestsDesc": "タスクバーのニュースとインタレストフィードを無効化し、バックグラウンド活動を削減",
+      "disableCloudOptimizedContent": "クラウド最適化コンテンツを無効化",
+      "disableCloudOptimizedContentDesc": "アプリ更新やファイル同期などのクラウド最適化コンテンツを無効化し、帯域幅を削減",
+      "disableEdgeTelemetry": "Edgeテレメトリを無効化",
+      "disableEdgeTelemetryDesc": "Edgeのパーソナライズレポート、フィードバック、メトリック収集を無効化し、更新サービスも無効化",
+      "disableVisualStudioTelemetry": "Visual Studioテレメトリを無効化",
+      "disableVisualStudioTelemetryDesc": "VSテレメトリスイッチ、フィードバック収集、SQMプログラムを無効化",
+      "disableChromeTelemetry": "Chromeテレメトリを無効化",
+      "disableChromeTelemetryDesc": "Chromeのメトリック報告、クリーンアップ報告、フィードバック収集を無効化",
+      "disableFirefoxTelemetry": "Firefoxテレメトリを無効化",
+      "disableFirefoxTelemetryDesc": "企業ポリシーでFirefoxのテレメトリと既定ブラウザーエージェントを無効化",
+      "disableActivityFeed": "アクティビティフィードを無効化",
+      "disableActivityFeedDesc": "タイムラインのアクティビティフィードを無効化し、最近のアクティビティを記録しない",
+      "disableCdp": "CDPを無効化",
+      "disableCdpDesc": "接続デバイスプラットフォームによるデータ収集とターゲティングを防止",
+      "disableDiagnosticsToast": "診断ポップアップを無効化",
+      "disableDiagnosticsToastDesc": "診断データレベルを「基本」に設定し、診断関連のポップアップを削減",
+      "disableHandwritingSharing": "手書きデータ共有を無効化",
+      "disableHandwritingSharingDesc": "手書きサンプルをMicrosoftサービスと共有することを防止",
+      "disableTextInputCollection": "テキスト入力データ収集を無効化",
+      "disableTextInputCollectionDesc": "Windowsが入力言語データを保存・分析することを防止",
+      "disableInputPersonalization": "入力パーソナライズを無効化",
+      "disableInputPersonalizationDesc": "ポリシーで入力クラウドパーソナライズ（予測テキスト・自動修正学習）を無効化",
+      "disableActivityUploads": "アクティビティアップロードを無効化",
+      "disableActivityUploadsDesc": "ユーザーアクティビティ履歴をMicrosoftクラウドへアップロードすることを停止",
+      "disableMessageSync": "メッセージ同期を無効化",
+      "disableMessageSyncDesc": "SMSと通知のクロスデバイス同期を阻止し、メッセージをこのデバイスに留める",
+      "disableSettingSync": "設定同期を無効化",
+      "disableSettingSyncDesc": "資格情報とアプリ設定のクロスデバイス同期を無効化",
+      "disableVoiceActivation": "音声アクティブ化を無効化",
+      "disableVoiceActivationDesc": "アプリの音声アクティブ化を強制拒否し、音声コマンドの盗み聞きを防止",
+      "disableFindMyDevice": "デバイスを探すを無効化",
+      "disableFindMyDeviceDesc": "デバイス位置の報告をオフにし、紛失時にリモート特定できなくなります"
     },
     "ai": {
       "disableCopilot": "Windows Copilot無効",
@@ -1663,7 +1723,17 @@
       "disableStepRecorder": "ステップ記録ツール無効",
       "disableStepRecorderDesc": "DisableUAR=1",
       "disablePerfTips": "パフォーマンスヒント無効",
-      "disablePerfTipsDesc": "パフォーマンス改善提案を無効化"
+      "disablePerfTipsDesc": "パフォーマンス改善提案を無効化",
+      "disableRemoteRegistry": "リモートレジストリを無効化",
+      "disableRemoteRegistryDesc": "RemoteRegistryサービスを無効化し、リモートからのレジストリアクセスを阻止",
+      "disableSysMain": "SysMainを無効化",
+      "disableSysMainDesc": "SysMain（Superfetch）サービスとプリフェッチャーを無効化。SSD環境に推奨",
+      "disableSystemRestore": "システムの復元を無効化",
+      "disableSystemRestoreDesc": "ポリシーで復元ポイントの作成を無効化。既存の復元ポイントは削除しない",
+      "disableSMBv1": "SMBv1を無効化",
+      "disableSMBv1Desc": "重大な脆弱性があるSMBv1プロトコル（ランサムウェアの主要感染経路）を無効化",
+      "disableSMBv2": "SMBv2を無効化",
+      "disableSMBv2Desc": "SMBv2プロトコルを無効化。LANファイル共有が使用できなくなるため注意"
     },
     "disk": {
       "disable8dot3": "8.3ファイル名無効",
@@ -1675,7 +1745,9 @@
       "disableReservedStorage": "更新予約ストレージ無効",
       "disableReservedStorageDesc": "約7GBの予約領域を解放",
       "disableFullFsSearch": "フルFS検索無効",
-      "disableFullFsSearchDesc": "インデックス位置のみ検索、ディスクスキャン削減"
+      "disableFullFsSearchDesc": "インデックス位置のみ検索、ディスクスキャン削減",
+      "ntfsMftZone": "NTFS MFTゾーン予約",
+      "ntfsMftZoneDesc": "マスターファイルテーブル用にディスクの25%-37%を予約し、断片化を削減"
     },
     "apps": {
       "disableBackgroundApps": "バックグラウンドアプリ無効",
@@ -1685,18 +1757,29 @@
       "slimEdgeAds": "Edge広告スリム化",
       "slimEdgeAdsDesc": "サイドバー、広告、ショッピングアシスタントなどを無効化",
       "disableSearchWebView2": "Search WebView2無効",
-      "disableSearchWebView2Desc": "Search WebView2レンダリングを無効化"
+      "disableSearchWebView2Desc": "Search WebView2レンダリングを無効化",
+      "addCopyMoveContextMenu": "コピー/移動コンテキストメニューを追加",
+      "addCopyMoveContextMenuDesc": "右クリックメニューに「フォルダーへコピー」「フォルダーへ移動」を追加",
+      "disableStoreAutoUpdate": "ストア自動更新を無効化",
+      "disableStoreAutoUpdateDesc": "Microsoft Storeのアプリ自動更新を無効化し、コンシューマー機能とプロモーションポップアップをオフ"
+    },
+    "risk": {
+      "low": "低リスク",
+      "medium": "中リスク",
+      "high": "高リスク"
     },
     "batchEnable": "すべて最適化",
     "batchDisable": "すべて復元",
+    "safeEnable": "安全最適化",
+    "enhancedEnable": "拡張最適化",
+    "batchDone": "選択範囲の最適化を適用しました",
     "batchOptimized": "すべての最適化が完了しました",
     "batchReverted": "すべての最適化を復元しました",
     "batchError": "バッチ操作に失敗しました",
     "optimized": "最適化済み",
     "reverted": "復元済み",
     "optimizing": "実行中...",
-    "operationError": "操作に失敗しました",
-    "requiresReboot": "システムの再起動が必要です"
+    "operationError": "操作に失敗しました"
   },
   "shaderCache": {
     "title": "シェーダーキャッシュクリーンアップ",
@@ -1860,6 +1943,8 @@
       "liquidGlassModeReal": "透明リキッドガラス",
       "liquidGlassModeNormalDesc": "ぼかしと透明度でガラス質感をシミュレート、ぼかし強度調整可能",
       "liquidGlassModeRealDesc": "SVG屈折フィルターでエッジ屈折と色差効果を実現、より透明だがGPU負荷大",
+      "islandLiquidGlassLabel": "ダイナミックアイランドリキッドガラス",
+      "islandLiquidGlassDesc": "オンにするとダイナミックアイランド通知にSVG屈折の透明ガラス効果を適用します",
       "jellyBounce": "ゼリーバウンス",
       "jellyBounceLabel": "ゼリーバウンス効果",
       "jellyBounceDesc": "有効にすると、すべてのカード、メニュー、ナビゲーションバーがインタラクションや状態切り替え時に弾性のあるスケールアニメーションを行います",

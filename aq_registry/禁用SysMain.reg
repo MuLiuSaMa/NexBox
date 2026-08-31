@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 SysMain（Superfetch 预取服务）
+; 关闭服务并禁用预取器；SSD 系统建议禁用，HDD 系统可能影响程序启动速度
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SysMain]
+"Start"=dword:00000004
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters]
+"EnableSuperfetch"=dword:00000000
+"EnablePrefetcher"=dword:00000000
+"SfTracingState"=dword:00000001

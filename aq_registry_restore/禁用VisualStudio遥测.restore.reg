@@ -1,0 +1,35 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 Visual Studio 遥测（删除策略值，服务恢复为手动）
+
+[HKEY_CURRENT_USER\Software\Microsoft\VisualStudio\Telemetry]
+"TurnOffSwitch"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback]
+"DisableFeedbackDialog"=-
+"DisableEmailInput"=-
+"DisableScreenshotCapture"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\14.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\15.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\16.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\14.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\15.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\16.0\SQM]
+"OptIn"=-
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VSStandardCollectorService150]
+"Start"=dword:00000003

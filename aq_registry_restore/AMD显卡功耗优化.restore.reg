@@ -1,0 +1,27 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 AMD 显卡功耗管理为系统默认（删除自定义值）
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000]
+"EnableULPS"=-
+"DisablePowerGating"=-
+"PP_GPUPowerDownEnabled"=-
+"DisableDynamicPstate"=-
+"DisableVCEPowerGating"=-
+"DisableVceClockGating"=-
+"EnableUvdClockGating"=-
+"EnableVceSwClockGating"=-
+"EnableAspmL0s"=-
+"EnableAspmL1"=-
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001]
+"EnableULPS"=-
+"DisablePowerGating"=-
+"PP_GPUPowerDownEnabled"=-
+"DisableDynamicPstate"=-
+"DisableVCEPowerGating"=-
+"DisableVceClockGating"=-
+"EnableUvdClockGating"=-
+"EnableVceSwClockGating"=-
+"EnableAspmL0s"=-
+"EnableAspmL1"=-

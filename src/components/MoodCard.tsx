@@ -8,7 +8,8 @@ import { invoke } from "@tauri-apps/api/core";
 /** 主页「心境」卡片：图标 + 标题 + 介绍，点击打开独立心境窗口（非浏览器） */
 export default function MoodCard() {
   const { t } = useTranslation();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  // react-icons 的 color 不经 Chakra 解析，必须用真实色值（token 在浅色下会退化成白色）
+  const textColor = useColorModeValue("#1a202c", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "#ffffff");
 
   const handleOpen = async () => {

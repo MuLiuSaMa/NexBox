@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用消息同步
+; 阻止短信和通知跨设备同步，消息仅保留在本机
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\Messaging]
+"AllowMessageSync"=dword:00000000

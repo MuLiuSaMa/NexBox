@@ -1841,6 +1841,12 @@ pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
         FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
         FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
         FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
+        FilterPreset { id: "delta-super".to_string(), name: "三角洲超级推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动超级推荐调校，压暗画面突出目标".to_string() },
+        FilterPreset { id: "delta-a".to_string(), name: "三角洲推荐A".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案A，适度提亮画面".to_string() },
+        FilterPreset { id: "delta-b".to_string(), name: "三角洲推荐B".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案B，高亮增强，暗处更清晰".to_string() },
+        FilterPreset { id: "delta-c".to_string(), name: "三角洲推荐C".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案C，轻度提亮，观感自然".to_string() },
+        FilterPreset { id: "delta-d".to_string(), name: "三角洲推荐D".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案D，压暗画面，减少眩光".to_string() },
+        FilterPreset { id: "delta-e".to_string(), name: "三角洲推荐E".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案E，压暗偏冷，久玩舒适".to_string() },
         FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
     ])
 }
@@ -1862,6 +1868,12 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
         "whiter" => Some("NexBox_偏白.icc".to_string()),
         "bluish" => Some("NexBox_偏蓝.icc".to_string()),
         "cool-tone" => Some("NexBox_原亮 冷色调.icc".to_string()),
+        "delta-super" => Some("NexBox_三角洲超级推荐.icc".to_string()),
+        "delta-a" => Some("NexBox_三角洲推荐A.icc".to_string()),
+        "delta-b" => Some("NexBox_三角洲推荐B.icc".to_string()),
+        "delta-c" => Some("NexBox_三角洲推荐C.icc".to_string()),
+        "delta-d" => Some("NexBox_三角洲推荐D.icc".to_string()),
+        "delta-e" => Some("NexBox_三角洲推荐E.icc".to_string()),
         _ => None,
     }
 }
@@ -1968,6 +1980,12 @@ fn get_filter_presets_sync() -> Result<Vec<FilterPreset>, String> {
         FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
         FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
         FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
+        FilterPreset { id: "delta-super".to_string(), name: "三角洲超级推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动超级推荐调校，压暗画面突出目标".to_string() },
+        FilterPreset { id: "delta-a".to_string(), name: "三角洲推荐A".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案A，适度提亮画面".to_string() },
+        FilterPreset { id: "delta-b".to_string(), name: "三角洲推荐B".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案B，高亮增强，暗处更清晰".to_string() },
+        FilterPreset { id: "delta-c".to_string(), name: "三角洲推荐C".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案C，轻度提亮，观感自然".to_string() },
+        FilterPreset { id: "delta-d".to_string(), name: "三角洲推荐D".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案D，压暗画面，减少眩光".to_string() },
+        FilterPreset { id: "delta-e".to_string(), name: "三角洲推荐E".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案E，压暗偏冷，久玩舒适".to_string() },
         FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
     ])
 }
@@ -2769,4 +2787,40 @@ pub async fn export_preset_as_icc(preset_id: String) -> Result<Option<String>, S
     }
     #[cfg(not(target_os = "windows"))]
     { Err("此功能仅支持 Windows 系统".to_string()) }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod delta_icc_tests {
+    use super::*;
+
+    /// 三角洲系列内置 ICC：每个预设都能找到文件、解析出非恒等 ramp，
+    /// 且能派生出预览/数值面板所需的参数。
+    #[test]
+    fn delta_presets_parse_to_meaningful_ramps() {
+        let ids = ["delta-super", "delta-a", "delta-b", "delta-c", "delta-d", "delta-e"];
+        for id in ids {
+            let filename = preset_id_to_builtin_icc(id)
+                .unwrap_or_else(|| panic!("{}: preset_id_to_builtin_icc 未映射", id));
+            let path = get_builtin_icc_path(&filename)
+                .unwrap_or_else(|e| panic!("{}: 找不到内置 ICC {}: {}", id, filename, e));
+            let parsed = parse_icc_file(path.to_str().unwrap())
+                .unwrap_or_else(|e| panic!("{}: 解析 {} 失败: {}", id, filename, e));
+
+            let ramp = parsed.to_ramp_array();
+            // 非恒等：至少一个通道在中间调偏离线性超过 2%
+            let max_dev = (0..3).map(|c| {
+                (32..224).map(|i| {
+                    (ramp[c][i] as f64 / (i as u32 * 256) as f64 - 1.0).abs()
+                }).fold(0.0f64, f64::max)
+            }).fold(0.0f64, f64::max);
+            assert!(max_dev > 0.02, "{}: ramp 看起来是恒等的 (max_dev={})", id, max_dev);
+
+            // 预览/数值派生不 panic 且亮度数值落在 50–150 显示区间
+            let (t, b, c, s, _g, _sc, _rb, _gb, _bb) = derive_params_from_icc_ramp(&ramp);
+            assert!((50..=150).contains(&b), "{}: 派生亮度 {} 越界", id, b);
+            assert!((50..=150).contains(&c) && (50..=150).contains(&s), "{}: 派生对比/饱和越界", id);
+            assert!((1000..=10000).contains(&t), "{}: 派生色温 {} 越界", id, t);
+            let _ = compute_icc_preview(&ramp);
+        }
+    }
 }

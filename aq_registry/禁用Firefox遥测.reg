@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Mozilla Firefox 遥测
+; 通过企业策略关闭遥测数据收集与默认浏览器代理
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Mozilla\Firefox]
+"DisableTelemetry"=dword:00000001
+"DisableDefaultBrowserAgent"=dword:00000001

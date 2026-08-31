@@ -1,0 +1,8 @@
+Windows Registry Editor Version 5.00
+
+; 禁用系统还原（策略）
+; 阻止系统继续创建还原点并禁用还原配置界面；不删除已存在的还原点
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore]
+"DisableSR"=dword:00000001
+"DisableConfig"=dword:00000001

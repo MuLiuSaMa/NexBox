@@ -135,6 +135,17 @@ mod windows_api {
     }
 }
 
+/// 清空所有磁盘的回收站(复用 Shell 标准流程,不依赖 PowerShell)。
+#[cfg(windows)]
+pub fn empty_all_recycle_bins() -> Result<(), String> {
+    windows_api::empty_recycle_bin(None)
+}
+
+#[cfg(not(windows))]
+pub fn empty_all_recycle_bins() -> Result<(), String> {
+    Err("清空回收站仅支持 Windows".to_string())
+}
+
 /// 删除引擎
 pub struct DeleteEngine {
     /// 是否跳过正在使用的文件

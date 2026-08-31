@@ -435,18 +435,6 @@ export default function ShaderCachePage() {
       </HStack>
 
       <Box
-        p={3}
-        borderRadius="md"
-        border="1px solid"
-        borderColor={useColorModeValue("orange.200", "orange.700")}
-        bg={useColorModeValue("orange.50", "rgba(237,137,54,0.1)")}
-      >
-        <Text fontSize="xs" color={useColorModeValue("orange.700", "orange.200")}>
-          {t("shaderCache.forceCleanTip")}
-        </Text>
-      </Box>
-
-      <Box
         p={5}
         borderRadius="xl"
         border="1px solid"

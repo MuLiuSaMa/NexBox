@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 SMBv1 协议
+; SMBv1 存在 EternalSeries 等高危漏洞（勒索病毒主要传播途径），禁用可显著提升安全性
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters]
+"SMB1"=dword:00000000

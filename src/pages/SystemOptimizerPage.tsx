@@ -13,7 +13,6 @@ import {
   IconButton,
   useColorModeValue,
   Spinner,
-  Tooltip,
   Badge,
   Modal,
   ModalOverlay,
@@ -107,20 +106,19 @@ const OptimizeCard = memo(function OptimizeCard({
             >
               {t(item.titleKey)}
             </Text>
-            {item.requiresReboot && (
-              <Tooltip label={t("systemOptimizer.requiresReboot")}>
-                <Badge
-                  fontSize="9px"
-                  colorScheme="orange"
-                  variant="subtle"
-                  borderRadius="full"
-                  px={1.5}
-                  lineHeight="1.2"
-                >
-                  REBOOT
-                </Badge>
-              </Tooltip>
-            )}
+            <Badge
+              fontSize="9px"
+              colorScheme={
+                item.risk === "low" ? "green" : item.risk === "medium" ? "orange" : "red"
+              }
+              variant="subtle"
+              borderRadius="full"
+              px={1.5}
+              lineHeight="1.2"
+              flexShrink={0}
+            >
+              {t(`systemOptimizer.risk.${item.risk}`)}
+            </Badge>
           </HStack>
           <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
             {t(item.descKey)}
@@ -543,45 +541,51 @@ export default function SystemOptimizerPage() {
     [persistStates, setSavedStates, toast, t],
   );
 
-  // 全部优化
-  const handleBatchEnable = useCallback(async () => {
-    setIsBatchOptimizing(true);
-    try {
-      const names = optimizerItems.map((item) => {
-        // select 类型应用默认选中值对应的 reg 文件
-        if (item.type === "select") {
-          const def = item.options?.find((opt) => opt.value === item.defaultSelectValue);
-          return def?.regName ?? item.regName;
+  // 按风险等级批量应用优化（安全=低 / 增强=低+中 / 全部=低+中+高）
+  // 未包含的优化项保持当前状态不变
+  const handleBatchEnableByRisk = useCallback(
+    async (levels: OptimizerItem["risk"][], labelKey: string) => {
+      setIsBatchOptimizing(true);
+      try {
+        const targets = optimizerItems.filter((item) => levels.includes(item.risk));
+        const names = targets.map((item) => {
+          // select 类型应用默认选中值对应的 reg 文件
+          if (item.type === "select") {
+            const def = item.options?.find((opt) => opt.value === item.defaultSelectValue);
+            return def?.regName ?? item.regName;
+          }
+          return item.regName;
+        });
+        await invoke("batch_apply_registry_tweaks", { names });
+        const newSaved: Record<string, boolean | string> = { ...savedStatesRef.current };
+        for (const item of targets) {
+          newSaved[item.id] = item.type === "select"
+            ? (item.defaultSelectValue ?? "")
+            : true;
         }
-        return item.regName;
-      });
-      await invoke("batch_apply_registry_tweaks", { names });
-      const newSaved: Record<string, boolean | string> = {};
-      for (const item of optimizerItems) {
-        newSaved[item.id] = item.type === "select"
-          ? (item.defaultSelectValue ?? "")
-          : true;
+        setSavedStates(newSaved);
+        persistStates(newSaved);
+        toast({
+          title: t(labelKey),
+          description: t("systemOptimizer.batchDone"),
+          status: "success",
+          duration: 3000,
+          isClosable: true,
+        });
+      } catch (err) {
+        toast({
+          title: t("systemOptimizer.batchError"),
+          description: String(err),
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+      } finally {
+        setIsBatchOptimizing(false);
       }
-      setSavedStates(newSaved);
-      persistStates(newSaved);
-      toast({
-        title: t("systemOptimizer.batchOptimized"),
-        status: "success",
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err) {
-      toast({
-        title: t("systemOptimizer.batchError"),
-        description: String(err),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setIsBatchOptimizing(false);
-    }
-  }, [persistStates, setSavedStates, toast, t]);
+    },
+    [persistStates, setSavedStates, toast, t],
+  );
 
   // 全部恢复
   const handleBatchDisable = useCallback(async () => {
@@ -665,7 +669,7 @@ export default function SystemOptimizerPage() {
             {t("systemOptimizer.pageTitle")}
           </Heading>
         </HStack>
-        <HStack spacing={2}>
+        <HStack spacing={2} flexWrap="wrap" rowGap={2}>
           <Button
             size="sm"
             onClick={() => handleScan(true)}
@@ -683,7 +687,34 @@ export default function SystemOptimizerPage() {
           </Button>
           <Button
             size="sm"
-            onClick={handleBatchEnable}
+            onClick={() => handleBatchEnableByRisk(["low"], "systemOptimizer.safeEnable")}
+            isLoading={isBatchOptimizing}
+            loadingText={t("systemOptimizer.optimizing")}
+            colorScheme="green"
+            variant="outline"
+          >
+            {t("systemOptimizer.safeEnable")}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() =>
+              handleBatchEnableByRisk(["low", "medium"], "systemOptimizer.enhancedEnable")
+            }
+            isLoading={isBatchOptimizing}
+            loadingText={t("systemOptimizer.optimizing")}
+            colorScheme="orange"
+            variant="outline"
+          >
+            {t("systemOptimizer.enhancedEnable")}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() =>
+              handleBatchEnableByRisk(
+                ["low", "medium", "high"],
+                "systemOptimizer.batchEnable",
+              )
+            }
             isLoading={isBatchOptimizing}
             loadingText={t("systemOptimizer.optimizing")}
             bg={activeColor}

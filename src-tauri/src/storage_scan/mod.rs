@@ -17,8 +17,9 @@ mod scan_engine;
 
 pub use big_files::LargeFileEntry;
 pub use categories::JunkCategory;
-pub use delete_engine::DeleteEngine;
+pub use delete_engine::{DeleteEngine, empty_all_recycle_bins};
 pub use file_info::{CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult};
+pub use recycle_bin::current_user_visible_size;
 pub use scan_engine::ScanEngine;
 
 use log::info;

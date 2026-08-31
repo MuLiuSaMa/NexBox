@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用活动上传
+; 阻止将用户活动记录上传到 Microsoft 云端
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\System]
+"UploadUserActivities"=dword:00000000

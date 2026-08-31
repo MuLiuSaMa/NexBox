@@ -1,0 +1,9 @@
+Windows Registry Editor Version 5.00
+
+; 恢复查找我的设备（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\FindMyDevice]
+"AllowFindMyDevice"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Settings\FindMyDevice]
+"LocationSyncEnabled"=-

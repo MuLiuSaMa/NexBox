@@ -1,0 +1,29 @@
+Windows Registry Editor Version 5.00
+
+; AMD 显卡功耗优化
+; 禁用 ULPS（超低功耗状态）、门控与动态调频，减少 GPU 电源状态切换带来的显示延迟与卡顿
+; 写入显卡类设备键 0000/0001，不支持的值会被驱动忽略
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0000]
+"EnableULPS"=dword:00000000
+"DisablePowerGating"=dword:00000001
+"PP_GPUPowerDownEnabled"=dword:00000000
+"DisableDynamicPstate"=dword:00000001
+"DisableVCEPowerGating"=dword:00000001
+"DisableVceClockGating"=dword:00000001
+"EnableUvdClockGating"=dword:00000000
+"EnableVceSwClockGating"=dword:00000000
+"EnableAspmL0s"=dword:00000000
+"EnableAspmL1"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0001]
+"EnableULPS"=dword:00000000
+"DisablePowerGating"=dword:00000001
+"PP_GPUPowerDownEnabled"=dword:00000000
+"DisableDynamicPstate"=dword:00000001
+"DisableVCEPowerGating"=dword:00000001
+"DisableVceClockGating"=dword:00000001
+"EnableUvdClockGating"=dword:00000000
+"EnableVceSwClockGating"=dword:00000000
+"EnableAspmL0s"=dword:00000000
+"EnableAspmL1"=dword:00000000

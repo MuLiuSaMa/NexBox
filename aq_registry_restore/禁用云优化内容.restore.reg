@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复云优化内容（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent]
+"DisableCloudOptimizedContent"=-

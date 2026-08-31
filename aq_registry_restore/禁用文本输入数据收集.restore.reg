@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复文本输入数据收集（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\TextInput]
+"AllowLinguisticDataCollection"=-

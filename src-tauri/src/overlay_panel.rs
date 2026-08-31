@@ -620,7 +620,13 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     &["CPU Total", "Total"],
                     false,
                 ).unzip();
-                let cpu_usage = cpu_usage.map(|v| v as u16);
+                let mut cpu_usage = cpu_usage.map(|v| v as u16);
+                // LHML 缺 CPU Load 传感器时回退 sysinfo（用户态，任何 CPU 可用）：
+                // AMD FX/Bulldozer 被 LibreHardwareMonitor 0.9.6 禁用支持（PawnIO 模块死机问题），
+                // 这类 CPU 没有任何 LHML CPU 传感器（温度需另装 PawnIO 后走 SuperIO 兜底）
+                if cpu_usage.is_none() {
+                    cpu_usage = crate::hardware::get_cpu_dynamic_info();
+                }
                 // CPU 温度 (AMD Ryzen: Core (Tctl/Tdie), Intel: CPU Package, 老AMD(A系列): SuperIO/Motherboard)
                 let (cpu_temp, cpu_name) = extract_sensor(
                     &response.sensors,
@@ -645,6 +651,8 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     .or_else(|| extract_sensor(&response.sensors, "Clock", "SuperIO", None, &["Bus Speed", "CPU Clock"], true))
                     .unzip();
                 let cpu_clock = cpu_clock.map(|v| v as u32);
+                // LHML 缺 CPU 频率传感器时回退 CallNtPowerInformation（用户态，免驱动）
+                let cpu_clock = cpu_clock.or_else(crate::hardware::get_cpu_clock_mhz_fallback);
                 // CPU 电压 (老AMD也可能通过SuperIO报告)
                 let cpu_voltage_result = extract_sensor(
                     &response.sensors,
@@ -832,7 +840,10 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                 } else {
                     log::warn!("LHML 传感器读取失败: {e}");
                 }
-                (None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Vec::new(), 0)
+                // 子进程整体失败时，CPU 占用/频率仍可由用户态兜底获取，避免悬窗 CPU 长期显示 --
+                let cpu_usage = crate::hardware::get_cpu_dynamic_info();
+                let cpu_clock = crate::hardware::get_cpu_clock_mhz_fallback();
+                (cpu_usage, None, cpu_clock, None, None, None, None, None, None, None, None, None, None, None, None, None, None, Vec::new(), 0)
             }
         }
     };

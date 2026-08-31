@@ -5,6 +5,8 @@ import { motion, useAnimationControls } from "framer-motion";
 import { useColorModeValue, Tooltip } from "@chakra-ui/react";
 import { useNavigate } from "react-router-dom";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import { useBackground } from "@/contexts/background-context";
+import { useLiquidGlassRefraction, ISLAND_FILTER_ID } from "@/components/special/liquid-glass-svg-filter";
 import {
   Zap,
   MemoryStick,
@@ -1081,6 +1083,10 @@ export function DynamicIslandHost() {
   const { item, revision } = snapshot;
   const { config } = useThemeColor();
   const primaryColor = config.primaryColor;
+  const { liquidGlassEnabled, islandLiquidGlassEnabled } = useBackground();
+  const { svgSupported } = useLiquidGlassRefraction();
+  // 总开关 + 灵动岛子开关（设置页液态玻璃卡片内，默认关闭）同时打开才启用真实折射；不支持时回退磨砂玻璃
+  const islandGlass = liquidGlassEnabled && islandLiquidGlassEnabled && svgSupported;
   const currentSong = useMusicStore((s) => s.currentSong);
   const externalTrack = useMusicStore((s) => s.externalTrack);
   const isPlaying = useMusicStore((s) => s.isPlaying);
@@ -1389,10 +1395,12 @@ export function DynamicIslandHost() {
   }, [item, revision, run, playAppear, playReplace, playDismiss]);
 
   const pillBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(20,20,20,0.88)");
+  const glassBg = useColorModeValue("rgba(255,255,255,0.10)", "rgba(12,12,12,0.22)");
+  // 真实液态玻璃：SVG 位移折射 + 轻模糊 + 提饱和；折射强度/边缘带在 liquid-glass-svg-filter.tsx 顶部可调
+  const glassBackdrop = `url(#${ISLAND_FILTER_ID}) blur(2px) saturate(1.35)`;
   const pillBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)");
   const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
   const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
-  const highlight = useColorModeValue("rgba(255,255,255,0.9)", "rgba(255,255,255,0.14)");
   const barTrack = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.14)");
 
   // 折叠：只显示精简短文案；展开：显示完整标题 + 详细描述
@@ -1426,12 +1434,13 @@ export function DynamicIslandHost() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onPointerLeave={handleMouseLeave}
+        className={islandGlass ? "real-liquid-glass" : undefined}
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
-          background: pillBg,
+          background: islandGlass ? glassBg : pillBg,
           border: `1px solid ${pillBorder}`,
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
+          backdropFilter: islandGlass ? glassBackdrop : "blur(20px)",
+          WebkitBackdropFilter: islandGlass ? glassBackdrop : "blur(20px)",
           overflow: "hidden",
           cursor: "pointer",
           pointerEvents: displayed ? "auto" : "none",
@@ -1440,18 +1449,6 @@ export function DynamicIslandHost() {
           position: "relative",
         }}
       >
-        {/* 顶部高光细线，玻璃质感 */}
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: "6%",
-            right: "6%",
-            height: 1,
-            background: highlight,
-            opacity: 0.5,
-          }}
-        />
         {displayed?.kind === "music" ? (
           <MusicIslandContent expanded={expanded} expandedVisible={expandedTextVisible} foldVisible={foldVisible} />
         ) : (

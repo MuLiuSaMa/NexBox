@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 Firefox 遥测（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Mozilla\Firefox]
+"DisableTelemetry"=-
+"DisableDefaultBrowserAgent"=-

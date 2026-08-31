@@ -1,0 +1,29 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Cortana 与网络搜索
+; 关闭小娜语音助手、Bing 网络搜索、云内容搜索与搜索历史，提升隐私与搜索速度
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\Windows Search]
+"AllowCortana"=dword:00000000
+"DisableWebSearch"=dword:00000001
+"ConnectedSearchUseWeb"=dword:00000000
+"ConnectedSearchUseWebOverMeteredConnections"=dword:00000000
+"AllowCloudSearch"=dword:00000000
+"AllowCortanaAboveLock"=dword:00000000
+"AllowCortanaInAAD"=dword:00000000
+"AllowCortanaInAADPathOOBE"=dword:00000000
+"AllowSearchToUseLocation"=dword:00000000
+"ConnectedSearchPrivacy"=dword:00000003
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\SearchSettings]
+"IsDeviceSearchHistoryEnabled"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Search]
+"HistoryViewEnabled"=dword:00000000
+"DeviceHistoryEnabled"=dword:00000000
+"AllowSearchToUseLocation"=dword:00000000
+"BingSearchEnabled"=dword:00000000
+"CortanaConsent"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Microsoft\Speech_OneCore\Preferences]
+"VoiceActivationEnableAboveLockscreen"=dword:00000000

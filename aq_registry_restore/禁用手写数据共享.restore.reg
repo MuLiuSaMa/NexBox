@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复手写数据共享（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\TabletPc]
+"PreventHandwritingDataSharing"=-

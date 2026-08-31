@@ -1,0 +1,37 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Visual Studio 遥测
+; 关闭 VS 遥测开关、反馈对话框/邮件/截图收集与 SQM 客户体验计划
+; 覆盖 14.0 / 15.0 / 16.0 三个版本（64 位与 Wow6432Node 双视图）
+
+[HKEY_CURRENT_USER\Software\Microsoft\VisualStudio\Telemetry]
+"TurnOffSwitch"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio\Feedback]
+"DisableFeedbackDialog"=dword:00000001
+"DisableEmailInput"=dword:00000001
+"DisableScreenshotCapture"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\VisualStudio\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\14.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\15.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VSCommon\16.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\14.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\15.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Wow6432Node\Microsoft\VSCommon\16.0\SQM]
+"OptIn"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\VSStandardCollectorService150]
+"Start"=dword:00000004

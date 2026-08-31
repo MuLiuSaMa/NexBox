@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 禁用诊断弹窗
+; 将诊断数据反馈级别设为"基本"，减少诊断与系统健康相关的弹窗提示
+
+[HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack]
+"ShowedToastAtLevel"=dword:00000001
+
+[HKEY_USERS\.DEFAULT\SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack]
+"ShowedToastAtLevel"=dword:00000001

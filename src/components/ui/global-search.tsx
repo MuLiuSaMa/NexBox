@@ -56,6 +56,9 @@ export function GlobalSearch() {
   const { tools } = useAppStartup();
 
   const [isOpen, setIsOpen] = useState(false);
+  // keydown 监听 deps 为空，用 ref 读取最新的开关状态
+  const isOpenRef = useRef(false);
+  isOpenRef.current = isOpen;
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [results, setResults] = useState<GroupedResults>({});
@@ -94,7 +97,9 @@ export function GlobalSearch() {
         setIsOpen(true);
         setTimeout(() => inputRef.current?.focus(), 0);
       }
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && isOpenRef.current) {
+        // 搜索浮层打开时 Esc 只关闭浮层，不触发全局 Esc 返回
+        e.stopPropagation();
         setIsOpen(false);
         setQuery("");
       }

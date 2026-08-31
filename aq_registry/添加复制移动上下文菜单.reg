@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 在文件右键菜单中添加"复制到文件夹"和"移动到文件夹"
+; 使用 Windows 内置的 Copy To / Move To Shell 扩展 CLSID
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Copy To]
+@="{C2FBB630-2971-11D1-A18C-00C04FD75D13}"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Classes\AllFilesystemObjects\shellex\ContextMenuHandlers\Move To]
+@="{C2FBB631-2971-11D1-A18C-00C04FD75D13}"

@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 Microsoft Store 自动更新与推广内容（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent]
+"DisableSoftLanding"=-
+"DisableWindowsConsumerFeatures"=-
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsStore]
+"AutoDownload"=-

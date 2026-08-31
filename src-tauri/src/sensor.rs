@@ -190,6 +190,11 @@ fn wait_pipe_readable(
 /// 全局传感器桥接
 pub static SENSOR_BRIDGE: Mutex<Option<SensorBridge>> = Mutex::new(None);
 
+/// LHML 是否至少成功读取过一次传感器。
+/// 静态硬件缓存用它判断 NexBoxMonitor 是否已就绪：
+/// 未就绪时构建的 GPU 列表可能是 WMI 兜底/NVML 单来源，不写入缓存，等就绪后重建。
+pub static LHM_EVER_SUCCEEDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// 重启冷却（秒）：子进程崩溃后至少等待 30s 才尝试重启
 const RESTART_COOLDOWN_SECS: u64 = 30;
 /// 连续重启次数上限：超过此次数后不再自动重启
@@ -431,6 +436,7 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
                 let hw_type = s.hardware_type.to_lowercase();
                 !(name.contains("virtual") || hw.contains("virtual") || hw_type.contains("virtual"))
             });
+            LHM_EVER_SUCCEEDED.store(true, std::sync::atomic::Ordering::Relaxed);
             Ok(response)
         }
         None => {

@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 SysMain 为自动启动（默认 2）并重新启用预取器（默认 3）
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\SysMain]
+"Start"=dword:00000002
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters]
+"EnableSuperfetch"=dword:00000003
+"EnablePrefetcher"=dword:00000003
+"SfTracingState"=-

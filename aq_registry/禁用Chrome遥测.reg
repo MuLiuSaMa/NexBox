@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Google Chrome 遥测
+; 关闭指标上报、清理上报、用户反馈收集
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome]
+"MetricsReportingEnabled"=dword:00000000
+"ChromeCleanupReportingEnabled"=dword:00000000
+"ChromeCleanupEnabled"=dword:00000000
+"UserFeedbackAllowed"=dword:00000000
+"DeviceMetricsReportingEnabled"=dword:00000000

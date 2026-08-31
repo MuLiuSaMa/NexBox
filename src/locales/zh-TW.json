@@ -369,7 +369,9 @@
         "secondary": "備選 DNS",
         "apply": "套用 DNS",
         "applied": "已套用",
-        "restore": "恢復自動獲取"
+        "restore": "恢復自動獲取",
+        "latencyTimeout": "逾時",
+        "hijacked": "被劫持"
       },
       "dnsRequired": "請至少輸入首選 DNS 位址",
       "dnsCacheCleared": "DNS 快取已清理",
@@ -1501,6 +1503,8 @@
       "liquidGlassModeReal": "透明液態玻璃",
       "liquidGlassModeNormalDesc": "使用模糊和透明度模擬玻璃質感，可調節模糊程度",
       "liquidGlassModeRealDesc": "使用 SVG 折射濾鏡實現邊緣折射和色差效果，更透明但需要更多 GPU 開銷",
+      "islandLiquidGlassLabel": "動態島液態玻璃",
+      "islandLiquidGlassDesc": "開啟後動態島提示使用 SVG 折射透明玻璃，更透明真實",
       "jellyBounce": "果凍彈跳",
       "jellyBounceLabel": "果凍彈跳效果",
       "jellyBounceDesc": "啟用後，所有卡片、選單和導航列在互動與狀態切換時會有彈性縮放動畫",

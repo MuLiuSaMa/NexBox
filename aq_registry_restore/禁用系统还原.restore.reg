@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 恢复系统还原（删除禁用策略）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore]
+"DisableSR"=-
+"DisableConfig"=-

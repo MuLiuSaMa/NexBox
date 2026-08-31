@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "9.2.5"
+version = "9.4.0"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -110,6 +110,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_LibraryLoader",
+    "Win32_System_Power",
     "Win32_System_Memory",
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
@@ -127,7 +128,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Devices_Display",
 ] }
 winreg = "0.52"
-winapi = { version = "0.3", features = ["winuser", "windef", "shellapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winnt", "sddl", "fileapi", "ioapiset", "errhandlingapi", "ntdef"] }
+winapi = { version = "0.3", features = ["winuser", "windef", "shellapi", "handleapi", "processthreadsapi", "securitybaseapi", "winbase", "winnt", "sddl", "fileapi", "ioapiset", "errhandlingapi", "ntdef", "iphlpapi", "iptypes"] }
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",

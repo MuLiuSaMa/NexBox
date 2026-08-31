@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用远程注册表服务（RemoteRegistry）
+; 阻止远程计算机访问本机注册表，提高安全性
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\RemoteRegistry]
+"Start"=dword:00000004

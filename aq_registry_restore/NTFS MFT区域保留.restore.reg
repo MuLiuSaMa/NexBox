@@ -1,0 +1,6 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 NTFS MFT 区域保留为系统默认（1）
+
+[HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem]
+"NtfsMftZoneReservation"=dword:00000001

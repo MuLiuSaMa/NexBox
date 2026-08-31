@@ -12,8 +12,9 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { deriveSplashColors } from "@/lib/color-utils";
+import { useEscBack } from "@/hooks/use-esc-back";
 
-function useNavPosition() {
+export function useNavPosition() {
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, activePresetIndex, presetBackgrounds, backgroundBlur, jellyBounceEnabled, mrColorMode, mrCustomColor } = useBackground();
   const { config } = useThemeColor();
   const navPosition = useNavPosition();
+  useEscBack();
   const location = useLocation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoReady, setVideoReady] = useState(false);

@@ -53,7 +53,8 @@ export default function RandomImageModal({ isOpen, onClose }: RandomImageModalPr
   const objectUrlRef = useRef<string | null>(null);
 
   const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
+  // react-icons 的 color 不经 Chakra 解析，必须用真实色值（token 在浅色下会退化成白色）
+  const subLabelColor = useColorModeValue("#718096", "#ffffff");
   const modalBg = useColorModeValue("white", "#111111");
   const modalBorderColor = useColorModeValue("gray.200", "#333333");
   const previewBg = useColorModeValue("gray.100", "#1e1e1e");

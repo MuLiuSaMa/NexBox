@@ -133,6 +133,9 @@ Pavise-Game-main/
 # Third-party reference project (downloaded Liquid Glass JS library, not part of repo)
 liquid-glass-main/
 
+# Third-party reference project (downloaded RyTuneX source, not part of repo)
+RyTuneX-main/
+
 # 根目录字体副本（与 public/fonts/ 下重复，仅提交 public/fonts 版本）
 NotoSerifSC-900.woff2
 

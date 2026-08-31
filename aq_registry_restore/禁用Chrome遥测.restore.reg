@@ -1,0 +1,10 @@
+Windows Registry Editor Version 5.00
+
+; 恢复 Chrome 遥测（删除策略值）
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Google\Chrome]
+"MetricsReportingEnabled"=-
+"ChromeCleanupReportingEnabled"=-
+"ChromeCleanupEnabled"=-
+"UserFeedbackAllowed"=-
+"DeviceMetricsReportingEnabled"=-

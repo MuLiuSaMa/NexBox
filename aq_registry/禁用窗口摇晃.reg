@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Aero Shake 窗口摇晃
+; 拖住标题栏摇晃窗口时不再最小化其他窗口，减少误触干扰
+
+[HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced]
+"DisallowShaking"=dword:00000001

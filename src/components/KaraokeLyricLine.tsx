@@ -37,7 +37,6 @@ function KaraokeLyricLineInner({
   line,
   nextLine,
   isActive,
-  isPlaying,
   fontSize,
   activeColor,
   highlightColor,
@@ -68,19 +67,21 @@ function KaraokeLyricLineInner({
     return () => clearTimeout(timer);
   }, [line.text, fontSize, isActive]);
 
-  // 动画循环：更新顶层 width（仅当前行 + 播放中运行）
+  // 动画循环：更新顶层 width（跟随 audio 真实播放状态）
+  // 不用 isPlaying 门控：暂停缓出期间音频仍在出声，需继续跟随到真正 pause 才停表；
+  // 以 audio 的 play/pause 事件驱动启停，单曲循环重播等不经过 isPlaying 的路径也能自动恢复
   useEffect(() => {
-    if (!isActive || !isPlaying || !overlayRef.current) return;
+    if (!isActive || !overlayRef.current || !audioRef) return;
 
     const el = overlayRef.current;
     el.style.width = "0%";
 
     let rafId: number;
-    let running = true;
+    let running = false;
 
     const tick = () => {
       if (!running) return;
-      const t = audioRef ? audioRef.currentTime : 0;
+      const t = audioRef.currentTime;
       const progress = getLineProgress(line, nextLine, t);
 
       // 更新顶层裁剪宽度
@@ -95,13 +96,29 @@ function KaraokeLyricLineInner({
       rafId = requestAnimationFrame(tick);
     };
 
-    rafId = requestAnimationFrame(tick);
-    return () => {
+    const start = () => {
+      if (running) return;
+      running = true;
+      rafId = requestAnimationFrame(tick);
+    };
+    const stop = () => {
       running = false;
       cancelAnimationFrame(rafId);
     };
+
+    const onPlay = () => start();
+    const onPause = () => stop();
+    // 挂载时音频已在出声（如缓出暂停期间行切换）直接起跑
+    if (!audioRef.paused) start();
+    audioRef.addEventListener("play", onPlay);
+    audioRef.addEventListener("pause", onPause);
+    return () => {
+      stop();
+      audioRef.removeEventListener("play", onPlay);
+      audioRef.removeEventListener("pause", onPause);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isPlaying, line, nextLine, scrollNeeded, audioRef]);
+  }, [isActive, line, nextLine, scrollNeeded, audioRef]);
 
   // ── 非当前行：简单显示 ──
   if (!isActive) {

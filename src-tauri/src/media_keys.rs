@@ -7,8 +7,8 @@
 //!   - 开关开启：WM_HOTKEY → 转发 `smtc:control` 给前端控制内置播放器；
 //!     同时注册本应用 SMTC 媒体会话（音量浮层/锁屏显示）。
 //!   - 开关关闭：热键保持注册（继续抢占物理媒体键，WebView2 无从插手），
-//!     但 WM_HOTKEY 改为直接命令外部音乐客户端的 SMTC 会话
-//!     （TryTogglePlayPauseAsync 等）——「仅新境盒不响应，其他软件正常」；
+//!     但 WM_HOTKEY 改为直接命令系统当前的任意媒体会话
+//!     （TryTogglePlayPauseAsync 等，不受音乐白名单限制）——「仅新境盒不响应」；
 //!     同时停用本应用 SMTC 会话（smtc_clear），音量浮层/锁屏不再显示新境盒。
 //!
 //! 若个别播放器抢注了同一批热键导致本应用注册失败，按键会走系统原生流程直达该
@@ -286,7 +286,7 @@ mod imp {
 
     /// RegisterHotKey 的消息窗口过程：
     /// - 开启：WM_HOTKEY → 转发前端控制内置播放器
-    /// - 关闭：WM_HOTKEY → 直接命令外部音乐客户端的 SMTC 会话（仅新境盒不响应）
+    /// - 关闭：WM_HOTKEY → 直接命令系统当前的任意媒体会话（仅新境盒不响应）
     unsafe extern "system" fn hotkey_wnd_proc(
         _hwnd: windows_sys::Win32::Foundation::HWND,
         msg: u32,
@@ -305,7 +305,7 @@ mod imp {
                 if ENABLED.load(Ordering::SeqCst) {
                     emit_control(action);
                 } else {
-                    log::info!("[MediaKeys] 关闭模式热键 → 转发外部 SMTC 会话: {action}");
+                    log::info!("[MediaKeys] 关闭模式热键 → 转发当前媒体会话: {action}");
                     crate::external_player::forward_media_key(action);
                 }
                 return 0;

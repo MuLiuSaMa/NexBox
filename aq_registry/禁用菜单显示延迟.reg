@@ -1,0 +1,7 @@
+Windows Registry Editor Version 5.00
+
+; 禁用菜单显示延迟（MenuShowDelay）
+; 控制鼠标悬停后菜单显示的等待时间，设为 0 让菜单立即打开，提高响应速度
+
+[HKEY_CURRENT_USER\Control Panel\Desktop]
+"MenuShowDelay"="0"

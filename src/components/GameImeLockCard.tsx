@@ -12,7 +12,8 @@ export default function GameImeLockCard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  // react-icons 的 color 不经 Chakra 解析，必须用真实色值（token 在浅色下会退化成白色）
+  const textColor = useColorModeValue("#1a202c", "#ffffff");
 
   useEffect(() => {
     let mounted = true;

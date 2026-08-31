@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; 恢复键盘默认重复延迟（1）并删除自定义重复速度（回默认 31）
+
+[HKEY_CURRENT_USER\Control Panel\Keyboard]
+"KeyboardDelay"="1"
+"KeyboardSpeed"=-
+
+[HKEY_USERS\.DEFAULT\Control Panel\Keyboard]
+"KeyboardDelay"="1"
+"KeyboardSpeed"=-

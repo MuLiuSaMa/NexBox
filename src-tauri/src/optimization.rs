@@ -1874,12 +1874,14 @@ pub struct MemoryCleanConfig {
 
 static MEMORY_CLEAN_CONFIG: Mutex<Option<MemoryCleanConfig>> = Mutex::new(None);
 
-/// 默认勾选项：待机列表 + 系统文件缓存 + 低优先级待机（安全、不砍进程工作集）
+/// 默认勾选项：待机列表 + 系统文件缓存 + 低优先级待机 + 进程工作集
+/// 工作集整理带白名单保护（跳过系统关键进程与游戏进程），可安全默认开启
 fn default_memory_clean_items() -> Vec<String> {
     vec![
         "standby".to_string(),
         "file_cache".to_string(),
         "low_pri_standby".to_string(),
+        "working_set".to_string(),
     ]
 }
 

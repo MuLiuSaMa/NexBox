@@ -4,6 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 const FILTER_ID = "nexbox-liquid-glass-filter";
 
+// 灵动岛专用折射滤镜：全局滤镜 scale=1 几乎不可见，灵动岛需要肉眼可见的边缘折射；
+// 且胶囊只有 30px 高，位移贴图需要更宽的垂直边缘带才能在矮胶囊上呈现折射
+export const ISLAND_FILTER_ID = "nexbox-island-glass-filter";
+const ISLAND_MAP_W = 400, ISLAND_MAP_H = 100, ISLAND_MAP_E = 20; // 水平折射带 5% 宽（匹配胶囊圆头），垂直折射带 20% 高
+const ISLAND_SCALE = 30; // 折射强度（px）：边缘最大位移 = ISLAND_SCALE / 2，观感偏强/偏弱只调这里
+
 export function supportsSvgBackdropFilter(): boolean {
   try {
     const ua = navigator.userAgent || "";
@@ -21,8 +27,7 @@ export function supportsSvgBackdropFilter(): boolean {
  * 仅最外层窄边有 R/B 梯度 → 边缘折射背景内容
  * feDisplacementMap scale 控制折射强度
  */
-function generateDisplacementMap(): string {
-  const W = 400, H = 200, E = 10; // E = 边缘折射带 (5%)
+function generateDisplacementMap(W = 400, H = 200, E = 10): string {
 
   const svg =
     `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">` +
@@ -79,10 +84,17 @@ export function LiquidGlassSvgFilter() {
 
   useEffect(() => {
     mapRef.current = generateDisplacementMap();
-    const img = document.getElementById("nexbox-glass-displacement-map");
-    if (img) {
-      img.setAttribute("href", mapRef.current);
-      try { img.setAttributeNS("http://www.w3.org/1999/xlink", "href", mapRef.current); } catch { /* */ }
+    const islandMap = generateDisplacementMap(ISLAND_MAP_W, ISLAND_MAP_H, ISLAND_MAP_E);
+    const maps: Array<[string, string]> = [
+      ["nexbox-glass-displacement-map", mapRef.current],
+      ["nexbox-island-displacement-map", islandMap],
+    ];
+    for (const [id, href] of maps) {
+      const img = document.getElementById(id);
+      if (img) {
+        img.setAttribute("href", href);
+        try { img.setAttributeNS("http://www.w3.org/1999/xlink", "href", href); } catch { /* */ }
+      }
     }
   }, []);
 
@@ -101,6 +113,22 @@ export function LiquidGlassSvgFilter() {
             in="SourceGraphic"
             in2="map"
             scale="1"
+            xChannelSelector="R"
+            yChannelSelector="B"
+          />
+        </filter>
+        {/* 灵动岛专用：强折射 + 为矮胶囊加宽的垂直边缘带 */}
+        <filter id={ISLAND_FILTER_ID} colorInterpolationFilters="sRGB" x="-50%" y="-50%" width="200%" height="200%">
+          <feImage
+            id="nexbox-island-displacement-map"
+            x="0" y="0" width="100%" height="100%"
+            preserveAspectRatio="none"
+            result="map"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="map"
+            scale={ISLAND_SCALE}
             xChannelSelector="R"
             yChannelSelector="B"
           />

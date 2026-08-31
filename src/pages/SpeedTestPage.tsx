@@ -4,13 +4,11 @@ import {
   Heading,
   VStack,
   HStack,
-  SimpleGrid,
   useColorModeValue,
   IconButton,
   Button,
   Badge,
   Tooltip,
-  Divider,
 } from "@chakra-ui/react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -33,6 +31,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavigate } from "react-router-dom";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { useNavPosition } from "@/components/ui/main-layout";
 
 interface SpeedTestProgress {
   stage: string; // ping / download / upload / done
@@ -274,45 +273,60 @@ function SpeedChart({
   );
 }
 
-function MetricCard({
+// 紧凑指标行(右侧栏用:图标+标签在左,数值在右)
+function MetricRow({
   label,
   value,
   unit,
   icon,
   accent,
+  flex,
 }: {
   label: string;
   value: string;
   unit: string;
   icon: React.ReactNode;
   accent: string;
+  flex?: number | string;
 }) {
   const subColor = useColorModeValue("gray.600", "#999999");
+  const valueColor = useColorModeValue("#000000", "#ffffff");
+  const rowBg = useColorModeValue("rgba(0,0,0,0.02)", "rgba(255,255,255,0.02)");
+  const rowBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
   return (
-    <LiquidGlassCard p={4} textAlign="center">
-      <VStack spacing={1}>
+    <HStack
+      flex={flex}
+      justify="space-between"
+      px={3}
+      py={2.5}
+      borderRadius="lg"
+      bg={rowBg}
+      border="1px solid"
+      borderColor={rowBorder}
+    >
+      <HStack spacing={2} minW={0}>
         <Box color={accent}>{icon}</Box>
-        <HStack spacing={1} align="baseline">
-          <Text
-            fontSize="2xl"
-            fontWeight="bold"
-            color={useColorModeValue("#000000", "#ffffff")}
-            style={{ fontVariantNumeric: "tabular-nums" }}
-          >
-            {value}
-          </Text>
-          <Text fontSize="xs" color={subColor}>{unit}</Text>
-        </HStack>
-        <Text fontSize="xs" color={subColor}>{label}</Text>
-      </VStack>
-    </LiquidGlassCard>
+        <Text fontSize="sm" color={subColor} noOfLines={1}>{label}</Text>
+      </HStack>
+      <HStack spacing={1} align="baseline" flexShrink={0}>
+        <Text
+          fontSize="lg"
+          fontWeight="bold"
+          color={valueColor}
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {value}
+        </Text>
+        <Text fontSize="xs" color={subColor}>{unit}</Text>
+      </HStack>
+    </HStack>
   );
 }
 
 export default function SpeedTestPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { getActiveColor, getContrastTextColor, getHoverColor } = useThemeColor();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
 
   const [stage, setStage] = useState<Stage>("idle");
   const [ping, setPing] = useState(0);
@@ -335,7 +349,6 @@ export default function SpeedTestPage() {
 
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  const hoverBg = getHoverColor(false);
 
   // 订阅测速进度
   useEffect(() => {
@@ -438,14 +451,18 @@ export default function SpeedTestPage() {
   const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("#000000", "#ffffff");
   const subColor = useColorModeValue("gray.500", "#888888");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+
+  // 内容铺满可视区:按导航位置扣除 MainLayout 的上下内边距
+  const navPosition = useNavPosition();
+  const fillMinH =
+    navPosition === "top" ? "calc(100vh - 152px)" : "calc(100vh - 88px)";
 
   const running = stage === "ping" || stage === "download" || stage === "upload";
 
   return (
-    <Box pt={8}>
-      <VStack align="stretch" spacing={6}>
-        <HStack justify="space-between" align="center">
+    <Box pt={2} minH={fillMinH} display="flex" flexDirection="column">
+      <VStack align="stretch" spacing={5} flex={1}>
+        <HStack justify="space-between" align="center" flexWrap="wrap">
           <HStack spacing={3}>
             <IconButton
               aria-label="back"
@@ -460,14 +477,29 @@ export default function SpeedTestPage() {
               </Heading>
             </HStack>
           </HStack>
-          <StageBadge stage={stage} />
+          <HStack spacing={3}>
+            <StageBadge stage={stage} />
+          </HStack>
         </HStack>
 
-        {/* 主测速卡片：液态玻璃效果（跟随全局开关），左侧下载/上传大数字 + 右侧超大折线图 */}
-        <LiquidGlassCard p={6}>
-          <SimpleGrid columns={{ base: 1, lg: 4 }} spacing={6} alignItems="center">
-            {/* 左侧：下载/上传 */}
-            <VStack spacing={6} align="stretch">
+        {/* 主测速卡片：液态玻璃效果（跟随全局开关）。网格布局：
+            桌面端 = 左列(下载/上传大数字 + 折线图)，右列(开始按钮 + 测速服务器 + 延迟/抖动/丢包，
+            指标卡片与折线图同一行拉伸、上下边缘严格对齐)；移动端纵向排列 */}
+        <LiquidGlassCard p={5} flex={1} display="flex" flexDirection="column">
+          <Box
+            flex={1}
+            display="grid"
+            gridTemplateColumns={{ base: "1fr", lg: "3fr 2fr" }}
+            gridTemplateAreas={{
+              base: `"controls" "meters" "chart" "metrics"`,
+              lg: `"meters controls" "chart metrics"`,
+            }}
+            columnGap={{ base: 0, lg: 5 }}
+            rowGap={{ base: 3, lg: 4 }}
+            alignContent="start"
+          >
+            {/* 顶部：下载/上传大数字 */}
+            <HStack gridArea="meters" justify="space-evenly" align="center" w="full">
               <SpeedMeter
                 icon={<Download size={18} />}
                 title={t("speedtest.download")}
@@ -475,7 +507,6 @@ export default function SpeedTestPage() {
                 accent="#38A169"
                 active={stage === "download" || stage === "done"}
               />
-              <Divider borderColor={dividerColor} />
               <SpeedMeter
                 icon={<Upload size={18} />}
                 title={t("speedtest.upload")}
@@ -483,10 +514,50 @@ export default function SpeedTestPage() {
                 accent="#A78BFA"
                 active={stage === "upload" || stage === "done"}
               />
+            </HStack>
+
+            {/* 右上：开始/停止按钮 + 测速服务器（按钮正下方） */}
+            <VStack gridArea="controls" spacing={3} align="stretch">
+              <Tooltip label={t("speedtest.startHint")} isDisabled={!running}>
+                <Button
+                  w="full"
+                  minH="48px"
+                  px={5}
+                  bg={running ? "#E53E3E" : activeColor}
+                  color={running ? "#ffffff" : contrastText}
+                  _hover={running ? { bg: "#C53030" } : { filter: "brightness(0.88)" }}
+                  _active={{ transform: "scale(0.97)" }}
+                  transition="filter 0.15s ease-in-out, background-color 0.15s ease-in-out, transform 0.1s ease"
+                  isLoading={running}
+                  loadingText={t("speedtest.testing")}
+                  leftIcon={running ? <RefreshCw size={16} /> : <Gauge size={16} />}
+                  onClick={running ? handleStop : handleStart}
+                  borderRadius="xl"
+                >
+                  {running ? t("speedtest.stop") : t("speedtest.start")}
+                </Button>
+              </Tooltip>
+              <HStack spacing={2} align="center">
+                <Box flexShrink={0}>
+                  <Server size={15} color={subColor} />
+                </Box>
+                <Box flex={1} minW={0}>
+                  <CustomSelect
+                    value={selectedServer}
+                    onChange={setSelectedServer}
+                    options={servers.map((s) => ({ value: s.id, label: s.name }))}
+                    width="100%"
+                    placeholder={t("speedtest.server")}
+                  />
+                </Box>
+              </HStack>
+              <Text fontSize="xs" color={subColor} noOfLines={2} title={t("speedtest.serverNote")}>
+                {t("speedtest.serverNote")}
+              </Text>
             </VStack>
 
-            {/* 右侧：超大折线图 */}
-            <Box gridColumn={{ lg: "span 3" }}>
+            {/* 折线图 */}
+            <Box gridArea="chart">
               <SpeedChart
                 downloadPoints={dlPoints}
                 uploadPoints={ulPoints}
@@ -494,72 +565,36 @@ export default function SpeedTestPage() {
                 activeColor={activeColor}
               />
             </Box>
-          </SimpleGrid>
+
+            {/* 延迟/抖动/丢包：与折线图同一行，三张卡片均分拉伸，上下边缘与图表对齐 */}
+            <VStack gridArea="metrics" spacing={3} align="stretch">
+              <MetricRow
+                flex={1}
+                label={t("speedtest.ping")}
+                value={ping > 0 ? ping.toFixed(1) : "--"}
+                unit="ms"
+                icon={<Timer size={16} />}
+                accent={activeColor}
+              />
+              <MetricRow
+                flex={1}
+                label={t("speedtest.jitter")}
+                value={jitter > 0 ? jitter.toFixed(1) : "--"}
+                unit="ms"
+                icon={<Activity size={16} />}
+                accent="#DD6B20"
+              />
+              <MetricRow
+                flex={1}
+                label={t("speedtest.packetLoss")}
+                value={loss > 0 ? loss.toFixed(1) : "0"}
+                unit="%"
+                icon={<Network size={16} />}
+                accent="#E53E3E"
+              />
+            </VStack>
+          </Box>
         </LiquidGlassCard>
-
-        {/* 延迟/抖动/丢包：独立卡片区 */}
-        <SimpleGrid columns={{ base: 1, sm: 3 }} spacing={4}>
-          <MetricCard
-            label={t("speedtest.ping")}
-            value={ping > 0 ? ping.toFixed(1) : "--"}
-            unit="ms"
-            icon={<Timer size={18} />}
-            accent={activeColor}
-          />
-          <MetricCard
-            label={t("speedtest.jitter")}
-            value={jitter > 0 ? jitter.toFixed(1) : "--"}
-            unit="ms"
-            icon={<Activity size={18} />}
-            accent="#DD6B20"
-          />
-          <MetricCard
-            label={t("speedtest.packetLoss")}
-            value={loss > 0 ? loss.toFixed(1) : "0"}
-            unit="%"
-            icon={<Network size={18} />}
-            accent="#E53E3E"
-          />
-        </SimpleGrid>
-
-        {/* 开始/停止 */}
-        <VStack spacing={3}>
-          {/* 测速服务器切换 */}
-          <HStack spacing={2.5}>
-            <HStack spacing={1.5}>
-              <Server size={15} color={subColor} />
-              <Text fontSize="sm" color={subColor}>{t("speedtest.server")}</Text>
-            </HStack>
-            <CustomSelect
-              value={selectedServer}
-              onChange={setSelectedServer}
-              options={servers.map((s) => ({ value: s.id, label: s.name }))}
-              width="200px"
-              placeholder={t("speedtest.server")}
-            />
-          </HStack>
-          <Tooltip label={t("speedtest.startHint")} isDisabled={!running}>
-            <Button
-              size="lg"
-              bg={running ? "#E53E3E" : activeColor}
-              color={running ? "#ffffff" : contrastText}
-              _hover={{ bg: running ? "#C53030" : hoverBg }}
-              isLoading={running}
-              loadingText={t("speedtest.testing")}
-              leftIcon={running ? <RefreshCw size={18} /> : <Gauge size={18} />}
-              onClick={running ? handleStop : handleStart}
-              w={{ base: "full", md: "320px" }}
-              h="52px"
-              borderRadius="xl"
-              boxShadow={running ? "none" : `0 4px 20px ${activeColor}55`}
-            >
-              {running ? t("speedtest.stop") : t("speedtest.start")}
-            </Button>
-          </Tooltip>
-          <Text fontSize="xs" color={subColor}>
-            {t("speedtest.serverNote")}
-          </Text>
-        </VStack>
       </VStack>
     </Box>
   );

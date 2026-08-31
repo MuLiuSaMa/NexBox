@@ -1,8 +1,10 @@
 Windows Registry Editor Version 5.00
 
 ; 缩短系统超时值，加快关机和应用响应
+; AutoEndTasks = 自动结束挂起的应用，避免关机被卡住的程序阻塞
 
 [HKEY_CURRENT_USER\Control Panel\Desktop]
 "HungAppTimeout"="1000"
 "WaitToKillAppTimeout"="2000"
 "LowLevelHooksTimeout"="1000"
+"AutoEndTasks"="1"

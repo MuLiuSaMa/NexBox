@@ -1,0 +1,11 @@
+Windows Registry Editor Version 5.00
+
+; 禁用 Microsoft Store 自动更新与推广内容
+; 关闭商店应用自动下载更新、消费者特性和建议弹窗
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\CloudContent]
+"DisableSoftLanding"=dword:00000001
+"DisableWindowsConsumerFeatures"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\WindowsStore]
+"AutoDownload"=dword:00000002
