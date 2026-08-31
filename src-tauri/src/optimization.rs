@@ -4574,6 +4574,40 @@ pub async fn restore_registry_tweak(name: String) -> Result<PerfTweakResult, Str
     .map_err(|e| format!("恢复执行线程异常: {}", e))?
 }
 
+/// 并行执行一批注册表 .reg 应用/恢复任务（注册表写入互不冲突，按 CPU 数分块并发）
+/// 返回 (成功数, 失败列表)。restore=true 时读取 <name>.restore.reg 执行恢复。
+fn batch_apply_reg_files(names: &[String], restore: bool) -> (usize, Vec<(String, String)>) {
+    let results: Mutex<Vec<(String, Result<(), String>)>> = Mutex::new(Vec::new());
+    let worker_count = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .clamp(1, 8);
+    let chunk_size = (names.len() + worker_count - 1) / worker_count;
+
+    std::thread::scope(|s| {
+        for chunk in names.chunks(chunk_size.max(1)) {
+            let res_ref = &results;
+            s.spawn(move || {
+                let mut local: Vec<(String, Result<(), String>)> = Vec::new();
+                for name in chunk {
+                    let r = read_reg_file(name, restore)
+                        .and_then(|content| apply_reg_content(&content));
+                    local.push((name.clone(), r));
+                }
+                res_ref.lock().unwrap().extend(local);
+            });
+        }
+    });
+
+    let all = results.into_inner().unwrap();
+    let success_count = all.iter().filter(|(_, r)| r.is_ok()).count();
+    let failed: Vec<(String, String)> = all
+        .into_iter()
+        .filter_map(|(name, r)| r.err().map(|e| (name, e)))
+        .collect();
+    (success_count, failed)
+}
+
 /// 批量应用注册表优化
 #[tauri::command]
 pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweakResult, String> {
@@ -4582,23 +4616,7 @@ pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweak
     }
 
     tokio::task::spawn_blocking(move || {
-        let mut success_count = 0;
-        let mut failed = Vec::new();
-
-        for name in &names {
-            match read_reg_file(name, false) {
-                Ok(content) => {
-                    if let Err(e) = apply_reg_content(&content) {
-                        failed.push((name.clone(), e));
-                    } else {
-                        success_count += 1;
-                    }
-                }
-                Err(e) => {
-                    failed.push((name.clone(), e));
-                }
-            }
-        }
+        let (success_count, failed) = batch_apply_reg_files(&names, false);
 
         if failed.is_empty() {
             Ok(PerfTweakResult {
@@ -4630,23 +4648,7 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
     }
 
     tokio::task::spawn_blocking(move || {
-        let mut success_count = 0;
-        let mut failed = Vec::new();
-
-        for name in &names {
-            match read_reg_file(name, true) {
-                Ok(content) => {
-                    if let Err(e) = apply_reg_content(&content) {
-                        failed.push((name.clone(), e));
-                    } else {
-                        success_count += 1;
-                    }
-                }
-                Err(e) => {
-                    failed.push((name.clone(), e));
-                }
-            }
-        }
+        let (success_count, failed) = batch_apply_reg_files(&names, true);
 
         if failed.is_empty() {
             Ok(PerfTweakResult {
