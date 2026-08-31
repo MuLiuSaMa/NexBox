@@ -117,6 +117,14 @@ src-tauri/resources/
 Delta Force.nip
 MCTier技术介绍.md
 
+# 三角洲行动ICC色彩配置文件（本地资源，不随仓库分发）
+三角洲推荐A.icc
+三角洲推荐B.icc
+三角洲推荐C.icc
+三角洲推荐D.icc
+三角洲推荐E.icc
+三角洲超级推荐.icc
+
 debug.log
 .temp_old_filter.rs
 monitor/build.log
