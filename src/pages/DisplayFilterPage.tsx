@@ -1842,7 +1842,7 @@ export default function DisplayFilterPage() {
 
   const content = (
     <VStack align="start" spacing={6}>
-      <Flex justify="space-between" align="flex-start" w="full" gap={4} flexWrap="wrap">
+      <Flex justify="space-between" align="flex-start" w="full" gap={4}>
         <HStack flexShrink={0}>
           <IconButton
             aria-label={t("builtinTools.back")}
@@ -1855,8 +1855,8 @@ export default function DisplayFilterPage() {
             {t("displayFilter.title")}
           </Heading>
         </HStack>
-        <VStack align="flex-end" spacing={1}>
-          <HStack>
+        <VStack align="flex-end" spacing={1} flex={1} minW={0}>
+          <HStack justify="flex-end">
             <Tooltip label={t("displayFilter.resetDefault")}>
               <IconButton
                 aria-label="Reset"
@@ -1900,7 +1900,7 @@ export default function DisplayFilterPage() {
               </HStack>
             </HStack>
           </HStack>
-          <HStack spacing={2} flexWrap="wrap">
+          <HStack spacing={2} flexWrap="wrap" justify="flex-end">
             <HStack
               bg={multiFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
               px={4}
