@@ -144,6 +144,12 @@ const ICC_TO_PRESET: Record<string, string> = {
   "builtin_NexBox_偏白": "whiter",
   "builtin_NexBox_偏蓝": "bluish",
   "builtin_NexBox_原亮 冷色调": "cool-tone",
+  "builtin_NexBox_三角洲超级推荐": "delta-super",
+  "builtin_NexBox_三角洲推荐A": "delta-a",
+  "builtin_NexBox_三角洲推荐B": "delta-b",
+  "builtin_NexBox_三角洲推荐C": "delta-c",
+  "builtin_NexBox_三角洲推荐D": "delta-d",
+  "builtin_NexBox_三角洲推荐E": "delta-e",
 };
 
 const presetIcons: Record<string, React.ElementType> = {
@@ -160,6 +166,12 @@ const presetIcons: Record<string, React.ElementType> = {
   "whiter": Sun,
   "bluish": Palette,
   "cool-tone": Film,
+  "delta-super": Gamepad2,
+  "delta-a": Sparkles,
+  "delta-b": Sun,
+  "delta-c": Film,
+  "delta-d": Palette,
+  "delta-e": Heart,
   "custom": Settings2,
 };
 
@@ -177,6 +189,12 @@ const presetColors: Record<string, string> = {
   "whiter": "#E8E8EC",
   "bluish": "#5AA9FF",
   "cool-tone": "#7EC8E3",
+  "delta-super": "#F0C24B",
+  "delta-a": "#7EE8A2",
+  "delta-b": "#FFD166",
+  "delta-c": "#06D6A0",
+  "delta-d": "#8E7CFF",
+  "delta-e": "#4CC9F0",
   "custom": "#6B7280",
 };
 
@@ -1824,8 +1842,8 @@ export default function DisplayFilterPage() {
 
   const content = (
     <VStack align="start" spacing={6}>
-      <HStack justify="space-between" w="full">
-        <HStack>
+      <Flex justify="space-between" align="flex-start" w="full" gap={4} flexWrap="wrap">
+        <HStack flexShrink={0}>
           <IconButton
             aria-label={t("builtinTools.back")}
             icon={<ArrowLeft size={20} />}
@@ -1833,7 +1851,7 @@ export default function DisplayFilterPage() {
             onClick={() => navigate("/builtin-tools")}
             color={headingColor}
           />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
+          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700" whiteSpace="nowrap">
             {t("displayFilter.title")}
           </Heading>
         </HStack>
@@ -1848,7 +1866,7 @@ export default function DisplayFilterPage() {
                 isDisabled={isLoading}
               />
             </Tooltip>
-            <HStack spacing={4}>
+            <HStack spacing={4} flexWrap="wrap" justify="flex-end">
               <HotkeyRecorder
                 value={filterHotkey}
                 onChange={async (val) => {
@@ -1951,7 +1969,7 @@ export default function DisplayFilterPage() {
             </HStack>
           </HStack>
         </VStack>
-      </HStack>
+      </Flex>
 
       {displays.length > 0 && (
         <HStack w="full" spacing={3}>
