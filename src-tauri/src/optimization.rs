@@ -1555,6 +1555,7 @@ fn clean_standby_memory_inner() -> u64 {
 
 /// 按勾选项执行内存清理，返回释放的 MB。items 支持：
 /// standby / low_pri_standby / modified / registry / combined / file_cache / working_set
+/// 列表 purge、文件缓存回收、工作集整理三类动作并行执行，缩短总耗时
 fn clean_items_inner(items: &[String]) -> u64 {
     let before = get_memory_info();
 
@@ -1579,15 +1580,25 @@ fn clean_items_inner(items: &[String]) -> u64 {
         }
     }
 
-    for cmd in purge_cmds {
-        purge_memory_list_command(cmd);
-    }
-    if has_file_cache {
-        reclaim_file_cache_native();
-    }
-    if has_working_set {
-        trim_working_set_inner();
-    }
+    std::thread::scope(|s| {
+        if !purge_cmds.is_empty() {
+            s.spawn(move || {
+                for cmd in purge_cmds {
+                    purge_memory_list_command(cmd);
+                }
+            });
+        }
+        if has_file_cache {
+            s.spawn(|| {
+                reclaim_file_cache_native();
+            });
+        }
+        if has_working_set {
+            s.spawn(|| {
+                trim_working_set_inner();
+            });
+        }
+    });
 
     let after = get_memory_info();
     if after.available > before.available {
@@ -1607,6 +1618,7 @@ fn is_protected_process_name(name: &str) -> bool {
 
 /// 原生遍历所有进程并 EmptyWorkingSet（收紧工作集），无需 PowerShell
 /// 跳过：自身、游戏进程（滤镜名单）、受保护的系统关键进程
+/// 按 CPU 核数分块多线程并行处理，大幅缩短全进程收紧耗时
 fn trim_working_set_inner() -> u64 {
     // 收集正在运行的滤镜名单游戏进程，避免游戏刚启动就被砍工作集
     let mut sys = System::new();
@@ -1628,45 +1640,76 @@ fn trim_working_set_inner() -> u64 {
         let access = PROCESS_QUERY_INFORMATION | PROCESS_SET_QUOTA | PROCESS_VM_READ;
         let pmc_size = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
         let self_pid = std::process::id();
-        let mut freed_mb: u64 = 0;
 
+        // 预过滤：跳过 0 / 自身 / 游戏进程，只留待处理 pid
+        let mut targets: Vec<u32> = Vec::with_capacity(count);
         for &pid in &pids[..count] {
             if pid == 0 || pid == self_pid || game_pids.contains(&pid) {
                 continue;
             }
-            let handle = OpenProcess(access, 0, pid);
-            if handle.is_null() {
-                continue;
-            }
-            // 受保护的系统关键进程跳过（explorer / dwm / svchost / lsass 等）
-            let mut name_buf: [u16; 260] = [0; 260];
-            let name_len =
-                K32GetProcessImageFileNameW(handle, name_buf.as_mut_ptr(), name_buf.len() as u32);
-            if name_len > 0 && name_len < name_buf.len() as u32 {
-                let path = String::from_utf16_lossy(&name_buf[..name_len as usize]);
-                let stem = std::path::Path::new(&path)
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if is_protected_process_name(&stem) {
-                    CloseHandle(handle);
-                    continue;
-                }
-            }
-            let mut pmc_before: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
-            if K32GetProcessMemoryInfo(handle, &mut pmc_before, pmc_size) == 0 {
-                CloseHandle(handle);
-                continue;
-            }
-            EmptyWorkingSet(handle);
-            let mut pmc_after: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
-            K32GetProcessMemoryInfo(handle, &mut pmc_after, pmc_size);
-            CloseHandle(handle);
-            if pmc_before.WorkingSetSize > pmc_after.WorkingSetSize {
-                freed_mb += ((pmc_before.WorkingSetSize - pmc_after.WorkingSetSize) / 1024 / 1024) as u64;
-            }
+            targets.push(pid);
         }
-        freed_mb
+        if targets.is_empty() {
+            return 0;
+        }
+
+        // 多线程并行收紧（最多 8 路），各线程本地累加释放量
+        let worker_count = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+            .clamp(1, 8);
+        let chunk_size = (targets.len() + worker_count - 1) / worker_count;
+        let freed: Mutex<u64> = Mutex::new(0);
+
+        std::thread::scope(|s| {
+            for chunk in targets.chunks(chunk_size.max(1)) {
+                let freed_ref = &freed;
+                s.spawn(move || {
+                    let mut local_freed: u64 = 0;
+                    for &pid in chunk {
+                        let handle = OpenProcess(access, 0, pid);
+                        if handle.is_null() {
+                            continue;
+                        }
+                        // 受保护的系统关键进程跳过（explorer / dwm / svchost / lsass 等）
+                        let mut name_buf: [u16; 260] = [0; 260];
+                        let name_len = K32GetProcessImageFileNameW(
+                            handle,
+                            name_buf.as_mut_ptr(),
+                            name_buf.len() as u32,
+                        );
+                        if name_len > 0 && name_len < name_buf.len() as u32 {
+                            let path = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+                            let stem = std::path::Path::new(&path)
+                                .file_stem()
+                                .map(|s| s.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            if is_protected_process_name(&stem) {
+                                CloseHandle(handle);
+                                continue;
+                            }
+                        }
+                        let mut pmc_before: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+                        if K32GetProcessMemoryInfo(handle, &mut pmc_before, pmc_size) == 0 {
+                            CloseHandle(handle);
+                            continue;
+                        }
+                        EmptyWorkingSet(handle);
+                        let mut pmc_after: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
+                        K32GetProcessMemoryInfo(handle, &mut pmc_after, pmc_size);
+                        CloseHandle(handle);
+                        if pmc_before.WorkingSetSize > pmc_after.WorkingSetSize {
+                            local_freed += ((pmc_before.WorkingSetSize - pmc_after.WorkingSetSize)
+                                / 1024
+                                / 1024) as u64;
+                        }
+                    }
+                    *freed_ref.lock().unwrap() += local_freed;
+                });
+            }
+        });
+
+        freed.into_inner().unwrap()
     }
 }
 
