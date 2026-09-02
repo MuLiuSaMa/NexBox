@@ -130,9 +130,6 @@ debug.log
 .temp_old_filter.rs
 monitor/build.log
 
-# 本地个人样式 reg，不随仓库提交
-aq_registry/调整处理器以获得最佳性能.reg
-
 # Third-party reference project (downloaded Mineradio source, not part of repo)
 Mineradio-main/
 
