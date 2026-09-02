@@ -50,7 +50,10 @@ query
 
 # Build outputs
 Output/
+# 忽略构建产物 exe，但保留 src-tauri 资源目录下随包分发的工具 exe
 *.exe
+!src-tauri/resources/binaries/icc-tools/*.exe
+!src-tauri/resources/binaries/*.exe
 *.zip
 
 # Tauri
@@ -105,9 +108,11 @@ README.md
 # Build output (frontend)
 dist/
 
-# Resources
-resources/
-src-tauri/resources/
+# Resources（本地资源纳入版本库，防止误删丢失）
+# 仅忽略部分体积较大或与根目录重复的字体副本
+src-tauri/resources/binaries/wintun.dll
+src-tauri/resources/binaries/Packet.dll
+src-tauri/resources/binaries/Packet.lib
 
 # 排除的文件
 1.icc
