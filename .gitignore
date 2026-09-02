@@ -109,10 +109,6 @@ README.md
 dist/
 
 # Resources（本地资源纳入版本库，防止误删丢失）
-# 仅忽略部分体积较大或与根目录重复的字体副本
-src-tauri/resources/binaries/wintun.dll
-src-tauri/resources/binaries/Packet.dll
-src-tauri/resources/binaries/Packet.lib
 
 # 排除的文件
 1.icc
@@ -134,6 +130,9 @@ debug.log
 .temp_old_filter.rs
 monitor/build.log
 
+# 本地个人样式 reg，不随仓库提交
+aq_registry/调整处理器以获得最佳性能.reg
+
 # Third-party reference project (downloaded Mineradio source, not part of repo)
 Mineradio-main/
 
@@ -148,6 +147,9 @@ liquid-glass-main/
 
 # Third-party reference project (downloaded RyTuneX source, not part of repo)
 RyTuneX-main/
+
+# Third-party reference project (SteamTools source, not part of repo)
+SteamTools-develop/
 
 # 根目录字体副本（与 public/fonts/ 下重复，仅提交 public/fonts 版本）
 NotoSerifSC-900.woff2
