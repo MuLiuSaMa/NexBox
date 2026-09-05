@@ -77,7 +77,7 @@ import {
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist, Artist, MusicComment, Album, Mv } from "@/types/music";
+import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -978,9 +978,24 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const modernBorderColor = coverColor.isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)";
   const modernHoverBg = coverColor.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
 
-  // 本地导入歌曲没有沉浸模式：沉浸样式对本地歌曲回退为通透
+  // 本地导入歌曲没有沉浸模式：沉浸样式对无歌词的本地歌曲回退为通透；
+  // 有歌词的本地歌曲与在线歌曲一致，可正常使用沉浸歌词可视化
   const isLocalSong = currentSong?.provider === "local";
-  const currentStyle = isLocalSong && expandedStyle === "immersive" ? "glass" : expandedStyle;
+  const currentLyricsSongId = useMusicStore((s) => s.currentLyricsSongId);
+  // 歌词解析：优先 YRC 逐字歌词，降级为 LRC 逐行歌词（无时间轴文本解析为 0 行）
+  const karaokeLines = useMemo(() => {
+    return buildKaraokeLines(currentLyrics);
+  }, [currentLyrics]);
+  // 本地歌曲是否有歌词：仅当歌词已为该歌曲加载完成（currentLyricsSongId 匹配）且
+  // 解析出带时间轴的内容时才显示歌词面板；否则维持旧的居中封面布局
+  const hasLocalLyrics =
+    isLocalSong && karaokeLines.length > 0 && currentLyricsSongId === currentSong?.id;
+  // 是否显示右侧歌词面板：在线歌曲恒显示；本地歌曲仅在解析出歌词时显示（无歌词保持居中布局）
+  const showLyricsPanel = !isLocalSong || hasLocalLyrics;
+  // 歌词视图是否激活：评论 Tab 仅网易云可用，其它平台（含本地歌）恒为歌词视图
+  const lyricsTabActive = rightTab === "lyrics" || currentSong?.provider !== "netease";
+  const currentStyle =
+    isLocalSong && !hasLocalLyrics && expandedStyle === "immersive" ? "glass" : expandedStyle;
   const isModern = currentStyle === "modern";
   const isImmersive = currentStyle === "immersive";
   const isSpectrum = currentStyle === "spectrum";
@@ -991,8 +1006,8 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const coverTextColor = coverEdge.isLight ? "#1a1a2e" : "#f0f0f0";
   const coverSubTextColor = coverEdge.isLight ? "#4a4a5e" : "#b0b0b0";
   const coverHoverBg = coverEdge.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
-  // 本地歌曲跳过沉浸预览（音域回响/透明彩胶对本地歌曲同样可用，不过滤）
-  const availableStylePreviews = isLocalSong
+  // 无歌词的本地歌曲跳过沉浸预览（音域回响/透明彩胶与是否有歌词无关，不过滤）
+  const availableStylePreviews = isLocalSong && !hasLocalLyrics
     ? STYLE_PREVIEWS.filter((s) => s.key !== "immersive")
     : STYLE_PREVIEWS;
 
@@ -1026,11 +1041,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
 
   // 歌词加载由 playSong 在 URL 获取前并行触发，不再需要此处 useEffect 重复加载
-
-  // 歌词解析：优先 YRC 逐字歌词，降级为 LRC 逐行歌词
-  const karaokeLines = useMemo(() => {
-    return buildKaraokeLines(currentLyrics);
-  }, [currentLyrics]);
 
   if (!currentSong) return null;
 
@@ -1273,18 +1283,18 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
         align="stretch"
         overflow="hidden"
         minH={0}
-        justify={isLocalSong ? "center" : undefined}
+        justify={showLyricsPanel ? undefined : "center"}
       >
         {/* 左侧：封面 + 歌曲信息 */}
         <VStack
           spacing={6}
           align="center"
           justify="center"
-          flex={isLocalSong ? "0 0 auto" : 1}
-          flexShrink={isLocalSong ? 0 : undefined}
+          flex={showLyricsPanel ? 1 : "0 0 auto"}
+          flexShrink={showLyricsPanel ? undefined : 0}
           minW={0}
-          w={isLocalSong ? "400px" : undefined}
-          maxW={isLocalSong ? "460px" : undefined}
+          w={showLyricsPanel ? undefined : "400px"}
+          maxW={showLyricsPanel ? undefined : "460px"}
         >
           {/* 碟片模式 */}
           {coverFilmEffect ? (
@@ -1508,18 +1518,18 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
           </VStack>
         </VStack>
 
-        {/* 右侧：歌词 / 评论（本地歌曲不显示） */}
-        {!isLocalSong && (
+        {/* 右侧：歌词 / 评论（本地歌曲仅在存在歌词文件时显示） */}
+        {showLyricsPanel && (
         <VStack flex={1} align="stretch" minW={0} h="100%" overflow="hidden" justify="flex-start" spacing={2}>
           {/* Tab 切换 */}
           <HStack spacing={1} flexShrink={0} justify="center">
             <Button
               size="xs"
-              variant={rightTab === "lyrics" ? "solid" : "ghost"}
+              variant={lyricsTabActive ? "solid" : "ghost"}
               onClick={() => setRightTab("lyrics")}
               leftIcon={<MusicIcon size={13} />}
               sx={
-                rightTab === "lyrics"
+                lyricsTabActive
                   ? { bg: activeColor, color: "white", _hover: { opacity: 0.85 } }
                   : { color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }
               }
@@ -1545,7 +1555,9 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             )}
           </HStack>
 
-          {rightTab === "lyrics" ? (
+          {/* 评论 Tab 仅网易云可用；非网易云歌曲（含本地歌）始终渲染歌词面板，
+              避免从网易云"评论"Tab 切换歌曲时误渲染评论面板 */}
+          {lyricsTabActive ? (
             <KaraokeLyricsView
               lines={karaokeLines}
               loading={loadingLyrics}
@@ -2831,6 +2843,143 @@ const LocalSongRow = memo(function LocalSongRow({
 });
 
 // ═══════════════════════════════════════════════
+// SearchProviderSwitcher — 搜索结果多平台切换器
+// 显示各平台（带登录状态圆点），点击切换搜索来源（歌曲/歌单/歌手）
+// ═══════════════════════════════════════════════
+const SEARCH_PROVIDERS: { id: MusicProvider; name: string; logo: string }[] = [
+  { id: "netease", name: "网易云", logo: "/music-providers/wyy.png" },
+  { id: "kugou", name: "酷狗", logo: "/music-providers/kugou.png" },
+  { id: "qqmusic", name: "QQ音乐", logo: "/music-providers/qqmusic.png" },
+  { id: "migu", name: "咪咕", logo: "/music-providers/migu.webp" },
+];
+
+function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvider) => void }) {
+  const searchProvider = useMusicStore((s) => s.searchProvider);
+  const loginInfos = useMusicStore((s) => s.loginInfos);
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+
+  const activeColor = getActiveColor();
+  const contrastText = getContrastTextColor();
+  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
+  const glassTransition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
+  // 未开启液态玻璃：不透明背景（hover 用不透明色，不透明不透视）
+  const plainBg = useColorModeValue("#ffffff", "#1a1a1a");
+  const plainHoverBg = useColorModeValue("#f0f0f0", "#2a2a2a");
+  const plainBorder = useColorModeValue("gray.200", "#333333");
+  // 开启液态玻璃：半透明背景，hover 时提高不透明度（更实，不透明）
+  const glassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassHoverBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
+  const glassBorder = useColorModeValue("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
+  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#a0a0a0");
+
+  // 已登录平台排在前面，未登录排后面（组内保持原有顺序）
+  const sortedProviders = useMemo(() => {
+    return [...SEARCH_PROVIDERS].sort((a, b) => {
+      const la = loginInfos[a.id]?.logged_in ? 0 : 1;
+      const lb = loginInfos[b.id]?.logged_in ? 0 : 1;
+      return la - lb;
+    });
+  }, [loginInfos]);
+
+  return (
+    <HStack spacing={2} flexShrink={0} flexWrap="wrap">
+      {sortedProviders.map((p) => {
+        const active = searchProvider === p.id;
+        const loggedIn = !!loginInfos[p.id]?.logged_in;
+        // 未登录平台不可搜索（当前激活来源除外，保持可点以便重新搜索）
+        const disabled = !loggedIn && !active;
+        return (
+          <Tooltip
+            key={p.id}
+            label={
+              loggedIn
+                ? `${p.name} · 已登录`
+                : active
+                  ? `${p.name} · 未登录（当前搜索来源）`
+                  : `${p.name} · 未登录，登录后可搜索`
+            }
+          >
+            <Button
+              size="sm"
+              isDisabled={disabled}
+              onClick={() => {
+                if (disabled) return;
+                useMusicStore.getState().setSearchProvider(p.id);
+                onSwitch?.(p.id);
+              }}
+              leftIcon={
+                <Box position="relative" display="flex" alignItems="center" flexShrink={0}>
+                  <Box
+                    w="18px"
+                    h="18px"
+                    borderRadius="4px"
+                    overflow="hidden"
+                    flexShrink={0}
+                    bg="white"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    <img
+                      src={p.logo}
+                      alt=""
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      draggable={false}
+                    />
+                  </Box>
+                  {/* 登录状态圆点：绿=已登录，灰=未登录 */}
+                  <Box
+                    position="absolute"
+                    right="-3px"
+                    bottom="-3px"
+                    w="9px"
+                    h="9px"
+                    borderRadius="full"
+                    border="2px solid"
+                    borderColor={active ? activeColor : (liquidGlassEnabled ? glassBg : plainBg)}
+                    bg={loggedIn ? "#38a169" : "#a0a0a0"}
+                  />
+                </Box>
+              }
+              sx={{
+                bg: active
+                  ? activeColor
+                  : (liquidGlassEnabled ? glassBg : plainBg),
+                color: active ? contrastText : textColor,
+                border: "1px solid",
+                borderColor: active ? activeColor : (liquidGlassEnabled ? glassBorder : plainBorder),
+                fontWeight: active ? "bold" : "normal",
+                backdropFilter: liquidGlassEnabled ? `blur(${effectiveBlur}px) saturate(1.3)` : undefined,
+                WebkitBackdropFilter: liquidGlassEnabled ? `blur(${effectiveBlur}px) saturate(1.3)` : undefined,
+                transition: glassTransition,
+                opacity: disabled ? 0.45 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
+                // hover 不透明：未开启玻璃用不透明色；开启玻璃提高不透明度
+                _hover: disabled
+                  ? {}
+                  : active
+                    ? { bg: activeColor, filter: "brightness(0.9)" }
+                    : { bg: liquidGlassEnabled ? glassHoverBg : plainHoverBg, borderColor: activeColor },
+              }}
+              borderRadius="lg"
+            >
+              {p.name}
+            </Button>
+          </Tooltip>
+        );
+      })}
+      {/* 当前搜索来源提示 */}
+      <Text fontSize="xs" color={subTextColor} flexShrink={0}>
+        搜索结果来源：{SEARCH_PROVIDERS.find((p) => p.id === searchProvider)?.name}
+      </Text>
+    </HStack>
+  );
+}
+
+// ═══════════════════════════════════════════════
 // SearchBox — 独立 memo 组件，管理搜索状态
 // 不订阅 currentTime/duration，播放时不会重渲染
 // ═══════════════════════════════════════════════
@@ -3242,6 +3391,7 @@ export default function MusicPage() {
   const recommendSongs = useMusicStore((s) => s.recommendSongs);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const playbackSource = useMusicStore((s) => s.playbackSource);
+  const searchProvider = useMusicStore((s) => s.searchProvider);
 
   const providerName = useMemo(() => {
     const map: Record<string, string> = {
@@ -3516,6 +3666,19 @@ export default function MusicPage() {
     setViewMode("unifiedSearch");
   }, []);
 
+  // 切换搜索平台：换源后立即用当前关键词重新搜索（歌曲/歌单/歌手）
+  const handleSearchProviderChange = useCallback((_provider: MusicProvider) => {
+    const kw = searchInput;
+    if (!kw) return;
+    setSearchExpandedPlaylist(null);
+    setSearchExpandedTracks([]);
+    Promise.all([
+      storeActions.search(kw),
+      storeActions.searchArtists(kw),
+      storeActions.searchPlaylists(kw),
+    ]);
+  }, [searchInput, storeActions]);
+
   // 从统一搜索进入全部歌手列表
   const handleShowAllArtists = useCallback(() => {
     setViewMode("fullArtistList");
@@ -3532,10 +3695,12 @@ export default function MusicPage() {
     const patched = { ...artist };
     useMusicStore.setState({ selectedArtist: patched });
     const artistId = patched.mid || patched.id || "";
+    // 歌手来源：优先歌手自带 provider（搜索时已回填），兜底当前搜索平台/播放源
+    const artistProvider = (patched.provider as MusicProvider) || searchProvider || playbackSource;
     storeActions.loadArtistSongs(artistId);
     setViewMode("artistDetail");
     // 网易云歌手扩展: 简介/专辑/MV
-    if (playbackSource === "netease" && artistId) {
+    if (artistProvider === "netease" && artistId) {
       storeActions.loadArtistDetail(artistId);
       storeActions.loadArtistAlbums(artistId);
       storeActions.loadArtistMvs(artistId);
@@ -3543,8 +3708,8 @@ export default function MusicPage() {
     // 歌手可能没有头像（从歌曲卡片进入时），按来源异步搜索补齐
     if (!patched.pic_url && patched.name) {
       const cmd =
-        playbackSource === "kugou" ? "kugou_artist_search"
-          : playbackSource === "qqmusic" ? "qq_artist_search"
+        artistProvider === "kugou" ? "kugou_artist_search"
+          : artistProvider === "qqmusic" ? "qq_artist_search"
           : "music_artist_search";
       invoke<Artist[]>(cmd, { keywords: patched.name, limit: 10 }).then((results) => {
         if (!results?.length) return;
@@ -3561,7 +3726,7 @@ export default function MusicPage() {
         }
       }).catch(() => {});
     }
-  }, [storeActions, viewMode, playbackSource]);
+  }, [storeActions, viewMode, playbackSource, searchProvider]);
 
 // ── 我的歌单点击：在左侧面板切换到曲目视图 ──
 const handlePlaylistClick = useCallback((pl: Playlist) => {
@@ -4615,6 +4780,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
           onUnifiedSearch={handleUnifiedSearch}
           onArtistClick={handleArtistClick}
         />
+
+        {/* 搜索平台切换：显示各平台登录状态，切换后重新搜索当前关键词 */}
+        <SearchProviderSwitcher onSwitch={handleSearchProviderChange} />
 
         {/* 三标签导航栏 */}
         <HStack

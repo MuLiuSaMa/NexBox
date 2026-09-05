@@ -1,56 +1,53 @@
-//! FPS 监控模块 — 重写版（参考 CapFrameX 架构）
+//! FPS 监控模块 — 内嵌 ETW 版（参考图吧工具箱 TubaWinUi3 FpsService.cs 移植）
 //!
 //! 核心改进：
-//! 1. PresentMon 持续运行，前台切换不重启（零中断）— 消除了旧方案频繁杀启 ETW 会话的问题
-//! 2. Reader 线程直接处理 CSV 数据，无 channel 中转 — 消除了 stdout 管道缓冲区阻塞的根因
-//! 3. 环形缓冲区 + EMA 双重平滑 — 比单一 EMA 更稳定，支持未来扩展百分位指标
-//! 4. 简化线程模型：2 线程 + 8 全局状态（原 3 线程 + 12 全局状态）
-//! 5. 消费端过滤（参考 CapFrameX OnlineMetricService）— PresentMon 捕获所有进程，reader 按目标过滤
+//! 1. 彻底移除外部 PresentMon 进程 — 不再 spawn 子进程、不再解析 stdout CSV
+//! 2. 进程内直接开启 ETW 实时会话（DxgKrnl / Win32k 两个内核 Provider），
+//!    监听 Present 事件族就地算帧率（与 PresentMon / CapFrameX 同源技术）
+//! 3. 完整移植参考实现的「同帧去重 + 信源优先级」逻辑：
+//!    PresentHistory(0xAB/0xD7) ＞ Win32k 合成(0xC9) ＞ 传统/MPO 事件，
+//!    每帧只计入一次，防止 MPO/Win32k 双源导致 FPS 翻倍
+//! 4. 保留原有统计管线：环形缓冲区(3000帧) + EMA(α=0.2) 平滑 + 1%/0.1% Low，
+//!    前台目标消费端过滤不变，公共 API 全兼容
 //!
 //! 架构说明：
-//! - fps_monitor_main 线程：管理 PresentMon 进程生命周期，等待 reader 线程退出后重启
-//! - reader 线程：持续读取 stdout CSV，解析帧时间，更新 SMOOTHED_FPS 原子变量
-//! - process_tracker 线程：追踪前台窗口，更新 TARGET_PROCESS，检测 FPS 过期归零
+//! - etw::fps_monitor_main 线程：管理 ETW 会话生命周期，会话中断自动重连（上限 5 次）
+//! - etw 回调线程（即 ProcessTrace 回调，单线程串行）：解析事件头 → 去重 → 目标过滤 → 统计管线
+//! - process_tracker_loop 线程：追踪前台窗口，更新 TARGET_PROCESS，检测 FPS 过期归零
 //!
-//! 参考：CapFrameX PresentMonCaptureService + OnlineMetricService
+//! 需要管理员权限才能启用内核 Provider（与旧 PresentMon 方案一致）。
 
-use std::io::{BufRead, BufReader};
-use std::path::PathBuf;
-use std::sync::OnceLock;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 
-// ============ 全局状态（8 项，原 12 项） ============
+// ============ 全局状态（8 项） ============
 
 /// 平滑后的 FPS 值，供 overlay 读取
 static SMOOTHED_FPS: AtomicU32 = AtomicU32::new(0);
 /// FPS 监控是否处于活跃状态
 static FPS_ACTIVE: AtomicBool = AtomicBool::new(false);
-/// PresentMon exe 路径缓存
-static PM_EXE_CACHE: OnceLock<Option<PathBuf>> = OnceLock::new();
 /// 自身 overlay 窗口句柄（用于排除前台切换到自身 overlay）
 static OVERLAY_HWND: AtomicU64 = AtomicU64::new(0);
 /// 当前前台窗口 PID（钩子回调中快速存储）
 static CURRENT_FG_PID: AtomicU32 = AtomicU32::new(0);
 /// 当前前台目标进程名（小写 exe 文件名，如 "game.exe"）— RwLock 读多写少
-static TARGET_PROCESS: RwLock<String> = RwLock::new(String::new());
-/// PresentMon 子进程句柄（用于停止时 kill）
-static CHILD_HANDLE: Mutex<Option<Child>> = Mutex::new(None);
+static TARGET_PROCESS: RwLock<String> = parking_lot::RwLock::new(String::new());
 /// 上次匹配到目标帧数据的时间戳（ms），用于检测 FPS 过期归零
 static LAST_FRAME_TIME: AtomicU64 = AtomicU64::new(0);
-/// 目标切换代次（每次切换 +1），reader 线程检测到变化后清空缓冲区
+/// 目标切换代次（每次切换 +1），ETW 回调检测到变化后清空缓冲区
 static TARGET_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// 1% Low FPS（最慢 1% 帧的平均 FPS），参考 CapFrameX OnePercentLowAverage
 static ONE_PCT_LOW_FPS: AtomicU32 = AtomicU32::new(0);
 /// 0.1% Low FPS（最慢 0.1% 帧的平均 FPS），参考 CapFrameX ZerodotOnePercentLowAverage
 static ZERO_DOT_ONE_PCT_LOW_FPS: AtomicU32 = AtomicU32::new(0);
+
+/// 自进程 PID（ETW 回调中排除自身）
+static SELF_PID: OnceLock<u32> = OnceLock::new();
 
 // ============ Windows 前台窗口钩子 ============
 
@@ -135,124 +132,23 @@ mod win32_fg {
     }
 }
 
-// ============ PresentMon 优雅退出 ============
+// ============ 排除名单与进程名匹配 ============
 
-/// 尝试向 PresentMon 的消息窗口发送 WM_QUIT，触发优雅退出
-#[cfg(windows)]
-fn try_send_quit_to_presentmon() -> bool {
-    use windows_sys::Win32::UI::WindowsAndMessaging::*;
-
-    let class_name: Vec<u16> = "PresentMon\0".encode_utf16().collect();
-
-    let hwnd = unsafe {
-        FindWindowExW(
-            (-3isize) as _,
-            std::ptr::null_mut(),
-            class_name.as_ptr(),
-            std::ptr::null(),
-        )
-    };
-
-    if !hwnd.is_null() {
-        unsafe {
-            PostMessageW(hwnd, WM_QUIT, 0, 0);
-        }
-        true
-    } else {
-        false
-    }
-}
-
-/// 优雅停止 PresentMon 子进程
-///
-/// 优先通过 WM_QUIT 让 PresentMon 自行清理 ETW 会话，
-/// 超时后（3秒）才回退到强制终止。
-fn stop_presentmon_graceful() {
-    let child_opt = CHILD_HANDLE.lock().unwrap().take();
-    let mut child = match child_opt {
-        Some(c) => c,
-        None => return,
-    };
-
-    #[cfg(windows)]
-    {
-        let sent = try_send_quit_to_presentmon();
-
-        if sent {
-            for _ in 0..30 {
-                thread::sleep(Duration::from_millis(100));
-                match child.try_wait() {
-                    Ok(Some(_)) => {
-                        log::info!("FPS监控: PresentMon 优雅退出（ETW 会话已清理）");
-                        return;
-                    }
-                    Ok(None) => continue,
-                    Err(_) => break,
-                }
-            }
-            log::warn!("FPS监控: PresentMon 优雅退出超时(3秒)，回退到强制终止");
-        } else {
-            log::warn!("FPS监控: 未找到 PresentMon 窗口，强制终止");
-        }
-    }
-
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-/// 预清理：停止可能残留的 ETW 会话
-fn cleanup_stale_etw_session(exe_path: &std::path::Path) {
-    let mut cmd = Command::new(exe_path);
-    cmd.args(["--terminate_existing_session"]);
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
-    cmd.stdin(Stdio::null());
-    #[cfg(windows)]
-    cmd.creation_flags(0x08000000);
-
-    match cmd.spawn() {
-        Ok(mut child) => {
-            let _ = child.wait();
-        }
-        Err(e) => {
-            log::warn!("FPS监控: 预清理 ETW 会话失败: {}", e);
-        }
-    }
-}
-
-// ============ PresentMon 进程管理 ============
-
-/// 查找 PresentMon exe 路径（兼容开发模式和生产模式）
-fn find_presentmon_exe() -> Option<PathBuf> {
-    if let Some(cached) = PM_EXE_CACHE.get() {
-        return cached.clone();
-    }
-
-    let exe_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
-    let cwd = std::env::current_dir().ok();
-    let candidates: Vec<PathBuf> = vec![
-        exe_dir.join("PresentMon-2.5.1-x64.exe"),
-        exe_dir.join("resources").join("PresentMon-2.5.1-x64.exe"),
-        exe_dir.join("bin").join("PresentMon-2.5.1-x64.exe"),
-        exe_dir.join("_up_").join("resources").join("binaries").join("PresentMon-2.5.1-x64.exe"),
-        exe_dir.join("..").join("..").join("resources").join("binaries").join("PresentMon-2.5.1-x64.exe"),
-        cwd.as_ref().map(|c| c.join("resources").join("binaries").join("PresentMon-2.5.1-x64.exe")).unwrap_or_default(),
-        cwd.as_ref().map(|c| c.join("PresentMon-main").join("PresentMon-2.5.1-x64.exe")).unwrap_or_default(),
-        cwd.as_ref().and_then(|c| c.parent()).map(|p| p.join("PresentMon-main").join("PresentMon-2.5.1-x64.exe")).unwrap_or_default(),
+/// 排除系统/桌面进程（文件名去 .exe 后缀后大小写不敏感比较，移植自图吧工具箱 Excluded 名单）
+fn is_excluded_process(name: &str) -> bool {
+    const EXCLUDED: &[&str] = &[
+        "dwm", "explorer", "searchhost", "shellexperiencehost",
+        "startmenuexperiencehost", "runtimebroker", "applicationframehost",
+        "sihost", "taskhostw", "ctfmon", "msedgewebview2", "microsoftedge",
+        "searchapp", "svchost", "csrss", "smss", "lsass", "wininit",
+        "services", "winlogon", "fontdrvhost", "dllhost", "conhost",
+        "taskmgr", "systemsettings", "windowsterminal", "cmd", "powershell",
+        "catpawai", "textinputhost", "shell", "memory compression",
+        "registry", "memcompression", "idle", "system", "ntoskrnl",
+        "interrupt", "dpcs", "nexbox",
     ];
-
-    let result = candidates.iter().find(|c| c.exists()).cloned();
-    if let Some(ref p) = result {
-        log::info!("FPS监控: 找到 PresentMon → {}", p.display());
-    } else {
-        log::error!(
-            "FPS监控: 未找到 PresentMon-2.5.1-x64.exe，已搜索以下路径: {:?}",
-            candidates
-        );
-    }
-
-    let _ = PM_EXE_CACHE.set(result.clone());
-    result
+    let stem = strip_exe_suffix(name);
+    EXCLUDED.iter().any(|e| stem.eq_ignore_ascii_case(e))
 }
 
 /// 判断进程是否为非游戏进程（大小写不敏感，避免 to_lowercase 堆分配）
@@ -302,6 +198,15 @@ fn process_name_matches(app: &str, target: &str) -> bool {
     let target_is_java = target_no_exe.eq_ignore_ascii_case("java")
         || target_no_exe.eq_ignore_ascii_case("javaw");
     app_is_java && target_is_java
+}
+
+/// 当前 Unix 毫秒时间戳
+#[inline]
+fn now_unix_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
 }
 
 // ============ 帧时间环形缓冲区 ============
@@ -419,185 +324,582 @@ impl FrameTimeBuffer {
     }
 }
 
-// ============ Reader 线程 ============
+// ============ ETW 采集（内嵌会话，参考图吧工具箱 FpsService.cs） ============
 
-/// Reader 线程：持续读取 PresentMon stdout CSV，解析帧时间，更新 SMOOTHED_FPS
-///
-/// 关键优化（参考 CapFrameX PresentMonCaptureService.OutputDataReceived）：
-/// - 无 channel 中转：直接在 reader 线程内处理每行数据
-/// - 无 Mutex 锁竞争：使用 RwLock 读锁（不阻塞其他读），仅做字符串比较
-/// - 无 HashMap 查找：表头解析一次后直接用索引
-/// - 无 String::clone()：目标进程名通过 &str 比较，不克隆
-///
-/// 这确保 reader 线程以最高速度消费 stdout，避免管道缓冲区填满导致 PresentMon 阻塞。
-fn reader_thread_main(stdout: std::process::ChildStdout) {
-    let reader = BufReader::new(stdout);
+#[cfg(target_os = "windows")]
+mod etw {
+    use super::*;
+    use std::mem::size_of;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::System::Diagnostics::Etw::*;
+    use windows_sys::Win32::System::Threading::{
+        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
 
-    // CSV 列索引（表头解析一次，参考 CapFrameX static readonly int 编译期常量设计）
-    let mut header_parsed = false;
-    let mut app_idx: usize = 0;
-    let mut ms_idx: usize = 0;
+    // ---- Provider GUID（与图吧工具箱 FpsService.cs 完全一致） ----
+    // Microsoft-Windows-DxgKrnl: 802EC45A-1E99-4B83-9920-87C98277BA9D
+    const DXGKRNL_PROVIDER: windows_sys::core::GUID = windows_sys::core::GUID {
+        data1: 0x802EC45A,
+        data2: 0x1E99,
+        data3: 0x4B83,
+        data4: [0x99, 0x20, 0x87, 0xC9, 0x82, 0x77, 0xBA, 0x9D],
+    };
+    // Microsoft-Windows-Win32k: 8C416C79-D49B-4F01-A467-E56D3AA8234C
+    const WIN32K_PROVIDER: windows_sys::core::GUID = windows_sys::core::GUID {
+        data1: 0x8C416C79,
+        data2: 0xD49B,
+        data3: 0x4F01,
+        data4: [0xA4, 0x67, 0xE5, 0x6D, 0x3A, 0xA8, 0x23, 0x4C],
+    };
 
-    // 帧时间环形缓冲区（3000 帧 ≈ 12.5s@240fps / 50s@60fps）
-    // 需要 >= 1000 帧才能计算有意义的 0.1% Low
-    let mut buffer = FrameTimeBuffer::new(3000);
+    /// ETW 实时会话名（私有会话；停启/崩溃后靠「先停同名旧会话」防残留）
+    fn session_name() -> Vec<u16> {
+        "NexBox_FPS\0".encode_utf16().collect()
+    }
 
-    // EMA 平滑状态
-    let mut smoothed_fps: f64 = 0.0;
-    let mut first_frame = true;
+    /// GUID 比较（windows-sys 0.59 的 GUID 未实现 PartialEq）
+    fn guid_eq(a: &windows_sys::core::GUID, b: &windows_sys::core::GUID) -> bool {
+        a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4
+    }
 
-    // 目标切换检测
-    let mut last_gen: u64 = 0;
+    // ---- Present 事件族（值 = EventHeader.EventDescriptor.Id，与参考实现一致） ----
+    const PRESENT: u16 = 0x00B8; // Present（传统/全屏独占）
+    const PRESENT_HISTORY_START: u16 = 0x00AB; // PresentHistory_Start（现代接管源，最高优先级）
+    const PRESENT_HISTORY_DETAILED: u16 = 0x00D7; // PresentHistoryDetailed_Start
+    const WIN32K_PRESENT: u16 = 0x00C9; // Win32k TokenCompositionSurfaceObject（合成/窗口化）
+    const BLT: u16 = 0x00A6; // Blt_Info（MPO blt 路径）
+    const MMIO_FLIP: u16 = 0x0074; // MMIOFlip_Info（MPO flip 路径）
+    const MMIO_FLIP_MPO: u16 = 0x0103; // MMIOFlip_MPO
+    const MMIO_FLIP_MPO3: u16 = 0x0182; // MMIOFlip_MPO3
+    const FLIP: u16 = 0x00A8; // Flip_Info（硬件翻转）
+    const FLIP_MPO: u16 = 0x00FC; // FlipMultiPlaneOverlay_Info
+    const INDEPENDENT_FLIP: u16 = 0x010A; // IndependentFlip_Info
 
-    // 1% Low / 0.1% Low 计算计时器（每 ~1 秒计算一次，避免每帧排序）
-    let mut last_low_calc_time = Instant::now();
+    // ---- 时间窗口（EventHeader.TimeStamp 单位为 100ns；差值计算与时钟源无关） ----
+    /// 0.1ms：同一帧去重窗口。参考实现用 1ms（口径 FPS≤1000），但超高帧率场景
+    /// （MC 高配 2000+ FPS，帧间隔 ~0.5ms）真实帧会被误判为同帧重复、帧率被腰斩。
+    /// 同帧多源事件（0xA6+0x74 / 0xAB+0xD7 等）间隔为微秒级（<0.1ms），0.1ms 窗口
+    /// 仍能挡住；漏网的由统计层 MIN_FRAME_MS 下限兜底。理论上限 10000 FPS。
+    const SAME_FRAME_WINDOW_TICKS: i64 = 1_000;
+    /// 4ms：Win32k 一帧可对应多个 composition surface（多窗口/UI 层）
+    const WIN32K_FRAME_WINDOW_TICKS: i64 = 40_000;
+    /// 500ms：信源优先级 shadow 窗口
+    const MODE_WINDOW_TICKS: i64 = 5_000_000;
+    /// 帧时间下限 0.1ms 与上限 2000ms，与旧 CSV 口径一致
+    const MIN_FRAME_MS: f64 = 0.1;
+    const MAX_FRAME_MS: f64 = 2000.0;
+    /// 进程去重状态 5 分钟无帧即移除（对齐参考实现的 5min 清理）
+    const STALE_PROC_TICKS: i64 = 300 * 10_000_000;
 
-    for line_result in reader.lines() {
-        // 检查活跃状态（PresentMon 被外部 kill 时 stdout 会 EOF）
-        if !FPS_ACTIVE.load(Ordering::SeqCst) {
-            break;
-        }
+    /// ETW 线程句柄（stop 时 join，确保会话清理完成）
+    static MONITOR_THREAD: Mutex<Option<std::thread::JoinHandle<()>>> = Mutex::new(None);
+    /// 当前 OpenTrace 处理句柄值（stop 时强制 CloseTrace 兜底）
+    static PROCESS_HANDLE: AtomicU64 = AtomicU64::new(0);
 
-        let line = match line_result {
-            Ok(l) => l,
-            Err(_) => break, // 管道 EOF 或错误
-        };
+    /// 每进程去重/信源状态（仅由 ProcessTrace 回调线程独占读写，无需锁）
+    struct EtwProcState {
+        /// 最近一次被计数的 Present（同帧去重基准）
+        last_present_ticks: i64,
+        /// 最近 PresentHistory 事件 tick（最高信源）
+        last_history_ticks: i64,
+        /// 最近 Win32k 合成事件 tick（次高信源）
+        last_win32k_ticks: i64,
+    }
 
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        // ===== 第一阶段：解析表头 =====
-        if !header_parsed {
-            let cols: Vec<&str> = trimmed.split(',').collect();
-            for (i, col) in cols.iter().enumerate() {
-                let col = col.trim();
-                if col == "Application" {
-                    app_idx = i;
-                } else if col == "MsBetweenPresents" {
-                    ms_idx = i;
-                }
-            }
-            header_parsed = true;
-            log::info!(
-                "FPS监控: CSV 表头 → Application[{}] MsBetweenPresents[{}] (共{}列)",
-                app_idx, ms_idx, cols.len()
-            );
-            continue;
-        }
-
-        // ===== 第二阶段：解析数据行 =====
-        // 优化：仅提取需要的两列，避免每帧 Vec<&str> 堆分配
-        // 240 FPS 下每秒省 240 次 Vec 分配 + 240 次 String::to_lowercase 分配
-        // 参考 CapFrameX 固定列索引 + OutputDataReceived 直接索引设计
-        let mut app_name: &str = "";
-        let mut ms_value: &str = "";
-        let mut found = 0u8; // bitmask: bit0=app, bit1=ms
-        for (i, col) in trimmed.split(',').enumerate() {
-            if i == app_idx {
-                app_name = col.trim();
-                found |= 1;
-            } else if i == ms_idx {
-                ms_value = col.trim();
-                found |= 2;
-            }
-            if found == 3 {
-                break; // 两列都找到了，提前退出
-            }
-        }
-        if found != 3 {
-            continue; // 列数不足，跳过
-        }
-
-        // 过滤 <error> 条目（参考 CapFrameX <error> 过滤）
-        // 优化：eq_ignore_ascii_case 避免 to_lowercase 堆分配
-        if app_name.eq_ignore_ascii_case("<error>") || app_name.is_empty() {
-            continue;
-        }
-
-        // 检测目标切换 → 清空缓冲区 + 重置 EMA
-        let gen = TARGET_GENERATION.load(Ordering::Relaxed);
-        if gen != last_gen {
-            buffer.clear();
-            smoothed_fps = 0.0;
-            first_frame = true;
-            last_gen = gen;
-            ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
-            ZERO_DOT_ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
-        }
-
-        // 消费端过滤：匹配目标进程（参考 CapFrameX OnlineMetricService.UpdateOnlineMetrics）
-        // 优化：process_name_matches 内部使用 eq_ignore_ascii_case，无堆分配
-        let target = TARGET_PROCESS.read();
-        if !process_name_matches(app_name, &target) {
-            continue;
-        }
-        drop(target); // 立即释放读锁
-
-        // 更新最后匹配时间戳
-        LAST_FRAME_TIME.store(
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64,
-            Ordering::Relaxed,
-        );
-
-        // 解析 MsBetweenPresents（毫秒）
-        if let Ok(ms_between_presents) = ms_value.parse::<f64>() {
-            // 仅用合理的帧时间（0.1ms ~ 2000ms）
-            if ms_between_presents >= 0.1 && ms_between_presents < 2000.0 {
-                // 环形缓冲区 + EMA 双重平滑
-                buffer.push(ms_between_presents);
-                let raw_fps = buffer.average_fps();
-
-                if raw_fps > 0.0 {
-                    if first_frame {
-                        smoothed_fps = raw_fps;
-                        first_frame = false;
-                    } else {
-                        // EMA 系数 0.2：值越小越平滑，越大越灵敏
-                        smoothed_fps = 0.2 * raw_fps + 0.8 * smoothed_fps;
-                    }
-
-                    SMOOTHED_FPS.store(smoothed_fps.round() as u32, Ordering::Relaxed);
-                }
-
-                // 每 ~1 秒计算 1% Low / 0.1% Low（排序 3000 帧仅需微秒级）
-                if last_low_calc_time.elapsed() >= Duration::from_secs(1) {
-                    // 1% Low 需要至少 100 帧
-                    if buffer.count >= 100 {
-                        let one_low = buffer.percentile_low_fps(0.01);
-                        if one_low > 0.0 {
-                            ONE_PCT_LOW_FPS.store(one_low.round() as u32, Ordering::Relaxed);
-                        }
-                    }
-                    // 0.1% Low 需要至少 1000 帧
-                    if buffer.count >= 1000 {
-                        let zero_one_low = buffer.percentile_low_fps(0.001);
-                        if zero_one_low > 0.0 {
-                            ZERO_DOT_ONE_PCT_LOW_FPS.store(zero_one_low.round() as u32, Ordering::Relaxed);
-                        }
-                    }
-                    last_low_calc_time = Instant::now();
-                }
+    impl Default for EtwProcState {
+        fn default() -> Self {
+            Self {
+                last_present_ticks: 0,
+                last_history_ticks: 0,
+                last_win32k_ticks: 0,
             }
         }
     }
 
-    log::info!("FPS监控: Reader 线程退出");
+    /// ETW 回调运行时状态（全部由 ProcessTrace 回调线程独占，无需锁）
+    struct EtwRuntime {
+        /// 每进程 Present 去重状态
+        procs: HashMap<u32, EtwProcState>,
+        /// 进程名缓存（10s TTL，防 PID 复用误判）
+        name_cache: HashMap<u32, (String, Instant)>,
+        /// 帧时间环形缓冲区（3000 帧 ≈ 12.5s@240fps / 50s@60fps）
+        buffer: FrameTimeBuffer,
+        /// EMA 平滑状态
+        smoothed_fps: f64,
+        first_frame: bool,
+        /// 1% Low / 0.1% Low 计算计时器
+        last_low_calc: Instant,
+        /// 目标进程最近一次被计数的 Present tick（帧间隔基准）
+        last_target_ticks: Option<i64>,
+        /// 已处理的目标切换代次
+        last_gen: u64,
+    }
+
+    impl EtwRuntime {
+        fn new() -> Self {
+            Self {
+                procs: HashMap::new(),
+                name_cache: HashMap::new(),
+                buffer: FrameTimeBuffer::new(3000),
+                smoothed_fps: 0.0,
+                first_frame: true,
+                last_low_calc: Instant::now(),
+                last_target_ticks: None,
+                last_gen: 0,
+            }
+        }
+    }
+
+    /// EVENT_TRACE_PROPERTIES + 尾部会话名缓冲区（固定堆栈布局，规避字节数组对齐问题）
+    #[repr(C)]
+    struct TracePropsBuffer {
+        props: EVENT_TRACE_PROPERTIES,
+        name: [u16; 16],
+    }
+
+    impl TracePropsBuffer {
+        fn new(name: &[u16]) -> Self {
+            let mut b: TracePropsBuffer = unsafe { std::mem::zeroed() };
+            b.props.Wnode.BufferSize = size_of::<TracePropsBuffer>() as u32;
+            b.props.Wnode.Guid = windows_sys::core::GUID::from_u128(0);
+            b.props.BufferSize = 64; // KB/缓冲
+            b.props.MinimumBuffers = 8;
+            b.props.MaximumBuffers = 64;
+            b.props.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
+            b.props.LoggerNameOffset = size_of::<EVENT_TRACE_PROPERTIES>() as u32;
+            b.props.LogFileNameOffset = 0; // 无日志文件，纯实时
+            for (i, &c) in name.iter().take(b.name.len()).enumerate() {
+                b.name[i] = c;
+            }
+            b
+        }
+    }
+
+    /// 停止同名的旧 ETW 会话（按名控制，崩溃残留也会被回收）
+    fn stop_session_by_name(name: &[u16]) {
+        let mut buf = TracePropsBuffer::new(name);
+        unsafe {
+            ControlTraceW(
+                CONTROLTRACE_HANDLE { Value: 0 },
+                name.as_ptr(),
+                &mut buf.props,
+                EVENT_TRACE_CONTROL_STOP,
+            );
+        }
+    }
+
+    /// 同帧去重 + 信源优先级（逐行移植图吧工具箱 FpsService.TryRecordPresent）
+    ///
+    /// 每进程信源优先级（以最近 500ms 内出现为准）：
+    /// PresentHistory(0xAB/0xD7) ＞ Win32k 合成(0xC9) ＞ 传统 Present/MPO 事件。
+    /// 低层信源只在高层信源缺席时作为兜底，避免同帧被多个事件双计。
+    fn record_present(st: &mut EtwProcState, id: u16, ticks: i64) -> bool {
+        if matches!(id, PRESENT_HISTORY_START | PRESENT_HISTORY_DETAILED) {
+            st.last_history_ticks = ticks;
+        } else if id == WIN32K_PRESENT {
+            st.last_win32k_ticks = ticks;
+        }
+
+        // 同帧去重：一帧画面内核可能发出多个事件（微秒级间隔）
+        let dup_window = if id == WIN32K_PRESENT {
+            WIN32K_FRAME_WINDOW_TICKS
+        } else {
+            SAME_FRAME_WINDOW_TICKS
+        };
+        if ticks - st.last_present_ticks < dup_window {
+            return false;
+        }
+
+        // 高层信源 500ms 内活跃时，忽略低层事件
+        if !matches!(id, PRESENT_HISTORY_START | PRESENT_HISTORY_DETAILED)
+            && ticks - st.last_history_ticks < MODE_WINDOW_TICKS
+        {
+            return false;
+        }
+        if matches!(
+            id,
+            PRESENT
+                | BLT
+                | MMIO_FLIP
+                | MMIO_FLIP_MPO
+                | MMIO_FLIP_MPO3
+                | FLIP
+                | FLIP_MPO
+                | INDEPENDENT_FLIP
+        ) && ticks - st.last_win32k_ticks < MODE_WINDOW_TICKS
+        {
+            return false;
+        }
+
+        st.last_present_ticks = ticks;
+        true
+    }
+
+    /// 解析进程名（QueryFullProcessImageNameW，PROCESS_QUERY_LIMITED_INFORMATION 无需高权限）
+    fn resolve_process_name(pid: u32) -> Option<String> {
+        unsafe {
+            let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+            if h.is_null() {
+                return None;
+            }
+            let mut buf = [0u16; 4096];
+            let mut size = buf.len() as u32;
+            let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut size);
+            CloseHandle(h);
+            if ok == 0 || size == 0 {
+                return None;
+            }
+            let path = String::from_utf16_lossy(&buf[..size as usize]);
+            let fname = path
+                .rsplit(['\\', '/'])
+                .next()
+                .unwrap_or("")
+                .to_string();
+            if fname.is_empty() {
+                return None;
+            }
+            Some(fname)
+        }
+    }
+
+    /// 带 10s TTL 缓存的进程名查询（回调热路径，避免每次 OpenProcess）
+    fn get_cached_name(rt: &mut EtwRuntime, pid: u32) -> Option<String> {
+        if let Some((name, born)) = rt.name_cache.get(&pid) {
+            if born.elapsed() < Duration::from_secs(10) {
+                return Some(name.clone());
+            }
+        }
+        let name = resolve_process_name(pid)?;
+        rt.name_cache.insert(pid, (name.clone(), Instant::now()));
+        Some(name)
+    }
+
+    /// 清理长期无帧的进程状态（对齐参考实现的 5min 移除）
+    fn prune_stale(rt: &mut EtwRuntime, now_ticks: i64) {
+        rt.procs
+            .retain(|_, st| now_ticks - st.last_present_ticks < STALE_PROC_TICKS);
+        rt.name_cache
+            .retain(|_, (_, born)| born.elapsed() < Duration::from_secs(10));
+    }
+
+    /// ETW 事件回调：解析事件头 → 过滤 → 去重 → 目标过滤 → 统计管线
+    /// 单线程串行派发（ProcessTrace 回调），EtwRuntime 位于该线程栈上。
+    unsafe extern "system" fn on_event_record(record: *mut EVENT_RECORD) {
+        if record.is_null() || !FPS_ACTIVE.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let h = &(*record).EventHeader;
+        let pid = h.ProcessId;
+        if pid <= 0 || pid == 4 || pid == *SELF_PID.get_or_init(|| std::process::id()) {
+            return;
+        }
+        if pid == 0 {
+            return;
+        }
+
+        let id = h.EventDescriptor.Id;
+        let ticks = h.TimeStamp;
+
+        // Provider + 事件 ID 过滤：只关心两 Provider 的 Present 事件族
+        let is_present = if guid_eq(&h.ProviderId, &DXGKRNL_PROVIDER) {
+            matches!(
+                id,
+                PRESENT
+                    | PRESENT_HISTORY_START
+                    | PRESENT_HISTORY_DETAILED
+                    | BLT
+                    | MMIO_FLIP
+                    | MMIO_FLIP_MPO
+                    | MMIO_FLIP_MPO3
+                    | FLIP
+                    | FLIP_MPO
+                    | INDEPENDENT_FLIP
+            )
+        } else if guid_eq(&h.ProviderId, &WIN32K_PROVIDER) {
+            id == WIN32K_PRESENT
+        } else {
+            false
+        };
+        if !is_present {
+            return;
+        }
+
+        // 运行时状态（由 OpenTraceW 时传入的 Context 回填到 UserContext）
+        let rt = &mut *((*record).UserContext as *mut EtwRuntime);
+
+        // 进程名（10s TTL 缓存）+ 排除名单
+        let name = match get_cached_name(rt, pid) {
+            Some(n) => n,
+            None => return, // 进程已退出/取不到名，视为排除
+        };
+        if is_excluded_process(&name) {
+            return;
+        }
+
+        // 同帧去重 + 信源优先级 → 决定本帧是否计入
+        let st = rt.procs.entry(pid).or_default();
+        if !record_present(st, id, ticks) {
+            return;
+        }
+
+        // 消费端过滤：仅统计当前前台目标进程
+        {
+            let target = TARGET_PROCESS.read();
+            if !process_name_matches(&name, &target) {
+                return;
+            }
+        }
+        LAST_FRAME_TIME.store(now_unix_ms(), Ordering::Relaxed);
+
+        // 目标切换 → 清空统计（原 CSV reader 的 generation 检测逻辑）
+        let gen = TARGET_GENERATION.load(Ordering::Relaxed);
+        if gen != rt.last_gen {
+            rt.buffer.clear();
+            rt.smoothed_fps = 0.0;
+            rt.first_frame = true;
+            rt.last_target_ticks = None;
+            rt.last_gen = gen;
+            ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
+            ZERO_DOT_ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
+        }
+
+        // 帧时间推进：上一目标帧与本帧的 tick 差值 → ms（100ns 单位）
+        if let Some(prev) = rt.last_target_ticks {
+            let ms = (ticks - prev) as f64 / 10_000.0;
+            if ms < MIN_FRAME_MS {
+                // 假帧（同帧重复事件漏网，间隔 <0.1ms）：不进统计、不重置基准，
+                // 让下一帧的间隔仍从上一个真帧起算，避免把真实帧间隔切短、读数偏高
+                return;
+            }
+            if ms < MAX_FRAME_MS {
+                rt.buffer.push(ms);
+                let raw_fps = rt.buffer.average_fps();
+                if raw_fps > 0.0 {
+                    if rt.first_frame {
+                        rt.smoothed_fps = raw_fps;
+                        rt.first_frame = false;
+                    } else {
+                        // EMA 系数 0.2：值越小越平滑，越大越灵敏
+                        rt.smoothed_fps = 0.2 * raw_fps + 0.8 * rt.smoothed_fps;
+                    }
+                    SMOOTHED_FPS.store(rt.smoothed_fps.round() as u32, Ordering::Relaxed);
+                }
+
+                // 每 ~1 秒计算 1% Low / 0.1% Low
+                if rt.last_low_calc.elapsed() >= Duration::from_secs(1) {
+                    if rt.buffer.count >= 100 {
+                        let one_low = rt.buffer.percentile_low_fps(0.01);
+                        if one_low > 0.0 {
+                            ONE_PCT_LOW_FPS.store(one_low.round() as u32, Ordering::Relaxed);
+                        }
+                    }
+                    if rt.buffer.count >= 1000 {
+                        let z_one_low = rt.buffer.percentile_low_fps(0.001);
+                        if z_one_low > 0.0 {
+                            ZERO_DOT_ONE_PCT_LOW_FPS.store(z_one_low.round() as u32, Ordering::Relaxed);
+                        }
+                    }
+                    rt.last_low_calc = Instant::now();
+                    prune_stale(rt, ticks);
+                }
+            }
+        }
+        // 真帧 / 超长间隔帧（暂停后恢复）：更新基准
+        rt.last_target_ticks = Some(ticks);
+    }
+
+    /// 单次 ETW 会话：创建 → 启用 Provider → 阻塞消费 → 清理。
+    /// 返回 false 表示会话无法继续（需彻底放弃或重试无意义）。
+    fn run_etw_session() -> bool {
+        let mut name = session_name();
+        // 预清理：停止可能残留的同名会话（崩溃/上次退出异常）
+        stop_session_by_name(&name);
+
+        // 1. 创建实时私有会话
+        let mut session = CONTROLTRACE_HANDLE { Value: 0 };
+        let mut started = false;
+        for _attempt in 0..2 {
+            let mut buf = TracePropsBuffer::new(&name);
+            let r = unsafe {
+                StartTraceW(
+                    &mut session,
+                    name.as_ptr(),
+                    &mut buf.props as *mut EVENT_TRACE_PROPERTIES,
+                )
+            };
+            if r == 0 {
+                started = true;
+                break;
+            }
+            if r == 183 {
+                // ERROR_ALREADY_EXISTS：同名会话还在，停掉再试一次
+                stop_session_by_name(&name);
+                continue;
+            }
+            if r == 5 {
+                // ERROR_ACCESS_DENIED
+                log::error!("FPS监控: ETW 会话创建失败（需要管理员权限），错误码 {r}");
+                return false;
+            }
+            log::error!("FPS监控: ETW 会话创建失败，错误码 {r}");
+            return false;
+        }
+        if !started {
+            log::error!("FPS监控: 无法创建 ETW 会话");
+            return false;
+        }
+
+        // 2. 启用两个内核 Provider（level=Verbose，与参考 EnableProvider(Guid) 默认一致）
+        let mut enabled = false;
+        if unsafe {
+            EnableTraceEx2(
+                session,
+                &DXGKRNL_PROVIDER,
+                EVENT_CONTROL_CODE_ENABLE_PROVIDER,
+                TRACE_LEVEL_VERBOSE as u8,
+                0,
+                0,
+                0,
+                std::ptr::null(),
+            )
+        } != 0
+        {
+            log::warn!("FPS监控: 启用 DxgKrnl Provider 失败");
+        } else {
+            enabled = true;
+        }
+        if unsafe {
+            EnableTraceEx2(
+                session,
+                &WIN32K_PROVIDER,
+                EVENT_CONTROL_CODE_ENABLE_PROVIDER,
+                TRACE_LEVEL_VERBOSE as u8,
+                0,
+                0,
+                0,
+                std::ptr::null(),
+            )
+        } != 0
+        {
+            log::warn!("FPS监控: 启用 Win32k Provider 失败");
+        } else {
+            enabled = true;
+        }
+        if !enabled {
+            log::error!("FPS监控: 两个内核 Provider 均启用失败，放弃本会话");
+            stop_session_by_name(&name);
+            return false;
+        }
+
+        log::info!("FPS监控: ETW 会话已启动（DxgKrnl/Win32k 全局捕获，前台切换不重启）");
+
+        // 3. 打开并阻塞消费（回调中完成统计管线）
+        let mut runtime = EtwRuntime::new();
+        let mut logfile: EVENT_TRACE_LOGFILEW = unsafe { std::mem::zeroed() };
+        logfile.LoggerName = name.as_mut_ptr();
+        logfile.Anonymous1.ProcessTraceMode =
+            PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD;
+        logfile.Anonymous2.EventRecordCallback = Some(on_event_record);
+        logfile.Context = (&mut runtime as *mut EtwRuntime) as *mut core::ffi::c_void;
+
+        let process_handle = unsafe { OpenTraceW(&mut logfile) };
+        if process_handle.Value == u64::MAX {
+            log::error!("FPS监控: OpenTraceW 失败");
+            stop_session_by_name(&name);
+            return false;
+        }
+        PROCESS_HANDLE.store(process_handle.Value, Ordering::SeqCst);
+
+        let handles = [process_handle];
+        let status = unsafe {
+            ProcessTrace(
+                handles.as_ptr(),
+                1,
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        };
+        unsafe {
+            CloseTrace(process_handle);
+        }
+        PROCESS_HANDLE.store(0, Ordering::SeqCst);
+        stop_session_by_name(&name);
+
+        if status != 0 {
+            log::warn!("FPS监控: ProcessTrace 退出 code={status}");
+        } else {
+            log::info!("FPS监控: ETW 会话已停止");
+        }
+
+        // 会话自然结束时若仍处于活跃状态 → 需要重连
+        FPS_ACTIVE.load(Ordering::SeqCst)
+    }
+
+    /// ETW 会话生命周期主循环（复刻旧方案的「重试上限 + 30s 宽限」逻辑）
+    fn fps_monitor_main() {
+        const MAX_RESTARTS: u32 = 5;
+        let mut restart_count = 0u32;
+
+        while FPS_ACTIVE.load(Ordering::SeqCst) {
+            let session_start = Instant::now();
+            let keep = run_etw_session();
+
+            if !keep {
+                log::error!("FPS监控: ETW 会话无法建立/恢复，停止监控");
+                break;
+            }
+            if !FPS_ACTIVE.load(Ordering::SeqCst) {
+                break;
+            }
+
+            // 上次会话运行超过 30 秒说明是正常运行后断开，重置重启计数器
+            if session_start.elapsed() >= Duration::from_secs(30) {
+                restart_count = 0;
+            }
+            restart_count += 1;
+            if restart_count > MAX_RESTARTS {
+                log::error!("FPS监控: ETW 会话重连超过 {MAX_RESTARTS} 次，放弃");
+                break;
+            }
+            log::warn!("FPS监控: ETW 会话中断，2秒后重连 (第{restart_count}/{MAX_RESTARTS})");
+            thread::sleep(Duration::from_secs(2));
+        }
+
+        FPS_ACTIVE.store(false, Ordering::SeqCst);
+        log::info!("FPS监控: ETW 采集线程退出");
+    }
+
+    /// 启动 ETW 采集线程（由 start_fps_monitor 调用）
+    pub fn spawn_monitor() {
+        *MONITOR_THREAD.lock().unwrap() = Some(thread::spawn(fps_monitor_main));
+    }
+
+    /// 停止 ETW 采集并等待线程退出（由 stop_fps_monitor 调用）
+    ///
+    /// 停止顺序：FPS_ACTIVE=false（已由调用方设置）→ 按名停会话 → 兜底 CloseTrace →
+    /// join 线程，确保会话无残留。
+    pub fn stop_and_join() {
+        stop_session_by_name(&session_name());
+        // 兜底：直接关闭 trace 处理句柄强制 ProcessTrace 返回
+        let ph = PROCESS_HANDLE.load(Ordering::SeqCst);
+        if ph != 0 {
+            unsafe {
+                CloseTrace(PROCESSTRACE_HANDLE { Value: ph });
+            }
+        }
+        if let Some(handle) = MONITOR_THREAD.lock().unwrap().take() {
+            let _ = handle.join();
+        }
+    }
 }
 
 // ============ 进程追踪线程 ============
 
 /// 进程追踪线程：追踪前台窗口，更新 TARGET_PROCESS，检测 FPS 过期归零
 ///
-/// 简化说明（对比旧方案 foreground_poller_loop）：
-/// - 去掉 200ms 高频轮询 → 500ms（Hook 已足够可靠，轮询仅兜底）
-/// - 去掉 LINE_COUNT_ATOMIC 看门狗 → reader 线程退出即触发重启
-/// - 去掉 RESTART_REQUESTED 标志 → 不重启 PresentMon，仅更新 TARGET_PROCESS
-/// - 去抖动从 300ms → 500ms（减少 Alt+Tab 抖动）
+/// - 500ms 轮询兜底（Hook 已足够可靠，轮询仅兜底）
+/// - 去抖动 500ms（减少 Alt+Tab 抖动）
 fn process_tracker_loop() {
     use sysinfo::{Pid, System};
 
@@ -633,10 +935,7 @@ fn process_tracker_loop() {
         }
 
         // 2. 检测 FPS 过期（无匹配数据超过 3 秒 → 归零显示）
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
+        let now = now_unix_ms();
         let last_frame = LAST_FRAME_TIME.load(Ordering::Relaxed);
         if last_frame > 0 && now > last_frame + 3000 {
             if SMOOTHED_FPS.load(Ordering::Relaxed) != 0 {
@@ -689,12 +988,13 @@ fn process_tracker_loop() {
                             SMOOTHED_FPS.store(0, Ordering::Relaxed);
                         }
 
-                        // 递增代次，通知 reader 线程清空缓冲区
+                        // 递增代次，通知 ETW 回调清空缓冲区
                         TARGET_GENERATION.fetch_add(1, Ordering::Relaxed);
 
                         log::info!(
                             "FPS监控: 前台进程 → {} (pid={}){}",
-                            pending, pid,
+                            pending,
+                            pid,
                             if is_game { "" } else { " (非游戏)" }
                         );
 
@@ -707,152 +1007,20 @@ fn process_tracker_loop() {
     }
 }
 
-// ============ FPS 监控主线程 ============
-
-/// FPS 监控主线程：管理 PresentMon 进程生命周期
-///
-/// 与旧方案的关键区别：
-/// - 不传 --process_name：PresentMon 捕获所有进程，reader 线程消费端过滤
-/// - 前台切换不重启 PresentMon：仅更新 TARGET_PROCESS 原子变量
-/// - 仅在 PresentMon 崩溃/退出（reader 线程退出）时才重启
-fn fps_monitor_main() {
-    let exe_path = match find_presentmon_exe() {
-        Some(p) => p,
-        None => {
-            log::error!("FPS监控: 未找到 PresentMon-2.5.1-x64.exe，请确保文件已打包");
-            FPS_ACTIVE.store(false, Ordering::SeqCst);
-            return;
-        }
-    };
-
-    let mut restart_count = 0u32;
-    const MAX_RESTARTS: u32 = 5;
-
-    while FPS_ACTIVE.load(Ordering::SeqCst) {
-        let session_start = Instant::now();
-
-        // 预清理：停止可能残留的 ETW 会话
-        cleanup_stale_etw_session(&exe_path);
-
-        // 构建 PresentMon 启动命令
-        // 关键：不传 --process_name！PresentMon 捕获所有进程，
-        // reader 线程按 TARGET_PROCESS 过滤（参考 CapFrameX 架构）
-        let mut cmd = Command::new(&exe_path);
-        cmd.args([
-            "--output_stdout",         // CSV 输出到 stdout
-            "--no_console_stats",      // 关闭控制台统计（防止污染 stdout）
-            "--stop_existing_session", // 停止已有同名 ETW 会话
-            "--no_track_input",        // 不追踪输入延迟（减少 ETW 开销，参考 CapFrameX）
-        ]);
-        // 排除系统进程，减少 ETW 事件量和 stdout 输出
-        // 参考 CapFrameX PresentMonServiceConfiguration.ExcludeProcesses
-        for proc in &[
-            "explorer.exe", "dwm.exe", "SearchHost.exe", "ShellExperienceHost.exe",
-            "msedgewebview2.exe", "TextInputHost.exe", "sihost.exe", "ctfmon.exe",
-            "ApplicationFrameHost.exe", "fontdrvhost.exe", "SystemSettings.exe",
-            "Taskmgr.exe", "WindowsTerminal.exe", "cmd.exe", "powershell.exe",
-            "conhost.exe", "CatPawAI.exe", "NexBox.exe",
-        ] {
-            cmd.args(["--exclude", proc]);
-        }
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
-        cmd.stdin(Stdio::null());
-        #[cfg(windows)]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-        let mut child = match cmd.spawn() {
-            Ok(c) => c,
-            Err(e) => {
-                log::error!(
-                    "FPS监控: PresentMon 启动失败: {}（可能需要管理员权限）",
-                    e
-                );
-                restart_count += 1;
-                if restart_count > MAX_RESTARTS {
-                    log::error!("FPS监控: PresentMon 启动失败超过 {} 次，放弃", MAX_RESTARTS);
-                    FPS_ACTIVE.store(false, Ordering::SeqCst);
-                    break;
-                }
-                thread::sleep(Duration::from_secs(2));
-                continue;
-            }
-        };
-
-        // 取出 stdout 管道
-        let stdout = child.stdout.take().unwrap();
-
-        // 捕获 stderr 用于诊断
-        if let Some(stderr) = child.stderr.take() {
-            thread::spawn(move || {
-                let reader = BufReader::new(stderr);
-                for line in reader.lines().flatten() {
-                    let trimmed = line.trim();
-                    if trimmed.is_empty() {
-                        continue;
-                    }
-                    // 过滤退出时的正常事件丢失警告
-                    if trimmed.contains("ETW events were lost") || trimmed.contains("ETW buffers were lost") {
-                        continue;
-                    }
-                    log::warn!("FPS监控: PresentMon stderr: {}", trimmed);
-                }
-            });
-        }
-
-        // 存储子进程句柄
-        {
-            let mut lock = CHILD_HANDLE.lock().unwrap();
-            *lock = Some(child);
-        }
-
-        log::info!("FPS监控: PresentMon 已启动（全局监控模式，前台切换不重启）");
-
-        // 启动 reader 线程
-        let reader_handle = thread::spawn(move || {
-            reader_thread_main(stdout);
-        });
-
-        // 等待 reader 线程退出（管道 EOF / PresentMon 崩溃 / 用户停止）
-        let _ = reader_handle.join();
-
-        // 停止 PresentMon（清理 ETW 会话）
-        stop_presentmon_graceful();
-
-        if !FPS_ACTIVE.load(Ordering::SeqCst) {
-            break;
-        }
-
-        // 上次会话运行超过 30 秒说明是正常运行后断开，重置重启计数器
-        if session_start.elapsed() >= Duration::from_secs(30) {
-            restart_count = 0;
-        }
-
-        restart_count += 1;
-        if restart_count > MAX_RESTARTS {
-            log::error!(
-                "FPS监控: PresentMon 失败重启超过 {} 次，放弃",
-                MAX_RESTARTS
-            );
-            FPS_ACTIVE.store(false, Ordering::SeqCst);
-            break;
-        }
-
-        log::warn!(
-            "FPS监控: PresentMon 管道断开，2秒后重启 (第{}/{})",
-            restart_count, MAX_RESTARTS
-        );
-        thread::sleep(Duration::from_secs(2));
-    }
-}
-
-// ============ 公共 API（保持与旧方案完全兼容） ============
+// ============ 公共 API（与旧方案完全兼容） ============
 
 /// 启动 FPS 监控
 pub fn start_fps_monitor() {
     if FPS_ACTIVE.load(Ordering::SeqCst) {
         return;
     }
+
+    // ETW 内核 Provider 需要管理员权限（与旧 PresentMon 方案一致）
+    if !crate::optimization::is_admin() {
+        log::error!("FPS监控: 需要管理员权限才能开启帧率监控（ETW 内核事件采集）");
+        return;
+    }
+
     FPS_ACTIVE.store(true, Ordering::SeqCst);
 
     #[cfg(target_os = "windows")]
@@ -863,17 +1031,16 @@ pub fn start_fps_monitor() {
         }
     }
 
-    // 启动 PresentMon 进程管理主线程
-    thread::spawn(|| {
-        fps_monitor_main();
-    });
+    // 启动 ETW 采集线程
+    #[cfg(target_os = "windows")]
+    etw::spawn_monitor();
 
     // 启动前台窗口追踪线程
     thread::spawn(|| {
         process_tracker_loop();
     });
 
-    log::info!("FPS监控: 已启动 (重写版 — 全局监控 + 消费端过滤)");
+    log::info!("FPS监控: 已启动 (内嵌 ETW — DxgKrnl/Win32k Present 事件)");
 }
 
 /// 停止 FPS 监控
@@ -883,8 +1050,9 @@ pub fn stop_fps_monitor() {
     }
     FPS_ACTIVE.store(false, Ordering::SeqCst);
 
-    // 优雅停止 PresentMon 子进程
-    stop_presentmon_graceful();
+    // 停止 ETW 会话并等待采集线程退出（确保无残留会话）
+    #[cfg(target_os = "windows")]
+    etw::stop_and_join();
 
     #[cfg(target_os = "windows")]
     unsafe {
@@ -943,7 +1111,7 @@ pub fn get_cached_01low_fps() -> Option<u32> {
 /// 设置自身 overlay 窗口句柄（用于排除前台切换到自身 overlay）
 pub fn set_overlay_hwnd(hwnd: u64) {
     OVERLAY_HWND.store(hwnd, Ordering::SeqCst);
-    log::info!("FPS监控: Overlay窗口句柄设置为 {:#X}", hwnd);
+    log::info!("FPS监控: Overlay窗口句柄设置为 {hwnd:#X}");
 }
 
 /// 清除自身 overlay 窗口句柄

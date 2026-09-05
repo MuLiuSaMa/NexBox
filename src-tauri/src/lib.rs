@@ -25,7 +25,6 @@ mod game_launcher;
 mod game_mode;
 mod game_process_optimize;
 mod game_win_key;
-mod game_ime_lock;
 mod game_ping;
 mod gpu_rename;
 mod hardware;
@@ -48,6 +47,7 @@ mod overlay_panel;
 mod power_settings;
 mod popup_blocker;
 mod vertical_overlay;
+mod vac_repair;
 mod vtx_virtualization;
 
 mod sensor;
@@ -391,12 +391,6 @@ pub fn run() {
             let app_handle_for_game_win_key = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = game_win_key::init(app_handle_for_game_win_key).await;
-            });
-
-            // 初始化游戏启动时锁定输入法（读取持久化配置并启动后台轮询）
-            let app_handle_for_game_ime_lock = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = game_ime_lock::init(app_handle_for_game_ime_lock).await;
             });
 
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
@@ -862,8 +856,6 @@ pub fn run() {
         game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
-        game_ime_lock::get_game_ime_lock_status,
-        game_ime_lock::set_game_ime_lock_enabled,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -1059,6 +1051,9 @@ pub fn run() {
         vtx_virtualization::check_vtx_virtualization_status,
         vtx_virtualization::fix_vtx_virtualization_popup,
         vtx_virtualization::restore_vtx_virtualization,
+        // === CS:GO VAC 修复 ===
+        vac_repair::get_vac_repair_status,
+        vac_repair::run_vac_repair,
             storage_clean::scan_storage_items,
             storage_clean::clean_storage_items,
             storage_clean::empty_recycle_bin_cmd,
@@ -1067,6 +1062,8 @@ pub fn run() {
             storage_scan::scan_junk_category,
             storage_scan::get_junk_categories,
             storage_scan::delete_junk_files,
+            storage_scan::get_winapp2_rule_info,
+            storage_scan::update_winapp2_rules,
             storage_scan::scan_large_files,
             storage_scan::cancel_large_file_scan,
             storage_scan::reveal_large_file,
@@ -1124,11 +1121,13 @@ pub fn run() {
         steam::switch_steam_account,
         steam::delete_steam_account,
         steam::uninstall_steam_game,
+        steam::install_steam_game,
         steam::format_file_size,
         steam::get_steam_stats,
         steam::get_library_disk_info,
         steam::steam_debug,
         steam::get_steam_user_avatars,
+        steam::get_steam_inventory,
 
         // === 网络测速 ===
         speedtest::start_speedtest,
@@ -1177,7 +1176,6 @@ pub fn run() {
                 hardware::cleanup_hardware_cache();
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
                 game_win_key::cleanup();
-                game_ime_lock::cleanup();
                 speedtest::cleanup();
                 display_filter::cleanup();
                 game_mode::shutdown();

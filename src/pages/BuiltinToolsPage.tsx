@@ -25,11 +25,17 @@ import {
   Video,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
+import csLogoImg from "@/assets/cs-logo.png";
 import { useTranslation } from "react-i18next";
 
 // NVIDIA Logo 图片组件
 function NvidiaLogo({ size = 24 }: { size?: number; color?: string }) {
   return <img src={nvidiaLogoImg} width={size} height={size} style={{ objectFit: 'contain' }} alt="NVIDIA" />;
+}
+
+// CS:GO Logo 图片组件
+function CsLogo({ size = 24 }: { size?: number; color?: string }) {
+  return <img src={csLogoImg} width={size} height={size} style={{ objectFit: 'contain' }} alt="CS:GO" />;
 }
 
 import { ViewGrid } from "@/components/special/view-grid";
@@ -188,6 +194,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.nvidiaRecording",
     descriptionKey: "builtinTools.nvidiaRecordingDesc",
     color: "#76B900",
+  },
+  {
+    id: "vac-repair",
+    path: "/vac-repair",
+    icon: CsLogo,
+    titleKey: "sidebar.vacRepair",
+    descriptionKey: "builtinTools.vacRepairDesc",
+    color: "#66C0F4",
   },
 ];
 

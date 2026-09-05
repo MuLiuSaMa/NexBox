@@ -66,6 +66,10 @@ pub struct CategoryScanResult {
     pub risk_level: u8,
     /// 该分类下的所有文件
     pub files: Vec<FileInfo>,
+    /// 该分类下的注册表残留项(Winapp2 规则)
+    pub registry_items: Vec<RegistryItemInfo>,
+    /// 该分类是否默认勾选(内置分类恒 true;Winapp2 条目按 Default 标志)
+    pub default_select: bool,
     /// 总大小(字节)
     pub total_size: u64,
     /// 文件数量
@@ -81,6 +85,8 @@ impl CategoryScanResult {
             risk_level: category.risk_level(),
             category,
             files: Vec::new(),
+            registry_items: Vec::new(),
+            default_select: true,
             total_size: 0,
             file_count: 0,
         }
@@ -91,6 +97,11 @@ impl CategoryScanResult {
         self.total_size += file.size;
         self.file_count += 1;
         self.files.push(file);
+    }
+
+    /// 是否有可清理内容
+    pub fn is_empty_result(&self) -> bool {
+        self.file_count == 0 && self.registry_items.is_empty()
     }
 
     /// 获取人类可读的总大小
@@ -174,6 +185,31 @@ pub struct DeleteTarget {
     /// 已知的文件大小(字节);为 None 时删除引擎会自行查询
     #[serde(default)]
     pub size: Option<u64>,
+    /// 是否为注册表目标(Winapp2 规则);为 true 时 path 是 "HIVE\子键" 路径
+    #[serde(default)]
+    pub is_registry: Option<bool>,
+    /// 注册表目标要删除的值名;省略表示删除整个键
+    #[serde(default)]
+    pub value_name: Option<String>,
+}
+
+/// 注册表删除目标(供命令层解析前端提交后交给 registry_delete)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryDeleteTarget {
+    /// "HIVE\子键" 格式的注册表路径
+    pub key_path: String,
+    /// 值名;None 表示删除整个键
+    pub value_name: Option<String>,
+}
+
+/// 展示给用户的注册表残留项信息
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegistryItemInfo {
+    /// "HIVE\子键" 格式的注册表路径
+    pub key_path: String,
+    pub value_name: Option<String>,
+    /// 展示文本(如 "值名: xxx" 或 "整个键")
+    pub description: String,
 }
 
 /// 删除操作结果

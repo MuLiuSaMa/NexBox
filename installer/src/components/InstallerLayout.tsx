@@ -29,6 +29,9 @@ export default function InstallerLayout({
     }
   };
 
+  // 没有任何页脚按钮时不渲染 footer，避免空白占位（如安装中/完成页）
+  const hasFooterContent = showCancel || !!onBack || !!onNext;
+
   return (
     <div className="installer-app">
       <div className="installer-body">
@@ -37,7 +40,8 @@ export default function InstallerLayout({
         </div>
       </div>
 
-      <div className="installer-footer">
+      {hasFooterContent && (
+        <div className="installer-footer">
         {showCancel && (
           <button className="btn-secondary" onClick={handleCancel} style={{ marginRight: "auto" }}>
             {t("btn_cancel")}
@@ -53,7 +57,8 @@ export default function InstallerLayout({
             {nextLabel || t("btn_next")}
           </button>
         )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

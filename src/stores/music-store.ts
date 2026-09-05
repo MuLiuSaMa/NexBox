@@ -56,6 +56,8 @@ interface MusicState {
   loginInfo: LoginInfo | null; // 当前播放源的登录信息 (向后兼容)
   loginInfos: Record<MusicProvider, LoginInfo | null>; // 所有平台登录信息
   playbackSource: MusicProvider; // 当前播放源
+  // 搜索平台（独立于播放源，供搜索结果页切换不同平台：歌曲/歌单/歌手）
+  searchProvider: MusicProvider;
 
   // 外部客户端播放（SMTC 接管系统媒体会话，供灵动岛显示）
   externalTrack: ExternalPlayback["track"];
@@ -82,6 +84,8 @@ interface MusicState {
   rightPlaylistLoadingMore: boolean;
   likedSongIds: Set<string>;
   currentLyrics: Lyrics | null;
+  /// currentLyrics 所属的歌曲 id（运行时判定本地歌曲是否有歌词的兜底依据）
+  currentLyricsSongId: string | null;
   recommendations: Playlist[];
   recommendSongs: Song[];
   dailyRecommendPlaylists: Playlist[];
@@ -223,6 +227,7 @@ interface MusicState {
   logoutFor: (provider: MusicProvider) => Promise<void>;
   openLoginWindow: (provider?: MusicProvider) => Promise<void>;
   switchPlaybackSource: (provider: MusicProvider) => Promise<void>;
+  setSearchProvider: (provider: MusicProvider) => void;
   loadAllLoginStatuses: () => Promise<void>;
 
   loadUserPlaylists: () => Promise<void>;
@@ -277,6 +282,7 @@ function serializeLocalSong(song: Song): Record<string, unknown> {
     hash: song.hash,
     _localPath: song._localPath,
     _localCoverPath: song._localCoverPath,
+    _localHasLyric: song._localHasLyric,
   };
 }
 
@@ -293,6 +299,8 @@ interface LocalSongInfoPayload {
   duration_ms: number;
   cover_path: string;
   cover_source: string;
+  /// 是否存在同目录的同名歌词文件
+  has_lyric: boolean;
 }
 
 /// 把后端返回的本地歌曲元信息合并进 localSongs 并持久化（供单文件/文件夹导入复用）
@@ -323,6 +331,8 @@ async function mergeLocalSongInfos(
     _localPath: info.path,
     // 封面缓存文件绝对路径，用于持久化与重启后恢复封面
     _localCoverPath: info.cover_path || undefined,
+    // 是否存在同目录歌词文件，播放器据此决定是否显示歌词面板
+    _localHasLyric: info.has_lyric,
   }));
 
   set((state) => {
@@ -714,6 +724,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loginInfo: null,
   loginInfos: { netease: null, kugou: null, qqmusic: null, migu: null },
   playbackSource: "netease",
+  searchProvider: "netease",
 
   externalTrack: null,
   externalPlaying: false,
@@ -734,6 +745,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   rightPlaylistLoadingMore: false,
   likedSongIds: new Set(),
   currentLyrics: null,
+  currentLyricsSongId: null,
   recommendations: [],
   recommendSongs: [],
   dailyRecommendPlaylists: [],
@@ -969,7 +981,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 加载播放源 (重启后恢复上次使用的平台)
     try {
       const source = await invoke<MusicProvider>("music_get_playback_source");
-      if (source) set({ playbackSource: source });
+      if (source) set({ playbackSource: source, searchProvider: source });
     } catch {}
 
     // 防止 React Strict Mode 双重调用导致重复注册
@@ -1257,12 +1269,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searching: true });
     try {
-      const provider = get().playbackSource;
+      const provider = get().searchProvider;
       const cmd = provider === "kugou" ? "kugou_search"
         : provider === "qqmusic" ? "qq_search"
         : provider === "migu" ? "migu_search"
         : "music_search";
       const results = await invoke<Song[]>(cmd, { keywords, limit: 30 });
+      // 仅当仍处于同一搜索平台时应用结果，避免切换平台后旧结果覆盖新结果
+      if (get().searchProvider !== provider) return;
       set({ searchResults: results });
     } catch (e) {
       console.error("Search failed:", e);
@@ -1275,18 +1289,24 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searchingArtists: true, artistSearchResults: [], selectedArtist: null, artistSongs: [] });
     try {
-            const provider = get().playbackSource;
+            const provider = get().searchProvider;
       if (provider === "migu") {
         // 咪咕歌手搜索 (search_all.do singerResultData，无头像)
         const results = await invoke<Artist[]>("migu_artist_search", { keywords, limit: 30 });
-        set({ artistSearchResults: results });
+        // 仅当仍处于同一搜索平台时应用结果，避免切换平台后旧结果覆盖新结果
+        if (get().searchProvider !== provider) return;
+        // 回填搜索来源，供点击歌手后按来源加载歌曲
+        set({ artistSearchResults: results.map((a) => ({ ...a, provider })) });
         return;
       }
       const cmd = provider === "kugou" ? "kugou_artist_search"
         : provider === "qqmusic" ? "qq_artist_search"
         : "music_artist_search";
       const results = await invoke<Artist[]>(cmd, { keywords, limit: 30 });
-      set({ artistSearchResults: results });
+      // 仅当仍处于同一搜索平台时应用结果，避免切换平台后旧结果覆盖新结果
+      if (get().searchProvider !== provider) return;
+      // 回填搜索来源，供点击歌手后按来源加载歌曲
+      set({ artistSearchResults: results.map((a) => ({ ...a, provider })) });
     } catch (e) {
       console.error("Artist search failed:", e);
       set({ artistSearchResults: [] });
@@ -1298,7 +1318,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadArtistSongs: async (artistId, offset = 0) => {
     set({ loadingArtistSongs: true });
     try {
-            const provider = get().playbackSource;
+      // 优先按歌手来源加载，跨平台搜索时保证点击歌手歌曲来自同一平台
+      const provider = (get().selectedArtist?.provider as MusicProvider) || get().searchProvider;
       if (provider === "migu") {
         // 咪咕歌手歌曲接口已失效：按歌手名搜索并精确匹配过滤
         const name = get().selectedArtist?.name || "";
@@ -1391,12 +1412,14 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     if (!keywords.trim()) return;
     set({ searchingPlaylists: true, playlistSearchResults: [] });
     try {
-            const provider = get().playbackSource;
+            const provider = get().searchProvider;
       const cmd = provider === "kugou" ? "kugou_playlist_search"
         : provider === "qqmusic" ? "qq_playlist_search"
         : provider === "migu" ? "migu_playlist_search"
         : "music_playlist_search";
       const results = await invoke<Playlist[]>(cmd, { keywords, limit: 30 });
+      // 仅当仍处于同一搜索平台时应用结果，避免切换平台后旧结果覆盖新结果
+      if (get().searchProvider !== provider) return;
       // 同步已收藏状态
       const subscribedIds = new Set(get().userPlaylists.filter((pl) => pl.subscribed).map((pl) => pl.id));
       set({
@@ -2249,6 +2272,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
+  // 搜索平台切换：仅切换搜索结果来源，不影响播放源
+  setSearchProvider: (provider) => {
+    set({ searchProvider: provider });
+  },
+
   loadUserPlaylists: async () => {
     await get().loadUserPlaylistsFor(get().playbackSource);
   },
@@ -2570,22 +2598,47 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   loadLyricsForSong: async (song) => {
     // 本地导入歌曲：读取同目录的同名 .lrc 歌词文件
     if (song.provider === "local") {
-      set({ loadingLyrics: true });
+      // 加载期间清空归属标记，避免用残留的旧歌词（切歌时 currentLyrics 不立即清空）误判布局
+      set({ loadingLyrics: true, currentLyricsSongId: null });
       try {
+        let hasLyric = false;
         const localPath = song._localPath || song.hash || "";
         if (localPath) {
           const lrcText = await invoke<string>("get_local_lyric", { path: localPath });
           if (lrcText && lrcText.trim()) {
-            set({ currentLyrics: { lyric: lrcText } });
+            hasLyric = true;
+            set({ currentLyrics: { lyric: lrcText }, currentLyricsSongId: song.id });
             if (get().desktopLyricsVisible) {
               get().emitDesktopLyricsData();
             }
-            return;
           }
         }
-        set({ currentLyrics: null });
-        if (get().desktopLyricsVisible) {
-          get().emitDesktopLyricsData();
+        if (!hasLyric) {
+          set({ currentLyrics: null, currentLyricsSongId: song.id });
+          if (get().desktopLyricsVisible) {
+            get().emitDesktopLyricsData();
+          }
+        }
+        // 自愈：歌词文件在导入后被新增/删除时，同步歌曲标识并持久化
+        if (hasLyric !== !!song._localHasLyric) {
+          set((state) => {
+            const st = state as { localSongs: Song[]; currentSong: Song | null };
+            const nextLocal = st.localSongs.map((s) =>
+              s.id === song.id ? { ...s, _localHasLyric: hasLyric } : s
+            );
+            const cur = st.currentSong;
+            // 同步当前播放歌曲的标识：历史导入的歌曲首次播放时也能立即显示歌词面板
+            return cur && cur.id === song.id
+              ? { localSongs: nextLocal, currentSong: { ...cur, _localHasLyric: hasLyric } }
+              : { localSongs: nextLocal };
+          });
+          try {
+            const s = await getStore();
+            await s.set("localSongs", get().localSongs.map(serializeLocalSong));
+            await s.save();
+          } catch (e) {
+            console.error("Sync local lyric flag persist failed:", e);
+          }
         }
       } catch {
         set({ currentLyrics: null });

@@ -320,7 +320,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.nvidia.disableGpuPowerMgmt",
     descKey: "systemOptimizer.nvidia.disableGpuPowerMgmtDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableHDCP",
@@ -330,7 +330,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[4],
     titleKey: "systemOptimizer.nvidia.disableHDCP",
     descKey: "systemOptimizer.nvidia.disableHDCPDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableWriteCombining",
@@ -340,7 +340,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[5],
     titleKey: "systemOptimizer.nvidia.disableWriteCombining",
     descKey: "systemOptimizer.nvidia.disableWriteCombiningDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableClockGating",
@@ -380,7 +380,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[9],
     titleKey: "systemOptimizer.nvidia.lockPState0",
     descKey: "systemOptimizer.nvidia.lockPState0Desc",
-    risk: "medium",
+    risk: "high",
   },
   {
     id: "disableMiracastOverlay",
@@ -390,7 +390,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[10],
     titleKey: "systemOptimizer.nvidia.disableMiracastOverlay",
     descKey: "systemOptimizer.nvidia.disableMiracastOverlayDesc",
-    risk: "low",
+    risk: "medium",
   },
 
   // ============== AMD 显卡优化 ==============
@@ -436,7 +436,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.performance.intelTSX",
     descKey: "systemOptimizer.performance.intelTSXDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "mergeSvcHost",
@@ -598,7 +598,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[0],
     titleKey: "systemOptimizer.privacy.disableTelemetrySvc",
     descKey: "systemOptimizer.privacy.disableTelemetrySvcDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableCEIP",
@@ -1172,7 +1172,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[12],
     titleKey: "systemOptimizer.services.disableSysMain",
     descKey: "systemOptimizer.services.disableSysMainDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableSystemRestore",
@@ -1224,7 +1224,7 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[1],
     titleKey: "systemOptimizer.disk.disableNtfsEncryption",
     descKey: "systemOptimizer.disk.disableNtfsEncryptionDesc",
-    risk: "low",
+    risk: "medium",
   },
   {
     id: "disableLastAccess",

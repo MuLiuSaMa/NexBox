@@ -1,7 +1,0 @@
-Windows Registry Editor Version 5.00
-
-; 调整处理器以获得最佳性能 - 恢复
-; 删除 Win32PrioritySeparation，让 Windows 回退到默认值 2
-
-[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\PriorityControl]
-"Win32PrioritySeparation"=-

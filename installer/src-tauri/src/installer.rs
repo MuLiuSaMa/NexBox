@@ -112,6 +112,12 @@ fn get_existing_install_path() -> Option<String> {
     None
 }
 
+/// 检测电脑上是否已安装 NexBox（注册表存在且 nexbox.exe 有效）
+#[tauri::command]
+pub fn is_existing_install() -> bool {
+    get_existing_install_path().is_some()
+}
+
 #[tauri::command]
 pub fn get_default_install_path() -> String {
     // 更新场景：优先使用注册表中已记录的安装目录

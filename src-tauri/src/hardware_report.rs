@@ -267,7 +267,7 @@ pub async fn export_hardware_report(path: String) -> Result<String, String> {
             .map_err(|e| format!("获取硬件信息失败: {}", e))?;
 
         // 6. 获取操作系统版本
-        let os_version = sysinfo::System::long_os_version()
+        let os_version = crate::hardware::long_os_version()
             .unwrap_or_else(|| "Unknown".to_string());
 
         // 7. 生成 HTML

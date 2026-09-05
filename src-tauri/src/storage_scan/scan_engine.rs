@@ -312,7 +312,7 @@ impl ScanEngine {
     }
 
     /// 检查是否为系统保护路径(不应扫描)
-    fn is_system_protected(&self, path: &Path) -> bool {
+    pub(crate) fn is_system_protected(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy().to_lowercase();
 
         // 保护关键系统目录
@@ -355,7 +355,7 @@ impl ScanEngine {
     /// MSIX/Tauri/Electron/WebView2 应用常把用户状态放在 LocalCache 下,例如 Claude 的
     /// EBWebView\Default。这里面的 IndexedDB、Local Storage、各种 SQLite/LevelDB 文件
     /// 不是纯缓存,删除后会导致会话列表、应用偏好或索引丢失。
-    fn is_persistent_app_profile_path(&self, path: &Path) -> bool {
+    pub(crate) fn is_persistent_app_profile_path(&self, path: &Path) -> bool {
         let path_str = path.to_string_lossy().to_lowercase();
         if !path_str.contains("\\appdata\\local\\packages\\") && !path_str.contains("\\ebwebview\\")
         {

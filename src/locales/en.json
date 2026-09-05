@@ -62,7 +62,8 @@
     "hiddenFeatures": "Windows Hidden Features",
     "contextMenu": "Context Menu Manager",
     "downloadAccelerator": "Downloader",
-    "nvidiaRecording": "NVIDIA Recording Manager"
+    "nvidiaRecording": "NVIDIA Recording Manager",
+    "vacRepair": "CS:GO VAC Repair"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -122,7 +123,20 @@
     "deleteAccountSuccess": "Account deleted",
     "deleteAccountError": "Failed to delete account",
     "deleteAccountCloseSteam": "Steam is running and will be closed automatically before deletion",
-    "lastPlayed": "Last played"
+    "lastPlayed": "Last played",
+    "inventoryGames": "Game Library",
+    "inventorySourceCache": "Local cache",
+    "currentAccount": "Account",
+    "inventoryTotal": "Total owned",
+    "inventoryInstalledCount": "Installed",
+    "inventoryNotInstalledCount": "Not installed",
+    "totalPlaytime": "Total playtime",
+    "inventoryEmpty": "No game library data",
+    "installedBadge": "Installed",
+    "notInstalledBadge": "Not installed",
+    "loadMore": "Load more",
+    "install": "Install",
+    "installSent": "Install request sent to Steam"
   },
   "powerAdvanced": {
     "title": "Processor Advanced Settings",
@@ -852,12 +866,8 @@
     "gameWinKey": {
       "loading": "Loading...",
       "line1": "While gaming",
-      "line2": "Block Win key"
-    },
-    "gameImeLock": {
-      "loading": "Loading...",
-      "line1": "While gaming",
-      "line2": "Lock input method"
+      "line2": "Block Win key",
+      "desc": "Automatically block the Win key while gaming to prevent accidental presses"
     },
     "randomImage": {
       "loading": "Loading...",
@@ -887,6 +897,10 @@
     "feedbackCard": {
       "title": "Feedback",
       "subtitle": "Report issues on the official website"
+    },
+    "docsCard": {
+      "title": "Documentation",
+      "subtitle": "View the online documentation"
     },
     "qqGroup": {
       "cardTitle": "Official QQ Groups",
@@ -1609,7 +1623,8 @@
     "hiddenFeaturesDesc": "Query, enable or disable hidden Windows A/B experimental feature flags",
     "contextMenuDesc": "Manage system context menu items and extra drives/cloud drives in This PC",
     "downloadAcceleratorDesc": "Multi-threaded segmented downloads to saturate your bandwidth",
-    "nvidiaRecordingDesc": "Scan NVIDIA recordings automatically, manage, preview and clean by time"
+    "nvidiaRecordingDesc": "Scan NVIDIA recordings automatically, manage, preview and clean by time",
+    "vacRepairDesc": "Fix CS:GO / CS2 VAC blocking issues and restore Steam services & system settings"
   },
   "contextMenu": {
     "title": "Context Menu & This PC",
@@ -1671,6 +1686,39 @@
     "adminHint": "When not running as admin, a UAC prompt will appear - please click Allow",
     "fullyFixed": "Virtualization settings are all disabled - currently in the fixed state.",
     "fullyRestored": "Virtualization settings are all restored - currently in the default state."
+  },
+  "vacRepair": {
+    "title": "CS:GO VAC Repair",
+    "subtitle": "Fix CS:GO / CS2 VAC blocking: restore the Steam launcher service, firewall and DEP system settings",
+    "refresh": "Re-check",
+    "checking": "Checking Steam environment...",
+    "checkFailed": "Failed to check status",
+    "notInstalled": "Steam is not detected. Please install and run the Steam client first.",
+    "serviceMissingHint": "steamservice.exe not found. The Steam installation may be incomplete - repair the library folders in Steam settings first.",
+    "steamInfo": "Steam Environment",
+    "installPath": "Steam Install Path",
+    "steamService": "Launcher Service (steamservice.exe)",
+    "serviceExists": "Present",
+    "serviceMissing": "Missing",
+    "steamStatus": "Steam Status",
+    "running": "Running",
+    "notRunning": "Not Running",
+    "steamRunningHint": "Steam is running; it will be closed and restarted during the fix",
+    "admin": "Administrator",
+    "isAdmin": "Granted",
+    "notAdmin": "Not granted",
+    "operations": "Actions",
+    "startRepair": "Start VAC Repair",
+    "repairing": "Repairing...",
+    "repairDone": "VAC repair completed",
+    "repairDoneDesc": "Steam services were repaired and Steam was restarted. Re-enter the game to verify.",
+    "repairFailed": "VAC repair failed",
+    "consoleTitle": "Execution Output",
+    "clear": "Clear output",
+    "consoleEmpty": "Output will appear here. Click \"Start VAC Repair\" to begin...",
+    "doneLine": "Repair process finished",
+    "firewallHint": "If \"Add firewall exception failed\" appears, disable \"Block all incoming connections\" (no exceptions) in Windows Firewall and repair again",
+    "closeSteamHint": "The fix closes and restarts Steam automatically - exit games and save progress first. A UAC prompt appears when not running as admin - click Allow"
   },
   "hiddenFeatures": {
     "title": "Windows Hidden Features",
@@ -1946,8 +1994,6 @@
       "homeHardwareModelDesc": "Show a brief summary of CPU/GPU/RAM/Motherboard/Storage on the homepage",
       "gameWinKeyLabel": "Win Key Disable Card",
       "gameWinKeyDesc": "Show the disable Win key while gaming card on the homepage",
-      "gameImeLockLabel": "Lock Input Method Card",
-      "gameImeLockDesc": "Show the lock input method while gaming card on the homepage",
       "gameModeLabel": "Game Mode",
       "gameModeDesc": "Show the game mode switcher in the title bar to toggle Default/Regular/Competitive suppression with one click",
       "randomImageLabel": "Random Image",
@@ -1964,6 +2010,8 @@
       "feedbackDesc": "Show the feedback card on the home page",
       "qqGroupCardLabel": "QQ Groups",
       "qqGroupCardDesc": "Show the QQ group card on the home page",
+      "docsCardLabel": "Documentation",
+      "docsCardDesc": "Show the documentation card on the home page",
       "splash": "Animation",
       "splashLogoLabel": "Splash Logo",
       "splashLogoDesc": "Customize the logo image shown during startup",
@@ -2852,7 +2900,7 @@
     "recycleBinError": "Failed to empty recycle bin",
     "adminRequired": "Admin Required",
     "tabQuick": "Quick Clean",
-    "tabJunk": "Junk Clean",
+    "tabJunk": "Deep Clean",
     "tabBigFiles": "Large Files",
     "risk1": "Safe",
     "risk2": "Low Risk",
@@ -2860,19 +2908,30 @@
     "risk4": "High Risk",
     "risk5": "Critical",
     "junkFileTotal": "Junk Files",
-    "junkScanning": "Scanning junk files...",
+    "junkScanning": "Deep scanning...",
     "junkCleanButton": "Clean Selected",
     "junkCleaning": "Cleaning...",
     "junkNoSelection": "Please select categories to clean",
     "junkCleanSuccess": "Cleanup complete, freed {{size}}",
-    "junkCleanFailed": "{{count}} files failed to clean",
+    "junkCleanFailed": "{{count}} targets failed to clean",
     "junkRebootPending": "{{count}} files will be deleted after reboot",
     "junkFiles": "{{count}} files",
-    "junkViewFiles": "View Files",
+    "junkViewFiles": "View Items",
     "junkHideFiles": "Collapse",
-    "junkEmpty": "No junk files found. Click \"Scan Junk\" to start.",
-    "junkScanButton": "Scan Junk",
+    "junkEmpty": "No junk files found. Click \"Scan\" to start.",
+    "junkScanButton": "Scan",
     "junkLoadMore": "Load More ({{count}})",
+    "registryItemLabel": "Registry Items",
+    "ruleDbTitle": "Junk Clean Rules",
+    "ruleDbInfo": "Version {{version}} · {{count}} rules · {{source}}",
+    "ruleDbSourceBundled": "Bundled",
+    "ruleDbSourceUpdated": "Online",
+    "ruleDbFetching": "Fetching rule database info...",
+    "ruleDbUpdateButton": "Update Rules",
+    "ruleDbUpdating": "Updating...",
+    "ruleDbUpdated": "Rule database updated to version {{version}}",
+    "ruleDbLatest": "Rule database is up to date",
+    "ruleDbUpdateFailed": "Failed to update rule database",
     "bigDrive": "Select Drive",
     "bigTopN": "Scan Count",
     "bigScanButton": "Start Scan",

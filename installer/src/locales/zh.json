@@ -3,6 +3,13 @@
   "app_name": "新境盒",
   "app_description": "为现代玩家打造的游戏工具箱",
 
+  "quick_install": "快速安装",
+  "custom_install": "自定义安装",
+  "upgrade": "更新",
+  "agree_prefix": "我已阅读并同意",
+  "agree_terms_name": "《用户协议》",
+  "close": "关闭",
+
   "step_welcome": "欢迎",
   "step_license": "许可协议",
   "step_directory": "安装位置",

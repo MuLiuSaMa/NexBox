@@ -339,7 +339,7 @@ pub async fn set_crosshair_hold_delay(app: tauri::AppHandle, delay_ms: u32) -> R
     Ok(())
 }
 
-/// Windows 低层钩子实现（模板：game_ime_lock.rs）
+/// Windows 低层钩子实现
 #[cfg(target_os = "windows")]
 mod win_hooks {
     use super::*;

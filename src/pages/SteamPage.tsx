@@ -33,7 +33,7 @@ import {
   Portal,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, memo, useDeferredValue } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
@@ -53,6 +53,10 @@ import {
   LuChevronDown,
   LuChevronUp,
   LuCircleUser,
+  LuLibrary,
+  LuClock3,
+  LuDownload,
+  LuCloudDownload,
 } from "react-icons/lu";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -116,6 +120,39 @@ interface SteamAllData {
   users: SteamUser[];
   libraries: SteamLibrary[];
   games: SteamGame[];
+}
+
+interface SteamInventoryGame {
+  app_id: number;
+  name: string;
+  installed: boolean;
+  playtime_minutes: number;
+  last_played: number;
+  size_on_disk: number;
+  install_dir: string;
+  library_path: string;
+}
+
+interface SteamInventoryStats {
+  total: number;
+  installed: number;
+  not_installed: number;
+  total_playtime_minutes: number;
+}
+
+interface SteamInventoryUser {
+  steam_id64: string;
+  account_name: string;
+  persona_name: string;
+}
+
+interface SteamInventoryData {
+  source: "online" | "cache" | "none";
+  steam_running: boolean;
+  current_user: SteamInventoryUser | null;
+  stats: SteamInventoryStats;
+  games: SteamInventoryGame[];
+  error: string | null;
 }
 
 // ======================== 工具函数 ========================
@@ -572,6 +609,121 @@ const GameCard = memo(function GameCard({
   );
 });
 
+const InventoryGameCard = memo(function InventoryGameCard({
+  game,
+  isLaunching,
+  onLaunch,
+  onInstall,
+  onStorePage,
+}: {
+  game: SteamInventoryGame;
+  isLaunching: boolean;
+  onLaunch: (appId: number) => void;
+  onInstall: (appId: number) => void;
+  onStorePage: (appId: number) => void;
+}) {
+  const { t } = useTranslation();
+  const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
+  const { colorMode } = useColorMode();
+  const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const cardBg = useColorModeValue("white", "#1a1a1a");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const activeColor = getActiveColor();
+
+  const cardContent = (
+    <>
+      <Box position="relative">
+        <GameCover appId={game.app_id} name={game.name} />
+        <Badge
+          position="absolute"
+          top={2}
+          right={2}
+          colorScheme={game.installed ? "green" : "gray"}
+          variant="solid"
+          fontSize="2xs"
+          zIndex={1}
+        >
+          {game.installed ? t("steam.installedBadge") : t("steam.notInstalledBadge")}
+        </Badge>
+      </Box>
+
+      <Box p={3}>
+        <VStack spacing={1.5} align="stretch">
+          <HStack justify="space-between" fontSize="2xs" color={subTextColor}>
+            <Text noOfLines={1}>AppID: {game.app_id}</Text>
+            {game.size_on_disk > 0 && <Text>{formatSize(game.size_on_disk)}</Text>}
+          </HStack>
+          {/* 游玩时长/最近游玩行：固定行高，无数据时也占据空间，保证卡片高度一致 */}
+          <Text
+            fontSize="2xs"
+            color={subTextColor}
+            noOfLines={1}
+            h="16px"
+            lineHeight="16px"
+            overflow="hidden"
+          >
+            {game.playtime_minutes > 0 ? formatPlaytime(game.playtime_minutes) : ""}
+            {game.playtime_minutes > 0 && game.last_played > 0 ? " · " : ""}
+            {game.last_played > 0
+              ? `${t("steam.lastPlayed")} ${formatLastPlayed(game.last_played)}`
+              : ""}
+          </Text>
+
+          <HStack spacing={1.5} mt={1}>
+            <Button
+              size="xs"
+              style={{ backgroundColor: activeColor, borderColor: activeColor }}
+              color="white"
+              leftIcon={game.installed ? <LuPlay size={12} /> : <LuDownload size={12} />}
+              borderRadius="lg"
+              flex={1}
+              isLoading={isLaunching}
+              loadingText={t("steam.launching")}
+              spinnerPlacement="start"
+              _hover={{ opacity: 0.85 }}
+              onClick={() => (game.installed ? onLaunch(game.app_id) : onInstall(game.app_id))}
+            >
+              {game.installed ? t("steam.launch") : t("steam.install")}
+            </Button>
+            <IconButton
+              aria-label={t("steam.storePage")}
+              icon={<LuExternalLink size={14} />}
+              size="xs"
+              variant="outline"
+              borderRadius="lg"
+              onClick={() => onStorePage(game.app_id)}
+            />
+          </HStack>
+        </VStack>
+      </Box>
+    </>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <LiquidGlassCard overflow="visible" transition="all 0.2s">
+        {cardContent}
+      </LiquidGlassCard>
+    );
+  }
+
+  return (
+    <Box
+      bg={cardBg}
+      border="1px solid"
+      borderColor={borderColor}
+      borderRadius="xl"
+      overflow="visible"
+      transition="all 0.2s"
+      _hover={{ borderColor: activeColor, boxShadow: "lg" }}
+    >
+      {cardContent}
+    </Box>
+  );
+});
+
 function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCount: number; gameSize: number }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
@@ -660,6 +812,13 @@ export default function SteamPage() {
   const [launchingSteam, setLaunchingSteam] = useState(false);
   const [showLibraries, setShowLibraries] = useState(true);
   const [showUsers, setShowUsers] = useState(true);
+  const [inventory, setInventory] = useState<SteamInventoryData | null>(null);
+  const [loadingInventory, setLoadingInventory] = useState(false);
+  const [showInventory, setShowInventory] = useState(true);
+  // 库存分页加载数量：默认只渲染前 120 张卡片，按「加载更多」递增，避免大库存一次渲染过重导致卡顿
+  const [visibleCount, setVisibleCount] = useState(120);
+  // 延迟值：搜索输入即时响应，列表过滤/渲染延后执行，输入上千条库存时避免每次按键都重算
+  const deferredSearch = useDeferredValue(searchText);
 
   const [uninstallTarget, setUninstallTarget] = useState<{ appId: number; name: string } | null>(null);
   const { isOpen: isUninstallOpen, onOpen: onUninstallOpen, onClose: onUninstallClose } = useDisclosure();
@@ -726,9 +885,22 @@ export default function SteamPage() {
     }
   }, [t, toast]);
 
+  const fetchInventory = useCallback(async (forceOnline: boolean) => {
+    setLoadingInventory(true);
+    try {
+      const result = await invoke<SteamInventoryData>("get_steam_inventory", { forceOnline });
+      setInventory(result);
+    } catch (err) {
+      console.error("Failed to fetch Steam inventory:", err);
+    } finally {
+      setLoadingInventory(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchInventory(false);
+  }, [fetchData, fetchInventory]);
 
   const filteredGames = useMemo(() => {
     if (!data?.games) return [];
@@ -780,6 +952,26 @@ export default function SteamPage() {
     }
     return groups;
   }, [data, filteredGames, t]);
+
+  // 库存游戏过滤（共用顶部搜索框，用延迟值避免大列表频繁重算）
+  const filteredInventory = useMemo(() => {
+    if (!inventory?.games) return [];
+    if (!deferredSearch.trim()) return inventory.games;
+    const lower = deferredSearch.toLowerCase();
+    return inventory.games.filter(
+      (g) => g.name.toLowerCase().includes(lower) || g.app_id.toString().includes(lower)
+    );
+  }, [inventory?.games, deferredSearch]);
+
+  // 库存按可见数量渲染（默认 120，点「加载更多」递增）
+  const inventoryGamesShown = useMemo(() => {
+    return filteredInventory.slice(0, visibleCount);
+  }, [filteredInventory, visibleCount]);
+
+  // 搜索词变化时重置分页
+  useEffect(() => {
+    setVisibleCount(120);
+  }, [deferredSearch]);
 
   // 直接按路径匹配计算每个库的游戏统计
   const getLibraryStats = useCallback((libPath: string) => {
@@ -841,6 +1033,15 @@ export default function SteamPage() {
       toast({ title: String(err), status: "error", duration: 2000, isClosable: true });
     }
   }, [toast]);
+
+  const handleInstall = useCallback(async (appId: number) => {
+    try {
+      await invoke("install_steam_game", { appId });
+      toast({ title: t("steam.installSent"), status: "info", duration: 2000, isClosable: true });
+    } catch (err) {
+      toast({ title: String(err), status: "error", duration: 2000, isClosable: true });
+    }
+  }, [toast, t]);
 
   const handleSwitchAccount = useCallback(async (accountName: string) => {
     setSwitchingAccount(accountName);
@@ -998,7 +1199,7 @@ export default function SteamPage() {
             size="sm"
             variant="outline"
             borderRadius="lg"
-            onClick={fetchData}
+            onClick={() => { fetchData(); fetchInventory(false); }}
             isLoading={loading}
           />
         </HStack>
@@ -1128,6 +1329,92 @@ export default function SteamPage() {
                   )}
                 </VStack>
               </Box>
+            )}
+          </Collapse>
+        </Box>
+      )}
+
+      {/* 库存游戏 - 可折叠区块（Steam 运行中在线获取账号库存，否则读本地缓存） */}
+      {inventory && (
+        <Box mb={6}>
+          <HStack
+            justify="space-between"
+            cursor="pointer"
+            onClick={() => setShowInventory(!showInventory)}
+            mb={showInventory ? 3 : 0}
+          >
+            <HStack spacing={2}>
+              <Box color={activeColor}><LuLibrary size={18} /></Box>
+              <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
+                {t("steam.inventoryGames")}
+              </Text>
+              <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+                {inventory.stats.total}
+              </Badge>
+              <Badge colorScheme="orange" variant="subtle" borderRadius="full">
+                {t("steam.inventorySourceCache")}
+              </Badge>
+              {loadingInventory && <Spinner size="sm" color={activeColor} thickness="2px" speed="0.8s" />}
+            </HStack>
+            <IconButton
+              aria-label="toggle"
+              icon={showInventory ? <LuChevronUp size={16} /> : <LuChevronDown size={16} />}
+              size="sm"
+              variant="ghost"
+            />
+          </HStack>
+          <Collapse in={showInventory}>
+            {inventory.current_user && (
+              <HStack spacing={4} mb={4} flexWrap="wrap">
+                <StatCard
+                  icon={<LuCircleUser size={16} />}
+                  label={t("steam.currentAccount")}
+                  value={inventory.current_user.persona_name || inventory.current_user.account_name}
+                />
+                <StatCard icon={<LuLibrary size={16} />} label={t("steam.inventoryTotal")} value={inventory.stats.total} />
+                <StatCard icon={<LuCircleDot size={16} />} label={t("steam.inventoryInstalledCount")} value={inventory.stats.installed} />
+                <StatCard icon={<LuCircle size={16} />} label={t("steam.inventoryNotInstalledCount")} value={inventory.stats.not_installed} />
+                <StatCard
+                  icon={<LuClock3 size={16} />}
+                  label={t("steam.totalPlaytime")}
+                  value={formatPlaytime(inventory.stats.total_playtime_minutes) || "0"}
+                />
+              </HStack>
+            )}
+            {inventoryGamesShown.length === 0 ? (
+              <VStack py={16} spacing={3}>
+                <LuLibrary size={40} color={subTextColor} />
+                <Text color={subTextColor} fontSize="md">
+                  {searchText ? t("steam.noSearchResults") : t("steam.inventoryEmpty")}
+                </Text>
+              </VStack>
+            ) : (
+              <>
+                <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5 }} spacing={4}>
+                  {inventoryGamesShown.map((game) => (
+                    <InventoryGameCard
+                      key={game.app_id}
+                      game={game}
+                      isLaunching={launchingAppId === game.app_id}
+                      onLaunch={handleLaunch}
+                      onInstall={handleInstall}
+                      onStorePage={handleStorePage}
+                    />
+                  ))}
+                </SimpleGrid>
+                {filteredInventory.length > visibleCount && (
+                  <VStack mt={4} align="center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      borderRadius="lg"
+                      onClick={() => setVisibleCount((c) => c + 120)}
+                    >
+                      {t("steam.loadMore")} ({filteredInventory.length - visibleCount})
+                    </Button>
+                  </VStack>
+                )}
+              </>
             )}
           </Collapse>
         </Box>

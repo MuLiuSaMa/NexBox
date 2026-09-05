@@ -177,7 +177,7 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
     //
     // PROCESSOR_RELATIONSHIP (从 entry+8 开始):
     //   +0  Flags           BYTE   (1)
-    //   +1  EfficiencyClass BYTE   (1)  (未使用，改用线程数判定)
+    //   +1  EfficiencyClass BYTE   (1)  (用于区分 P/E 核：值越高 = P 核)
     //   +2  Reserved        BYTE[20] (20)
     //   +22 GroupCount      WORD   (2)
     //   +24 GroupMask[]     GROUP_AFFINITY[] (每个 16 bytes)
@@ -189,9 +189,10 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
     //   Total: 16 bytes
 
     let mut physical_cores: Vec<PhysicalCore> = Vec::new();
+    let mut efficiency_classes: Vec<u8> = Vec::new(); // 与 physical_cores 下标对齐
     let mut total_logical: u32 = 0;
     let mut system_mask: u64 = 0;
-    let mut has_efficiency = false;
+    let mut max_class: u8 = 0;
 
     let mut offset = 0usize;
     while offset + 8 <= buf.len() {
@@ -205,6 +206,15 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
         // 只处理 RelationProcessorCore (0)
         if rel == 0 {
             let p = offset + 8; // union 起点
+
+            // EfficiencyClass（BYTE @ +1）：值越高 = 性能越强（P 核），越低 = 越能效（E 核）。
+            // 这是区分 P/E 核的可靠信号（见 PROCESSOR_RELATIONSHIP 官方文档）。
+            // 不能再用「线程数」判定——Arrow Lake 及以后的 Core Ultra 取消超线程，
+            // P 核与 E 核都只有 1 个线程，按线程数会把所有核心误判为 E 核。
+            let efficiency_class = buf[p + 1];
+            if efficiency_class > max_class {
+                max_class = efficiency_class;
+            }
 
             let group_count = read_u16(buf, p + 22) as usize;
 
@@ -230,21 +240,14 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
                 }
             }
 
-            // 核心类型判定：根据逻辑处理器（线程）数量
-            //   P-cores (Performance) 支持超线程 → 2个逻辑处理器
-            //   E-cores (Efficiency)   不支持超线程 → 1个逻辑处理器
-            let core_type = match logical_processors.len() {
-                2 => CoreType::Performance,
-                1 => { has_efficiency = true; CoreType::Efficiency },
-                _ => CoreType::Unknown,
-            };
-
             total_logical += logical_processors.len() as u32;
             system_mask |= core_mask;
 
+            efficiency_classes.push(efficiency_class);
+            // 核心类型在循环结束后按效率等级统一赋值
             physical_cores.push(PhysicalCore {
                 core_index: physical_cores.len() as u32,
-                core_type,
+                core_type: CoreType::Unknown,
                 logical_processors,
                 affinity_mask: core_mask,
             });
@@ -257,20 +260,64 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
         return Err("未能解析到任何物理核心信息".to_string());
     }
 
-    // 非混合架构（无 E核，如 AMD）: 所有 Unknown 核心视为 Performance 核心
-    if !has_efficiency {
-        for core in &mut physical_cores {
-            if core.core_type == CoreType::Unknown {
-                core.core_type = CoreType::Performance;
-            }
+    // ── 核心类型判定（基于 EfficiencyClass）──────────────────
+    // 官方语义：EfficiencyClass 值越高 = 性能越强（P 核），越低 = 越能效（E 核）。
+    // 混合 CPU（Intel Alder Lake 及以后）存在多个效率等级：最高等级 = P 核，其余 = E 核
+    // （Arrow Lake 的低功耗 E 核也归为 E 核）。
+    // 非混合 CPU（AMD / 旧 Intel）所有核心效率等级一致 → 全部视为性能核。
+    let distinct_classes: std::collections::BTreeSet<u8> =
+        efficiency_classes.iter().copied().collect();
+
+    // 次级兜底：老 Windows 10 在混合 CPU 上可能未正确上报 EfficiencyClass（全为 0），
+    // 此时若线程数出现混合（部分 2 线程、部分 1 线程），退回「线程数」启发式识别 P/E。
+    let has_smt_mix = physical_cores.iter().any(|c| c.logical_processors.len() == 2)
+        && physical_cores.iter().any(|c| c.logical_processors.len() == 1);
+
+    let has_hybrid = distinct_classes.len() > 1 || has_smt_mix;
+
+    for (core, &class) in physical_cores.iter_mut().zip(&efficiency_classes) {
+        if distinct_classes.len() > 1 {
+            // EfficiencyClass 是权威信号：最高效率等级 = P 核，其余 = E 核
+            core.core_type = if class == max_class {
+                CoreType::Performance
+            } else {
+                CoreType::Efficiency
+            };
+        } else if has_smt_mix {
+            // 按线程数启发式：2 线程（超线程）= P 核，1 线程 = E 核
+            core.core_type = if core.logical_processors.len() == 2 {
+                CoreType::Performance
+            } else {
+                CoreType::Efficiency
+            };
+        } else {
+            core.core_type = CoreType::Performance;
         }
     }
+
+    let p_count = physical_cores
+        .iter()
+        .filter(|c| c.core_type == CoreType::Performance)
+        .count();
+    let e_count = physical_cores
+        .iter()
+        .filter(|c| c.core_type == CoreType::Efficiency)
+        .count();
+    log::info!(
+        "[CPU拓扑] {} | 物理核 {} | P核 {} | E核 {} | 混合架构: {} | 效率等级: {:?}",
+        cpu_name,
+        physical_cores.len(),
+        p_count,
+        e_count,
+        has_hybrid,
+        distinct_classes
+    );
 
     Ok(CpuTopology {
         cpu_name,
         total_physical_cores: physical_cores.len() as u32,
         total_logical_processors: total_logical,
-        has_hybrid_architecture: has_efficiency,
+        has_hybrid_architecture: has_hybrid,
         physical_cores,
         system_affinity_mask: system_mask,
     })

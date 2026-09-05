@@ -1588,6 +1588,28 @@ pub async fn uninstall_steam_game(app_id: u32) -> Result<(), String> {
     Ok(())
 }
 
+/// 安装 Steam 游戏（通过 Steam 协议，未安装的库存游戏点击「安装」时调用）
+#[tauri::command]
+pub async fn install_steam_game(app_id: u32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        let url = format!("steam://install/{}", app_id);
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &url])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| format!("安装请求失败: {}", e))?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app_id;
+        return Err("Not supported on this platform".into());
+    }
+    Ok(())
+}
+
 /// 格式化文件大小（供前端调用）
 #[tauri::command]
 pub async fn format_file_size(bytes: u64) -> String {
@@ -1709,4 +1731,458 @@ pub async fn get_library_disk_info() -> Vec<LibraryDiskInfo> {
         });
     }
     result
+}
+
+// ======================== 库存游戏（Steam GameList） ========================
+//
+// 参考 SteamTools 库存游戏插件的实现思路：
+// - Steam 运行时：以当前账号（注册表 ActiveUser / loginusers.vdf 最近登录）为准，
+//   优先在线获取该账号的完整库存（steamcommunity 游戏列表页，无需 API Key），本地缓存兜底。
+// - Steam 未运行：加载 Steam 本地缓存数据（.acf 已安装清单 + localconfig 游玩记录 + appinfo 目录）。
+
+/// 库存游戏条目
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamInventoryGame {
+    pub app_id: u32,
+    pub name: String,
+    /// 是否已安装到本地
+    pub installed: bool,
+    /// 游玩时长（分钟）
+    pub playtime_minutes: u64,
+    /// 最近游玩时间（unix 秒）
+    pub last_played: i64,
+    pub size_on_disk: u64,
+    pub install_dir: String,
+    pub library_path: String,
+}
+
+/// 库存游戏统计
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamInventoryStats {
+    pub total: usize,
+    pub installed: usize,
+    pub not_installed: usize,
+    pub total_playtime_minutes: u64,
+}
+
+/// 当前账号摘要
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamInventoryUser {
+    pub steam_id64: String,
+    pub account_name: String,
+    pub persona_name: String,
+}
+
+/// 库存游戏数据（get_steam_inventory 返回值）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamInventoryData {
+    /// 数据来源："online"（在线库存）| "cache"（本地缓存）| "none"（无 Steam）
+    pub source: String,
+    /// Steam 客户端是否正在运行
+    pub steam_running: bool,
+    pub current_user: Option<SteamInventoryUser>,
+    pub stats: SteamInventoryStats,
+    pub games: Vec<SteamInventoryGame>,
+    /// 在线获取失败时的提示（仅在线失败且回退本地缓存时非空）
+    pub error: Option<String>,
+}
+
+// ---------- 二进制 appinfo.vdf 解析（v40 / v41） ----------
+
+/// 二进制 VDF 值（仅保留库存需要的字段类型）
+#[derive(Debug, Clone)]
+enum BvdfValue {
+    Str(String),
+    Int(i64),
+    U64(u64),
+    Obj(Vec<(String, BvdfValue)>),
+}
+
+/// appinfo.vdf 读取器：支持 v41（key 为字符串表索引）与 v40（key 为内联字符串）
+struct BvdfReader<'a> {
+    data: &'a [u8],
+    pos: usize,
+    strtab: Option<&'a [String]>,
+}
+
+impl<'a> BvdfReader<'a> {
+    fn new(data: &'a [u8], strtab: Option<&'a [String]>) -> Self {
+        Self { data, pos: 0, strtab }
+    }
+
+    fn read_u32(&mut self) -> u32 {
+        if self.pos + 4 > self.data.len() {
+            return 0;
+        }
+        let v = u32::from_le_bytes([
+            self.data[self.pos],
+            self.data[self.pos + 1],
+            self.data[self.pos + 2],
+            self.data[self.pos + 3],
+        ]);
+        self.pos += 4;
+        v
+    }
+
+    fn read_u64(&mut self) -> u64 {
+        if self.pos + 8 > self.data.len() {
+            return 0;
+        }
+        let mut b = [0u8; 8];
+        b.copy_from_slice(&self.data[self.pos..self.pos + 8]);
+        self.pos += 8;
+        u64::from_le_bytes(b)
+    }
+
+    /// 读取 C 风格以 \0 结尾的字符串
+    fn read_cstr(&mut self) -> String {
+        let start = self.pos;
+        while self.pos < self.data.len() && self.data[self.pos] != 0 {
+            self.pos += 1;
+        }
+        let s = String::from_utf8_lossy(&self.data[start..self.pos]).to_string();
+        if self.pos < self.data.len() {
+            self.pos += 1;
+        }
+        s
+    }
+
+    /// 读取宽字符串（\0 结尾的 UTF-16LE）
+    fn read_wstr(&mut self) -> String {
+        let mut chars: Vec<u16> = Vec::new();
+        while self.pos + 1 < self.data.len() {
+            let c = u16::from_le_bytes([self.data[self.pos], self.data[self.pos + 1]]);
+            self.pos += 2;
+            if c == 0 {
+                break;
+            }
+            chars.push(c);
+        }
+        String::from_utf16_lossy(&chars)
+    }
+
+    /// 读取一个 key：v41 为字符串表索引（u32），v40 为内联字符串
+    fn read_key(&mut self) -> String {
+        if self.strtab.is_some() {
+            let idx = self.read_u32() as usize;
+            self.strtab
+                .and_then(|st| st.get(idx))
+                .cloned()
+                .unwrap_or_else(|| format!("<key@{idx}>"))
+        } else {
+            self.read_cstr()
+        }
+    }
+
+    /// 解析一段二进制 VDF（读到 type 8 结束）
+    fn parse(&mut self) -> BvdfValue {
+        let mut entries: Vec<(String, BvdfValue)> = Vec::new();
+        let mut guard = 0usize;
+        while self.pos < self.data.len() {
+            guard += 1;
+            if guard > 1_000_000 {
+                break;
+            }
+            let t = self.data[self.pos];
+            self.pos += 1;
+            if t == 8 {
+                break;
+            }
+            let key = self.read_key();
+            match t {
+                0 | 4 => {} // null / pointer：无数据
+                1 => entries.push((key, BvdfValue::Str(self.read_cstr()))),
+                2 => entries.push((key, BvdfValue::Int(self.read_u32() as i32 as i64))),
+                3 => {
+                    self.pos += 4; // float
+                }
+                5 => entries.push((key, BvdfValue::Str(self.read_wstr()))),
+                6 => {
+                    self.pos += 4; // color
+                }
+                7 | 9 => entries.push((key, BvdfValue::U64(self.read_u64()))),
+                _ => return BvdfValue::Obj(entries), // 未知类型，中止避免错位
+            }
+        }
+        BvdfValue::Obj(entries)
+    }
+}
+
+fn bvdf_find<'a>(v: &'a BvdfValue, key: &str) -> Option<&'a BvdfValue> {
+    if let BvdfValue::Obj(entries) = v {
+        for (k, val) in entries {
+            if k == key {
+                return Some(val);
+            }
+        }
+    }
+    None
+}
+
+fn bvdf_str(v: &BvdfValue) -> Option<String> {
+    match v {
+        BvdfValue::Str(s) => Some(s.clone()),
+        BvdfValue::Int(i) => Some(i.to_string()),
+        BvdfValue::U64(u) => Some(u.to_string()),
+        _ => None,
+    }
+}
+
+/// 解析 appinfo.vdf，返回 所有游戏的 (名称, 类型) 映射。
+/// 仅支持 v40(0x07564428) 与 v41(0x07564429)；旧版本返回空映射（容忍）。
+fn parse_appinfo_file(path: &str) -> std::collections::HashMap<u32, (String, String)> {
+    let mut result = std::collections::HashMap::new();
+    let data = match std::fs::read(path) {
+        Ok(d) => d,
+        Err(_) => return result,
+    };
+    if data.len() < 16 {
+        return result;
+    }
+    let mut r = BvdfReader::new(&data, None);
+    let magic = r.read_u32();
+    let _universe = r.read_u32();
+
+    let mut st: Vec<String> = Vec::new();
+    if magic == 0x0756_4429 {
+        // v41：头部还有字符串表偏移；条目 key 用字符串表索引
+        let st_off = r.read_u64() as usize;
+        if st_off + 4 <= data.len() {
+            let mut sr = BvdfReader::new(&data[st_off..], None);
+            let count = sr.read_u32() as usize;
+            st.reserve(count.min(1_000_000));
+            for _ in 0..count {
+                if sr.pos >= sr.data.len() {
+                    break;
+                }
+                st.push(sr.read_cstr());
+            }
+        }
+    } else if magic != 0x0756_4428 {
+        // 仅支持 v40/v41
+        return result;
+    }
+    let strtab: Option<&[String]> = if magic == 0x0756_4429 { Some(&st) } else { None };
+
+    loop {
+        // 条目结构：appid(u32), size(u32), infostate(u32), last_updated(u32),
+        // pics_token(u64), sha1(20), changenumber(u32), binary_sha1(20), binary_vdf(size-60)
+        if r.pos + 68 > data.len() {
+            break;
+        }
+        let appid = r.read_u32();
+        if appid == 0 {
+            break; // 文件 footer
+        }
+        let size = r.read_u32() as usize;
+        let entry_start = r.pos;
+        r.read_u32(); // infostate
+        r.read_u32(); // last_updated
+        r.read_u64(); // pics token
+        r.pos += 20; // sha1
+        r.read_u32(); // changenumber
+        r.pos += 20; // binary sha1
+
+        // 边界检查：binary vdf 长度为 size - 60（去掉后续 60 字节头字段）
+        let bvdflen = size.saturating_sub(60);
+        let vdf_end = r.pos + bvdflen;
+        if vdf_end > data.len() {
+            break;
+        }
+        let slice = &data[r.pos..vdf_end];
+        let mut br = BvdfReader::new(slice, strtab);
+        let v = br.parse();
+        extract_appinfo_fields(appid, &v, &mut result);
+        // 结构偏移推进到下一个条目
+        r.pos = entry_start + size;
+    }
+    result
+}
+
+fn extract_appinfo_fields(
+    appid: u32,
+    v: &BvdfValue,
+    result: &mut std::collections::HashMap<u32, (String, String)>,
+) {
+    // 名称/类型可能在根级（2026 客户端扁平布局），也可能在 common 子节点（旧布局）
+    let name = bvdf_find(v, "name")
+        .and_then(bvdf_str)
+        .or_else(|| bvdf_find(v, "common").and_then(|c| bvdf_find(c, "name")).and_then(bvdf_str))
+        .unwrap_or_default();
+    let typ = bvdf_find(v, "type")
+        .and_then(bvdf_str)
+        .or_else(|| bvdf_find(v, "common").and_then(|c| bvdf_find(c, "type")).and_then(bvdf_str))
+        .unwrap_or_default();
+    if !name.is_empty() || !typ.is_empty() {
+        result.insert(appid, (name, typ));
+    }
+}
+
+/// appinfo 解析结果缓存（按文件修改时间失效）
+static APPINFO_CACHE: std::sync::OnceLock<
+    std::sync::Mutex<Option<(std::time::SystemTime, std::collections::HashMap<u32, (String, String)>)>>,
+> = std::sync::OnceLock::new();
+
+/// 获取 appinfo 应用目录（带进程内缓存）
+fn load_appinfo_names(steam_dir: &str) -> std::collections::HashMap<u32, (String, String)> {
+    let path = format!("{steam_dir}\\appcache\\appinfo.vdf");
+    let mtime = std::fs::metadata(&path)
+        .and_then(|m| m.modified())
+        .ok();
+    let mut lock = APPINFO_CACHE
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+        .unwrap();
+    if let Some((t, map)) = &*lock {
+        if Some(*t) == mtime {
+            return map.clone();
+        }
+    }
+    let map = parse_appinfo_file(&path);
+    let t = mtime.unwrap_or_else(|| std::time::SystemTime::now());
+    *lock = Some((t, map.clone()));
+    map
+}
+
+// ---------- 库存合并与主命令 ----------
+
+/// 获取当前账号库存（纯本地缓存：.acf 已安装清单 + localconfig 游玩记录 + appinfo 目录）
+#[tauri::command]
+pub async fn get_steam_inventory() -> SteamInventoryData {
+    let install_path = get_steam_path();
+
+    let none_data = SteamInventoryData {
+        source: "none".to_string(),
+        steam_running: false,
+        current_user: None,
+        stats: SteamInventoryStats {
+            total: 0,
+            installed: 0,
+            not_installed: 0,
+            total_playtime_minutes: 0,
+        },
+        games: vec![],
+        error: None,
+    };
+
+    let steam_dir = match install_path {
+        Some(p) => p,
+        None => return none_data,
+    };
+    let steam_running = is_steam_running();
+
+    // 当前账号：loginusers.vdf 最近登录（运行中会用注册表 ActiveUser 校正）
+    let current_user = parse_login_users(&steam_dir, steam_running)
+        .into_iter()
+        .next()
+        .map(|u| SteamInventoryUser {
+            steam_id64: u.steam_id64,
+            account_name: u.account_name,
+            persona_name: u.persona_name,
+        });
+
+    // 本地数据：已安装清单 + 游玩记录
+    let libraries = parse_library_folders(&steam_dir);
+    let installed_games = scan_installed_games(&libraries);
+    let local_playtimes = parse_local_config_playtimes(&steam_dir);
+
+    // 合并容器（app_id -> 条目）
+    use std::collections::HashMap;
+    let mut merged: HashMap<u32, SteamInventoryGame> = HashMap::new();
+
+    // 1) 本地已安装：.acf 清单直接作为库存基础
+    for g in &installed_games {
+        let entry = merged.entry(g.app_id).or_insert(SteamInventoryGame {
+            app_id: g.app_id,
+            name: g.name.clone(),
+            installed: true,
+            playtime_minutes: g.playtime_minutes,
+            last_played: g.last_played,
+            size_on_disk: g.size_on_disk,
+            install_dir: g.install_dir.clone(),
+            library_path: g.library_path.clone(),
+        });
+        entry.installed = true;
+        if entry.name.is_empty() {
+            entry.name = g.name.clone();
+        }
+        entry.playtime_minutes = entry.playtime_minutes.max(g.playtime_minutes);
+        if g.last_played > entry.last_played {
+            entry.last_played = g.last_played;
+        }
+        entry.size_on_disk = g.size_on_disk;
+        if entry.install_dir.is_empty() {
+            entry.install_dir = g.install_dir.clone();
+        }
+        if entry.library_path.is_empty() {
+            entry.library_path = g.library_path.clone();
+        }
+    }
+
+    // 3) 本地游玩记录（localconfig）：补充游玩时长/最近游玩，未出现在列表中的也加入
+    for (appid, (playtime, last_played)) in &local_playtimes {
+        let entry = merged.entry(*appid).or_insert(SteamInventoryGame {
+            app_id: *appid,
+            name: String::new(),
+            installed: false,
+            playtime_minutes: 0,
+            last_played: 0,
+            size_on_disk: 0,
+            install_dir: String::new(),
+            library_path: String::new(),
+        });
+        entry.playtime_minutes = entry.playtime_minutes.max(*playtime);
+        if *last_played > entry.last_played {
+            entry.last_played = *last_played;
+        }
+    }
+
+    // 3) 名称为空的用 appinfo 目录补充，仍无则退化为 "App {id}"
+    let appinfo = load_appinfo_names(&steam_dir);
+    for (_id, g) in merged.iter_mut() {
+        if g.name.is_empty() {
+            if let Some((n, _)) = appinfo.get(&g.app_id) {
+                g.name = n.clone();
+            } else {
+                g.name = format!("App {}", g.app_id);
+            }
+        }
+    }
+
+    // 统计与排序（最近游玩优先）
+    let total = merged.len();
+    let (installed, not_installed, total_playtime) = merged.values().fold(
+        (0usize, 0usize, 0u64),
+        |(i, ni, pt), g| {
+            (
+                i + if g.installed { 1 } else { 0 },
+                ni + if g.installed { 0 } else { 1 },
+                pt + g.playtime_minutes,
+            )
+        },
+    );
+
+    // 排序：已安装优先，其次最近游玩，再次游玩时长，最后按名称
+    let mut games: Vec<SteamInventoryGame> = merged.into_values().collect();
+    games.sort_by(|a, b| {
+        b.installed
+            .cmp(&a.installed)
+            .then(b.last_played.cmp(&a.last_played))
+            .then(b.playtime_minutes.cmp(&a.playtime_minutes))
+            .then(a.name.cmp(&b.name))
+    });
+
+    SteamInventoryData {
+        source: "cache".to_string(),
+        steam_running,
+        current_user,
+        stats: SteamInventoryStats {
+            total,
+            installed,
+            not_installed,
+            total_playtime_minutes: total_playtime,
+        },
+        games,
+        error: None,
+    }
 }

@@ -148,6 +148,12 @@ RyTuneX-main/
 # Third-party reference project (SteamTools source, not part of repo)
 SteamTools-develop/
 
+# Third-party reference project (downloaded tubatools source, not part of repo)
+tubatools-master/
+
+# Third-party reference project (downloaded Steam520 source, not part of repo)
+Steam520-main/
+
 # 根目录字体副本（与 public/fonts/ 下重复，仅提交 public/fonts 版本）
 NotoSerifSC-900.woff2
 

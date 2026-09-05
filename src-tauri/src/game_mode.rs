@@ -216,6 +216,37 @@ const CORE_SYSTEM_PROCESSES: &[&str] = &[
 /// 性能监控/叠加层：自身被压制会导致监控采样变慢、OSD 卡顿，永不压制
 const PERF_MONITOR_PROCESSES: &[&str] = &["msiafterburner", "rtss"];
 
+/// 录屏/直播软件（OBS 等）：被压制会导致录制卡顿、丢帧、直播流不稳，永不压制
+const RECORDING_PROCESSES: &[&str] = &[
+    // OBS Studio
+    "obs64", "obs32",
+    // Bandicam / Bandicut
+    "bdcam", "bdcut",
+    // Fraps
+    "fraps",
+    // Dxtory
+    "dxtory",
+    // ShareX
+    "sharex",
+    // Medal
+    "medal",
+    // Camtasia
+    "camtasia", "camtasiastudio",
+];
+
+/// 录屏/直播软件兜底关键词（前缀/包含匹配，覆盖多进程家族与第三方 OBS 构建）
+const RECORDING_KEYWORDS: &[&str] = &[
+    // OBS 内置浏览器等子进程
+    "obs-browser",
+    // Xbox Game Bar / GameDVR（GameBar*.exe、AppBar.exe 等多进程）
+    "gamebar", "appbar",
+    // 其他主流录屏/直播
+    "bandicam", "bandicut", "fraps", "dxtory", "sharex", "camtasia",
+    "mirillis", "shadowplay", "streamlabs", "screencast", "screenrec", "medal",
+    // 直播伴侣 / Bilibili 直播姬 / 斗鱼虎牙等直播工具
+    "livepartner", "livehime", "douyu", "huya", "直播",
+];
+
 const INPUT_AUDIO_KEYWORDS: &[&str] = &[
     "keyboard", "mouse", "hotkey", "keymap", "macro", "autohotkey", "hid", "input", "ime",
     "pinyin", "qqpy", "sogou", "sgtool", "wetype", "iflyime", "wubi", "audio", "sound", "voice",
@@ -309,6 +340,14 @@ fn is_core_system(name: &str) -> bool {
 fn is_perf_monitor(name: &str) -> bool {
     let low = strip_exe_suffix(name).to_ascii_lowercase();
     PERF_MONITOR_PROCESSES.iter().any(|&s| low == s)
+}
+
+fn is_recording_software(name: &str) -> bool {
+    let low = strip_exe_suffix(name).to_ascii_lowercase();
+    if RECORDING_PROCESSES.iter().any(|&s| low == s) {
+        return true;
+    }
+    RECORDING_KEYWORDS.iter().any(|&k| low.contains(k))
 }
 
 fn is_input_audio(name: &str) -> bool {
@@ -598,7 +637,7 @@ fn sweep_loop(app: tauri::AppHandle, generation: u64) {
             }
             if is_anticheat(&name) || is_core_system(&name) || is_input_audio(&name)
                 || is_platform_shell(&name) || is_perf_monitor(&name) || is_net_accelerator(&name)
-                || is_oem_console(&name)
+                || is_oem_console(&name) || is_recording_software(&name)
             {
                 continue;
             }

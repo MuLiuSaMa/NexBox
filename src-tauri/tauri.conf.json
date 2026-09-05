@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "9.4.0",
+  "version": "9.5.2",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -93,7 +93,6 @@
       "../aq_registry_restore/*",
       "resources/binaries/fxvad/*",
       "resources/binaries/fxvad/presets/*",
-      "resources/binaries/PresentMon-2.5.1-x64.exe",
       "resources/binaries/icc-tools/*",
       "resources/binaries/PawnIO_setup.exe",
       "resources/crosshair-presets/*",

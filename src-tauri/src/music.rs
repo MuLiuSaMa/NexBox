@@ -33,6 +33,8 @@ pub struct LocalSongInfo {
     pub cover_path: String,
     /// 封面来源："embedded" 内嵌 / "folder" 同目录图片 / "none" 无
     pub cover_source: String,
+    /// 是否存在同目录的同名歌词文件（.lrc 优先，回退 .txt）
+    pub has_lyric: bool,
 }
 
 /// 封面缓存目录：应用缓存目录下的 covers 子目录
@@ -429,6 +431,8 @@ fn build_local_song_info(
         duration_ms,
         cover_path,
         cover_source,
+        // 是否存在同目录同名歌词文件（.lrc 优先，回退 .txt）
+        has_lyric: find_local_lyric_path(path).is_some(),
     })
 }
 
@@ -532,30 +536,30 @@ pub async fn import_local_music_folder(app: AppHandle, folder: String) -> Result
     import_local_music(app, paths).await
 }
 
+/// 查找与音频同目录的同名歌词文件：.lrc 优先，回退 .txt。
+/// 返回命中的歌词文件路径；未找到返回 None。
+fn find_local_lyric_path(audio_path: &Path) -> Option<PathBuf> {
+    let dir = audio_path.parent()?;
+    let stem = audio_path.file_stem()?.to_str()?;
+    for ext in ["lrc", "txt"] {
+        let candidate = dir.join(format!("{stem}.{ext}"));
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 /// 读取本地音频文件同目录的同名 .lrc 歌词文件。
 /// 优先级：同名 .lrc → 同名 .txt（文本歌词）。
 /// 返回原始歌词文本，若不存在返回空字符串。
 #[tauri::command]
 pub async fn get_local_lyric(path: String) -> Result<String, String> {
     let audio_path = std::path::Path::new(&path);
-    let dir = audio_path.parent().ok_or_else(|| "无法解析路径".to_string())?;
-    let stem = audio_path
-        .file_stem()
-        .and_then(|v| v.to_str())
-        .unwrap_or_default();
-
-    // 尝试 .lrc 和 .txt
-    for ext in ["lrc", "txt"] {
-        let candidate = dir.join(format!("{stem}.{ext}"));
-        if candidate.is_file() {
-            match std::fs::read_to_string(&candidate) {
-                Ok(text) if !text.trim().is_empty() => return Ok(text),
-                _ => continue,
-            }
-        }
-    }
-
-    Ok(String::new())
+    let Some(candidate) = find_local_lyric_path(audio_path) else {
+        return Ok(String::new());
+    };
+    Ok(std::fs::read_to_string(&candidate).unwrap_or_default())
 }
 
 /// 封面自愈检查请求项：id 为歌曲唯一标识（决定缓存文件名），path 为音频绝对路径，

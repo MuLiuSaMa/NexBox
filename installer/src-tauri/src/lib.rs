@@ -9,6 +9,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             get_default_install_path,
+            is_existing_install,
             check_disk_space,
             get_resource_files,
             install,

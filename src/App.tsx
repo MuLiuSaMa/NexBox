@@ -56,6 +56,7 @@ import CpuSchedulerPage from "./pages/CpuSchedulerPage";
 import SpeedTestPage from "./pages/SpeedTestPage";
 import CustomPage from "./pages/CustomPage";
 import NvidiaRecordingPage from "./pages/NvidiaRecordingPage";
+import VacRepairPage from "./pages/VacRepairPage";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -503,6 +504,14 @@ function App() {
                       </AnimatedPage>
                     }
                   />
+                  <Route
+                    path="/vac-repair"
+                    element={
+                      <AnimatedPage>
+                        <VacRepairPage />
+                      </AnimatedPage>
+                    }
+                  />
                 </Routes>
               </AnimatePresence>
             ) : (
@@ -856,6 +865,14 @@ function App() {
                   element={
                     <AnimatedPage>
                       <NvidiaRecordingPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/vac-repair"
+                  element={
+                    <AnimatedPage>
+                      <VacRepairPage />
                     </AnimatedPage>
                   }
                 />

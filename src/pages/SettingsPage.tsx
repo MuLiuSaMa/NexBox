@@ -197,11 +197,11 @@ function GeneralSettings() {
   const [gameLauncherEnabled, setGameLauncherEnabled] = useState(true);
   const [homeHardwareModelEnabled, setHomeHardwareModelEnabled] = useState(true);
   const [gameWinKeyCardEnabled, setGameWinKeyCardEnabled] = useState(true);
-  const [gameImeLockCardEnabled, setGameImeLockCardEnabled] = useState(true);
   const [gameModeEnabled, setGameModeEnabled] = useState(true);
   const [searchBarEnabled, setSearchBarEnabled] = useState(true);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [qqGroupCardEnabled, setQqGroupCardEnabled] = useState(true);
+  const [docsCardEnabled, setDocsCardEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
   const [moodCardEnabled, setMoodCardEnabled] = useState(true);
   const [homeUsername, setHomeUsername] = useState("");
@@ -347,15 +347,6 @@ function GeneralSettings() {
         if (ls !== null) setGameWinKeyCardEnabled(ls === "true");
       }
 
-      // 游戏时锁定输入法卡片显示（store 持久化，默认显示）
-      v = await store.get<boolean>("nexbox_game_ime_lock_card_enabled");
-      if (v !== null && v !== undefined) {
-        setGameImeLockCardEnabled(v);
-      } else {
-        const ls = localStorage.getItem("nexbox_game_ime_lock_card_enabled");
-        if (ls !== null) setGameImeLockCardEnabled(ls === "true");
-      }
-
       // 游戏模式（顶栏切换条）显示开关（store 持久化，默认显示）
       v = await store.get<boolean>("nexbox_game_mode_enabled");
       if (v !== null && v !== undefined) {
@@ -381,6 +372,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_qq_group_card_enabled");
         if (ls !== null) setQqGroupCardEnabled(ls === "true");
+      }
+
+      // 使用文档卡片
+      v = await store.get<boolean>("nexbox_docs_card_enabled");
+      if (v !== null && v !== undefined) {
+        setDocsCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_docs_card_enabled");
+        if (ls !== null) setDocsCardEnabled(ls === "true");
       }
 
       // 主页随机图片卡片显示（store 持久化，默认开启）
@@ -602,22 +602,6 @@ function GeneralSettings() {
     }
   };
 
-  const handleGameImeLockCardToggle = async () => {
-    const newValue = !gameImeLockCardEnabled;
-    setGameImeLockCardEnabled(newValue);
-    store.set("nexbox_game_ime_lock_card_enabled", newValue).then(() => store.save());
-    localStorage.setItem("nexbox_game_ime_lock_card_enabled", String(newValue));
-    window.dispatchEvent(new CustomEvent("game-ime-lock-card-setting-changed", { detail: newValue }));
-    // 卡片隐藏时功能同步关闭，保持显示与功能一致
-    if (!newValue) {
-      try {
-        await invoke("set_game_ime_lock_enabled", { enabled: false });
-      } catch {
-        // ignore
-      }
-    }
-  };
-
   const handleGameModeToggle = () => {
     const newValue = !gameModeEnabled;
     setGameModeEnabled(newValue);
@@ -662,6 +646,14 @@ function GeneralSettings() {
     store.set("nexbox_qq_group_card_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_qq_group_card_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("qq-group-card-setting-changed", { detail: newValue }));
+  };
+
+  const handleDocsCardToggle = () => {
+    const newValue = !docsCardEnabled;
+    setDocsCardEnabled(newValue);
+    store.set("nexbox_docs_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_docs_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("docs-card-setting-changed", { detail: newValue }));
   };
 
   const handleRandomImageToggle = () => {
@@ -1099,19 +1091,6 @@ function GeneralSettings() {
                 <HStack justify="space-between" py={2} minH="50px" align="center">
                   <Box flex={1}>
                     <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                      {t("settings.generalSettings.gameImeLockLabel")}
-                    </Text>
-                  </Box>
-                  <ThemeSwitch
-                    size="md"
-                    isChecked={gameImeLockCardEnabled}
-                    onChange={handleGameImeLockCardToggle}
-                  />
-                </HStack>
-                <Divider />
-                <HStack justify="space-between" py={2} minH="50px" align="center">
-                  <Box flex={1}>
-                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
                       {t("settings.generalSettings.homeHardwareModelLabel")}
                     </Text>
                   </Box>
@@ -1165,6 +1144,19 @@ function GeneralSettings() {
                     size="md"
                     isChecked={qqGroupCardEnabled}
                     onChange={handleQqGroupCardToggle}
+                  />
+                </HStack>
+                <Divider />
+                <HStack justify="space-between" py={2} minH="50px" align="center">
+                  <Box flex={1}>
+                    <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                      {t("settings.generalSettings.docsCardLabel")}
+                    </Text>
+                  </Box>
+                  <ThemeSwitch
+                    size="md"
+                    isChecked={docsCardEnabled}
+                    onChange={handleDocsCardToggle}
                   />
                 </HStack>
               </VStack>
@@ -2951,16 +2943,45 @@ function SponsorSettings() {
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
   const [sponsorsError, setSponsorsError] = useState(false);
 
+  // 赞助者列表可能很长（远程 sponsors.json），一次性渲染上百张卡片会阻塞主线程并导致滚动卡顿。
+  // 这里先渲染前一批，再按帧分批追加剩余条目。
+  const SPONSOR_CHUNK_SIZE = 24;
+
   useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     invoke<{ update_time: string; total_amount: string; list: SponsorItem[] }>(
       "get_sponsors",
     )
       .then((data) => {
-        setSponsors(data.list);
+        if (cancelled) return;
         setTotalAmount(data.total_amount ?? "");
+        const list = data.list ?? [];
+        setSponsors(list.slice(0, SPONSOR_CHUNK_SIZE));
+        setSponsorsLoading(false);
+        if (list.length > SPONSOR_CHUNK_SIZE) {
+          let done = SPONSOR_CHUNK_SIZE;
+          const step = () => {
+            if (cancelled) return;
+            done = Math.min(done + SPONSOR_CHUNK_SIZE, list.length);
+            setSponsors(list.slice(0, done));
+            if (done < list.length) {
+              timer = setTimeout(step, 33);
+            }
+          };
+          timer = setTimeout(step, 33);
+        }
       })
-      .catch(() => setSponsorsError(true))
-      .finally(() => setSponsorsLoading(false));
+      .catch(() => {
+        if (!cancelled) setSponsorsError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setSponsorsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   return (
@@ -3084,6 +3105,9 @@ function SponsorSettings() {
                 textAlign="center"
                 minW="140px"
                 flex="0 1 auto"
+                // 列表可能很长：content-visibility 让浏览器跳过视口外卡片的渲染/绘制，
+                // 只保留可见区的液态玻璃滤镜，滚动不卡且效果完整
+                sx={{ contentVisibility: "auto", containIntrinsicSize: "96px" }}
               >
                 <Text fontSize="md" fontWeight="medium" color={labelColor} mb={1}>
                   {sponsor.name}
@@ -3122,7 +3146,7 @@ function AboutSettings() {
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
 
-  const currentVersion = "9.4.0";
+  const currentVersion = "9.5.2";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

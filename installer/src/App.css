@@ -380,3 +380,142 @@ html, body, #root {
 .checkbox-label input:checked + .checkbox-mark::after {
   opacity: 1;
 }
+
+/* ── Mode Select Buttons ── */
+.mode-buttons {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  max-width: 340px;
+}
+
+.mode-btn {
+  flex: 1;
+  height: 42px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  background: #1a1a1a;
+  color: #ffffff;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mode-btn:hover:not(.disabled) {
+  background: #333;
+}
+
+.mode-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Agreement Row ── */
+.agree-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.agree-link {
+  color: #3b82f6;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  margin-left: 2px;
+}
+
+.agree-link:hover {
+  color: #2563eb;
+}
+
+/* ── License Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 660px;
+  height: 75%;
+  padding: 24px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+}
+
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.modal-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ── Install Carousel ── */
+.install-carousel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  width: 100%;
+  /* 底部预留空间，避免与贴底的进度条重叠 */
+  padding: 12px 0 72px;
+}
+
+.install-carousel img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+/* 进度条固定在安装页最底部（相对 .installer-content 定位） */
+.install-progress {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  padding-bottom: 14px;
+}
+
+.install-progress-text {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a202c;
+}

@@ -43,6 +43,7 @@ import {
   ShieldCheck,
   FlaskConical,
   Ban,
+  Swords,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -340,6 +341,14 @@ export const searchIndex: SearchItem[] = [
     icon: ShieldCheck,
     category: "builtin-tool",
     keywords: ["VT-X", "vt-x", "VTX", "虚拟化", "virtualization", "内存完整性", "内核隔离", "hypervisor", "hyper-v", "hyperv", "VBS", "HypervisorEnforcedCodeIntegrity", "弹窗", "反作弊", "安全中心"],
+  },
+  {
+    id: "vac-repair",
+    nameKey: "sidebar.vacRepair",
+    path: "/vac-repair",
+    icon: Swords,
+    category: "builtin-tool",
+    keywords: ["CS:GO", "CSGO", "CS2", "VAC", "反作弊", "steamservice", "Steam服务", "Steam 服务", "启动器", "修复", "vac修复", "vac 修复", "被封", "屏蔽"],
   },
   {
     id: "hidden-features",

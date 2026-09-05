@@ -27,9 +27,13 @@ export interface Song {
   // === 本地导入扩展字段 ===
   _localPath?: string;
   _localCoverPath?: string;
+  /** 是否存在同目录的歌词文件（.lrc/.txt），决定播放器是否显示歌词面板 */
+  _localHasLyric?: boolean;
 }
 
 export interface Artist {
+  /** 来源平台（netease/kugou/qqmusic/migu），搜索回填，供点击后按来源加载歌曲 */
+  provider?: string;
   id?: string;
   mid?: string;
   name: string;

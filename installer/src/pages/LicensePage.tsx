@@ -15,7 +15,7 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.3 }}
-      style={{ display: "flex", flexDirection: "column", flex: 1 }}
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
     >
       <h2 className="page-title">{t("license_title")}</h2>
       <p className="page-subtitle">{t("license_desc")}</p>

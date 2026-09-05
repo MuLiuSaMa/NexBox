@@ -42,11 +42,13 @@ pub enum JunkCategory {
     InstallerTemp,
     /// 剪贴板缓存
     ClipboardCache,
+    /// Winapp2 社区规则条目(携带条目名,由 deep_scan 专用引擎扫描)
+    Winapp2(String),
 }
 
 impl JunkCategory {
     /// 获取分类的中文显示名称
-    pub fn display_name(&self) -> &'static str {
+    pub fn display_name(&self) -> &str {
         match self {
             JunkCategory::WindowsTemp => "Windows临时文件",
             JunkCategory::SystemCache => "系统缓存",
@@ -65,11 +67,12 @@ impl JunkCategory {
             JunkCategory::WindowsErrorReports => "Windows错误报告",
             JunkCategory::InstallerTemp => "安装程序临时文件",
             JunkCategory::ClipboardCache => "剪贴板缓存",
+            JunkCategory::Winapp2(name) => name.as_str(),
         }
     }
 
     /// 获取分类的描述信息
-    pub fn description(&self) -> &'static str {
+    pub fn description(&self) -> &str {
         match self {
             JunkCategory::WindowsTemp => "系统和应用程序产生的临时文件，可安全删除",
             JunkCategory::SystemCache => "Windows系统预读取和分发缓存文件",
@@ -96,6 +99,7 @@ impl JunkCategory {
             JunkCategory::WindowsErrorReports => "系统和应用崩溃时生成的错误报告文件",
             JunkCategory::InstallerTemp => "软件安装过程中产生的临时文件",
             JunkCategory::ClipboardCache => "剪贴板历史记录缓存文件",
+            JunkCategory::Winapp2(_) => "来自 Winapp2 社区规则库的应用残留垃圾",
         }
     }
 
@@ -119,6 +123,8 @@ impl JunkCategory {
             JunkCategory::AppCache => 3,
             JunkCategory::MemoryDump => 3,
             JunkCategory::OldWindowsInstallation => 3,
+            // Winapp2 条目的风险由 deep_scan 依据 Default/Warning 覆盖为 2 或 3
+            JunkCategory::Winapp2(_) => 2,
         }
     }
 
@@ -288,6 +294,8 @@ impl JunkCategory {
                     "Users\\*\\AppData\\Local\\Microsoft\\Windows\\Explorer",
                 ),
             ],
+            // Winapp2 条目由 deep_scan 专用引擎扫描,不走静态路径配置
+            JunkCategory::Winapp2(_) => Vec::new(),
         }
     }
 
@@ -311,6 +319,7 @@ impl JunkCategory {
             JunkCategory::WindowsErrorReports => vec!["*"],
             JunkCategory::InstallerTemp => vec!["*"],
             JunkCategory::ClipboardCache => vec!["*"],
+            JunkCategory::Winapp2(_) => Vec::new(),
         }
     }
 

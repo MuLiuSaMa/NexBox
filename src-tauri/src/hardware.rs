@@ -1861,7 +1861,145 @@ pub fn is_nvidia_gpu() -> bool {
 
 #[tauri::command]
 pub fn get_os_version() -> Result<String, String> {
-    sysinfo::System::long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
+    long_os_version().ok_or_else(|| "无法获取操作系统版本".to_string())
+}
+
+/// 操作系统名称（如 "Windows 10 专业版" / "Windows 11 Pro"）。
+///
+/// 背景：旧实现直接用 `sysinfo::System::long_os_version()`，它只读取注册表
+/// `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProductName`。部分机器
+/// （Win7→Win10 升级、克隆/镜像恢复等）会残留旧的 ProductName（如 "Windows 7 ..."），
+/// 导致真实 Win10 被误识别为 Win7。
+///
+/// 修复思路：以 ntdll `RtlGetVersion` 返回的**真实内核版本**判定系统家族
+/// （该 API 读取内核信息，不受注册表残留影响），再用 ProductName 保留
+/// “专业版/旗舰版/Home/Pro”等版本后缀；家族不一致时以内核为准。
+pub(crate) fn long_os_version() -> Option<String> {
+    let product_name = read_product_name();
+
+    let Some((major, minor, build)) = kernel_version() else {
+        // 拿不到内核版本（理论上不会发生）时退回旧行为
+        return product_name;
+    };
+    let real_family = os_family_name(major, minor, build);
+
+    let Some(pn) = product_name else {
+        return Some(real_family);
+    };
+
+    // 服务器系统（Windows Server ...）在 Win10/11 内核上，直接用原名更准确
+    if pn.starts_with("Windows Server") {
+        return Some(pn);
+    }
+
+    // 注册表家族与真实内核一致：直接沿用原名，保留版本后缀
+    if pn.contains(&real_family) {
+        return Some(pn);
+    }
+
+    // Win11 的 ProductName 仍是 "Windows 10 xx"，按真实内核替换为 11
+    if real_family == "Windows 11" && pn.contains("Windows 10") {
+        return Some(pn.replacen("Windows 10", "Windows 11", 1));
+    }
+
+    // 家族不一致（残留旧 ProductName）：只保留原名里家族名之后的后缀，替换为真实家族
+    // 例如 "Windows 7 旗舰版" -> "Windows 10 旗舰版"
+    if let Some(idx) = pn.find("Windows") {
+        let suffix = strip_version_token(&pn[idx + "Windows".len()..]);
+        if suffix.is_empty() {
+            return Some(real_family);
+        }
+        return Some(format!("{real_family} {suffix}"));
+    }
+
+    Some(real_family)
+}
+
+/// 读取注册表 ProductName（如 "Windows 10 Pro"）。
+fn read_product_name() -> Option<String> {
+    use winreg::enums::HKEY_LOCAL_MACHINE;
+    use winreg::RegKey;
+
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    hklm.open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion")
+        .and_then(|key| key.get_value::<String, _>("ProductName"))
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
+/// 通过 ntdll RtlGetVersion 获取真实内核版本 (major, minor, build)。
+/// 与 GetVersionEx 不同，RtlGetVersion 不受应用兼容性清单影响，也不依赖注册表。
+fn kernel_version() -> Option<(u32, u32, u32)> {
+    #[repr(C)]
+    struct OsVersionInfoW {
+        os_version_info_size: u32,
+        major_version: u32,
+        minor_version: u32,
+        build_number: u32,
+        platform_id: u32,
+        csd_version: [u16; 128],
+    }
+
+    type PRtlGetVersion = unsafe extern "system" fn(*mut OsVersionInfoW) -> i32;
+
+    // ntdll 常驻系统，动态加载即可（与 feature_flags.rs 保持一致，避免静态链接隐患）
+    let lib = unsafe { libloading::Library::new("ntdll.dll") }.ok()?;
+    let rtl_get_version = unsafe { lib.get::<PRtlGetVersion>(b"RtlGetVersion") }.ok()?;
+
+    let mut info = OsVersionInfoW {
+        os_version_info_size: std::mem::size_of::<OsVersionInfoW>() as u32,
+        major_version: 0,
+        minor_version: 0,
+        build_number: 0,
+        platform_id: 0,
+        csd_version: [0; 128],
+    };
+
+    // 返回 NTSTATUS，STATUS_SUCCESS = 0
+    let status = unsafe { rtl_get_version(&mut info) };
+    if status != 0 {
+        return None;
+    }
+    Some((info.major_version, info.minor_version, info.build_number))
+}
+
+/// 内核版本 -> 系统家族名。
+fn os_family_name(major: u32, minor: u32, build: u32) -> String {
+    if major == 10 {
+        if build >= 22000 {
+            "Windows 11".to_string()
+        } else {
+            "Windows 10".to_string()
+        }
+    } else if major == 6 {
+        match minor {
+            3 => "Windows 8.1".to_string(),
+            2 => "Windows 8".to_string(),
+            1 => "Windows 7".to_string(),
+            0 => "Windows Vista".to_string(),
+            _ => format!("Windows {}.{}", major, minor),
+        }
+    } else if major == 5 && minor == 1 {
+        "Windows XP".to_string()
+    } else {
+        format!("Windows {}", major)
+    }
+}
+
+/// 去除 ProductName 中紧随 "Windows" 之后的旧版本号，如 " 7 旗舰版" -> "旗舰版"。
+fn strip_version_token(rest: &str) -> String {
+    let rest = rest.trim_start();
+    let bytes = rest.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
+        i += 1;
+    }
+    if i > 0 {
+        rest[i..].trim_start().to_string()
+    } else {
+        rest.to_string()
+    }
 }
 
 // ─── Disk Health（纯 Rust + WinAPI 直读 SMART，移植自 CrystalDiskInfo）───

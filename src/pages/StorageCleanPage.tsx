@@ -66,6 +66,7 @@ import {
   ChevronDown,
   FolderOpen,
   Trash,
+  Download,
 } from "lucide-react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -110,12 +111,20 @@ interface JunkFileInfo {
   category: string;
 }
 
+interface RegistryItemInfo {
+  key_path: string;
+  value_name?: string | null;
+  description: string;
+}
+
 interface CategoryScanResult {
   category: string;
   display_name: string;
   description: string;
   risk_level: number;
   files: JunkFileInfo[];
+  registry_items: RegistryItemInfo[];
+  default_select: boolean;
   total_size: number;
   file_count: number;
 }
@@ -140,7 +149,20 @@ interface JunkDeleteResult {
 /** 删除目标:携带扫描时已知的文件大小,避免删除阶段重复 stat */
 interface DeleteJunkTarget {
   path: string;
-  size: number;
+  size: number | null;
+  /** 注册表残留目标(深度清理);为 true 时 path 是 "HIVE\\子键" 路径 */
+  is_registry?: boolean;
+  /** 注册表目标要删除的值名;省略表示删除整个键 */
+  value_name?: string;
+}
+
+/** Winapp2 规则库信息(仿照图吧工具箱的规则库卡片) */
+interface Winapp2RuleInfo {
+  version: string;
+  entry_count: number;
+  file_size_bytes: number;
+  is_bundled: boolean;
+  effective_path: string;
 }
 
 interface LargeFileEntry {
@@ -365,7 +387,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   const rowBg = useColorModeValue("#f7fafc", "#232323");
   const dividerColor = useColorModeValue("gray.200", "#333333");
 
-  const hasContent = category.file_count > 0;
+  const hasContent = category.file_count > 0 || category.registry_items.length > 0;
 
   // 展开时一次性渲染全部文件会导致界面卡死(如 WindowsTemp 可能上万条)。
   // 每次只渲染前 100 条,点击「加载更多」再追加。
@@ -436,7 +458,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
               >
                 {isExpanded
                   ? t("storageClean.junkHideFiles")
-                  : `${t("storageClean.junkViewFiles")} (${category.file_count})`}
+                  : `${t("storageClean.junkViewFiles")} (${category.file_count + category.registry_items.length})`}
               </Button>
             )}
           </VStack>
@@ -452,7 +474,9 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
             {formatSize(category.total_size)}
           </Badge>
           <Text fontSize="xs" color={pathColor}>
-            {hasContent ? t("storageClean.junkFiles", { count: category.file_count }) : "0 B"}
+            {hasContent
+              ? t("storageClean.junkFiles", { count: category.file_count })
+              : "0 B"}
           </Text>
         </VStack>
       </Flex>
@@ -460,6 +484,33 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
       {/* 仅展开时才挂载文件列表,避免大量 DOM 常驻导致勾选/切换卡顿 */}
       {isExpanded && (
         <Box maxH="320px" overflowY="auto" borderTop="1px solid" borderColor={dividerColor}>
+          {category.registry_items.length > 0 && (
+            <Box px={4} py={2}>
+              <Text fontSize="xs" fontWeight="semibold" color={primaryColor} mb={1}>
+                {t("storageClean.registryItemLabel")} ({category.registry_items.length})
+              </Text>
+              {category.registry_items.map((item, index) => (
+                <Flex
+                  key={`reg-${item.key_path}-${index}`}
+                  justify="space-between"
+                  align="center"
+                  bg={index % 2 === 0 ? rowBg : "transparent"}
+                  px={2}
+                  py={1}
+                >
+                  <Tooltip label={item.key_path}>
+                    <Text fontSize="xs" color={headingColor} isTruncated w="100%">
+                      {item.key_path}
+                      {item.value_name ? `  [${item.value_name}]` : ""}
+                    </Text>
+                  </Tooltip>
+                  <Text fontSize="10px" color={pathColor} ml={3} flexShrink={0}>
+                    {item.description}
+                  </Text>
+                </Flex>
+              ))}
+            </Box>
+          )}
           {visibleFiles.map((file, index) => (
             <Flex
               key={`${file.path}-${index}`}
@@ -658,12 +709,17 @@ export default function StorageCleanPage() {
   const [isCleaning, setIsCleaning] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
-  // ---------- 垃圾清理 ----------
+  // ---------- 垃圾清理(深度清理) ----------
   const [junkResult, setJunkResult] = useState<JunkScanResult | null>(null);
   const [junkScanning, setJunkScanning] = useState(false);
   const [junkCleaning, setJunkCleaning] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+
+  // ---------- Winapp2 规则库(仿照图吧工具箱) ----------
+  const [ruleInfo, setRuleInfo] = useState<Winapp2RuleInfo | null>(null);
+  const [updatingRules, setUpdatingRules] = useState(false);
+  const [ruleUpdateMsg, setRuleUpdateMsg] = useState("");
 
   // ---------- 大文件扫描 ----------
   const [drives, setDrives] = useState<string[]>([]);
@@ -729,7 +785,11 @@ export default function StorageCleanPage() {
         setJunkResult(result);
         const defaultSelected = new Set(
           result.categories
-            .filter((category) => category.file_count > 0)
+            .filter(
+              (category) =>
+                (category.file_count > 0 || category.registry_items.length > 0) &&
+                category.default_select
+            )
             .map((category) => category.display_name)
         );
         setSelectedCategories(defaultSelected);
@@ -929,6 +989,59 @@ export default function StorageCleanPage() {
     await doJunkScan();
   };
 
+  // ---------- Winapp2 规则库更新逻辑(仿照图吧工具箱) ----------
+  // 挂载时拉取当前规则库信息
+  useEffect(() => {
+    invoke<Winapp2RuleInfo>("get_winapp2_rule_info")
+      .then(setRuleInfo)
+      .catch((error) => console.error("Failed to get rule info:", error));
+  }, []);
+
+  // 监听规则库更新进度事件
+  useEffect(() => {
+    let unlisten: UnlistenFn | undefined;
+    const setup = async () => {
+      unlisten = await listen<{ message: string }>("winapp2-update:progress", (event) => {
+        setRuleUpdateMsg(event.payload.message);
+      });
+    };
+    setup();
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  const handleUpdateRules = async () => {
+    setUpdatingRules(true);
+    setRuleUpdateMsg("");
+    const oldVersion = ruleInfo?.version;
+    try {
+      const result = await invoke<Winapp2RuleInfo>("update_winapp2_rules");
+      setRuleInfo(result);
+      toast({
+        title:
+          result.version === oldVersion && !result.is_bundled
+            ? t("storageClean.ruleDbLatest")
+            : t("storageClean.ruleDbUpdated", { version: result.version || "--" }),
+        status: "success",
+        duration: 3000,
+        isClosable: true,
+      });
+      await doJunkScan();
+    } catch (error) {
+      console.error("Failed to update rule database:", error);
+      toast({
+        title: t("storageClean.ruleDbUpdateFailed"),
+        description: String(error),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    }
+    setUpdatingRules(false);
+    setRuleUpdateMsg("");
+  };
+
   // ---------- 大文件扫描逻辑 ----------
   useEffect(() => {
     let cancelled = false;
@@ -1116,7 +1229,7 @@ export default function StorageCleanPage() {
 
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
+      <HStack justifyContent="space-between" alignItems="center" w="full" position="relative">
         <Button
           variant="ghost"
           leftIcon={<ArrowLeft size={18} />}
@@ -1125,10 +1238,78 @@ export default function StorageCleanPage() {
         >
           返回
         </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
+        <Heading
+          position="absolute"
+          left="50%"
+          transform="translateX(-50%)"
+          size="lg"
+          color={adaptiveTitle.text}
+          textShadow={adaptiveTitle.shadow}
+          fontWeight="700"
+          whiteSpace="nowrap"
+        >
           {t("storageClean.title")}
         </Heading>
-        <Box w="100px" />
+        {/* 快速清理主操作按钮固定右上角,不再放在底部 */}
+        {tabIndex === 0 && (
+          <HStack spacing={2}>
+            <LiquidGlassButton
+              size="sm"
+              leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={15} />}
+              onClick={handleClean}
+              isLoading={isCleaning}
+              loadingText={t("storageClean.cleaning")}
+              disabled={isScanning || selectedItems.size === 0}
+              bg={themeConfig.primaryColor}
+              color={getContrastTextColor()}
+              _hover={{ bg: themeConfig.primaryColor, filter: "brightness(0.9)" }}
+              _active={{ bg: themeConfig.primaryColor, filter: "brightness(0.8)" }}
+            >
+              {t("storageClean.cleanButton")}
+            </LiquidGlassButton>
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<RefreshCw size={15} />}
+              onClick={doScan}
+              isLoading={isScanning}
+              borderColor={themeConfig.primaryColor}
+              color={themeConfig.primaryColor}
+            >
+              {t("storageClean.scanButton")}
+            </Button>
+          </HStack>
+        )}
+        {/* 深度清理(垃圾清理)主操作按钮固定右上角,不再放在底部 */}
+        {tabIndex === 1 && (
+          <HStack spacing={2}>
+            <LiquidGlassButton
+              size="sm"
+              leftIcon={junkCleaning ? <Spinner size="sm" /> : <Trash2 size={15} />}
+              onClick={handleJunkClean}
+              isLoading={junkCleaning}
+              loadingText={t("storageClean.junkCleaning")}
+              disabled={junkScanning || selectedCategories.size === 0}
+              bg={themeConfig.primaryColor}
+              color={getContrastTextColor()}
+              _hover={{ bg: themeConfig.primaryColor, filter: "brightness(0.9)" }}
+              _active={{ bg: themeConfig.primaryColor, filter: "brightness(0.8)" }}
+            >
+              {t("storageClean.junkCleanButton")}
+            </LiquidGlassButton>
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<ScanSearch size={15} />}
+              onClick={doJunkScan}
+              isLoading={junkScanning}
+              borderColor={themeConfig.primaryColor}
+              color={themeConfig.primaryColor}
+            >
+              {t("storageClean.junkScanButton")}
+            </Button>
+          </HStack>
+        )}
       </HStack>
 
       <Tabs variant="soft-rounded" index={tabIndex} onChange={setTabIndex} isLazy>
@@ -1268,41 +1449,10 @@ export default function StorageCleanPage() {
                   </VStack>
                 )
               )}
-
-              <HStack spacing={3} justify="start">
-                <LiquidGlassButton
-                  leftIcon={isCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
-                  onClick={handleClean}
-                  isLoading={isCleaning}
-                  loadingText={t("storageClean.cleaning")}
-                  disabled={isScanning || selectedItems.size === 0}
-                  bg={themeConfig.primaryColor}
-                  color={getContrastTextColor()}
-                  _hover={{
-                    bg: themeConfig.primaryColor,
-                    filter: "brightness(0.9)",
-                  }}
-                  _active={{
-                    bg: themeConfig.primaryColor,
-                    filter: "brightness(0.8)",
-                  }}
-                >
-                  {t("storageClean.cleanButton")}
-                </LiquidGlassButton>
-                <LiquidGlassButton
-                  leftIcon={<RefreshCw size={16} />}
-                  onClick={doScan}
-                  isLoading={isScanning}
-                  variant="outline"
-                  colorScheme="gray"
-                >
-                  {t("storageClean.scanButton")}
-                </LiquidGlassButton>
-              </HStack>
             </VStack>
           </TabPanel>
 
-          {/* ================= 垃圾清理 ================= */}
+          {/* ================= 深度清理 ================= */}
           <TabPanel px={0} pt={0}>
             <VStack align="stretch" spacing={6}>
               {junkResult && (
@@ -1341,25 +1491,59 @@ export default function StorageCleanPage() {
                 </LiquidGlassCard>
               )}
 
-              <HStack spacing={2}>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleJunkSelectAll}
-                  borderColor={themeConfig.primaryColor}
-                  color={themeConfig.primaryColor}
-                >
-                  {t("storageClean.selectAll")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleJunkDeselectAll}
-                  color={themeConfig.primaryColor}
-                >
-                  {t("storageClean.deselectAll")}
-                </Button>
+              {/* 全选/取消全选 与 规则库更新 同行(规则库在右侧) */}
+              <HStack justify="space-between" align="center" w="full" spacing={3} flexWrap="wrap">
+                <HStack spacing={2}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleJunkSelectAll}
+                    borderColor={themeConfig.primaryColor}
+                    color={themeConfig.primaryColor}
+                  >
+                    {t("storageClean.selectAll")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleJunkDeselectAll}
+                    color={themeConfig.primaryColor}
+                  >
+                    {t("storageClean.deselectAll")}
+                  </Button>
+                </HStack>
+                <HStack spacing={2} align="center">
+                  <Text fontSize="xs" color={subTextColor}>
+                    {ruleInfo
+                      ? t("storageClean.ruleDbInfo", {
+                          version: ruleInfo.version || "--",
+                          count: ruleInfo.entry_count,
+                          source: ruleInfo.is_bundled
+                            ? t("storageClean.ruleDbSourceBundled")
+                            : t("storageClean.ruleDbSourceUpdated"),
+                        })
+                      : t("storageClean.ruleDbFetching")}
+                  </Text>
+                  <Button
+                    size="sm"
+                    leftIcon={updatingRules ? <Spinner size="sm" /> : <Download size={14} />}
+                    onClick={handleUpdateRules}
+                    isLoading={updatingRules}
+                    loadingText={t("storageClean.ruleDbUpdating")}
+                    isDisabled={!ruleInfo}
+                    borderColor={themeConfig.primaryColor}
+                    color={themeConfig.primaryColor}
+                    variant="outline"
+                  >
+                    {t("storageClean.ruleDbUpdateButton")}
+                  </Button>
+                </HStack>
               </HStack>
+              {ruleUpdateMsg && (
+                <Text fontSize="10px" color={themeConfig.primaryColor} alignSelf="flex-end">
+                  {ruleUpdateMsg}
+                </Text>
+              )}
 
               {junkScanning ? (
                 <VStack py={8}>
@@ -1388,37 +1572,6 @@ export default function StorageCleanPage() {
                   </VStack>
                 )
               )}
-
-              <HStack spacing={3} justify="start">
-                <LiquidGlassButton
-                  leftIcon={junkCleaning ? <Spinner size="sm" /> : <Trash2 size={16} />}
-                  onClick={handleJunkClean}
-                  isLoading={junkCleaning}
-                  loadingText={t("storageClean.junkCleaning")}
-                  disabled={junkScanning || selectedCategories.size === 0}
-                  bg={themeConfig.primaryColor}
-                  color={getContrastTextColor()}
-                  _hover={{
-                    bg: themeConfig.primaryColor,
-                    filter: "brightness(0.9)",
-                  }}
-                  _active={{
-                    bg: themeConfig.primaryColor,
-                    filter: "brightness(0.8)",
-                  }}
-                >
-                  {t("storageClean.junkCleanButton")}
-                </LiquidGlassButton>
-                <LiquidGlassButton
-                  leftIcon={<ScanSearch size={16} />}
-                  onClick={doJunkScan}
-                  isLoading={junkScanning}
-                  variant="outline"
-                  colorScheme="gray"
-                >
-                  {t("storageClean.junkScanButton")}
-                </LiquidGlassButton>
-              </HStack>
             </VStack>
           </TabPanel>
 

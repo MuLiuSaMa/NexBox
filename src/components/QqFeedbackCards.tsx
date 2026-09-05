@@ -1,5 +1,5 @@
 import { Box, Text, HStack, VStack, useDisclosure, useColorModeValue } from "@chakra-ui/react";
-import { FaBug } from "react-icons/fa6";
+import { FaBug, FaBook } from "react-icons/fa6";
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,6 +11,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
 
 const FEEDBACK_URL = "https://nexbox.top/feedback";
+const DOCS_URL = "https://docs.nexbox.top";
 /** 本地兜底的 QQ 群图标 */
 const LOCAL_QQ_ICON = "/icons/qq.png";
 
@@ -49,6 +50,11 @@ export function useFeedbackEnabled() {
 /** 首页「官方QQ群」卡片显示开关（持久化，默认开启） */
 export function useQqGroupCardEnabled() {
   return useCardEnabled("nexbox_qq_group_card_enabled", "qq-group-card-setting-changed");
+}
+
+/** 首页「使用文档」卡片显示开关（持久化，默认开启） */
+export function useDocsCardEnabled() {
+  return useCardEnabled("nexbox_docs_card_enabled", "docs-card-setting-changed");
 }
 
 /** 单卡片外壳：纯浅色/深色模式适配（不使用主题主色），且不参与路由切换弹跳动画 */
@@ -123,6 +129,22 @@ export function FeedbackCard() {
       title={t("home.feedbackCard.title")}
       subtitle={t("home.feedbackCard.subtitle")}
       onClick={() => openExternal(FEEDBACK_URL)}
+    />
+  );
+}
+
+/** 首页「使用文档」卡片：点击跳转在线文档 */
+export function DocsCard() {
+  const { t } = useTranslation();
+  // 注意：react-icons 的 <svg color> 不经过 Chakra 主题解析，必须传真实 hex，
+  // 不能用 Chakra token（如 gray.800），否则浅色模式下图标会退化为白色
+  const iconColor = useColorModeValue("#1a202c", "#ffffff");
+  return (
+    <FeedbackLinkCard
+      icon={<FaBook size={18} color={iconColor} />}
+      title={t("home.docsCard.title")}
+      subtitle={t("home.docsCard.subtitle")}
+      onClick={() => openExternal(DOCS_URL)}
     />
   );
 }

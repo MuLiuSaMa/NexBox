@@ -14,6 +14,7 @@ export default function GameWinKeyCard() {
 
   // react-icons 的 color 不经 Chakra 解析，必须用真实色值（token 在浅色下会退化成白色）
   const textColor = useColorModeValue("#1a202c", "#ffffff");
+  const subTextColor = useColorModeValue("gray.600", "#ffffff");
 
   useEffect(() => {
     let mounted = true;
@@ -60,14 +61,14 @@ export default function GameWinKeyCard() {
           <Spinner size="sm" />
         </HStack>
       ) : (
-        <HStack spacing={2} align="center">
-          <FaWindows size={18} color={textColor} style={{ flexShrink: 0 }} />
-          <VStack spacing={0} align="start">
-            <Text fontSize="sm" color={textColor} fontWeight="semibold" whiteSpace="nowrap">
-              {t("home.gameWinKey.line1") || "游戏时"}
+        <HStack spacing={3} align="center" w="full">
+          <FaWindows size={22} color={textColor} style={{ flexShrink: 0 }} />
+          <VStack flex="1" spacing={0.5} align="start" minW="0">
+            <Text fontSize="sm" color={textColor} fontWeight="bold" noOfLines={1}>
+              {t("home.gameWinKey.line1") || "游戏时"} {t("home.gameWinKey.line2") || "禁用 Win 键"}
             </Text>
-            <Text fontSize="sm" color={textColor} fontWeight="semibold" whiteSpace="nowrap">
-              {t("home.gameWinKey.line2") || "禁用 Win 键"}
+            <Text fontSize="xs" color={subTextColor} noOfLines={1}>
+              {t("home.gameWinKey.desc") || "运行游戏时自动屏蔽 Win 键，防止误触弹回桌面"}
             </Text>
           </VStack>
           <ThemeSwitch

@@ -618,6 +618,14 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenWattToolkit = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://steampp.net/");
+    }).catch(() => {
+      window.open("https://steampp.net/", "_blank");
+    });
+  };
+
   const handleOpenMR = () => {
     import("@tauri-apps/plugin-shell").then(({ open }) => {
       open("https://mineradio.cn/");
@@ -690,6 +698,42 @@ function OfficialToolSection({
         gap={4}
         alignItems="stretch"
       >
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenWattToolkit}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("watt-toolkit") || ""}
+                alt={"Watt Toolkit"}
+                w={"32px"}
+                h={"32px"}
+                objectFit={"contain"}
+                fallback={<Network size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  Watt Toolkit
+                </Text>
+                <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
+                  {t("tools.recommended")}
+                </Badge>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                Steam++ 全能网络加速工具，开源免费、支持 GitHub/Steam 等加速。
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
         <LiquidGlassToolCard size={"md"} onClick={handleOpenPyisland}>
           <VStack align={"start"} spacing={3} h="full">
             <Flex

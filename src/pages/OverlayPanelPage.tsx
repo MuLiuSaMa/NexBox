@@ -809,9 +809,7 @@ export default function OverlayPanelPage() {
               <Text fontSize="xs" color={subTextColor} opacity={0.75}>
                 游戏需开启无边框模式，全屏模式会被覆盖
               </Text>
-              <Text fontSize="xs" color={subTextColor} opacity={0.75}>
-                FPS仅适合单机游戏，网游反作弊会拦截FPS获取
-              </Text>
+              
             </VStack>
             <HStack
               bg={autoApplyOnStartup ? hexToRgba(getActiveColor(), 0.15) : sliderBg}

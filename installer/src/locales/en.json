@@ -3,6 +3,13 @@
   "app_name": "NexBox",
   "app_description": "Game Toolkit for Modern Players",
 
+  "quick_install": "Quick Install",
+  "custom_install": "Custom Install",
+  "upgrade": "Update",
+  "agree_prefix": "I have read and agree to",
+  "agree_terms_name": "the License Agreement",
+  "close": "Close",
+
   "step_welcome": "Welcome",
   "step_license": "License",
   "step_directory": "Directory",

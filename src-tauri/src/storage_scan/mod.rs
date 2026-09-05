@@ -12,15 +12,20 @@ mod categories;
 mod delete_engine;
 mod file_info;
 mod recycle_bin;
+mod registry_delete;
 mod safety_constants;
 mod scan_engine;
+mod winapp2;
 
 pub use big_files::LargeFileEntry;
 pub use categories::JunkCategory;
 pub use delete_engine::{DeleteEngine, empty_all_recycle_bins};
-pub use file_info::{CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult};
+pub use file_info::{
+    CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult, RegistryDeleteTarget,
+};
 pub use recycle_bin::current_user_visible_size;
 pub use scan_engine::ScanEngine;
+pub use winapp2::DeepScanEngine;
 
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -38,14 +43,17 @@ pub struct CategoryInfo {
     pub name: String,
     pub description: String,
     pub risk_level: u8,
+    /// 是否默认勾选(内置分类恒 true)
+    pub default_select: bool,
 }
 
-/// 执行垃圾文件扫描
+/// 执行垃圾文件扫描(深度清理 = 内置分类线 + Winapp2 规则线)
 #[tauri::command]
 pub async fn scan_junk_categories(request: Option<ScanRequest>) -> Result<JunkScanResult, String> {
-    info!("开始扫描垃圾文件");
+    info!("开始扫描垃圾文件(深度清理)");
 
     let result = tokio::task::spawn_blocking(move || {
+        // ---- 1. 内置分类线(request.categories 过滤仅作用于内置 17 分类) ----
         let engine = if let Some(req) = request {
             if let Some(category_names) = req.categories {
                 let categories: Vec<JunkCategory> = JunkCategory::all()
@@ -64,33 +72,48 @@ pub async fn scan_junk_categories(request: Option<ScanRequest>) -> Result<JunkSc
         } else {
             ScanEngine::new()
         };
+        let mut result = engine.scan();
 
-        engine.scan()
+        // ---- 2. Winapp2 规则线(深度清理核心) ----
+        let entries = winapp2::load_entries();
+        for category_result in DeepScanEngine::scan(&entries) {
+            result.add_category_result(category_result);
+        }
+
+        result
     })
     .await
     .map_err(|e| format!("扫描任务异常: {}", e))?;
 
     info!(
-        "扫描完成: {} 个文件, {} 字节",
-        result.total_file_count, result.total_size
+        "扫描完成: {} 个分类, {} 个文件, {} 字节",
+        result.categories.len(),
+        result.total_file_count,
+        result.total_size
     );
 
     Ok(result)
 }
 
-/// 扫描单个分类
+/// 扫描单个分类(内置分类或 Winapp2 条目)
 #[tauri::command]
 pub async fn scan_junk_category(category_name: String) -> Result<CategoryScanResult, String> {
     info!("扫描分类: {}", category_name);
 
     let result = tokio::task::spawn_blocking(move || -> Result<CategoryScanResult, String> {
-        let category = JunkCategory::all()
+        // 优先匹配内置分类
+        if let Some(category) = JunkCategory::all()
             .into_iter()
             .find(|c| c.display_name() == category_name)
-            .ok_or_else(|| format!("未知分类: {}", category_name))?;
+        {
+            let engine = ScanEngine::new();
+            return Ok(engine.scan_category(&category));
+        }
 
-        let engine = ScanEngine::new();
-        Ok(engine.scan_category(&category))
+        // 回退到 Winapp2 单条目扫描
+        let entries = winapp2::load_entries();
+        DeepScanEngine::scan_single(&entries, &category_name)
+            .ok_or_else(|| format!("未知分类: {}", category_name))
     })
     .await
     .map_err(|e| format!("扫描任务异常: {}", e))??;
@@ -98,7 +121,7 @@ pub async fn scan_junk_category(category_name: String) -> Result<CategoryScanRes
     Ok(result)
 }
 
-/// 获取所有可用的清理分类
+/// 获取所有可用的内置清理分类
 #[tauri::command]
 pub fn get_junk_categories() -> Vec<CategoryInfo> {
     JunkCategory::all()
@@ -107,18 +130,57 @@ pub fn get_junk_categories() -> Vec<CategoryInfo> {
             name: c.display_name().to_string(),
             description: c.description().to_string(),
             risk_level: c.risk_level(),
+            default_select: true,
         })
         .collect()
 }
 
-/// 删除指定的垃圾文件
+/// 获取当前生效的 Winapp2 规则库信息(版本/条目数/是否内置)
+#[tauri::command]
+pub fn get_winapp2_rule_info() -> winapp2::update::RuleDatabaseInfo {
+    winapp2::update::get_info()
+}
+
+/// 在线更新 Winapp2 规则库到数据目录(仿照图吧工具箱;进度通过
+/// "winapp2-update:progress" 事件推送)
+#[tauri::command]
+pub async fn update_winapp2_rules(
+    window: Window,
+) -> Result<winapp2::update::RuleDatabaseInfo, String> {
+    winapp2::update::update_rules(Some(window)).await
+}
+
+/// 删除指定的垃圾文件(文件目标与注册表目标分流)
 #[tauri::command]
 pub async fn delete_junk_files(targets: Vec<DeleteTarget>) -> Result<DeleteResult, String> {
-    info!("开始删除 {} 个文件", targets.len());
+    info!("开始删除 {} 个目标", targets.len());
 
     let result = tokio::task::spawn_blocking(move || {
-        let engine = DeleteEngine::new();
-        engine.delete_paths(&targets)
+        let (registry_targets, file_targets): (Vec<DeleteTarget>, Vec<DeleteTarget>) = targets
+            .into_iter()
+            .partition(|t| t.is_registry.unwrap_or(false));
+
+        let mut result = if file_targets.is_empty() {
+            DeleteResult::new()
+        } else {
+            DeleteEngine::new().delete_paths(&file_targets)
+        };
+
+        if !registry_targets.is_empty() {
+            let reg_items: Vec<RegistryDeleteTarget> = registry_targets
+                .into_iter()
+                .map(|t| RegistryDeleteTarget {
+                    key_path: t.path,
+                    value_name: t.value_name,
+                })
+                .collect();
+            let outcome = registry_delete::delete_registry_items(&reg_items);
+            result.success_count += outcome.success_count;
+            result.failed_count += outcome.failed.len();
+            result.failed_files.extend(outcome.failed);
+        }
+
+        result
     })
     .await
     .map_err(|e| format!("删除任务异常: {}", e))?;
@@ -199,7 +261,12 @@ pub async fn delete_large_file(paths: Vec<String>) -> Result<DeleteResult, Strin
     // 大文件删除未携带已知大小(size 置 None),删除引擎会自行查询
     let targets: Vec<DeleteTarget> = paths
         .into_iter()
-        .map(|path| DeleteTarget { path, size: None })
+        .map(|path| DeleteTarget {
+            path,
+            size: None,
+            is_registry: None,
+            value_name: None,
+        })
         .collect();
 
     let result = tokio::task::spawn_blocking(move || {
