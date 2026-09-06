@@ -24,7 +24,7 @@ fn get_net_offset_ms() -> Option<i64> {
 
 /// 后台线程周期性从 HTTP 响应头 Date 字段同步网络时间。
 /// 从多个端点轮流尝试，任意一个成功即可。
-fn start_net_time_sync() {
+pub(crate) fn start_net_time_sync() {
     if NET_TIME_SYNC_ACTIVE.swap(true, Ordering::SeqCst) {
         return;
     }

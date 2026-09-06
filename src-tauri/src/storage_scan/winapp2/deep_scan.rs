@@ -19,7 +19,7 @@ use std::time::SystemTime;
 use super::detection::DetectionService;
 use super::parser::{CleanerEntry, ExcludeType, FileKeyEntry, FileKeyFlag};
 use super::path_expander::{matches_wildcard, PathExpander};
-use crate::storage_scan::file_info::{CategoryScanResult, FileInfo, RegistryItemInfo};
+use crate::storage_scan::file_info::{CategoryScanResult, FileInfo};
 use crate::storage_scan::scan_engine::ScanEngine;
 use crate::storage_scan::JunkCategory;
 
@@ -124,18 +124,8 @@ fn scan_entry(
         scan_file_key(file_key, expander, &exclusions, &mut result);
     }
 
-    for reg_key in &entry.reg_keys {
-        if super::detection::reg_key_exists(&reg_key.key_path, reg_key.value_name.as_deref()) {
-            result.registry_items.push(RegistryItemInfo {
-                key_path: reg_key.key_path.clone(),
-                value_name: reg_key.value_name.clone(),
-                description: match &reg_key.value_name {
-                    Some(v) => format!("值名: {}", v),
-                    None => "整个键".to_string(),
-                },
-            });
-        }
-    }
+    // 注:规则库中的 RegKey 注册表规则不参与扫描与清理,
+    // 深度清理只处理文件与目录。
 
     if result.is_empty_result() {
         return None;

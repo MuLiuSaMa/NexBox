@@ -2698,7 +2698,6 @@
     "junkEmpty": "未发现可清理的垃圾文件，点击「开始扫描」",
     "junkScanButton": "开始扫描",
     "junkLoadMore": "加载更多 ({{count}})",
-    "registryItemLabel": "注册表残留",
     "ruleDbTitle": "垃圾清理规则库",
     "ruleDbInfo": "版本 {{version}} · {{count}} 条规则 · {{source}}",
     "ruleDbSourceBundled": "内置",

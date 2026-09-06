@@ -2295,7 +2295,6 @@
     "junkEmpty": "削除可能な不要ファイルが見つかりません。「スキャン」をクリックして開始してください",
     "junkScanButton": "スキャン",
     "junkLoadMore": "さらに読み込む ({{count}})",
-    "registryItemLabel": "レジストリ項目",
     "ruleDbTitle": "不要ファイルのルール DB",
     "ruleDbInfo": "バージョン {{version}} · {{count}} ルール · {{source}}",
     "ruleDbSourceBundled": "内蔵",

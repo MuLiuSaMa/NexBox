@@ -2921,7 +2921,6 @@
     "junkEmpty": "No junk files found. Click \"Scan\" to start.",
     "junkScanButton": "Scan",
     "junkLoadMore": "Load More ({{count}})",
-    "registryItemLabel": "Registry Items",
     "ruleDbTitle": "Junk Clean Rules",
     "ruleDbInfo": "Version {{version}} · {{count}} rules · {{source}}",
     "ruleDbSourceBundled": "Bundled",

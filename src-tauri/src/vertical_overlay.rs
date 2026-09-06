@@ -85,6 +85,18 @@ pub async fn start_vertical_overlay(
 
     let _ = window.set_always_on_top(true);
 
+    // 启动 FPS / 延迟 / 网络时间服务（与 Win32 start_overlay 对齐；均有幂等保护）。
+    // 此前竖排面板只启动了数据推送线程，collect_hardware_data 读到的
+    // fps / game_ping / net_time_offset_ms 永远为 None。
+    crate::game_ping::start_ping_thread();
+    crate::game_fps::start_fps_monitor();
+    crate::overlay_panel::start_net_time_sync();
+
+    // 排除竖排窗口自身成为前台目标（用户关闭鼠标穿透点击悬浮框时，FPS 目标不应切走）
+    if let Ok(hwnd) = window.hwnd() {
+        crate::game_fps::set_overlay_hwnd(hwnd.0 as u64);
+    }
+
     // 窗口已创建但 visible=false，等前端 mount 后调用 vertical_overlay_ready 命令再 show，避免加载时白屏闪烁
 
     // 启动数据推送线程（如果尚未启动）
@@ -163,6 +175,10 @@ pub async fn stop_vertical_overlay(
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
         let _ = window.destroy();
     }
+
+    // 与 Win32 stop_overlay 对称：停止 FPS 监控并清除自身窗口排除
+    crate::game_fps::clear_overlay_hwnd();
+    crate::game_fps::stop_fps_monitor();
 
     let _ = app_handle.emit("overlay-status-changed", ());
     Ok(OverlayResult {

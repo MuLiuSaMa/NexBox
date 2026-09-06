@@ -12,7 +12,6 @@ mod categories;
 mod delete_engine;
 mod file_info;
 mod recycle_bin;
-mod registry_delete;
 mod safety_constants;
 mod scan_engine;
 mod winapp2;
@@ -20,9 +19,7 @@ mod winapp2;
 pub use big_files::LargeFileEntry;
 pub use categories::JunkCategory;
 pub use delete_engine::{DeleteEngine, empty_all_recycle_bins};
-pub use file_info::{
-    CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult, RegistryDeleteTarget,
-};
+pub use file_info::{CategoryScanResult, DeleteResult, DeleteTarget, FileInfo, JunkScanResult};
 pub use recycle_bin::current_user_visible_size;
 pub use scan_engine::ScanEngine;
 pub use winapp2::DeepScanEngine;
@@ -150,37 +147,13 @@ pub async fn update_winapp2_rules(
     winapp2::update::update_rules(Some(window)).await
 }
 
-/// 删除指定的垃圾文件(文件目标与注册表目标分流)
+/// 删除指定的垃圾文件(纯文件/目录,不含注册表)
 #[tauri::command]
 pub async fn delete_junk_files(targets: Vec<DeleteTarget>) -> Result<DeleteResult, String> {
     info!("开始删除 {} 个目标", targets.len());
 
     let result = tokio::task::spawn_blocking(move || {
-        let (registry_targets, file_targets): (Vec<DeleteTarget>, Vec<DeleteTarget>) = targets
-            .into_iter()
-            .partition(|t| t.is_registry.unwrap_or(false));
-
-        let mut result = if file_targets.is_empty() {
-            DeleteResult::new()
-        } else {
-            DeleteEngine::new().delete_paths(&file_targets)
-        };
-
-        if !registry_targets.is_empty() {
-            let reg_items: Vec<RegistryDeleteTarget> = registry_targets
-                .into_iter()
-                .map(|t| RegistryDeleteTarget {
-                    key_path: t.path,
-                    value_name: t.value_name,
-                })
-                .collect();
-            let outcome = registry_delete::delete_registry_items(&reg_items);
-            result.success_count += outcome.success_count;
-            result.failed_count += outcome.failed.len();
-            result.failed_files.extend(outcome.failed);
-        }
-
-        result
+        DeleteEngine::new().delete_paths(&targets)
     })
     .await
     .map_err(|e| format!("删除任务异常: {}", e))?;
@@ -264,8 +237,6 @@ pub async fn delete_large_file(paths: Vec<String>) -> Result<DeleteResult, Strin
         .map(|path| DeleteTarget {
             path,
             size: None,
-            is_registry: None,
-            value_name: None,
         })
         .collect();
 

@@ -115,13 +115,6 @@ fn check_registry(reg_path: &str) -> bool {
     reg_key_present(&hive, &sub_key, value_name.as_deref())
 }
 
-/// 供 deep_scan 判断 RegKeyN 目标当前是否存在。
-/// key_path 为 "HIVE\子键",value_name 为 None 时只要求键存在。
-pub(crate) fn reg_key_exists(key_path: &str, value_name: Option<&str>) -> bool {
-    let (hive, sub_key, _) = split_reg_path(key_path);
-    reg_key_present(&hive, &sub_key, value_name)
-}
-
 fn reg_key_present(hive: &str, sub_key: &str, value_name: Option<&str>) -> bool {
     let Some(predef) = hive_to_predef(hive) else {
         return false;

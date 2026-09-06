@@ -111,19 +111,12 @@ interface JunkFileInfo {
   category: string;
 }
 
-interface RegistryItemInfo {
-  key_path: string;
-  value_name?: string | null;
-  description: string;
-}
-
 interface CategoryScanResult {
   category: string;
   display_name: string;
   description: string;
   risk_level: number;
   files: JunkFileInfo[];
-  registry_items: RegistryItemInfo[];
   default_select: boolean;
   total_size: number;
   file_count: number;
@@ -149,11 +142,7 @@ interface JunkDeleteResult {
 /** 删除目标:携带扫描时已知的文件大小,避免删除阶段重复 stat */
 interface DeleteJunkTarget {
   path: string;
-  size: number | null;
-  /** 注册表残留目标(深度清理);为 true 时 path 是 "HIVE\\子键" 路径 */
-  is_registry?: boolean;
-  /** 注册表目标要删除的值名;省略表示删除整个键 */
-  value_name?: string;
+  size: number;
 }
 
 /** Winapp2 规则库信息(仿照图吧工具箱的规则库卡片) */
@@ -387,7 +376,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   const rowBg = useColorModeValue("#f7fafc", "#232323");
   const dividerColor = useColorModeValue("gray.200", "#333333");
 
-  const hasContent = category.file_count > 0 || category.registry_items.length > 0;
+  const hasContent = category.file_count > 0;
 
   // 展开时一次性渲染全部文件会导致界面卡死(如 WindowsTemp 可能上万条)。
   // 每次只渲染前 100 条,点击「加载更多」再追加。
@@ -458,7 +447,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
               >
                 {isExpanded
                   ? t("storageClean.junkHideFiles")
-                  : `${t("storageClean.junkViewFiles")} (${category.file_count + category.registry_items.length})`}
+                  : `${t("storageClean.junkViewFiles")} (${category.file_count})`}
               </Button>
             )}
           </VStack>
@@ -484,33 +473,6 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
       {/* 仅展开时才挂载文件列表,避免大量 DOM 常驻导致勾选/切换卡顿 */}
       {isExpanded && (
         <Box maxH="320px" overflowY="auto" borderTop="1px solid" borderColor={dividerColor}>
-          {category.registry_items.length > 0 && (
-            <Box px={4} py={2}>
-              <Text fontSize="xs" fontWeight="semibold" color={primaryColor} mb={1}>
-                {t("storageClean.registryItemLabel")} ({category.registry_items.length})
-              </Text>
-              {category.registry_items.map((item, index) => (
-                <Flex
-                  key={`reg-${item.key_path}-${index}`}
-                  justify="space-between"
-                  align="center"
-                  bg={index % 2 === 0 ? rowBg : "transparent"}
-                  px={2}
-                  py={1}
-                >
-                  <Tooltip label={item.key_path}>
-                    <Text fontSize="xs" color={headingColor} isTruncated w="100%">
-                      {item.key_path}
-                      {item.value_name ? `  [${item.value_name}]` : ""}
-                    </Text>
-                  </Tooltip>
-                  <Text fontSize="10px" color={pathColor} ml={3} flexShrink={0}>
-                    {item.description}
-                  </Text>
-                </Flex>
-              ))}
-            </Box>
-          )}
           {visibleFiles.map((file, index) => (
             <Flex
               key={`${file.path}-${index}`}
@@ -787,8 +749,7 @@ export default function StorageCleanPage() {
           result.categories
             .filter(
               (category) =>
-                (category.file_count > 0 || category.registry_items.length > 0) &&
-                category.default_select
+                (category.file_count > 0) && category.default_select
             )
             .map((category) => category.display_name)
         );
