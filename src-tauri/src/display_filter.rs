@@ -19,397 +19,6 @@ pub struct DisplayInfo {
     pub height: i32,
 }
 
-// ─── 拓扑绑定数据模型（第一批）───
-//
-// 目标显示器身份与当前寻址信息分离：
-// - `identity` 字段（monitor_device_path + adapter 完整 LUID + target_id）用于
-//   恢复责任绑定与跨拓扑核验；
-// - `friendly_name` 仅供展示/日志，**绝不参与身份判定**；
-// - `gdi_path`（\\.\DISPLAYn）是当前寻址路径，是瞬时的，不是持久身份。
-// 整个结构不做整体相等比较——身份比较必须只比较 identity 字段。
-
-/// 稳定设备身份依据。`monitor_device_path` 是监视器设备接口路径（尽力而为的
-/// 身份依据），**不能保证对缺少独特序列信息的同型号替换始终不同**；路径为空时
-/// 不能仅凭适配器+端口批准跨拓扑恢复。
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
-pub(crate) struct DisplayIdentity {
-    /// 设备接口路径（DISPLAYCONFIG_TARGET_DEVICE_NAME.monitorDevicePath）。
-    /// 空 = 身份依据不足。
-    pub monitor_device_path: String,
-    /// 完整 LUID：HighPart + LowPart 都保留，不截断、不合并成单数。
-    pub adapter_high: i32,
-    pub adapter_low: u32,
-    /// CCD 路径目标标识（targetInfo.id）。
-    pub target_id: u32,
-}
-
-impl DisplayIdentity {
-    /// 是否具有路径信息（不是"已具备跨拓扑恢复可靠性"——那需要连续性/身份
-    /// 可信度条件，见 `authorizes_cross_topology_restore`）。
-    pub fn has_path_info(&self) -> bool {
-        !self.monitor_device_path.is_empty()
-    }
-
-    /// 跨拓扑恢复授权：仅凭相同路径 + LUID + 端口**不自动证明是原设备**。
-    /// 需要在"目标连接中断后可验证的连续观察"下才可授权；本函数只表达
-    /// "身份依据足以参与解析定位"，跨拓扑恢复是否放行由调用方结合
-    /// `TargetRestoreDecision` 判定。
-    pub fn authorizes_cross_topology_restore(&self, observed_continuity: bool) -> bool {
-        observed_continuity && self.has_path_info()
-    }
-}
-
-/// 目标消失后重现的恢复决策：区分"可确认原设备"与"无法确认"。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TargetRestoreDecision {
-    /// 有连续性观察 + 可靠路径：可尝试对解析出的目标恢复。
-    Confirmed,
-    /// 目标消失后重现，但没有更强身份依据：**不自动证明是原设备**，
-    /// 保留恢复记录，不写屏。
-    Unconfirmed,
-    /// 目标当前不在拓扑中。
-    Gone,
-    /// 身份依据不足（无路径信息等）。
-    Unknown,
-}
-
-/// 目标连续性跟踪器（离线可测；不接真实设备事件）。
-/// 捕获时建立目标绑定 → 接受后续拓扑观察 → 目标缺席/解析歧义/观察失败
-/// 将连续性标为中断/无法确认 → 相同字段重新出现**不自动恢复为已确认**。
-/// 恢复决策读取跟踪结果，而不是由外部随意传 true/false。
-#[derive(Debug, Clone)]
-pub(crate) struct TargetContinuity {
-    /// 绑定的目标身份。
-    identity: DisplayIdentity,
-    /// 是否已观察到目标持续存在（期间无缺席/歧义/观察失败）。
-    observed: bool,
-}
-
-impl TargetContinuity {
-    /// 捕获/绑定时建立：初始视为已观察到（连续观察开始）。
-    pub fn bind(identity: DisplayIdentity) -> Self {
-        Self { identity, observed: true }
-    }
-    /// 接受一次拓扑观察：目标仍唯一解析且映射有效 → 保持连续性；
-    /// 缺席/歧义/观察失败 → 连续性中断。
-    pub fn observe(&mut self, resolver: &dyn TargetResolver) {
-        match resolver.resolve(&self.identity) {
-            Ok(_) => { /* 仍唯一解析：连续性保持 */ }
-            Err(TargetError::Gone) | Err(TargetError::Ambiguous) | Err(TargetError::Unknown) => {
-                self.observed = false;
-            }
-            Err(TargetError::NoSnapshot) => {
-                self.observed = false;
-            }
-        }
-    }
-    /// 目标缺席后相同字段重新出现：**不自动恢复为已确认**。
-    pub fn reappear(&mut self) {
-        // 保守：缺席后的重现不自动恢复连续性（需要更强证据或明确重新绑定，
-        // 本批只实现保守拒绝）。
-        self.observed = false;
-    }
-    pub fn identity(&self) -> &DisplayIdentity {
-        &self.identity
-    }
-    pub fn observed(&self) -> bool {
-        self.observed
-    }
-    /// 恢复授权：读取跟踪结果，而非外部参数。
-    pub fn authorizes_restore(&self) -> bool {
-        self.observed && self.identity.has_path_info()
-    }
-}
-
-/// 共用恢复决策：基于连续性跟踪器与当前解析结果判定。
-/// 返回 `TargetRestoreDecision`，调用方据此执行或拒绝恢复（拒绝时保留记录）。
-pub(crate) fn decide_target_restore(
-    continuity: &TargetContinuity,
-    resolver: &dyn TargetResolver,
-) -> TargetRestoreDecision {
-    if !continuity.identity.has_path_info() {
-        return TargetRestoreDecision::Unknown;
-    }
-    match resolver.resolve(&continuity.identity) {
-        Ok(_) => {
-            if continuity.authorizes_restore() {
-                TargetRestoreDecision::Confirmed
-            } else {
-                TargetRestoreDecision::Unconfirmed
-            }
-        }
-        Err(TargetError::Gone) => TargetRestoreDecision::Gone,
-        Err(TargetError::Ambiguous) | Err(TargetError::Unknown) => TargetRestoreDecision::Unconfirmed,
-        Err(TargetError::NoSnapshot) => TargetRestoreDecision::Unconfirmed,
-    }
-}
-
-/// 一个显示器槽位的完整描述：身份 + 展示 + 当前寻址（一批一致的快照）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct DisplaySnapshot {
-    /// 身份依据（恢复绑定用）。
-    pub identity: DisplayIdentity,
-    /// 展示标签（仅 UI/日志，不参与判定）。
-    pub friendly_name: String,
-    /// 当前 GDI 寻址路径（\\.\DISPLAYn），瞬时。
-    pub gdi_path: String,
-    /// CCD 源路径标识（sourceInfo.adapterId/id）——共享显示源识别依据
-    /// （同一源路径 = 同一视频源，可能共享 Gamma 域）。
-    pub source_adapter_high: i32,
-    pub source_adapter_low: u32,
-    pub source_id: u32,
-    /// 是否主显示器。
-    pub is_primary: bool,
-    /// 当前宽度/高度（供诊断日志）。
-    pub width: i32,
-    pub height: i32,
-}
-
-/// 目标解析结果：身份已核验、寻址已确定的目标对象。
-/// 所有物理读写应使用该对象，不在底层再次按裸索引查询另一份设备表。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ResolvedTarget {
-    /// 已核验一致的身份。
-    pub identity: DisplayIdentity,
-    /// 当前寻址信息（解析时一致快照内的）。
-    pub gdi_path: String,
-    /// 该快照在解析时的槽位索引（诊断用，不作为身份）。
-    pub snapshot_index: usize,
-    /// 解析时的一致性快照版本（捕获/恢复核验用）。
-    pub snapshot_version: u64,
-}
-
-/// 目标解析失败分类（统一错误语义）。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum TargetError {
-    /// 身份不在当前拓扑中（目标暂时消失）。
-    Gone,
-    /// 身份无法确认（依据不足/歧义）。
-    Unknown,
-    /// 多个快照匹配同一目标（共享显示源歧义）。
-    Ambiguous,
-    /// 拓扑快照为空/不可用。
-    NoSnapshot,
-}
-
-/// 恢复责任记录：有 Ramp 与无 Ramp 都保留目标身份依据。
-/// 用户接管（自动会话过期）只终止过期自动动作，**不删除原始校色数据**——
-/// 只有明确恢复成功或执行了明确数据处置策略才清除记录。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RestoreRecord {
-    /// 本进程可能修改了哪个目标（身份依据）。
-    pub target: DisplayIdentity,
-    /// 捕获的原始 gamma ramp；None = 降级清除场景（身份仍保留）。
-    pub original_ramp: Option<GammaRamp>,
-    /// 待恢复。
-    pub restore_pending: bool,
-    /// 自动会话关联（可空：非自动路径）。用户接管判定用。
-    pub session: Option<u64>,
-    /// 恢复意图版本（Restoring 阶段重试用）。
-    pub restore_generation: Option<u64>,
-}
-
-/// 恢复记录管理（最小可复用函数集；暂不接生产写屏，测试直接调用）。
-pub(crate) type RestoreRecords = HashMap<DisplayIdentity, RestoreRecord>;
-
-/// 用户接管：释放自动关联（session/generation），**保留原始 Ramp 与待恢复责任**。
-pub(crate) fn record_user_takeover(record: &mut RestoreRecord) {
-    record.session = None;
-    record.restore_generation = None;
-    // original_ramp 与 restore_pending 保留：新操作仍需要最初的原始校色数据。
-}
-
-/// 新目标进入：登记 B 的记录，不覆盖 A 的现有记录。
-pub(crate) fn record_register_target(
-    records: &mut RestoreRecords,
-    record: RestoreRecord,
-) {
-    let key = record.target.clone();
-    // 若已存在同目标记录，保留既有记录（不覆盖原始数据）；否则插入。
-    records.entry(key).or_insert(record);
-}
-
-/// 目标消失：保留原记录，不转交给替代设备。
-/// 返回原记录（若存在）。
-pub(crate) fn record_keep_on_gone(records: &mut RestoreRecords, identity: &DisplayIdentity) -> Option<RestoreRecord> {
-    records.get(identity).cloned()
-}
-
-/// 恢复失败：保留记录（pending 仍 true）。
-pub(crate) fn record_on_restore_failure(record: &mut RestoreRecord, err: &str) {
-    record.restore_pending = true;
-    // 日志由调用方记录；本函数保证失败不清除数据。
-    log::warn!("恢复失败，保留恢复记录（目标 {}）: {}", record.target.monitor_device_path, err);
-}
-
-/// 恢复成功：**已由调用方验证成功**后的内部清理动作——本函数不自行执行条件核验，
-/// 调用方（共用协调层）必须已确认目标绑定与恢复版本有效。
-pub(crate) fn record_on_restore_success(record: &mut RestoreRecord) {
-    record.restore_pending = false;
-    record.original_ramp = None;
-    record.session = None;
-    record.restore_generation = None;
-}
-
-/// 带绑定/修订校验的成功清理：仅当记录仍对应 `expected_identity` 且（若记录
-/// 携带会话）`expected_session` 匹配时才清理。旧记录的恢复结果不能清掉后来
-/// 替换或重新绑定的记录。返回是否执行了清理。
-pub(crate) fn record_on_restore_success_if_current(
-    record: &mut RestoreRecord,
-    expected_identity: &DisplayIdentity,
-    expected_session: Option<u64>,
-) -> bool {
-    if record.target != *expected_identity {
-        return false;
-    }
-    if expected_session.is_some() && record.session != expected_session {
-        return false; // 会话已被替换/接管：不清理（保留原始数据供后续）。
-    }
-    record_on_restore_success(record);
-    true
-}
-
-/// 新操作继续使用原目标：是否已有原始 Ramp（有则保留，调用方不应重新捕获覆盖）。
-pub(crate) fn record_keep_original_ramp(record: &RestoreRecord) -> bool {
-    record.original_ramp.is_some()
-}
-
-/// 捕获前后核验共用流程（暂不接生产写屏；用可注入的后端与解析器驱动）：
-/// 1. 解析目标及快照版本；
-/// 2. 从**该目标**读取 Ramp（假后端按解析出的目标读取）；
-/// 3. 再取当前拓扑并核验版本/目标一致；
-/// 4. 一致 → 提交有效捕获记录；不一致 → 返回拒绝，**不替换既有记录**。
-///
-/// 返回 `Ok(Some(record))`：捕获有效并提交（original_ramp 已填充）；
-/// `Ok(None)`：已有捕获记录（不覆盖）或目标读取后核验一致但记录已存在；
-/// `Err(CaptureRejected)`：读取后拓扑变化/目标变化——捕获失效，不提交。
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum CaptureRejected {
-    SnapshotChanged,
-    TargetGone,
-    IdentityMismatch,
-}
-
-pub(crate) fn capture_with_verify(
-    identity: &DisplayIdentity,
-    resolver: &dyn TargetResolver,
-    backend: &dyn GammaBackend,
-    records: &mut RestoreRecords,
-) -> Result<Option<RestoreRecord>, CaptureRejected> {
-    // 1. 解析目标及快照版本。
-    let target = match resolver.resolve(identity) {
-        Ok(t) => t,
-        Err(TargetError::Gone) => return Err(CaptureRejected::TargetGone),
-        Err(_) => return Err(CaptureRejected::IdentityMismatch),
-    };
-    // 若已有捕获记录：不覆盖（保留最初原始数据）。
-    if let Some(existing) = records.get(identity) {
-        return Ok(Some(existing.clone()));
-    }
-    // 2. 从该目标读取 Ramp（后端按解析出的目标读取——此处用解析结果的
-    //    snapshot_index 定位假后端槽位；生产接 GDI 时按目标寻址）。
-    let ramp = match backend.read(target.snapshot_index) {
-        Ok(r) => r,
-        Err(e) => {
-            log::warn!("捕获读取失败（目标 {}）: {}", identity.monitor_device_path, e);
-            return Err(CaptureRejected::TargetGone);
-        }
-    };
-    // 3. 再取当前拓扑并核验：解析器版本/目标一致（快照可能已变化）。
-    let current = match resolver.resolve(identity) {
-        Ok(t) if t.snapshot_version == target.snapshot_version && t.snapshot_index == target.snapshot_index => t,
-        Ok(_) => return Err(CaptureRejected::SnapshotChanged),
-        Err(TargetError::Gone) => return Err(CaptureRejected::TargetGone),
-        Err(_) => return Err(CaptureRejected::IdentityMismatch),
-    };
-    let _ = current;
-    // 4. 一致 → 提交有效捕获记录。
-    let record = RestoreRecord {
-        target: identity.clone(),
-        original_ramp: Some(ramp),
-        restore_pending: true,
-        session: None,
-        restore_generation: None,
-    };
-    record_register_target(records, record.clone());
-    Ok(Some(record))
-}
-
-/// 可注入的目标解析器：基于一次一致的拓扑快照解析目标，
-/// 不在底层再次按裸索引查询。生产用真实枚举快照；测试注入独立快照。
-pub(crate) trait TargetResolver {
-    /// 按身份解析目标。返回 `Ok(ResolvedTarget)`（唯一匹配）或错误分类。
-    fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError>;
-    /// 当前快照（供诊断/拓扑版本维护）。
-    fn snapshot(&self) -> &[DisplaySnapshot];
-}
-
-/// 基于 `Vec<DisplaySnapshot>` 的解析器实现。
-pub(crate) struct SnapshotResolver {
-    snapshot: Vec<DisplaySnapshot>,
-    /// 应用维护的拓扑版本号（EnumDisplayMonitors 不直接提供版本；由应用在
-    /// 快照变化时递增，用于检测捕获/恢复期间拓扑变化）。
-    version: u64,
-}
-
-impl SnapshotResolver {
-    pub fn new(snapshot: Vec<DisplaySnapshot>, version: u64) -> Self {
-        Self { snapshot, version }
-    }
-    pub fn version(&self) -> u64 {
-        self.version
-    }
-}
-
-impl TargetResolver for SnapshotResolver {
-    fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError> {
-        if self.snapshot.is_empty() {
-            return Err(TargetError::NoSnapshot);
-        }
-        // 身份依据不足：拒绝（不按型号/端口猜测）。
-        if !identity.has_path_info() {
-            return Err(TargetError::Unknown);
-        }
-        // 按 identity 字段（不含展示/寻址）匹配。
-        let mut matches = self
-            .snapshot
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.identity == *identity);
-        let (idx, first) = match matches.next() {
-            Some(m) => m,
-            None => return Err(TargetError::Gone),
-        };
-        // 唯一身份匹配（同一 identity 只应出现在一个槽位；出现多个也属歧义）。
-        if matches.next().is_some() {
-            return Err(TargetError::Ambiguous);
-        }
-        // 共享显示源检测：同一源路径（CCD source）可能共享 Gamma 域。
-        // 若多个快照身份不同但源路径相同，视为歧义（不能独立写屏）。
-        let dup_source = self.snapshot.iter().any(|s| {
-            s.source_adapter_high == first.source_adapter_high
-                && s.source_adapter_low == first.source_adapter_low
-                && s.source_id == first.source_id
-                && s.identity != first.identity
-        });
-        if dup_source {
-            return Err(TargetError::Ambiguous);
-        }
-        // 寻址路径为空：不能返回可写目标（无法寻址）。
-        if first.gdi_path.trim().is_empty() {
-            return Err(TargetError::Unknown);
-        }
-        Ok(ResolvedTarget {
-            identity: identity.clone(),
-            gdi_path: first.gdi_path.clone(),
-            snapshot_index: idx,
-            snapshot_version: self.version,
-        })
-    }
-    fn snapshot(&self) -> &[DisplaySnapshot] {
-        &self.snapshot
-    }
-}
 
 static DISPLAY_DEVICES: Mutex<Option<Vec<String>>> = Mutex::new(None);
 
@@ -829,19 +438,13 @@ pub(crate) enum RollbackOutcome {
 /// 协调层上下文。生产路径用全局静态构造（[`global_ops`]）；测试用独立实例 +
 /// 假后端，从而**不替换全局状态**也能并行运行真实协调逻辑。
 #[derive(Clone, Copy)]
-pub(crate) struct DisplayOps<'a> {    states: &'a Mutex<Option<Vec<Mutex<DisplayState>>>>,
+pub(crate) struct DisplayOps<'a> {
+    states: &'a Mutex<Option<Vec<Mutex<DisplayState>>>>,
     op_locks: &'a Mutex<Vec<Arc<Mutex<()>>>>,
     ramps: &'a Mutex<Vec<Mutex<Option<GammaRamp>>>>,
     shutting_down: &'a AtomicBool,
     count: usize,
     backend: &'a dyn GammaBackend,
-}
-
-impl<'a> DisplayOps<'a> {
-    /// 后端访问器（测试注入假后端；生产为真实后端）。
-    pub(crate) fn backend(&self) -> &dyn GammaBackend {
-        self.backend
-    }
 }
 
 /// 一次“捕获原始 ramp 并复查版本”的结果：区分捕获被跳过（版本过期/退出）与
@@ -990,13 +593,6 @@ impl<'a> DisplayOps<'a> {
         let state = states.get(idx)?;
         let mut state = state.lock().unwrap();
         Some(f(&mut *state))
-    }
-
-    /// 是否在操作锁外拥有有效的状态槽位（用于锁外快速检查，供 `apply` 等在
-    /// 取得操作锁前先验证目标显示器，避免对越界索引取锁后才发现目标不存在）。
-    pub(crate) fn has_state_slot(&self, idx: usize) -> bool {
-        let lock = self.states.lock().unwrap();
-        lock.as_ref().map(|s| idx < s.len()).unwrap_or(false)
     }
 
     /// **退出准入的原子边界**：在同一状态锁内先检查退出标志，通过后才允许
@@ -1328,26 +924,10 @@ fn display_count() -> usize {
     DISPLAY_DEVICES.lock().unwrap().as_ref().map(|d| d.len()).unwrap_or(1).max(1)
 }
 
-/// 确保 ORIGINAL_RAMPS 与显示器数量对齐；新增的槽位默认为 None（尚未捕获）。
-fn ensure_original_ramps(count: usize) {
-    let mut lock = ORIGINAL_RAMPS.lock().unwrap();
-    if lock.len() > count {
-        lock.truncate(count);
-    } else {
-        while lock.len() < count {
-            lock.push(Mutex::new(None));
-        }
-    }
-}
-
 /// 条件开启：在**单一状态锁闭包内**完成「当前未开启 → 置开启 → 递增版本」三件事。
 /// 返回 `Some(新版本)`：本任务赢得开启权，可据此登记归属并派发版本化应用；
 /// 返回 `None`：正在退出，或用户已在锁外预检查之后、本提交之前手动开启（版本已被
 /// 推进）——资格不成立时**不创建有效自动归属，也不覆盖手动意图**。
-pub(crate) fn conditional_set_active(idx: usize, active: bool) -> Option<u64> {
-    conditional_set_active_with(&global_ops(), idx, active)
-}
-
 /// 自动登记控制锁 + 控制状态：关闭命令与自动开启/登记共享的同步边界。
 /// 控制状态（enabled + generation）的读取、修改和登记遵守**同一把锁边界**——
 /// 锁外读取的 bool/代次快照不作为锁内依据。锁内不得等待物理恢复或跨 await。
@@ -1482,11 +1062,6 @@ pub(crate) fn auto_current_generation() -> u64 {
     auto_registration_guard().generation
 }
 
-/// 读取自动控制是否启用（锁内读取；供状态查询用，不作为登记依据）。
-pub(crate) fn auto_is_enabled() -> bool {
-    auto_registration_guard().enabled
-}
-
 /// 条件开启的可测试变体：对注入的 DisplayOps 实例执行（测试用独立上下文驱动）。
 pub(crate) fn conditional_set_active_with(ops: &DisplayOps, idx: usize, active: bool) -> Option<u64> {
     ops.submit(idx, |s| {
@@ -1497,21 +1072,6 @@ pub(crate) fn conditional_set_active_with(ops: &DisplayOps, idx: usize, active: 
         Some(bump_operation_generation(s))
     })
     .flatten()
-}
-
-/// 读取指定显示器的滤镜是否开启（供 game_filter 模块使用）
-pub(crate) fn is_filter_active(idx: usize) -> bool {
-    with_display_state(idx, |state| state.filter_active)
-}
-
-/// 设置指定显示器的滤镜开关状态（供 game_filter 模块使用），并返回新的操作生成代号。
-/// 应用正在退出时拒绝（返回 Err），避免游戏轮询在退出期间再写屏。
-pub(crate) fn set_filter_active(idx: usize, active: bool) -> Result<u64, String> {
-    ensure_not_shutting_down()?;
-    Ok(submit_intent(idx, |state| {
-        state.filter_active = active;
-        bump_operation_generation(state)
-    })?)
 }
 
 pub(crate) fn get_active_index() -> usize {
@@ -2997,22 +2557,6 @@ impl<'a> DisplayOps<'a> {
 }
 
 // ─── 生产路径薄封装（委托到全局协调层）───
-
-pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
-    // 兼容性包装：generation 未知，仅用于获取当前代号后走完整执行器（含捕获后复查）。
-    let generation = global_ops()
-        .with_state(idx, |s| s.operation_generation)
-        .ok_or_else(|| format!("apply_filter_to_display[{}]: 显示器状态不存在", idx))?;
-    apply_filter_to_display_if_current(idx, generation)
-        .map(|_| ())
-        .map_err(|e| e)
-}
-
-/// 恢复显示器（要求调用方已持有操作锁）。返回实际恢复形式，供调用方向用户区分
-/// “精确恢复”与“降级线性清除”。
-pub(crate) fn restore_display_default(idx: usize) -> Result<RestoreOutcome, String> {
-    global_ops().restore(idx)
-}
 
 /// 生产使用的应用包装逻辑（可在测试中用独立 DisplayOps 实例驱动）：
 /// 捕获后版本复查发现过期时，向调用方返回**单层** `SkippedStale`。
@@ -5341,52 +4885,6 @@ mod coordination_tests {
     }
 
     // ─── 场景 19：拓扑变化（设备名/数量不符）→ TargetGone，不写任何显示器 ───
-    #[test]
-    fn topology_change_aborts_restore_without_touching_displays() {
-        // 场景：目标显示器失效或重排（设备名变化 / 数量变化）→ 决策返回 TargetGone，
-        // slot 清空，不写任何显示器（log_order 必须为空）。
-        let ctx = TestContext::new(2);
-        let g1 = ctx.ops.submit(0, |s| {
-            s.filter_active = true;
-            bump_operation_generation(s)
-        }).unwrap();
-        let slot: AutoOwnershipSlot = StdMutex::new(Some(AutoOwnership {
-            session: 1,
-            display_idx: 0,
-            device_name: "DEV0".to_string(),
-            display_count: 2,
-            operation_generation: g1,
-            state: AutoSessionState::Applied,
-            restore_generation: None,
-        }));
-
-        // 设备名变化：拓扑返回 ("DEV9", 2) — 设备名不匹配 → TargetGone。
-        let decision = auto_restore_decision(&slot, 1, &ctx.ops, |_idx| Some(("DEV9".to_string(), 2)));
-        assert!(matches!(decision, AutoRestoreDecision::TargetGone),
-                "设备名不匹配必须 TargetGone，实际 {:?}", decision);
-        assert!(slot.lock().unwrap().is_none(), "TargetGone 必须清空 slot");
-        assert!(ctx.log_order().is_empty(), "TargetGone 不得触碰任何显示器: {:?}", ctx.log_order());
-
-        // 数量变化：拓扑返回 ("DEV0", 1) — 数量不符 → TargetGone。
-        let g2 = ctx.ops.submit(0, |s| {
-            s.filter_active = true;
-            bump_operation_generation(s)
-        }).unwrap();
-        let slot: AutoOwnershipSlot = StdMutex::new(Some(AutoOwnership {
-            session: 2,
-            display_idx: 0,
-            device_name: "DEV0".to_string(),
-            display_count: 2,
-            operation_generation: g2,
-            state: AutoSessionState::Applied,
-            restore_generation: None,
-        }));
-        let decision = auto_restore_decision(&slot, 2, &ctx.ops, |_idx| Some(("DEV0".to_string(), 1)));
-        assert!(matches!(decision, AutoRestoreDecision::TargetGone),
-                "数量不匹配必须 TargetGone，实际 {:?}", decision);
-        assert!(slot.lock().unwrap().is_none());
-        assert!(ctx.log_order().is_empty(), "数量变化也不得触碰任何显示器: {:?}", ctx.log_order());
-    }
 
     // ─── 场景 20：生产应用包装层 apply_filter_if_current_with 必须返回单层 SkippedStale ───
     #[test]
@@ -5759,484 +5257,42 @@ mod coordination_tests {
         assert!(ctx.log_order().is_empty(), "登记与关闭都不得写屏: {:?}", ctx.log_order());
     }
 
-    // ─── 拓扑绑定第一批：目标解析与恢复责任模型（离线）───
-
-    /// 构造测试快照辅助。
-    fn snap(
-        device_path: &str,
-        src_id: u32,
-        gdi: &str,
-        friendly: &str,
-        is_primary: bool,
-    ) -> DisplaySnapshot {
-        DisplaySnapshot {
-            identity: DisplayIdentity {
-                monitor_device_path: device_path.to_string(),
-                adapter_high: 1,
-                adapter_low: 2,
-                target_id: src_id,
-            },
-            friendly_name: friendly.to_string(),
-            gdi_path: gdi.to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: src_id,
-            is_primary,
-            width: 1920,
-            height: 1080,
-        }
-    }
 
     // 场景：同型号同端口替换，系统身份依据无法区分（设备路径+目标 id 全同的
     // 两个槽位）→ 解析必须拒绝（Ambiguous），不写屏。
-    #[test]
-    fn topology_same_model_same_port_identity_rejected() {
-        // 两个槽位携带完全相同的 identity（同型号替换后系统未提供独特信息，
-        // 设备路径+adapter+target_id 都相同）——身份无法区分。
-        let shared_identity = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let a = DisplaySnapshot {
-            identity: shared_identity.clone(),
-            friendly_name: "DELL A".to_string(),
-            gdi_path: r"\\.\DISPLAY1".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        let b = DisplaySnapshot {
-            identity: shared_identity.clone(), // 同一身份出现在两个槽位
-            friendly_name: "DELL A (replacement)".to_string(),
-            gdi_path: r"\\.\DISPLAY2".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: false,
-            width: 1920,
-            height: 1080,
-        };
-        let resolver = SnapshotResolver::new(vec![a, b], 1);
-        let target = resolver.resolve(&shared_identity);
-        // 同一 identity 匹配多个槽位 → Ambiguous：系统未能区分，拒绝写屏。
-        match target {
-            Err(TargetError::Ambiguous) => {}
-            Err(e) => panic!("应为 Ambiguous，实际 {:?}", e),
-            Ok(_) => panic!("身份重复时必须拒绝解析（不能按型号猜测写屏）"),
-        }
-    }
 
     // 场景：同型号但设备路径不同（身份可区分）→ 解析唯一成功。
-    #[test]
-    fn topology_same_model_distinct_path_resolves() {
-        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
-        let b = snap("DISPLAY\\DEL0001\\5&def", 2, r"\\.\DISPLAY2", "DELL A", false);
-        let resolver = SnapshotResolver::new(vec![a, b], 1);
-        let target = resolver.resolve(&DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&def".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 2,
-        });
-        let resolved = target.expect("路径不同身份应可区分");
-        assert_eq!(resolved.gdi_path, r"\\.\DISPLAY2", "解析必须返回当前寻址路径");
-        assert_eq!(resolved.snapshot_index, 1);
-    }
 
     // 场景：索引重排后按身份解析到正确设备（不依赖索引）。
-    #[test]
-    fn topology_index_reorder_resolves_by_identity() {
-        // 原快照：A 在槽 0。重排后 A 在槽 1（B 插入槽 0）。
-        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
-        let b = snap("DISPLAY\\DELL0002\\5&xyz", 2, r"\\.\DISPLAY2", "Other", false);
-        let reordered = vec![b.clone(), a.clone()];
-        let resolver = SnapshotResolver::new(reordered, 2);
-        let target = resolver.resolve(&a.identity).expect("重排后仍应解析到 A");
-        assert_eq!(target.gdi_path, r"\\.\DISPLAY1", "必须解析到 A 的当前寻址");
-        assert_eq!(target.snapshot_index, 1, "A 现在位于槽 1");
-    }
 
     // 场景：无关设备增减不影响原目标解析。
-    #[test]
-    fn topology_unrelated_add_remove_keeps_resolution() {
-        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
-        // 加入无关设备 C、移除 B，A 身份不变 → 仍解析。
-        let c = snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other C", false);
-        let resolver = SnapshotResolver::new(vec![a.clone(), c], 3);
-        let target = resolver.resolve(&a.identity).expect("无关设备增减不影响 A");
-        assert_eq!(target.identity, a.identity);
-    }
 
     // 场景：目标消失 → Gone；重现且身份匹配 → 解析成功。
-    #[test]
-    fn topology_gone_then_reappears() {
-        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
-        // 消失：快照不含 A。
-        let b = snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false);
-        let resolver = SnapshotResolver::new(vec![b], 4);
-        assert_eq!(resolver.resolve(&a.identity), Err(TargetError::Gone),
-                   "目标消失必须 Gone");
-        // 重现：快照含 A（槽位变化），身份匹配 → 解析成功。
-        let reappeared = vec![
-            snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false),
-            a.clone(),
-        ];
-        let resolver2 = SnapshotResolver::new(reappeared, 5);
-        let target = resolver2.resolve(&a.identity).expect("重现且身份匹配应可解析");
-        assert_eq!(target.snapshot_index, 1);
-    }
 
     // 场景：身份依据不足（设备路径为空）→ 拒绝，不按型号/端口猜测。
-    #[test]
-    fn topology_unreliable_identity_rejected() {
-        let snap_no_path = DisplaySnapshot {
-            identity: DisplayIdentity {
-                monitor_device_path: String::new(),
-                adapter_high: 1,
-                adapter_low: 2,
-                target_id: 1,
-            },
-            friendly_name: "Unknown".to_string(),
-            gdi_path: r"\\.\DISPLAY1".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        // 身份依据不足：空路径 has_path_info 直接为 false。
-        assert!(!snap_no_path.identity.has_path_info());
-        let resolver = SnapshotResolver::new(vec![snap_no_path], 1);
-        // 用空路径身份解析 → Unknown（即使端口可复现也不批准）。
-        assert_eq!(
-            resolver.resolve(&DisplayIdentity {
-                monitor_device_path: String::new(),
-                adapter_high: 1,
-                adapter_low: 2,
-                target_id: 1,
-            }),
-            Err(TargetError::Unknown),
-            "身份依据不足必须拒绝"
-        );
-    }
 
     // 场景：共享显示源（同一 CCD source、不同 identity）→ Ambiguous 拒绝独立写屏。
-    #[test]
-    fn topology_shared_source_rejected() {
-        // 镜像/克隆模式：两个 target 共享同一 source_id。
-        let a = snap("DISPLAY\\DEL0001\\5&abc", 7, r"\\.\DISPLAY1", "DELL A", true);
-        let b = DisplaySnapshot {
-            identity: DisplayIdentity {
-                monitor_device_path: "DISPLAY\\DEL0001\\5&def".to_string(),
-                adapter_high: 1,
-                adapter_low: 2,
-                target_id: 8,
-            },
-            friendly_name: "DELL B".to_string(),
-            gdi_path: r"\\.\DISPLAY2".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 7, // 与 A 同一源 → 共享 Gamma 域歧义
-            is_primary: false,
-            width: 1920,
-            height: 1080,
-        };
-        let resolver = SnapshotResolver::new(vec![a, b], 1);
-        let target = resolver.resolve(&DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 7,
-        });
-        match target {
-            Err(TargetError::Ambiguous) => {}
-            other => panic!("共享显示源必须拒绝独立写屏，实际 {:?}", other),
-        }
-    }
 
     // 场景：用户接管（自动会话过期）不删除原始校色数据——恢复记录管理函数。
-    #[test]
-    fn restore_record_survives_user_takeover() {
-        let identity = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        // 自动开启捕获了原始 ramp。
-        let mut record = RestoreRecord {
-            target: identity.clone(),
-            original_ramp: Some([[1u16; 256]; 3]),
-            restore_pending: true,
-            session: Some(42),
-            restore_generation: Some(9),
-        };
-        // 调用管理函数：用户接管只释放自动关联。
-        record_user_takeover(&mut record);
-        assert!(record.session.is_none(), "自动会话关联释放");
-        assert!(record.restore_generation.is_none(), "恢复意图版本释放");
-        assert!(record.original_ramp.is_some(), "用户接管不得删除原始校色数据");
-        assert!(record.restore_pending, "待恢复责任保留");
-        assert_eq!(record.target, identity, "目标身份保留");
-        // 恢复成功才条件清理。
-        record_on_restore_success(&mut record);
-        assert!(!record.restore_pending, "成功后才清除待恢复");
-        assert!(record.original_ramp.is_none(), "成功后原始数据清理");
-    }
 
     // 场景：无原始 Ramp 的降级清除场景，身份仍保留（恢复管理函数）。
-    #[test]
-    fn restore_record_without_ramp_keeps_identity() {
-        let identity = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let mut record = RestoreRecord {
-            target: identity.clone(),
-            original_ramp: None, // 降级清除场景
-            restore_pending: true,
-            session: None,
-            restore_generation: None,
-        };
-        assert!(record.restore_pending);
-        // 恢复失败：管理函数保留记录（pending 仍 true，身份不丢）。
-        record_on_restore_failure(&mut record, "模拟恢复失败");
-        assert!(record.restore_pending, "失败后待恢复保留");
-        assert_eq!(record.target.monitor_device_path, "DISPLAY\\DEL0001\\5&abc", "身份保留");
-        assert!(record.target.has_path_info());
-    }
 
     // 场景：新目标进入不覆盖旧记录（调用登记函数）。
-    #[test]
-    fn restore_record_not_overwritten_by_new_device() {
-        let identity_a = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let identity_b = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\OTH0003\\5&zzz".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 3,
-        };
-        let mut records: RestoreRecords = HashMap::new();
-        // 登记 A。
-        record_register_target(&mut records, RestoreRecord {
-            target: identity_a.clone(),
-            original_ramp: Some([[7u16; 256]; 3]),
-            restore_pending: true,
-            session: None,
-            restore_generation: None,
-        });
-        // 实际登记 B（新目标进入）。
-        record_register_target(&mut records, RestoreRecord {
-            target: identity_b.clone(),
-            original_ramp: Some([[8u16; 256]; 3]),
-            restore_pending: true,
-            session: None,
-            restore_generation: None,
-        });
-        // A 的记录仍存在且未修改。
-        let a_rec = records.get(&identity_a).expect("A 的记录必须保留");
-        assert_eq!(a_rec.original_ramp, Some([[7u16; 256]; 3]), "A 的原始数据未被覆盖");
-        assert!(records.contains_key(&identity_b), "B 已登记");
-    }
 
     // 场景：目标消失——保留原记录，不转交给替代设备（调用管理函数）。
-    #[test]
-    fn restore_record_kept_on_target_gone() {
-        let identity_a = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let mut records: RestoreRecords = HashMap::new();
-        record_register_target(&mut records, RestoreRecord {
-            target: identity_a.clone(),
-            original_ramp: Some([[7u16; 256]; 3]),
-            restore_pending: true,
-            session: None,
-            restore_generation: None,
-        });
-        // A 消失：保留原记录。
-        let kept = record_keep_on_gone(&mut records, &identity_a).expect("消失必须保留原记录");
-        assert_eq!(kept.target, identity_a, "记录不转交给替代设备");
-        assert!(records.contains_key(&identity_a), "记录仍在表中");
-    }
 
     // 场景：新操作继续使用原目标——不覆盖最初捕获的原始 Ramp。
-    #[test]
-    fn restore_record_keeps_original_ramp_on_new_operation() {
-        let identity = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let mut record = RestoreRecord {
-            target: identity.clone(),
-            original_ramp: Some([[3u16; 256]; 3]),
-            restore_pending: true,
-            session: Some(1),
-            restore_generation: None,
-        };
-        // 新操作继续使用原目标：已有原始数据 → 不重新捕获覆盖。
-        assert!(record_keep_original_ramp(&record), "已有原始数据必须保留");
-        // 新操作自身失败的回滚走同一记录：原始 ramp 不变。
-        record_on_restore_failure(&mut record, "新操作失败");
-        assert_eq!(record.original_ramp, Some([[3u16; 256]; 3]), "原始 Ramp 未被覆盖");
-        assert!(record.restore_pending);
-    }
 
     // ─── 收尾 1：唯一匹配 vs 跨拓扑恢复授权 ───
     // 快照 1 只有 A（身份字段 X）；A 被移除；快照 2 只有替代设备 B（系统仍提供 X）。
     // 任何单一快照都没有两个 X——唯一匹配成功，但跨拓扑恢复**不得授权**（无连续性
     // 观察且无更强身份依据 → Unconfirmed，不写屏）。
-    #[test]
-    fn topology_sequential_replacement_not_confirmed_without_continuity() {
-        let x = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        // 快照 1：只有 A（X）。
-        let a = DisplaySnapshot {
-            identity: x.clone(),
-            friendly_name: "DELL A".to_string(),
-            gdi_path: r"\\.\DISPLAY1".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        let snap1 = SnapshotResolver::new(vec![a.clone()], 1);
-        // 捕获时解析：唯一匹配成功（定位）。
-        let resolved = snap1.resolve(&x).expect("快照 1 唯一匹配应成功");
-        assert_eq!(resolved.gdi_path, r"\\.\DISPLAY1");
-        // A 被移除。快照 2：只有替代设备 B，系统仍提供 X（同型号替换）。
-        let b = DisplaySnapshot {
-            identity: x.clone(), // 相同身份字段
-            friendly_name: "DELL B (replacement)".to_string(),
-            gdi_path: r"\\.\DISPLAY2".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        let snap2 = SnapshotResolver::new(vec![b.clone()], 2);
-        // 快照 2 中唯一匹配成功（定位到 B）——但跨拓扑恢复不得自动授权：
-        // 没有连续性观察（连接中断后仅凭相同路径/LUID/端口）→ Unconfirmed。
-        let resolved2 = snap2.resolve(&x).expect("快照 2 唯一匹配应成功（定位）");
-        assert_eq!(resolved2.gdi_path, r"\\.\DISPLAY2");
-        // 共用连续性跟踪器：捕获时绑定 A（连续观察开始）。
-        let mut continuity = TargetContinuity::bind(x.clone());
-        // 正常观察（快照 1 仍含 A）→ 连续性保持。
-        continuity.observe(&snap1);
-        assert!(continuity.authorizes_restore(), "连续观察期间应可授权恢复");
-        // A 缺席：把缺席快照交给跟踪器（快照只含无关设备）→ 连续性中断。
-        let gone_snap = SnapshotResolver::new(vec![
-            snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false),
-        ], 3);
-        continuity.observe(&gone_snap);
-        assert!(!continuity.observed(), "目标缺席必须中断连续性");
-        // 相同字段的 B 重新出现（快照 2）→ 不自动恢复连续性。
-        continuity.observe(&snap2);
-        assert!(!continuity.observed(), "缺席后相同字段重现不自动恢复为已确认");
-        // 共用决策函数：读取跟踪结果（而非外部传参）→ Unconfirmed。
-        let decision = decide_target_restore(&continuity, &snap2);
-        assert_eq!(decision, TargetRestoreDecision::Unconfirmed,
-                   "A 消失、B 以相同字段单独出现：无法确认是原设备，不写屏");
-        // 恢复记录保留（不写屏、不清理）。
-        let identity = x.clone();
-        let mut records: RestoreRecords = HashMap::new();
-        record_register_target(&mut records, RestoreRecord {
-            target: identity.clone(),
-            original_ramp: Some([[1u16; 256]; 3]),
-            restore_pending: true,
-            session: None,
-            restore_generation: None,
-        });
-        assert!(records.contains_key(&identity), "Unconfirmed 时恢复记录保留");
-    }
 
     // ─── 收尾 2：快照版本接入捕获核验 + 空寻址拒绝 ───
     // 解析目标 → 开始捕获 → 拓扑变化 → 捕获返回：旧捕获结果不被接受为有效
     // 恢复记录，不执行后续应用（版本核验，不接真实写屏）。
-    #[test]
-    fn topology_capture_rejected_after_snapshot_change() {
-        let x = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let a = DisplaySnapshot {
-            identity: x.clone(),
-            friendly_name: "DELL A".to_string(),
-            gdi_path: r"\\.\DISPLAY1".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        let snap_v1 = SnapshotResolver::new(vec![a.clone()], 1);
-        // 解析目标（快照版本 1）。
-        let resolved = snap_v1.resolve(&x).expect("v1 解析成功");
-        assert_eq!(resolved.snapshot_version, 1, "解析结果必须关联快照版本");
-        // 捕获期间拓扑变化：快照版本推进到 2（同一身份仍在）。
-        let snap_v2 = SnapshotResolver::new(vec![a], 2);
-        let current = snap_v2.resolve(&x).expect("v2 解析成功");
-        // 版本不一致 → 旧解析结果不再有效（捕获期间拓扑变化，放弃该次捕获）。
-        assert_ne!(resolved.snapshot_version, current.snapshot_version,
-                   "拓扑版本已变化");
-        assert_eq!(current.snapshot_version, 2, "当前快照版本为 2");
-        // 若捕获流程核验版本：resolved 的版本(1) != 当前(2) → 放弃，不产生恢复记录。
-        let capture_valid = resolved.snapshot_version == current.snapshot_version;
-        assert!(!capture_valid, "拓扑变化后旧捕获结果不得被接受为有效恢复记录");
-    }
 
     // 空 gdi_path：唯一身份匹配但无法寻址 → 拒绝返回可写目标。
-    #[test]
-    fn topology_empty_gdi_path_rejected() {
-        let x = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let a = DisplaySnapshot {
-            identity: x.clone(),
-            friendly_name: "DELL A".to_string(),
-            gdi_path: String::new(), // 空寻址
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        let resolver = SnapshotResolver::new(vec![a], 1);
-        assert_eq!(resolver.resolve(&x), Err(TargetError::Unknown),
-                   "空 gdi_path 不得返回可写目标");
-    }
 
     // ─── 收尾 4：ICC 离线格式样本（当前解析行为 vs 未来校准写屏策略）───
     // 构造最小 ICC 文件：128 字节头部 + tag 表 + 标签数据。
@@ -6401,96 +5457,8 @@ mod coordination_tests {
     // ─── 收尾 2：假后端驱动的捕获前后核验共用流程 ───
     // 用共用函数 capture_with_verify：解析目标 → 读取 Ramp → 再取当前拓扑核验。
     // 假后端读取期间切换快照（版本推进）→ 返回拒绝，不提交、不覆盖既有记录。
-    #[test]
-    fn capture_verify_rejects_when_snapshot_changed_during_read() {
-        let ctx = TestContext::new(1);
-        let identity = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let a = DisplaySnapshot {
-            identity: identity.clone(),
-            friendly_name: "DELL A".to_string(),
-            gdi_path: r"\\.\DISPLAY1".to_string(),
-            source_adapter_high: 1,
-            source_adapter_low: 2,
-            source_id: 1,
-            is_primary: true,
-            width: 1920,
-            height: 1080,
-        };
-        // 解析器：第一次 resolve 返回版本 1，之后返回版本 2 —— 模拟"解析目标
-        // → 读取期间拓扑变化 → 再解析"的版本推进。
-        struct VersionFlipResolver {
-            snapshot: Vec<DisplaySnapshot>,
-            count: std::sync::Arc<AtomicUsize>,
-        }
-        impl TargetResolver for VersionFlipResolver {
-            fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError> {
-                let n = self.count.fetch_add(1, Ordering::Relaxed);
-                // 第一次 resolve 版本 1；之后 resolve 版本 2。
-                let ver = if n == 0 { 1 } else { 2 };
-                SnapshotResolver::new(self.snapshot.clone(), ver).resolve(identity)
-            }
-            fn snapshot(&self) -> &[DisplaySnapshot] {
-                &self.snapshot
-            }
-        }
-        let flip = VersionFlipResolver {
-            snapshot: vec![a],
-            count: std::sync::Arc::new(AtomicUsize::new(0)),
-        };
-        let mut records2: RestoreRecords = HashMap::new();
-        // 无既有记录：capture_with_verify 第一次 resolve v1 → read → 第二次 resolve v2
-        // → 版本不一致 → SnapshotChanged 拒绝，不提交新记录。
-        let result2 = capture_with_verify(&identity, &flip, ctx.ops.backend(), &mut records2);
-        assert_eq!(result2, Err(CaptureRejected::SnapshotChanged),
-                   "读取期间快照变化必须拒绝捕获（不提交、不写屏）");
-        assert!(!records2.contains_key(&identity), "拒绝后不得提交新恢复记录");
-        // 后续假应用调用次数为零（未发生任何写屏）。
-        let order = ctx.log_order();
-        assert!(!order.contains(&Op::ApplyIcc), "捕获拒绝后不得应用: {:?}", order);
-        assert!(!order.contains(&Op::Write), "捕获拒绝后不得写回: {:?}", order);
-        // read 确实发生（捕获尝试过）。
-        assert!(order.contains(&Op::Capture), "捕获读取必须发生: {:?}", order);
-    }
 
     // ─── 收尾 3：条件清理边界 ───
     // record_on_restore_success_if_current：旧记录的恢复结果不能清掉后来
     // 替换或重新绑定的记录。
-    #[test]
-    fn restore_success_if_current_does_not_clear_rebound_record() {
-        let identity_a = DisplayIdentity {
-            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
-            adapter_high: 1,
-            adapter_low: 2,
-            target_id: 1,
-        };
-        let mut records: RestoreRecords = HashMap::new();
-        // 旧会话 1 的记录（A，session=1）。
-        record_register_target(&mut records, RestoreRecord {
-            target: identity_a.clone(),
-            original_ramp: Some([[1u16; 256]; 3]),
-            restore_pending: true,
-            session: Some(1),
-            restore_generation: Some(5),
-        });
-        // 新会话 2 重新绑定同一目标（不覆盖原始数据，仅替换会话）。
-        let rec = records.get_mut(&identity_a).unwrap();
-        rec.session = Some(2);
-        rec.restore_generation = Some(6);
-        // 旧会话 1 的恢复成功：绑定不匹配（session=1 != 当前 2）→ 不清理。
-        let rec = records.get_mut(&identity_a).unwrap();
-        let cleared = record_on_restore_success_if_current(rec, &identity_a, Some(1));
-        assert!(!cleared, "旧会话恢复结果不得清掉重新绑定的记录");
-        assert!(rec.restore_pending, "未清理：待恢复保留");
-        assert_eq!(rec.original_ramp, Some([[1u16; 256]; 3]), "原始数据保留");
-        // 当前会话 2 的恢复成功：匹配 → 清理。
-        let rec = records.get_mut(&identity_a).unwrap();
-        let cleared = record_on_restore_success_if_current(rec, &identity_a, Some(2));
-        assert!(cleared, "当前会话恢复成功应清理");
-        assert!(!rec.restore_pending);
-    }
 }
