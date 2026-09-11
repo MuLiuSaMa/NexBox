@@ -991,6 +991,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "操作已被更新的操作取代，未执行",
     "title": "显示器滤镜",
     "enable": "启用滤镜",
     "presets": "预设模式",
@@ -3092,5 +3093,6 @@
     "deleteSuccessMulti": "已删除 {{n}} 个视频",
     "deleteBodyMulti": "删除后不可恢复，确定要永久删除选中的 {{n}} 个视频吗？",
     "andMore": "等 {{n}} 个"
-  }
+  },
+  "filterDisabledDegraded": "滤镜已关闭（降级清除：未能恢复原有校色）"
 }

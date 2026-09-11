@@ -1184,6 +1184,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "Operation superseded by a newer action; not executed",
     "title": "Display Filter",
     "enable": "Enable Filter",
     "presets": "Presets",
@@ -3095,5 +3096,6 @@
     "deleteSuccessMulti": "Deleted {{n}} videos",
     "deleteBodyMulti": "This cannot be undone. Permanently delete {{n}} selected videos?",
     "andMore": "and {{n}} more"
-  }
+  },
+  "filterDisabledDegraded": "Filter disabled (degraded clear: original calibration may not be restored)"
 }

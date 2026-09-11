@@ -830,6 +830,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "操作已被更新的操作取代，未執行",
     "title": "顯示器濾鏡",
     "enable": "啟用濾鏡",
     "presets": "預設模式",
@@ -1938,5 +1939,6 @@
     "deleteSuccessMulti": "已刪除 {{n}} 個影片",
     "deleteBodyMulti": "刪除後不可復原，確定要永久刪除選中的 {{n}} 個影片嗎？",
     "andMore": "等 {{n}} 個"
-  }
+  },
+  "filterDisabledDegraded": "濾鏡已關閉（降級清除：未能恢復原有色彩校正）"
 }

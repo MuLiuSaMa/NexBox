@@ -845,6 +845,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "Vorgang wurde durch eine neuere Aktion ersetzt und nicht ausgeführt",
     "title": "Anzeigefilter",
     "enable": "Filter aktivieren",
     "presets": "Voreinstellungen",
@@ -1953,5 +1954,6 @@
     "deleteSuccessMulti": "{{n}} Videos gelöscht",
     "deleteBodyMulti": "Dies kann nicht rückgängig gemacht werden. {{n}} ausgewählte Videos endgültig löschen?",
     "andMore": "und {{n}} weitere"
-  }
+  },
+  "filterDisabledDegraded": "Filter deaktiviert (abgestuftes Zurücksetzen: ursprüngliche Kalibrierung ggf. nicht wiederhergestellt)"
 }

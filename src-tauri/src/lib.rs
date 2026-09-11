@@ -1177,6 +1177,9 @@ pub fn run() {
                 overlay_panel::cleanup(); // 先停后台轮询线程(FPS/传感器)，再恢复 Gamma
                 game_win_key::cleanup();
                 speedtest::cleanup();
+                // 先停游戏滤镜轮询线程（推进控制代次），再执行显示器恢复：
+                // 否则轮询线程可能在清理期间触发新的应用/恢复，与 cleanup 争抢同一操作锁。
+                game_filter::shutdown();
                 display_filter::cleanup();
                 game_mode::shutdown();
                 vertical_overlay::cleanup(app_handle);

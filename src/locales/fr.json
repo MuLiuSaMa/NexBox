@@ -845,6 +845,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "Opération remplacée par une action plus récente ; non exécutée",
     "title": "Filtre d'affichage",
     "enable": "Activer le filtre",
     "presets": "Préréglages",
@@ -1953,5 +1954,6 @@
     "deleteSuccessMulti": "{{n}} vidéos supprimées",
     "deleteBodyMulti": "Action irréversible. Supprimer définitivement les {{n}} vidéos sélectionnées ?",
     "andMore": "et {{n}} autres"
-  }
+  },
+  "filterDisabledDegraded": "Filtre désactivé (nettoyage dégradé : la calibration d'origine peut ne pas être restaurée)"
 }

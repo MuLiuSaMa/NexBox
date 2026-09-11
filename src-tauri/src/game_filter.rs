@@ -1,9 +1,13 @@
 //! 游戏启动时自动应用滤镜模块
 //!
-//! 后台每 2.5 秒轮询一次系统进程，当检测到内置/自定义名单中的游戏进程运行时：
+//! 后台每 2 秒轮询一次系统进程，当检测到内置/自定义名单中的游戏进程运行时：
 //! - 自动开启当前选中的滤镜（复用 `display_filter::apply_filter_to_display`）
 //! 当所有名单内游戏进程退出时：
 //! - 自动恢复默认显示（仅关闭由自动任务开启的滤镜，不误关用户手动开启的滤镜）
+//!
+//! 边缘经防抖确认（连续观测一致 + 最小切换间隔）后才动作，避免进程名单抖动
+//! 造成滤镜反复应用/恢复；恢复失败的自动重试有次数上限与指数退避，不会
+//! 无限写屏。
 //!
 //! 参考 `optimization.rs` 的 ACE 自动检测模式（generation 代次控制线程生命周期 +
 //! `app.store` 持久化配置）。
@@ -341,15 +345,36 @@ pub const BUILTIN_GAMES: &[(&str, &[&str])] = &[
 
 /// 轮询间隔（秒）
 const POLL_INTERVAL_SECS: u64 = 2;
+/// 恢复重试上限：连续失败达到该次数后放弃自动重试（原始校色数据保留，
+/// 退出清理与用户手动恢复仍可用）。防止曾经的“每 2 秒无限写屏”风暴。
+const MAX_AUTO_RESTORE_RETRIES: u32 = 5;
+/// 恢复重试退避上限（秒）：指数退避 2→4→8→16→32，封顶 60。
+const RESTORE_RETRY_BACKOFF_CAP_SECS: u64 = 60;
+/// 边缘防抖：新状态需连续 N 次轮询观测一致才触发应用/恢复。
+const EDGE_DEBOUNCE_POLLS: u32 = 2;
+/// 两次自动切换（应用↔恢复）之间的最小间隔：进程名单抖动不得造成
+/// 滤镜反复应用/恢复（每次切换都是一次显示器写入）。
+const MIN_AUTO_SWITCH_INTERVAL: Duration = Duration::from_secs(10);
 
 // ─── 全局状态 ───
 
 /// 开关是否开启（内存态，供轮询线程与状态查询读取）
 static ENABLED: AtomicBool = AtomicBool::new(false);
-/// 代次：开关切换时 +1，通知旧轮询线程退出
-static GENERATION: AtomicU64 = AtomicU64::new(0);
-/// 当前滤镜是否由自动任务开启（用于退出游戏时区分自动/手动）
-static AUTO_FILTER_ON: AtomicBool = AtomicBool::new(false);
+/// 自动滤镜归属槽（替换原 AUTO_FILTER_ON 布尔）：记录哪个自动会话在哪台显示器上
+/// 以哪个版本开启了滤镜、处于什么状态。条件登记/条件弃权/条件恢复见
+/// [`display_filter::AutoOwnership`]。**锁顺序：归属锁 → 设备拓扑锁/状态锁 → 操作锁**，
+/// 绝不反向（display_filter 的状态/操作锁路径从不回调归属锁）。
+static AUTO_OWNERSHIP: Mutex<Option<display_filter::AutoOwnership>> = Mutex::new(None);
+/// 自动会话计数器：每次自动开启尝试生成新会话标识。
+static AUTO_SESSION: AtomicU64 = AtomicU64::new(0);
+/// 恢复重试策略状态（重试次数/退避时刻按会话隔离；恢复责任事实仍以
+/// [`AUTO_OWNERSHIP`] 的 Restoring 记录为准，这里只存“何时再试、还剩几次”）。
+struct RestoreRetryPolicy {
+    session: u64,
+    failures: u32,
+    next_retry_at: Option<std::time::Instant>,
+}
+static RESTORE_RETRY: Mutex<Option<RestoreRetryPolicy>> = Mutex::new(None);
 /// 自定义游戏名单内存缓存（None = 尚未从 store 加载）
 static CUSTOM_GAMES: Mutex<Option<Vec<CustomGame>>> = Mutex::new(None);
 
@@ -479,7 +504,10 @@ pub(crate) fn running_game_pids(system: &System) -> HashSet<u32> {
     }
     for (_, process) in system.processes() {
         let name = process.name().to_string();
-        if games.iter().any(|g| process_matches(&name, &g.process_names)) {
+        if games
+            .iter()
+            .any(|g| process_matches(&name, &g.process_names))
+        {
             pids.insert(process.pid().as_u32());
         }
     }
@@ -488,84 +516,389 @@ pub(crate) fn running_game_pids(system: &System) -> HashSet<u32> {
 
 // ─── 自动应用 / 恢复滤镜 ───
 
-/// 检测到游戏启动：自动开启当前选中的滤镜
-fn auto_apply_filter() {
+/// 检测到游戏启动：自动开启当前选中的滤镜。
+/// `expected_generation`：当前轮询线程启动时的控制代次。登记在控制锁内将
+/// `expected_generation` 与锁内当前代次比较——关闭后重开时旧代次即使当前
+/// enabled=true 也会被拒绝。
+fn auto_apply_filter(expected_generation: u64) {
     let idx = display_filter::get_active_index();
-    let was_active = display_filter::is_filter_active(idx);
 
-    if was_active {
-        // 用户已手动开启滤镜，自动任务不干预
-        AUTO_FILTER_ON.store(false, Ordering::Relaxed);
+    let Some((idx, session, operation_generation)) = display_filter::auto_register_owned(
+        idx,
+        expected_generation,
+        &AUTO_SESSION,
+        &AUTO_OWNERSHIP,
+    ) else {
+        log::info!(
+            "游戏滤镜自动应用[{}]: 条件开启被拒绝（功能已关闭/代次过期/滤镜已开启/退出中），自动任务不介入",
+            idx
+        );
         return;
-    }
+    };
 
-    display_filter::set_filter_active(idx, true);
-    match display_filter::apply_filter_to_display(idx) {
-        Ok(()) => {
-            AUTO_FILTER_ON.store(true, Ordering::Relaxed);
-            log::info!("游戏滤镜自动应用[{}]: 检测到游戏运行，已自动开启当前滤镜", idx);
+    match display_filter::apply_filter_to_display_if_current(idx, operation_generation) {
+        Ok(display_filter::RunResult::Executed(())) => {
+            // 条件登记：只有归属仍属于本会话、且操作版本未被用户推进，才置 Applied。
+            // 旧任务晚到成功不得登记成当前自动会话；用户已手动接管时条件弃权。
+            if display_filter::auto_mark_applied(
+                &AUTO_OWNERSHIP,
+                session,
+                &display_filter::global_ops(),
+            ) {
+                log::info!(
+                    "游戏滤镜自动应用[{}]: 检测到游戏运行，已自动开启当前滤镜",
+                    idx
+                );
+            } else {
+                log::info!(
+                    "游戏滤镜自动应用[{}]: 应用完成但归属已被新会话接管/用户已接管，不登记",
+                    idx
+                );
+            }
+        }
+        Ok(display_filter::RunResult::SkippedStale) => {
+            // 已被更晚意图接管：只释放**自己的**记录，不得清除新会话的归属。
+            display_filter::auto_release_if_owned(&AUTO_OWNERSHIP, session);
+            log::info!("游戏滤镜自动应用[{}]: 应用已过期，跳过", idx);
         }
         Err(e) => {
-            AUTO_FILTER_ON.store(false, Ordering::Relaxed);
-            display_filter::set_filter_active(idx, false);
+            // 统一失败回滚（条件）：仅当归属/版本仍属本任务时原子关闭并走
+            // 版本化串行恢复。按结果条件收尾（成功清记录由调用方统一处理）：
+            // - Restored/DegradedCleared/NoRestoreNeeded：条件完成恢复，清归属。
+            // - Superseded（关闭未提交/已过期）：条件弃权，不改新意图、不写屏。
+            // - RestoreFailed：保留 Restoring 记录 + restore_pending 供逐轮重试，
+            //   不得无条件清除。
+            match display_filter::auto_rollback_failed_apply_global(&AUTO_OWNERSHIP, session) {
+                display_filter::RollbackOutcome::Restored => {
+                    display_filter::auto_finish_restore(&AUTO_OWNERSHIP, session);
+                    log::info!("游戏滤镜自动应用[{}]: 应用失败，已精确恢复默认显示", idx);
+                }
+                display_filter::RollbackOutcome::DegradedCleared => {
+                    display_filter::auto_finish_restore(&AUTO_OWNERSHIP, session);
+                    log::warn!("游戏滤镜自动应用[{}]: 应用失败，已降级清除滤镜", idx);
+                }
+                display_filter::RollbackOutcome::NoRestoreNeeded => {
+                    display_filter::auto_finish_restore(&AUTO_OWNERSHIP, session);
+                    log::info!("游戏滤镜自动应用[{}]: 应用失败，无待恢复记录", idx);
+                }
+                display_filter::RollbackOutcome::Superseded => {
+                    // 已被更晚意图接管：只释放自己的记录，不得清除新会话的归属。
+                    display_filter::auto_release_if_owned(&AUTO_OWNERSHIP, session);
+                }
+                display_filter::RollbackOutcome::RestoreFailed(re) => {
+                    log::error!(
+                        "游戏滤镜自动应用[{}]: 应用失败，回滚恢复也失败（保留重试责任）: {}",
+                        idx,
+                        re
+                    );
+                }
+            }
             log::error!("游戏滤镜自动应用[{}]: 应用滤镜失败: {}", idx, e);
         }
     }
 }
 
-/// 游戏退出：若滤镜由自动任务开启则恢复默认显示
+/// 游戏退出：若滤镜由自动任务开启，则恢复**原目标显示器**的默认显示。
 fn auto_restore_filter() {
-    if !AUTO_FILTER_ON.load(Ordering::Relaxed) {
-        return;
+    // 会话标识：只处理当前归属所属的会话。
+    let session = {
+        let slot = AUTO_OWNERSHIP.lock().unwrap();
+        match slot.as_ref() {
+            Some(rec) => rec.session,
+            None => return, // 无归属（滤镜非自动开启）：不干预
+        }
+    };
+    // 归属核对 + 拓扑失效检测 + 原子条件关闭：全部在同一次归属锁持有内完成；
+    // 恢复永远针对登记时的目标显示器，不再用恢复时的 get_active_index() 替代。
+    match display_filter::auto_restore_decision_global(&AUTO_OWNERSHIP, session) {
+        display_filter::AutoRestoreDecision::Proceed {
+            display_idx,
+            restore_generation,
+        } => {
+            match display_filter::restore_display_default_if_current(
+                display_idx,
+                restore_generation,
+            ) {
+                Ok(display_filter::RunResult::Executed(_)) => {
+                    display_filter::auto_finish_restore(&AUTO_OWNERSHIP, session);
+                    log::info!(
+                        "游戏滤镜自动恢复[{}]: 游戏已退出，已恢复默认显示",
+                        display_idx
+                    );
+                }
+                Ok(display_filter::RunResult::SkippedStale) => {
+                    // 用户在恢复执行前接管（版本被推进）：丢弃旧归属，不覆盖用户选择。
+                    display_filter::auto_release_if_owned(&AUTO_OWNERSHIP, session);
+                    log::info!(
+                        "游戏滤镜自动恢复[{}]: 恢复已过期（用户已接管），停止",
+                        display_idx
+                    );
+                }
+                Err(e) => {
+                    // 恢复失败：保留 Restoring 归属（含 restore_generation）供逐轮重试；
+                    // restore_pending 由恢复路径保留。
+                    log::error!(
+                        "游戏滤镜自动恢复[{}]: 恢复默认显示失败，保留重试责任: {}",
+                        display_idx,
+                        e
+                    );
+                }
+            }
+        }
+        display_filter::AutoRestoreDecision::Superseded => {
+            log::info!("游戏滤镜自动恢复: 用户已接管滤镜状态，自动恢复弃权");
+        }
+        display_filter::AutoRestoreDecision::TargetGone => {
+            log::warn!(
+                "游戏滤镜自动恢复: 目标显示器拓扑已变化（重排/移除），明确退出，不写任何显示器"
+            );
+        }
+        display_filter::AutoRestoreDecision::NotOwned => {
+            log::info!("游戏滤镜自动恢复: 无归属或已被新自动会话接管，跳过");
+        }
     }
-    let idx = display_filter::get_active_index();
-    let still_on = display_filter::is_filter_active(idx);
-    if !still_on {
-        // 用户在游戏运行期间手动关闭了滤镜，重置标记不再干预
-        AUTO_FILTER_ON.store(false, Ordering::Relaxed);
-        return;
-    }
+}
 
-    display_filter::set_filter_active(idx, false);
-    if let Err(e) = display_filter::restore_display_default(idx) {
-        log::error!("游戏滤镜自动恢复[{}]: 恢复默认显示失败: {}", idx, e);
-    } else {
-        log::info!("游戏滤镜自动恢复[{}]: 游戏已退出，已恢复默认显示", idx);
+/// 第 n 次失败后的下次重试延迟（秒）：2^n，封顶 [`RESTORE_RETRY_BACKOFF_CAP_SECS`]。
+fn restore_retry_backoff_secs(failures: u32) -> u64 {
+    1u64.checked_shl(failures)
+        .unwrap_or(u64::MAX)
+        .min(RESTORE_RETRY_BACKOFF_CAP_SECS)
+}
+
+/// 恢复责任重试：存在 Restoring 归属时按退避节奏重试版本化恢复，
+/// 直到成功 / 用户接管（SkippedStale → 丢弃旧归属）/ 目标失效 / 重试耗尽。
+/// 重试上限与退避是本模块的策略：归属记录本身不存重试计数。耗尽后释放归属、
+/// 停止自动重试，但**保留**显示器的原始 ramp 与 restore_pending——
+/// 退出清理与用户手动恢复仍可精确恢复，不因放弃重试而丢弃校色数据。
+fn auto_retry_pending_restore() {
+    let (session, display_idx, restore_generation) = {
+        let slot = AUTO_OWNERSHIP.lock().unwrap();
+        match slot.as_ref() {
+            Some(rec) if rec.state == display_filter::AutoSessionState::Restoring => (
+                rec.session,
+                rec.display_idx,
+                match rec.restore_generation {
+                    Some(g) => g,
+                    None => return,
+                },
+            ),
+            _ => {
+                // 归属已不存在或不处于 Restoring：清掉过期的重试策略状态。
+                RESTORE_RETRY.lock().unwrap().take();
+                return;
+            }
+        }
+    };
+    // 退避门控：未到下次重试时刻不写屏；会话变化则重置计数（新会话新预算）。
+    {
+        let mut retry = RESTORE_RETRY.lock().unwrap();
+        match retry.as_mut() {
+            Some(r) if r.session == session => {
+                if let Some(at) = r.next_retry_at {
+                    if std::time::Instant::now() < at {
+                        return;
+                    }
+                }
+            }
+            _ => {
+                *retry = Some(RestoreRetryPolicy {
+                    session,
+                    failures: 0,
+                    next_retry_at: None,
+                })
+            }
+        }
     }
-    AUTO_FILTER_ON.store(false, Ordering::Relaxed);
+    match display_filter::restore_display_default_if_current(display_idx, restore_generation) {
+        Ok(display_filter::RunResult::Executed(_)) => {
+            display_filter::auto_finish_restore(&AUTO_OWNERSHIP, session);
+            RESTORE_RETRY.lock().unwrap().take();
+            log::info!("游戏滤镜自动恢复[{}]: 重试恢复成功", display_idx);
+        }
+        Ok(display_filter::RunResult::SkippedStale) => {
+            // 用户已接管：停止旧重试，丢弃旧归属，不写屏。
+            display_filter::auto_release_if_owned(&AUTO_OWNERSHIP, session);
+            RESTORE_RETRY.lock().unwrap().take();
+            log::info!(
+                "游戏滤镜自动恢复[{}]: 重试已过期（用户已接管），停止",
+                display_idx
+            );
+        }
+        Err(e) => {
+            let failures = {
+                let mut retry = RESTORE_RETRY.lock().unwrap();
+                let r = match retry.as_mut() {
+                    Some(r) if r.session == session => r,
+                    _ => retry.get_or_insert_with(|| RestoreRetryPolicy {
+                        session,
+                        failures: 0,
+                        next_retry_at: None,
+                    }),
+                };
+                r.failures += 1;
+                r.failures
+            };
+            if failures >= MAX_AUTO_RESTORE_RETRIES {
+                // 重试耗尽：释放归属停止自动重试（原始 ramp / restore_pending 保留，
+                // 退出清理与用户手动恢复仍可用）。与 TargetGone 分支同样“明确退出”。
+                display_filter::auto_release_if_owned(&AUTO_OWNERSHIP, session);
+                RESTORE_RETRY.lock().unwrap().take();
+                log::error!(
+                    "游戏滤镜自动恢复[{}]: 恢复重试 {} 次仍失败，停止自动重试（原始校色数据已保留，退出时还会尝试恢复）: {}",
+                    display_idx, failures, e
+                );
+            } else {
+                let delay_secs = restore_retry_backoff_secs(failures);
+                let mut retry = RESTORE_RETRY.lock().unwrap();
+                if let Some(r) = retry.as_mut() {
+                    r.next_retry_at =
+                        Some(std::time::Instant::now() + Duration::from_secs(delay_secs));
+                }
+                log::error!(
+                    "游戏滤镜自动恢复[{}]: 重试恢复仍失败（第 {}/{} 次，{} 秒后重试）: {}",
+                    display_idx,
+                    failures,
+                    MAX_AUTO_RESTORE_RETRIES,
+                    delay_secs,
+                    e
+                );
+            }
+        }
+    }
 }
 
 // ─── 后台轮询线程 ───
 
+/// 轮询边缘决策（纯函数，便于测试）：只在“无游戏 → 有游戏”边缘自动开启；
+/// 只要有任一名单内游戏仍在运行（running 保持 true），**不得提前恢复**——
+/// 只有最后一个名单内游戏退出（true → false）才触发恢复。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PollEdge {
+    None,
+    GameStarted,
+    AllGamesExited,
+}
+
+fn poll_edge(prev_running: bool, now_running: bool) -> PollEdge {
+    match (prev_running, now_running) {
+        (false, true) => PollEdge::GameStarted,
+        (true, false) => PollEdge::AllGamesExited,
+        _ => PollEdge::None,
+    }
+}
+
+/// 轮询边缘防抖器：观测值需连续 [`EDGE_DEBOUNCE_POLLS`] 次一致才确认边缘，
+/// 且两次确认边缘之间至少间隔 [`MIN_AUTO_SWITCH_INTERVAL`]。
+/// 进程名单瞬时抖动（反作弊拉起的短命进程等）不触发应用/恢复——
+/// 每次切换都是一次显示器写入，来回切换即反复写屏。
+#[derive(Debug)]
+struct EdgeDebouncer {
+    /// 已确认的运行状态（防抖后的生效值）。
+    confirmed: bool,
+    /// 待确认的候选观测值（与生效值不同时才有候选）。
+    candidate: Option<bool>,
+    /// 候选值连续出现次数。
+    hits: u32,
+    /// 上次确认边缘的时刻（None = 尚未切换过，首次切换不受最小间隔限制）。
+    last_transition: Option<std::time::Instant>,
+}
+
+impl EdgeDebouncer {
+    fn new(initial_running: bool) -> Self {
+        Self {
+            confirmed: initial_running,
+            candidate: None,
+            hits: 0,
+            last_transition: None,
+        }
+    }
+
+    /// 功能关闭后的复位：回到初始未运行状态，清空候选与间隔基准。
+    fn reset(&mut self) {
+        self.confirmed = false;
+        self.candidate = None;
+        self.hits = 0;
+        self.last_transition = None;
+    }
+
+    /// 输入一次观测，返回确认后的边缘。防抖未满或被最小间隔压制时返回
+    /// [`PollEdge::None`]（候选保留，间隔到期后的下一次观测直接确认）。
+    fn observe(&mut self, running: bool) -> PollEdge {
+        let now = std::time::Instant::now();
+        self.observe_at(running, now)
+    }
+
+    /// 可测试变体：以注入时刻判定最小间隔。
+    fn observe_at(&mut self, running: bool, now: std::time::Instant) -> PollEdge {
+        if running == self.confirmed {
+            // 与生效状态一致：撤销候选（抖动结束）。
+            self.candidate = None;
+            self.hits = 0;
+            return PollEdge::None;
+        }
+        if self.candidate == Some(running) {
+            self.hits += 1;
+        } else {
+            self.candidate = Some(running);
+            self.hits = 1;
+        }
+        if self.hits < EDGE_DEBOUNCE_POLLS {
+            return PollEdge::None;
+        }
+        if let Some(last) = self.last_transition {
+            if now.duration_since(last) < MIN_AUTO_SWITCH_INTERVAL {
+                return PollEdge::None;
+            }
+        }
+        let edge = poll_edge(self.confirmed, running);
+        debug_assert!(edge != PollEdge::None, "候选与生效值不同，边缘必非 None");
+        self.confirmed = running;
+        self.candidate = None;
+        self.hits = 0;
+        self.last_transition = Some(now);
+        edge
+    }
+}
+
 fn game_filter_loop(generation: u64) {
     let mut system = System::new();
-    let mut game_running = false;
+    // 边缘防抖：生效状态经连续观测确认后才触发应用/恢复（见 EdgeDebouncer）。
+    let mut debouncer = EdgeDebouncer::new(false);
 
     loop {
-        if GENERATION.load(Ordering::Relaxed) != generation {
+        // 控制状态读取在锁内完成（enabled + 代次一致时继续；否则退出）。
+        let (still_enabled, still_current) = {
+            let guard = display_filter::auto_registration_guard();
+            (guard.enabled, guard.generation == generation)
+        };
+        if !still_current {
             break;
         }
         thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
-        if GENERATION.load(Ordering::Relaxed) != generation {
+        let (still_enabled, still_current) = {
+            let guard = display_filter::auto_registration_guard();
+            (guard.enabled, guard.generation == generation)
+        };
+        if !still_current {
             break;
         }
-        if !ENABLED.load(Ordering::Relaxed) {
-            game_running = false;
-            AUTO_FILTER_ON.store(false, Ordering::Relaxed);
+        if !still_enabled {
+            // 归属处置已由关闭命令 set_game_filter_enabled 明确执行；
+            // 轮询线程只需停止轮询并退出（代次检查已保证不复活）。
+            debouncer.reset();
             continue;
         }
 
         system.refresh_processes();
-        let running = any_game_running(&system);
 
-        if running && !game_running {
-            // 游戏刚启动
-            auto_apply_filter();
-        } else if !running && game_running {
-            // 游戏刚退出
-            auto_restore_filter();
+        match debouncer.observe(any_game_running(&system)) {
+            PollEdge::GameStarted => auto_apply_filter(generation),
+            PollEdge::AllGamesExited => auto_restore_filter(),
+            PollEdge::None => {}
         }
-        game_running = running;
+        // 上轮恢复失败的责任重试（仍会检查用户是否已接管；有上限与退避）。
+        auto_retry_pending_restore();
     }
 }
 
@@ -581,10 +914,17 @@ pub async fn init(app: tauri::AppHandle) -> Result<(), String> {
         *lock = Some(config.custom_games.clone());
     }
 
+    // 控制状态初始化也在同一把控制锁内更新（与运行时开关命令一致）。
+    // 注意：startup 时若配置为 false 且锁内当前已 false，则返回 None（无需启动线程）。
+    let started = display_filter::auto_update_control_state(&AUTO_OWNERSHIP, config.enabled);
+    // 展示值同步（仅状态查询用；登记依据完全走控制锁）。
     ENABLED.store(config.enabled, Ordering::Relaxed);
 
     if config.enabled {
-        let gen = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+        let gen = match started {
+            Some((_, gen)) => gen,
+            None => display_filter::auto_current_generation(),
+        };
         thread::spawn(move || {
             let _ = std::panic::catch_unwind(|| game_filter_loop(gen));
         });
@@ -604,18 +944,28 @@ pub async fn get_game_filter_status(_app: tauri::AppHandle) -> Result<GameFilter
     })
 }
 
-/// 开关切换：开启启动轮询线程，关闭停止（代次 +1 使旧线程退出）
+/// 开关切换：开启启动轮询线程，关闭停止（代次 +1 使旧线程退出）。
+/// 控制状态（enabled + generation）的更新在**同一控制锁边界**内完成，
+/// 与自动登记互斥；旧线程即使在锁外预检查后到达，也会在锁内因代次/启用
+/// 状态不符而被拒绝登记。
 #[tauri::command]
 pub async fn set_game_filter_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let current = ENABLED.load(Ordering::Relaxed);
-    if current == enabled {
+    // 锁内检查当前状态、更新 enabled/generation、处置归属。
+    let Some((keep_restoring, gen)) =
+        display_filter::auto_update_control_state(&AUTO_OWNERSHIP, enabled)
+    else {
         return Ok(());
-    }
-
-    let gen = GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    };
+    // 展示值同步（仅状态查询用；登记依据完全走控制锁）。
     ENABLED.store(enabled, Ordering::Relaxed);
 
-    // 持久化
+    // 关闭时若存在未完成的自动恢复（Restoring），安排恢复重试（锁已释放）。
+    if !enabled && keep_restoring {
+        log::info!("游戏滤镜自动应用: 关闭时存在未完成的自动恢复，安排恢复重试");
+        auto_retry_pending_restore();
+    }
+
+    // 持久化（锁外 await）
     let config = GameFilterConfig {
         enabled,
         custom_games: {
@@ -634,6 +984,22 @@ pub async fn set_game_filter_enabled(app: tauri::AppHandle, enabled: bool) -> Re
         log::info!("游戏滤镜自动应用: 已关闭");
     }
     Ok(())
+}
+
+/// 应用退出时调用：推进控制代次，通知轮询线程退出。
+///
+/// 轮询线程只按控制锁内的代次/启用状态决定是否退出，而进程退出时无人推进代次；
+/// 若不调用本函数，线程只能靠进程终止兜底——期间它可能与 `display_filter::cleanup()`
+/// 在同一个操作锁上排队，导致退出时序耦合甚至挂起。
+///
+/// 这里**只停止轮询**，不做显示器恢复：恢复责任由 `display_filter::cleanup()`
+/// 统一负责（退出清单中它在本函数之前执行）。
+pub fn shutdown() {
+    // 走与关闭命令相同的控制锁边界推进代次；返回 None 表示原本就是关闭态。
+    if display_filter::auto_update_control_state(&AUTO_OWNERSHIP, false).is_some() {
+        ENABLED.store(false, Ordering::Relaxed);
+        log::info!("游戏滤镜自动应用: 退出清理已停止轮询线程");
+    }
 }
 
 /// 添加自定义游戏
@@ -713,4 +1079,203 @@ pub async fn remove_custom_game(
         enabled: ENABLED.load(Ordering::Relaxed),
         games: merge_games(),
     })
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod tests {
+    use super::*;
+
+    // ─── 多游戏运行时的轮询边缘决策 ───
+    // 名单内多个游戏同时运行时 running 保持 true；只有最后一个游戏退出
+    // （true → false）才触发恢复，不得提前恢复。
+    #[test]
+    fn poll_edge_multi_game_no_early_restore() {
+        assert_eq!(poll_edge(false, false), PollEdge::None, "无游戏：不动作");
+        assert_eq!(
+            poll_edge(false, true),
+            PollEdge::GameStarted,
+            "首个游戏启动：自动开启"
+        );
+        // 多个游戏同时运行：running 保持 true → 不提前恢复。
+        assert_eq!(
+            poll_edge(true, true),
+            PollEdge::None,
+            "仍有游戏运行：不得提前恢复"
+        );
+        assert_eq!(
+            poll_edge(true, false),
+            PollEdge::AllGamesExited,
+            "最后一个游戏退出：恢复"
+        );
+    }
+
+    // ─── 恢复重试退避计算 ───
+    #[test]
+    fn restore_retry_backoff_exponential_capped() {
+        assert_eq!(restore_retry_backoff_secs(1), 2, "第 1 次失败后 2s");
+        assert_eq!(restore_retry_backoff_secs(2), 4, "第 2 次失败后 4s");
+        assert_eq!(restore_retry_backoff_secs(3), 8, "第 3 次失败后 8s");
+        assert_eq!(restore_retry_backoff_secs(4), 16, "第 4 次失败后 16s");
+        assert_eq!(restore_retry_backoff_secs(6), 60, "2^6=64 → 封顶 60s");
+        assert_eq!(restore_retry_backoff_secs(63), 60, "溢出前均封顶 60s");
+    }
+
+    // ─── 边缘防抖：瞬时抖动不触发，连续观测才确认 ───
+    #[test]
+    fn edge_debouncer_ignores_transient_blips() {
+        let t0 = std::time::Instant::now();
+        let mut d = EdgeDebouncer::new(false);
+        // 第 1 次观测到游戏：候选计数 1，不触发。
+        assert_eq!(d.observe_at(true, t0), PollEdge::None);
+        // 抖动：下轮观测不到进程（短命进程已退出）→ 候选撤销。
+        assert_eq!(
+            d.observe_at(false, t0 + Duration::from_secs(2)),
+            PollEdge::None
+        );
+        // 再观测到：重新计数，仍不触发。
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(4)),
+            PollEdge::None
+        );
+        // 连续第 2 次一致：确认开启。
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(6)),
+            PollEdge::GameStarted
+        );
+        // 已运行中继续为 true：不重复触发。
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(8)),
+            PollEdge::None
+        );
+    }
+
+    // ─── 边缘防抖：两次切换之间的最小间隔 ───
+    #[test]
+    fn edge_debouncer_enforces_min_switch_interval() {
+        let t0 = std::time::Instant::now();
+        let mut d = EdgeDebouncer::new(false);
+        // 首次切换不受间隔限制：两轮确认后开启（切换时刻 = t0+2s）。
+        assert_eq!(d.observe_at(true, t0), PollEdge::None);
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(2)),
+            PollEdge::GameStarted
+        );
+        // 游戏很快退出：防抖在第 2 轮（t0+8s）满足，但距切换仅 6s < 10s：压制，候选保留。
+        assert_eq!(
+            d.observe_at(false, t0 + Duration::from_secs(6)),
+            PollEdge::None
+        );
+        assert_eq!(
+            d.observe_at(false, t0 + Duration::from_secs(8)),
+            PollEdge::None
+        );
+        // 距切换满 10s（t0+12s）后确认恢复。
+        assert_eq!(
+            d.observe_at(false, t0 + Duration::from_secs(12)),
+            PollEdge::AllGamesExited
+        );
+    }
+
+    // ─── 边缘防抖：多游戏运行期间单个退出不得提前恢复（防抖前即有此语义）───
+    #[test]
+    fn edge_debouncer_no_early_restore_while_running() {
+        let t0 = std::time::Instant::now();
+        let mut d = EdgeDebouncer::new(false);
+        assert_eq!(d.observe_at(true, t0), PollEdge::None);
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(2)),
+            PollEdge::GameStarted
+        );
+        // running 保持 true：任何观测都不得产生恢复边缘。
+        assert_eq!(
+            d.observe_at(true, t0 + Duration::from_secs(30)),
+            PollEdge::None
+        );
+    }
+
+    // ─── 功能关闭时的归属处置 ───
+    // Applied/Applying 彻底释放自动控制（效果保留，沿用旧版清标志语义；在途 apply
+    // 完成时 auto_mark_applied 因槽位为 None 拒绝登记，不留残留、不误删新会话）；
+    // Restoring 保留（恢复责任不随开关消失）。用与生产共用的
+    // auto_update_control_state_with 验证关闭处置。
+    #[test]
+    fn disable_keeps_restoring_but_drops_other_ownership() {
+        let make = |session, state, restore_gen| display_filter::AutoOwnership {
+            session,
+            display_idx: 0,
+            device_name: "MON0".to_string(),
+            display_count: 1,
+            operation_generation: 7,
+            state,
+            restore_generation: restore_gen,
+        };
+
+        let applying: display_filter::AutoOwnershipSlot = std::sync::Mutex::new(Some(make(
+            1,
+            display_filter::AutoSessionState::Applying,
+            None,
+        )));
+        let state = std::sync::Mutex::new(display_filter::AutoControlState {
+            enabled: true,
+            generation: 1,
+        });
+        let guard = state.lock().unwrap();
+        let (keep_restoring, _) =
+            display_filter::auto_update_control_state_with(guard, &applying, false)
+                .expect("状态变化必须返回更新");
+        assert!(!keep_restoring, "Applying 释放自动控制");
+        assert!(
+            applying.lock().unwrap().is_none(),
+            "关闭后不得残留 Applying 记录"
+        );
+
+        let applied: display_filter::AutoOwnershipSlot = std::sync::Mutex::new(Some(make(
+            1,
+            display_filter::AutoSessionState::Applied,
+            None,
+        )));
+        let state = std::sync::Mutex::new(display_filter::AutoControlState {
+            enabled: true,
+            generation: 1,
+        });
+        let guard = state.lock().unwrap();
+        let (keep_restoring, _) =
+            display_filter::auto_update_control_state_with(guard, &applied, false)
+                .expect("状态变化必须返回更新");
+        assert!(!keep_restoring, "Applied 释放自动控制");
+        assert!(
+            applied.lock().unwrap().is_none(),
+            "已生效效果保留，但自动控制权移交用户"
+        );
+
+        let none: display_filter::AutoOwnershipSlot = std::sync::Mutex::new(None);
+        let state = std::sync::Mutex::new(display_filter::AutoControlState {
+            enabled: true,
+            generation: 1,
+        });
+        let guard = state.lock().unwrap();
+        let (keep_restoring, _) =
+            display_filter::auto_update_control_state_with(guard, &none, false)
+                .expect("状态变化必须返回更新");
+        assert!(!keep_restoring, "空槽位无需处置");
+
+        let restoring: display_filter::AutoOwnershipSlot = std::sync::Mutex::new(Some(make(
+            1,
+            display_filter::AutoSessionState::Restoring,
+            Some(9),
+        )));
+        let state = std::sync::Mutex::new(display_filter::AutoControlState {
+            enabled: true,
+            generation: 1,
+        });
+        let guard = state.lock().unwrap();
+        let (keep_restoring, _) =
+            display_filter::auto_update_control_state_with(guard, &restoring, false)
+                .expect("状态变化必须返回更新");
+        assert!(keep_restoring, "Restoring 归属必须保留");
+        assert!(
+            restoring.lock().unwrap().is_some(),
+            "不得在恢复完成前删除唯一归属记录"
+        );
+    }
 }
