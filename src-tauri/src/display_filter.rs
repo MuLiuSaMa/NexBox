@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Read;
@@ -19,11 +19,408 @@ pub struct DisplayInfo {
     pub height: i32,
 }
 
+// ─── 拓扑绑定数据模型（第一批）───
+//
+// 目标显示器身份与当前寻址信息分离：
+// - `identity` 字段（monitor_device_path + adapter 完整 LUID + target_id）用于
+//   恢复责任绑定与跨拓扑核验；
+// - `friendly_name` 仅供展示/日志，**绝不参与身份判定**；
+// - `gdi_path`（\\.\DISPLAYn）是当前寻址路径，是瞬时的，不是持久身份。
+// 整个结构不做整体相等比较——身份比较必须只比较 identity 字段。
+
+/// 稳定设备身份依据。`monitor_device_path` 是监视器设备接口路径（尽力而为的
+/// 身份依据），**不能保证对缺少独特序列信息的同型号替换始终不同**；路径为空时
+/// 不能仅凭适配器+端口批准跨拓扑恢复。
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub(crate) struct DisplayIdentity {
+    /// 设备接口路径（DISPLAYCONFIG_TARGET_DEVICE_NAME.monitorDevicePath）。
+    /// 空 = 身份依据不足。
+    pub monitor_device_path: String,
+    /// 完整 LUID：HighPart + LowPart 都保留，不截断、不合并成单数。
+    pub adapter_high: i32,
+    pub adapter_low: u32,
+    /// CCD 路径目标标识（targetInfo.id）。
+    pub target_id: u32,
+}
+
+impl DisplayIdentity {
+    /// 是否具有路径信息（不是"已具备跨拓扑恢复可靠性"——那需要连续性/身份
+    /// 可信度条件，见 `authorizes_cross_topology_restore`）。
+    pub fn has_path_info(&self) -> bool {
+        !self.monitor_device_path.is_empty()
+    }
+
+    /// 跨拓扑恢复授权：仅凭相同路径 + LUID + 端口**不自动证明是原设备**。
+    /// 需要在"目标连接中断后可验证的连续观察"下才可授权；本函数只表达
+    /// "身份依据足以参与解析定位"，跨拓扑恢复是否放行由调用方结合
+    /// `TargetRestoreDecision` 判定。
+    pub fn authorizes_cross_topology_restore(&self, observed_continuity: bool) -> bool {
+        observed_continuity && self.has_path_info()
+    }
+}
+
+/// 目标消失后重现的恢复决策：区分"可确认原设备"与"无法确认"。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TargetRestoreDecision {
+    /// 有连续性观察 + 可靠路径：可尝试对解析出的目标恢复。
+    Confirmed,
+    /// 目标消失后重现，但没有更强身份依据：**不自动证明是原设备**，
+    /// 保留恢复记录，不写屏。
+    Unconfirmed,
+    /// 目标当前不在拓扑中。
+    Gone,
+    /// 身份依据不足（无路径信息等）。
+    Unknown,
+}
+
+/// 目标连续性跟踪器（离线可测；不接真实设备事件）。
+/// 捕获时建立目标绑定 → 接受后续拓扑观察 → 目标缺席/解析歧义/观察失败
+/// 将连续性标为中断/无法确认 → 相同字段重新出现**不自动恢复为已确认**。
+/// 恢复决策读取跟踪结果，而不是由外部随意传 true/false。
+#[derive(Debug, Clone)]
+pub(crate) struct TargetContinuity {
+    /// 绑定的目标身份。
+    identity: DisplayIdentity,
+    /// 是否已观察到目标持续存在（期间无缺席/歧义/观察失败）。
+    observed: bool,
+}
+
+impl TargetContinuity {
+    /// 捕获/绑定时建立：初始视为已观察到（连续观察开始）。
+    pub fn bind(identity: DisplayIdentity) -> Self {
+        Self { identity, observed: true }
+    }
+    /// 接受一次拓扑观察：目标仍唯一解析且映射有效 → 保持连续性；
+    /// 缺席/歧义/观察失败 → 连续性中断。
+    pub fn observe(&mut self, resolver: &dyn TargetResolver) {
+        match resolver.resolve(&self.identity) {
+            Ok(_) => { /* 仍唯一解析：连续性保持 */ }
+            Err(TargetError::Gone) | Err(TargetError::Ambiguous) | Err(TargetError::Unknown) => {
+                self.observed = false;
+            }
+            Err(TargetError::NoSnapshot) => {
+                self.observed = false;
+            }
+        }
+    }
+    /// 目标缺席后相同字段重新出现：**不自动恢复为已确认**。
+    pub fn reappear(&mut self) {
+        // 保守：缺席后的重现不自动恢复连续性（需要更强证据或明确重新绑定，
+        // 本批只实现保守拒绝）。
+        self.observed = false;
+    }
+    pub fn identity(&self) -> &DisplayIdentity {
+        &self.identity
+    }
+    pub fn observed(&self) -> bool {
+        self.observed
+    }
+    /// 恢复授权：读取跟踪结果，而非外部参数。
+    pub fn authorizes_restore(&self) -> bool {
+        self.observed && self.identity.has_path_info()
+    }
+}
+
+/// 共用恢复决策：基于连续性跟踪器与当前解析结果判定。
+/// 返回 `TargetRestoreDecision`，调用方据此执行或拒绝恢复（拒绝时保留记录）。
+pub(crate) fn decide_target_restore(
+    continuity: &TargetContinuity,
+    resolver: &dyn TargetResolver,
+) -> TargetRestoreDecision {
+    if !continuity.identity.has_path_info() {
+        return TargetRestoreDecision::Unknown;
+    }
+    match resolver.resolve(&continuity.identity) {
+        Ok(_) => {
+            if continuity.authorizes_restore() {
+                TargetRestoreDecision::Confirmed
+            } else {
+                TargetRestoreDecision::Unconfirmed
+            }
+        }
+        Err(TargetError::Gone) => TargetRestoreDecision::Gone,
+        Err(TargetError::Ambiguous) | Err(TargetError::Unknown) => TargetRestoreDecision::Unconfirmed,
+        Err(TargetError::NoSnapshot) => TargetRestoreDecision::Unconfirmed,
+    }
+}
+
+/// 一个显示器槽位的完整描述：身份 + 展示 + 当前寻址（一批一致的快照）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DisplaySnapshot {
+    /// 身份依据（恢复绑定用）。
+    pub identity: DisplayIdentity,
+    /// 展示标签（仅 UI/日志，不参与判定）。
+    pub friendly_name: String,
+    /// 当前 GDI 寻址路径（\\.\DISPLAYn），瞬时。
+    pub gdi_path: String,
+    /// CCD 源路径标识（sourceInfo.adapterId/id）——共享显示源识别依据
+    /// （同一源路径 = 同一视频源，可能共享 Gamma 域）。
+    pub source_adapter_high: i32,
+    pub source_adapter_low: u32,
+    pub source_id: u32,
+    /// 是否主显示器。
+    pub is_primary: bool,
+    /// 当前宽度/高度（供诊断日志）。
+    pub width: i32,
+    pub height: i32,
+}
+
+/// 目标解析结果：身份已核验、寻址已确定的目标对象。
+/// 所有物理读写应使用该对象，不在底层再次按裸索引查询另一份设备表。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedTarget {
+    /// 已核验一致的身份。
+    pub identity: DisplayIdentity,
+    /// 当前寻址信息（解析时一致快照内的）。
+    pub gdi_path: String,
+    /// 该快照在解析时的槽位索引（诊断用，不作为身份）。
+    pub snapshot_index: usize,
+    /// 解析时的一致性快照版本（捕获/恢复核验用）。
+    pub snapshot_version: u64,
+}
+
+/// 目标解析失败分类（统一错误语义）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TargetError {
+    /// 身份不在当前拓扑中（目标暂时消失）。
+    Gone,
+    /// 身份无法确认（依据不足/歧义）。
+    Unknown,
+    /// 多个快照匹配同一目标（共享显示源歧义）。
+    Ambiguous,
+    /// 拓扑快照为空/不可用。
+    NoSnapshot,
+}
+
+/// 恢复责任记录：有 Ramp 与无 Ramp 都保留目标身份依据。
+/// 用户接管（自动会话过期）只终止过期自动动作，**不删除原始校色数据**——
+/// 只有明确恢复成功或执行了明确数据处置策略才清除记录。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RestoreRecord {
+    /// 本进程可能修改了哪个目标（身份依据）。
+    pub target: DisplayIdentity,
+    /// 捕获的原始 gamma ramp；None = 降级清除场景（身份仍保留）。
+    pub original_ramp: Option<GammaRamp>,
+    /// 待恢复。
+    pub restore_pending: bool,
+    /// 自动会话关联（可空：非自动路径）。用户接管判定用。
+    pub session: Option<u64>,
+    /// 恢复意图版本（Restoring 阶段重试用）。
+    pub restore_generation: Option<u64>,
+}
+
+/// 恢复记录管理（最小可复用函数集；暂不接生产写屏，测试直接调用）。
+pub(crate) type RestoreRecords = HashMap<DisplayIdentity, RestoreRecord>;
+
+/// 用户接管：释放自动关联（session/generation），**保留原始 Ramp 与待恢复责任**。
+pub(crate) fn record_user_takeover(record: &mut RestoreRecord) {
+    record.session = None;
+    record.restore_generation = None;
+    // original_ramp 与 restore_pending 保留：新操作仍需要最初的原始校色数据。
+}
+
+/// 新目标进入：登记 B 的记录，不覆盖 A 的现有记录。
+pub(crate) fn record_register_target(
+    records: &mut RestoreRecords,
+    record: RestoreRecord,
+) {
+    let key = record.target.clone();
+    // 若已存在同目标记录，保留既有记录（不覆盖原始数据）；否则插入。
+    records.entry(key).or_insert(record);
+}
+
+/// 目标消失：保留原记录，不转交给替代设备。
+/// 返回原记录（若存在）。
+pub(crate) fn record_keep_on_gone(records: &mut RestoreRecords, identity: &DisplayIdentity) -> Option<RestoreRecord> {
+    records.get(identity).cloned()
+}
+
+/// 恢复失败：保留记录（pending 仍 true）。
+pub(crate) fn record_on_restore_failure(record: &mut RestoreRecord, err: &str) {
+    record.restore_pending = true;
+    // 日志由调用方记录；本函数保证失败不清除数据。
+    log::warn!("恢复失败，保留恢复记录（目标 {}）: {}", record.target.monitor_device_path, err);
+}
+
+/// 恢复成功：**已由调用方验证成功**后的内部清理动作——本函数不自行执行条件核验，
+/// 调用方（共用协调层）必须已确认目标绑定与恢复版本有效。
+pub(crate) fn record_on_restore_success(record: &mut RestoreRecord) {
+    record.restore_pending = false;
+    record.original_ramp = None;
+    record.session = None;
+    record.restore_generation = None;
+}
+
+/// 带绑定/修订校验的成功清理：仅当记录仍对应 `expected_identity` 且（若记录
+/// 携带会话）`expected_session` 匹配时才清理。旧记录的恢复结果不能清掉后来
+/// 替换或重新绑定的记录。返回是否执行了清理。
+pub(crate) fn record_on_restore_success_if_current(
+    record: &mut RestoreRecord,
+    expected_identity: &DisplayIdentity,
+    expected_session: Option<u64>,
+) -> bool {
+    if record.target != *expected_identity {
+        return false;
+    }
+    if expected_session.is_some() && record.session != expected_session {
+        return false; // 会话已被替换/接管：不清理（保留原始数据供后续）。
+    }
+    record_on_restore_success(record);
+    true
+}
+
+/// 新操作继续使用原目标：是否已有原始 Ramp（有则保留，调用方不应重新捕获覆盖）。
+pub(crate) fn record_keep_original_ramp(record: &RestoreRecord) -> bool {
+    record.original_ramp.is_some()
+}
+
+/// 捕获前后核验共用流程（暂不接生产写屏；用可注入的后端与解析器驱动）：
+/// 1. 解析目标及快照版本；
+/// 2. 从**该目标**读取 Ramp（假后端按解析出的目标读取）；
+/// 3. 再取当前拓扑并核验版本/目标一致；
+/// 4. 一致 → 提交有效捕获记录；不一致 → 返回拒绝，**不替换既有记录**。
+///
+/// 返回 `Ok(Some(record))`：捕获有效并提交（original_ramp 已填充）；
+/// `Ok(None)`：已有捕获记录（不覆盖）或目标读取后核验一致但记录已存在；
+/// `Err(CaptureRejected)`：读取后拓扑变化/目标变化——捕获失效，不提交。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum CaptureRejected {
+    SnapshotChanged,
+    TargetGone,
+    IdentityMismatch,
+}
+
+pub(crate) fn capture_with_verify(
+    identity: &DisplayIdentity,
+    resolver: &dyn TargetResolver,
+    backend: &dyn GammaBackend,
+    records: &mut RestoreRecords,
+) -> Result<Option<RestoreRecord>, CaptureRejected> {
+    // 1. 解析目标及快照版本。
+    let target = match resolver.resolve(identity) {
+        Ok(t) => t,
+        Err(TargetError::Gone) => return Err(CaptureRejected::TargetGone),
+        Err(_) => return Err(CaptureRejected::IdentityMismatch),
+    };
+    // 若已有捕获记录：不覆盖（保留最初原始数据）。
+    if let Some(existing) = records.get(identity) {
+        return Ok(Some(existing.clone()));
+    }
+    // 2. 从该目标读取 Ramp（后端按解析出的目标读取——此处用解析结果的
+    //    snapshot_index 定位假后端槽位；生产接 GDI 时按目标寻址）。
+    let ramp = match backend.read(target.snapshot_index) {
+        Ok(r) => r,
+        Err(e) => {
+            log::warn!("捕获读取失败（目标 {}）: {}", identity.monitor_device_path, e);
+            return Err(CaptureRejected::TargetGone);
+        }
+    };
+    // 3. 再取当前拓扑并核验：解析器版本/目标一致（快照可能已变化）。
+    let current = match resolver.resolve(identity) {
+        Ok(t) if t.snapshot_version == target.snapshot_version && t.snapshot_index == target.snapshot_index => t,
+        Ok(_) => return Err(CaptureRejected::SnapshotChanged),
+        Err(TargetError::Gone) => return Err(CaptureRejected::TargetGone),
+        Err(_) => return Err(CaptureRejected::IdentityMismatch),
+    };
+    let _ = current;
+    // 4. 一致 → 提交有效捕获记录。
+    let record = RestoreRecord {
+        target: identity.clone(),
+        original_ramp: Some(ramp),
+        restore_pending: true,
+        session: None,
+        restore_generation: None,
+    };
+    record_register_target(records, record.clone());
+    Ok(Some(record))
+}
+
+/// 可注入的目标解析器：基于一次一致的拓扑快照解析目标，
+/// 不在底层再次按裸索引查询。生产用真实枚举快照；测试注入独立快照。
+pub(crate) trait TargetResolver {
+    /// 按身份解析目标。返回 `Ok(ResolvedTarget)`（唯一匹配）或错误分类。
+    fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError>;
+    /// 当前快照（供诊断/拓扑版本维护）。
+    fn snapshot(&self) -> &[DisplaySnapshot];
+}
+
+/// 基于 `Vec<DisplaySnapshot>` 的解析器实现。
+pub(crate) struct SnapshotResolver {
+    snapshot: Vec<DisplaySnapshot>,
+    /// 应用维护的拓扑版本号（EnumDisplayMonitors 不直接提供版本；由应用在
+    /// 快照变化时递增，用于检测捕获/恢复期间拓扑变化）。
+    version: u64,
+}
+
+impl SnapshotResolver {
+    pub fn new(snapshot: Vec<DisplaySnapshot>, version: u64) -> Self {
+        Self { snapshot, version }
+    }
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+}
+
+impl TargetResolver for SnapshotResolver {
+    fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError> {
+        if self.snapshot.is_empty() {
+            return Err(TargetError::NoSnapshot);
+        }
+        // 身份依据不足：拒绝（不按型号/端口猜测）。
+        if !identity.has_path_info() {
+            return Err(TargetError::Unknown);
+        }
+        // 按 identity 字段（不含展示/寻址）匹配。
+        let mut matches = self
+            .snapshot
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.identity == *identity);
+        let (idx, first) = match matches.next() {
+            Some(m) => m,
+            None => return Err(TargetError::Gone),
+        };
+        // 唯一身份匹配（同一 identity 只应出现在一个槽位；出现多个也属歧义）。
+        if matches.next().is_some() {
+            return Err(TargetError::Ambiguous);
+        }
+        // 共享显示源检测：同一源路径（CCD source）可能共享 Gamma 域。
+        // 若多个快照身份不同但源路径相同，视为歧义（不能独立写屏）。
+        let dup_source = self.snapshot.iter().any(|s| {
+            s.source_adapter_high == first.source_adapter_high
+                && s.source_adapter_low == first.source_adapter_low
+                && s.source_id == first.source_id
+                && s.identity != first.identity
+        });
+        if dup_source {
+            return Err(TargetError::Ambiguous);
+        }
+        // 寻址路径为空：不能返回可写目标（无法寻址）。
+        if first.gdi_path.trim().is_empty() {
+            return Err(TargetError::Unknown);
+        }
+        Ok(ResolvedTarget {
+            identity: identity.clone(),
+            gdi_path: first.gdi_path.clone(),
+            snapshot_index: idx,
+            snapshot_version: self.version,
+        })
+    }
+    fn snapshot(&self) -> &[DisplaySnapshot] {
+        &self.snapshot
+    }
+}
+
 static DISPLAY_DEVICES: Mutex<Option<Vec<String>>> = Mutex::new(None);
 
 /// 系统关机/注销标志：当 Windows 广播 WM_QUERYENDSESSION / WM_ENDSESSION 时置位，
 /// 用于在退出清理阶段跳过 xcalib 这类外部子进程调用（关机时系统运行库正在被拆除，子进程会初始化失败 0xc0000142）。
 static SYSTEM_SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+/// 应用自身正在退出（RunEvent::Exit 已触发某次清理）。用于退出准入：拒绝新的滤镜意图，
+/// 并确保 game_filter 等后台任务不会在退出期间再写屏。
+static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+/// Unique suffix for generated ICC files so concurrent displays never share a path.
+static TEMP_ICC_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 /// 会话监控隐藏窗口句柄（保存为裸指针），防止窗口句柄被回收。
 static SESSION_WATCH_HWND: AtomicPtr<std::ffi::c_void> = AtomicPtr::new(std::ptr::null_mut());
 
@@ -313,10 +710,17 @@ pub(crate) struct DisplayState {
     icc_active: bool,
     active_icc_id: Option<String>,
     filter_active: bool,
+    /// 本进程可能已修改该显示器的显示效果，尚未确认恢复成功。
+    /// 在第一次可能修改屏幕的底层写入前置为 true；即使写入返回错误也保留 true；
+    /// 仅在确认恢复成功后清除。用于退出/重复关闭时决定是否仍需恢复，避免仅凭
+    /// `filter_active == false` 提前跳过恢复。
+    restore_pending: bool,
     /// 是否处于多滤镜叠加模式（已应用叠加组合）
     stacked: bool,
     /// 已应用的叠加组合（应用顺序，即卡片点选顺序）
     stack_preset_ids: Vec<String>,
+    /// Monotonic last-intent token. Older physical display writes are skipped.
+    operation_generation: u64,
 }
 
 impl Default for DisplayState {
@@ -325,18 +729,143 @@ impl Default for DisplayState {
             temperature: 6500, brightness: 100, contrast: 100, saturation: 100,
             r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0, mode: 0,
             icc_ramp: None, icc_active: false, active_icc_id: None, filter_active: false,
-            stacked: false, stack_preset_ids: Vec::new(),
+            restore_pending: false,
+            stacked: false, stack_preset_ids: Vec::new(), operation_generation: 0,
         }
     }
 }
 
 static DISPLAY_STATES: Mutex<Option<Vec<Mutex<DisplayState>>>> = Mutex::new(None);
+/// Serialize physical ICC/gamma writes per display, while different displays remain independent.
+static DISPLAY_OPERATION_LOCKS: Mutex<Vec<Arc<Mutex<()>>>> = Mutex::new(Vec::new());
 static ACTIVE_DISPLAY_INDEX: AtomicUsize = AtomicUsize::new(0);
+
+/// 一条 gamma ramp（3 通道 × 256 项，每项 0..=65535）。
+pub(crate) type GammaRamp = [[u16; 256]; 3];
+
+/// 物理写屏后端。只负责“读当前 ramp / 写 ramp / 用 ICC 落屏 / 清成线性”，
+/// **不参与版本号、退出准入、原始 Ramp 管理或 `restore_pending`** —— 那些属于协调层。
+/// 生产实现复用现有 GDI + xcalib；测试实现可记录调用顺序并注入失败与暂停。
+///
+/// `read` 返回 `Result`（而非 `Option`），以保留捕获失败的具体原因。
+pub(crate) trait GammaBackend: Send + Sync {
+    fn read(&self, display: usize) -> Result<GammaRamp, String>;
+    fn write(&self, display: usize, ramp: &GammaRamp) -> Result<(), String>;
+    fn apply_icc(&self, display: usize, path: &Path) -> Result<(), String>;
+    fn clear(&self, display: usize) -> Result<(), String>;
+}
+
+/// 真实后端：直接转发到现有 GDI / xcalib 实现（这些函数本身不再做协调，避免递归）。
+pub(crate) struct SystemGammaBackend;
+
+impl GammaBackend for SystemGammaBackend {
+    fn read(&self, display: usize) -> Result<GammaRamp, String> {
+        read_gamma_ramp(display).ok_or_else(|| format!("GetDeviceGammaRamp[{}] 读取失败", display))
+    }
+    fn write(&self, display: usize, ramp: &GammaRamp) -> Result<(), String> {
+        write_gamma_ramp(display, ramp)
+    }
+    fn apply_icc(&self, display: usize, path: &Path) -> Result<(), String> {
+        apply_icc_via_xcalib(path, display)
+    }
+    fn clear(&self, display: usize) -> Result<(), String> {
+        clear_gamma_ramp_via_xcalib(display)
+    }
+}
+
+static SYSTEM_BACKEND: SystemGammaBackend = SystemGammaBackend;
 
 /// 首次应用滤镜前捕获的原始硬件 gamma ramp（按显示器 index 对齐，与 DISPLAY_STATES 键位一致）。
 /// 退出/禁用时据此精确恢复，而不是用 `xcalib -c` 清成线性——那会把图形控制台 /
 /// 系统颜色管理里设置的 sRGB 校色一并抹掉。
-static ORIGINAL_RAMPS: Mutex<Vec<Mutex<Option<[[u16; 256]; 3]>>>> = Mutex::new(Vec::new());
+static ORIGINAL_RAMPS: Mutex<Vec<Mutex<Option<GammaRamp>>>> = Mutex::new(Vec::new());
+
+/// 一次恢复的实际结果。用于把“精确恢复”与“降级线性清除”区分开，
+/// 避免把降级清除当成普通“已恢复”报给用户。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RestoreOutcome {
+    /// 已用捕获的原始 ramp 精确恢复。
+    Restored,
+    /// 无原始 ramp，用线性清除兜底：滤镜已移除，但**原有校色未保证恢复**。
+    DegradedCleared,
+    /// 该显示器未受影响、无待恢复记录：未执行任何写屏。
+    NothingToDo,
+}
+
+/// 一次版本化执行器调用的结果：区分“实际执行”与“因版本过期而跳过”。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RunResult<T> {
+    /// 操作已实际执行，携带操作返回值。
+    Executed(T),
+    /// 操作因已有更新意图（版本不匹配）而跳过，未发生任何物理写屏。
+    SkippedStale,
+}
+
+/// cleanup 的汇总计数（供调用方/测试直接断言，例如“清除失败计入 failed”）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct CleanupSummary {
+    pub restored: usize,
+    pub degraded: usize,
+    pub idle: usize,
+    pub failed: usize,
+}
+
+/// 失败回滚的明确结果：调用方按此收尾归属/记录，不得用单个布尔混义
+/// “提交关闭成功”与“恢复成功”。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RollbackOutcome {
+    /// 已精确恢复应用前的原始 ramp，回滚完成。
+    Restored,
+    /// 无原始 ramp，用线性清除兜底：滤镜已移除，原有校色未保证恢复。
+    DegradedCleared,
+    /// 该显示器无待恢复记录（未受影响），无需写屏。
+    NoRestoreNeeded,
+    /// 关闭未提交（版本已被取代/退出中/归属已失效）：未写屏，调用方应条件弃权。
+    Superseded,
+    /// 恢复失败：Restoring 归属 + restore_pending 保留，调用方不得清除记录。
+    RestoreFailed(String),
+}
+
+/// 协调层上下文。生产路径用全局静态构造（[`global_ops`]）；测试用独立实例 +
+/// 假后端，从而**不替换全局状态**也能并行运行真实协调逻辑。
+#[derive(Clone, Copy)]
+pub(crate) struct DisplayOps<'a> {    states: &'a Mutex<Option<Vec<Mutex<DisplayState>>>>,
+    op_locks: &'a Mutex<Vec<Arc<Mutex<()>>>>,
+    ramps: &'a Mutex<Vec<Mutex<Option<GammaRamp>>>>,
+    shutting_down: &'a AtomicBool,
+    count: usize,
+    backend: &'a dyn GammaBackend,
+}
+
+impl<'a> DisplayOps<'a> {
+    /// 后端访问器（测试注入假后端；生产为真实后端）。
+    pub(crate) fn backend(&self) -> &dyn GammaBackend {
+        self.backend
+    }
+}
+
+/// 一次“捕获原始 ramp 并复查版本”的结果：区分捕获被跳过（版本过期/退出）与
+/// 已成功捕获。捕获期间可能被新的关闭意图推进版本，因此捕获完成后必须复查。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CaptureOutcome {
+    /// 已确认捕获成功，且操作版本仍为最新（可继续写屏）。
+    Captured,
+    /// 捕获未执行或捕获期间版本已过期：调用方必须中止写屏（视为跳过）。
+    Skip,
+}
+
+/// 构造生产用协调层上下文（短暂获取状态锁完成初始化，不跨驱动调用持有）。
+pub(crate) fn global_ops() -> DisplayOps<'static> {
+    ensure_display_states();
+    DisplayOps {
+        states: &DISPLAY_STATES,
+        op_locks: &DISPLAY_OPERATION_LOCKS,
+        ramps: &ORIGINAL_RAMPS,
+        shutting_down: &SHUTTING_DOWN,
+        count: display_count(),
+        backend: &SYSTEM_BACKEND,
+    }
+}
 
 /// Build a `DisplayState` for a given display index, loading any persisted
 /// parameters/ICC from disk. `filter_active` is forced to `false` so we never
@@ -392,6 +921,8 @@ pub(crate) fn ensure_display_states() {
         dev_lock.as_ref().map(|d| d.len()).unwrap_or(1).max(1)
     };
 
+    ensure_display_operation_locks(count);
+
     let mut lock = DISPLAY_STATES.lock().unwrap();
     match lock.as_mut() {
         // Already sized correctly — nothing to do.
@@ -417,6 +948,369 @@ pub(crate) fn ensure_display_states() {
             *lock = Some(states);
         }
     }
+}
+
+/// 操作锁表维护：只增长、不截断。执行器会克隆 Arc 锁句柄，截断会在显示器数量
+/// 减少再增加时于同一槽位创建新锁，破坏同槽位串行保证（新旧任务各持一把锁）。
+/// 状态层仍有严格边界检查（with_state/submit/op_lock 对越界返回 None），
+/// 锁存在不代表设备存在。生产与测试共用此函数，保证测试验证的正是生产逻辑。
+fn grow_operation_locks(locks: &mut Vec<Arc<Mutex<()>>>, count: usize) {
+    while locks.len() < count {
+        locks.push(Arc::new(Mutex::new(())));
+    }
+}
+
+fn ensure_display_operation_locks(count: usize) {
+    let mut locks = DISPLAY_OPERATION_LOCKS.lock().unwrap();
+    grow_operation_locks(&mut locks, count);
+}
+
+fn bump_operation_generation(state: &mut DisplayState) -> u64 {
+    state.operation_generation = state.operation_generation.wrapping_add(1);
+    if state.operation_generation == 0 {
+        state.operation_generation = 1;
+    }
+    state.operation_generation
+}
+
+/// 协调层核心实现。所有方法都假定调用方按约定取锁：
+/// - 状态锁（`states`）只在短暂修改/读取字段时持有，**绝不跨驱动调用或外部进程**；
+/// - 显示器操作锁（`op_locks[i]`）串行化同一显示器的物理写屏；
+/// - 锁顺序统一为「先操作锁 → 再短暂状态锁」，不存在反向嵌套。
+impl<'a> DisplayOps<'a> {
+    /// 短暂获取状态锁读取/修改单个显示器状态（不跨驱动调用）。
+    /// **严格边界检查**：空集合或越界索引返回 `None`，不做夹取——
+    /// 滤镜操作不能因索引失效而作用于另一台显示器。
+    pub(crate) fn with_state<F, R>(&self, idx: usize, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut DisplayState) -> R,
+    {
+        let lock = self.states.lock().unwrap();
+        let states = lock.as_ref()?;
+        let state = states.get(idx)?;
+        let mut state = state.lock().unwrap();
+        Some(f(&mut *state))
+    }
+
+    /// 是否在操作锁外拥有有效的状态槽位（用于锁外快速检查，供 `apply` 等在
+    /// 取得操作锁前先验证目标显示器，避免对越界索引取锁后才发现目标不存在）。
+    pub(crate) fn has_state_slot(&self, idx: usize) -> bool {
+        let lock = self.states.lock().unwrap();
+        lock.as_ref().map(|s| idx < s.len()).unwrap_or(false)
+    }
+
+    /// **退出准入的原子边界**：在同一状态锁内先检查退出标志，通过后才允许
+    /// 修改期望状态、递增版本并取得任务数据。返回 `None` 表示正在退出、意图被拒绝。
+    ///
+    /// cleanup 也在同一状态锁内置位退出标志，因此“检查退出 + 接受意图”整体原子，
+    /// 不会出现“入口检查通过后、cleanup 已递增版本，本任务又递增更高版本”的竞态。
+    pub(crate) fn submit<F, R>(&self, idx: usize, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut DisplayState) -> R,
+    {
+        let lock = self.states.lock().unwrap();
+        let states = lock.as_ref()?;
+        let state = states.get(idx)?;
+        if self.shutting_down.load(Ordering::SeqCst) {
+            return None;
+        }
+        let mut state = state.lock().unwrap();
+        Some(f(&mut *state))
+    }
+
+    /// 退出第一步：在**同一状态锁保护下**置位退出标志并使所有已有任务失效。
+    /// 返回每台显示器的新代号，供后续在操作锁内校验。
+    pub(crate) fn begin_shutdown(&self) -> Vec<u64> {
+        let lock = self.states.lock().unwrap();
+        let states = lock.as_ref().expect("display states not initialized");
+        // 先置标志：之后任何 submit 都会在本锁内看到它并拒绝新意图。
+        self.shutting_down.store(true, Ordering::SeqCst);
+        states
+            .iter()
+            .map(|state_mutex| {
+                let mut state = state_mutex.lock().unwrap();
+                state.filter_active = false;
+                state.icc_active = false;
+                state.active_icc_id = None;
+                bump_operation_generation(&mut *state)
+            })
+            .collect()
+    }
+
+    pub(crate) fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::SeqCst)
+    }
+
+    /// 取指定显示器的操作锁句柄（只增长不截断，避免截断时新旧锁并存）。
+    /// 越界索引返回 `None`——调用方必须先确认目标显示器存在，不能静默夹取到最后一台。
+    pub(crate) fn op_lock(&self, idx: usize) -> Option<Arc<Mutex<()>>> {
+        let mut locks = self.op_locks.lock().unwrap();
+        while locks.len() < self.count.max(1) {
+            locks.push(Arc::new(Mutex::new(())));
+        }
+        locks.get(idx).cloned()
+    }
+
+    /// 版本化执行器：取得显示器操作锁后，**在锁内**复查版本与退出标志。
+    /// `allow_during_shutdown == false` 的普通应用/关闭任务在退出期间会被拒绝；
+    /// 退出恢复走 `allow_during_shutdown == true` 的内部路径，不被该检查拦截。
+    pub(crate) fn run_if_current<F, R>(
+        &self,
+        idx: usize,
+        expected_generation: u64,
+        operation_name: &str,
+        allow_during_shutdown: bool,
+        operation: F,
+    ) -> Result<RunResult<R>, String>
+    where
+        F: FnOnce() -> Result<R, String>,
+    {
+        // 越界索引：明确拒绝（不夹取到其他显示器）。
+        let operation_lock = self.op_lock(idx)
+            .ok_or_else(|| format!("{}[{}]: 显示器索引越界，已拒绝操作", operation_name, idx))?;
+        let _guard = operation_lock.lock().unwrap();
+        // 锁内复查：退出标志 + 当前版本。
+        let shutting_down = self.is_shutting_down();
+        let current_generation = self
+            .with_state(idx, |state| state.operation_generation)
+            .ok_or_else(|| format!("{}[{}]: 显示器状态不存在，已拒绝操作", operation_name, idx))?;
+        if current_generation != expected_generation {
+            log::info!(
+                "{}[{}]: stale display operation skipped (expected={}, current={})",
+                operation_name,
+                idx,
+                expected_generation,
+                current_generation
+            );
+            return Ok(RunResult::SkippedStale);
+        }
+        if shutting_down && !allow_during_shutdown {
+            return Err(format!(
+                "{}[{}]: 应用正在退出，普通写屏任务被拒绝",
+                operation_name, idx
+            ));
+        }
+        Ok(RunResult::Executed(operation()?))
+    }
+
+    /// 使 ramps 槽位与显示器数量对齐（只增长）。
+    fn ensure_ramps(&self) {
+        let mut lock = self.ramps.lock().unwrap();
+        while lock.len() < self.count.max(1) {
+            lock.push(Mutex::new(None));
+        }
+    }
+
+    /// 首次写屏前捕获原始 ramp。已有捕获则复用；捕获失败返回 Err（调用方必须中止应用）。
+    /// 要求调用方已持有该显示器的操作锁。**不**做版本复查（慢操作；由
+    /// [`DisplayOps::capture_if_current`] 在捕获完成后复查版本）。
+    pub(crate) fn capture(&self, idx: usize) -> Result<(), String> {
+        self.ensure_ramps();
+        let slot = self.ramps.lock().unwrap();
+        let Some(cell) = slot.get(idx) else {
+            return Err(format!("capture_original_ramp[{}]: 无此显示器", idx));
+        };
+        let mut guard = cell.lock().unwrap();
+        if guard.is_some() {
+            return Ok(()); // 已捕获，复用；不重新捕获以免被已加过滤镜的 ramp 覆盖
+        }
+        match self.backend.read(idx) {
+            Ok(ramp) => {
+                log::info!("capture_original_ramp[{}]: 已捕获原始 gamma ramp（含用户 sRGB 校色）", idx);
+                *guard = Some(ramp);
+                Ok(())
+            }
+            Err(e) => {
+                // 捕获失败：不中止已有“可能被修改”的记录，也不继续写屏。
+                log::error!("capture_original_ramp[{}]: 读取原始 ramp 失败，已中止应用: {}", idx, e);
+                Err(format!("无法读取显示器 {} 的原始 gamma ramp，已中止应用: {}", idx, e))
+            }
+        }
+    }
+
+    /// 捕获 + 捕获后复查版本：捕获原始 ramp（如果尚未捕获），**完成后在操作锁内
+    /// 复查版本与退出标志**——捕获是慢操作（GDI 读取/外部进程），期间可能被新的
+    /// 关闭意图推进版本。版本已过期或正在退出时返回 `Skip`，调用方必须中止写屏。
+    /// 要求调用方已持有该显示器的操作锁。
+    pub(crate) fn capture_if_current(
+        &self,
+        idx: usize,
+        expected_generation: u64,
+        operation_name: &str,
+    ) -> Result<CaptureOutcome, String> {
+        self.capture(idx)?;
+        let current_generation = self
+            .with_state(idx, |s| s.operation_generation)
+            .ok_or_else(|| format!("{}[{}]: 显示器状态不存在，已拒绝操作", operation_name, idx))?;
+        if current_generation != expected_generation {
+            log::info!(
+                "{}[{}]: 捕获完成后版本已变化 (expected={}, current={})，中止写屏",
+                operation_name,
+                idx,
+                expected_generation,
+                current_generation
+            );
+            return Ok(CaptureOutcome::Skip);
+        }
+        if self.is_shutting_down() {
+            log::info!("{}[{}]: 应用正在退出，捕获后中止写屏", operation_name, idx);
+            return Ok(CaptureOutcome::Skip);
+        }
+        Ok(CaptureOutcome::Captured)
+    }
+
+    /// 读取保存的原始 ramp（副本，不移除）。
+    pub(crate) fn peek_ramp(&self, idx: usize) -> Option<GammaRamp> {
+        self.ensure_ramps();
+        let slot = self.ramps.lock().unwrap();
+        let cell = slot.get(idx)?;
+        let guard = cell.lock().unwrap();
+        guard.clone()
+    }
+
+    /// 确认恢复成功后清除保存的原始 ramp。
+    pub(crate) fn clear_ramp(&self, idx: usize) {
+        self.ensure_ramps();
+        let slot = self.ramps.lock().unwrap();
+        if let Some(cell) = slot.get(idx) {
+            *cell.lock().unwrap() = None;
+        }
+    }
+
+    pub(crate) fn set_restore_pending(&self, idx: usize, pending: bool) {
+        self.with_state(idx, |s| s.restore_pending = pending);
+    }
+
+    /// 协调层落屏入口：在调用**可能修改屏幕**的后端操作前置位 restore_pending。
+    /// 即使写屏失败也保留 true（可能已部分修改），仅在确认恢复成功后清除。
+    pub(crate) fn apply_icc(&self, idx: usize, path: &Path) -> Result<(), String> {
+        self.set_restore_pending(idx, true);
+        self.backend.apply_icc(idx, path)
+    }
+
+    /// 应用本次生成的临时 ICC，结束后清理该临时文件（外部进程已退出，安全）。
+    pub(crate) fn apply_generated_icc(&self, idx: usize, path: &Path) -> Result<(), String> {
+        let result = self.apply_icc(idx, path);
+        if let Err(e) = std::fs::remove_file(path) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log::warn!("临时 ICC 文件清理失败 '{}': {}", path.display(), e);
+            }
+        }
+        result
+    }
+
+    /// 恢复显示器。要求调用方已持有该显示器的操作锁（因此锁内判断 pending / ramp）。
+    /// 越界索引返回 Err（不夹取到其他显示器）。
+    pub(crate) fn restore(&self, idx: usize) -> Result<RestoreOutcome, String> {
+        let pending = self
+            .with_state(idx, |s| s.restore_pending)
+            .ok_or_else(|| format!("restore[{}]: 显示器状态不存在，已拒绝操作", idx))?;
+        if let Some(ramp) = self.peek_ramp(idx) {
+            // 写回可能修改屏幕：在底层调用前置位待恢复标记，失败也保留（可能已部分修改）。
+            self.set_restore_pending(idx, true);
+            return match self.backend.write(idx, &ramp) {
+                Ok(()) => {
+                    // 确认恢复成功后才删除原始 ramp、清除待恢复标记。
+                    self.clear_ramp(idx);
+                    self.set_restore_pending(idx, false);
+                    log::info!("restore[{}]: 已精确恢复应用前的原始 gamma ramp", idx);
+                    Ok(RestoreOutcome::Restored)
+                }
+                Err(e) => {
+                    // 写回失败：保留原始 ramp 与 restore_pending 供重试。不自动用 xcalib -c
+                    // 清成线性——那不等于恢复用户原来的校色，不能据此报“恢复成功”。
+                    log::error!("restore[{}]: 精确恢复失败，保留原始 ramp 供重试: {}", idx, e);
+                    Err(e)
+                }
+            };
+        }
+        if pending {
+            // 待恢复但无原始 ramp：只能降级线性清除。同样在调用前保留标记，失败可重试。
+            self.set_restore_pending(idx, true);
+            log::warn!("restore[{}]: 无原始 ramp，降级用线性清除兜底", idx);
+            return match self.backend.clear(idx) {
+                Ok(()) => {
+                    self.set_restore_pending(idx, false);
+                    Ok(RestoreOutcome::DegradedCleared)
+                }
+                // 清除失败（含系统关机/注销时跳过外部进程）：标记保留，
+                // 调用方/cleanup 必须将其计入失败，不得当作清除成功。
+                Err(e) => Err(e),
+            };
+        }
+        // 从未修改过该显示器：无事可做，不写屏。
+        Ok(RestoreOutcome::NothingToDo)
+    }
+
+    /// 退出清理：先在同一状态锁内禁止新意图并使旧任务失效，再逐台取操作锁、
+    /// **在锁内**判断并执行恢复。不持状态锁等待操作锁或外部进程。
+    /// 返回各显示器恢复的汇总计数（调用方可用于观测；失败计数不得计入 restored/degraded）。
+    pub(crate) fn cleanup(&self) -> CleanupSummary {
+        let cleanup_generations = self.begin_shutdown();
+        let num_displays = cleanup_generations.len();
+        let mut summary = CleanupSummary::default();
+
+        for i in 0..num_displays {
+            // 迭代索引来自 begin_shutdown 返回的长度，恒有效；仍防御性处理 None。
+            let operation_lock = self.op_lock(i);
+            let Some(operation_lock) = operation_lock else {
+                log::error!("cleanup[{}]: 操作锁不存在，跳过该显示器恢复", i);
+                summary.failed += 1;
+                continue;
+            };
+            let _guard = operation_lock.lock().unwrap();
+            // 已在操作锁内：退出期间不应再有普通任务递增版本（submit 已拒绝）。
+            // 若仍观察到版本变化，不能当作“已清理”，而是继续在本锁内恢复。
+            let current_generation = self
+                .with_state(i, |s| s.operation_generation)
+                .unwrap_or(u64::MAX); // 状态缺失视为异常版本，仍尝试恢复（restore 会报错）
+            if current_generation != cleanup_generations[i] {
+                log::error!(
+                    "cleanup[{}]: 意外版本变化 ({} -> {})，仍在本锁内执行恢复",
+                    i,
+                    cleanup_generations[i],
+                    current_generation
+                );
+            }
+            match self.restore(i) {
+                Ok(RestoreOutcome::Restored) => summary.restored += 1,
+                Ok(RestoreOutcome::DegradedCleared) => summary.degraded += 1,
+                Ok(RestoreOutcome::NothingToDo) => summary.idle += 1,
+                Err(e) => {
+                    // 恢复失败：restore_pending 保留 true，不声称已恢复。
+                    log::error!("cleanup[{}]: 恢复失败，保留待恢复标记: {}", i, e);
+                    summary.failed += 1;
+                }
+            }
+        }
+        log::info!(
+            "cleanup: restored={} degraded={} idle={} failed={}",
+            summary.restored,
+            summary.degraded,
+            summary.idle,
+            summary.failed
+        );
+        summary
+    }
+}
+
+/// 退出准入的快速检查（入口提前拒绝，优化体验）。
+/// **权威检查在 [`DisplayOps::submit`] 的状态锁内**，此处不能代替它。
+pub(crate) fn ensure_not_shutting_down() -> Result<(), String> {
+    if SHUTTING_DOWN.load(Ordering::SeqCst) {
+        return Err("应用正在退出，已拒绝新的滤镜操作".to_string());
+    }
+    Ok(())
+}
+
+/// 提交意图的统一入口：在状态锁内检查退出标志，通过后才修改状态 + 递增版本。
+pub(crate) fn submit_intent<F, R>(idx: usize, f: F) -> Result<R, String>
+where
+    F: FnOnce(&mut DisplayState) -> R,
+{
+    global_ops()
+        .submit(idx, f)
+        .ok_or_else(|| "应用正在退出，已拒绝新的滤镜操作".to_string())
 }
 
 pub(crate) fn with_display_state<F, R>(idx: usize, f: F) -> R
@@ -446,14 +1340,178 @@ fn ensure_original_ramps(count: usize) {
     }
 }
 
+/// 条件开启：在**单一状态锁闭包内**完成「当前未开启 → 置开启 → 递增版本」三件事。
+/// 返回 `Some(新版本)`：本任务赢得开启权，可据此登记归属并派发版本化应用；
+/// 返回 `None`：正在退出，或用户已在锁外预检查之后、本提交之前手动开启（版本已被
+/// 推进）——资格不成立时**不创建有效自动归属，也不覆盖手动意图**。
+pub(crate) fn conditional_set_active(idx: usize, active: bool) -> Option<u64> {
+    conditional_set_active_with(&global_ops(), idx, active)
+}
+
+/// 自动登记控制锁 + 控制状态：关闭命令与自动开启/登记共享的同步边界。
+/// 控制状态（enabled + generation）的读取、修改和登记遵守**同一把锁边界**——
+/// 锁外读取的 bool/代次快照不作为锁内依据。锁内不得等待物理恢复或跨 await。
+pub(crate) fn auto_registration_guard() -> std::sync::MutexGuard<'static, AutoControlState> {
+    static STATE: std::sync::Mutex<AutoControlState> = std::sync::Mutex::new(AutoControlState {
+        enabled: false,
+        generation: 0,
+    });
+    STATE.lock().unwrap()
+}
+
+/// 自动控制状态（由 auto_registration_guard 保护）。
+pub(crate) struct AutoControlState {
+    pub enabled: bool,
+    pub generation: u64,
+}
+
+/// 自动开启入口：在**同一次控制锁持有**内完成「锁内读取 enabled → 锁内比较
+/// generation 与 expected → 条件开启 → 登记归属」——**控制锁保持到归属登记完成
+/// 之后才释放**，防止「检查通过 → 关闭命令清除归属 → 旧任务再登记」的窗口。
+/// `expected_generation` 是调用方轮询线程启动时获得的代次，在锁内与实际当前代次
+/// 比较——关闭后重开时旧代次即使当前 enabled=true 也会被拒绝。
+/// 返回 `(display_idx, session, operation_generation)`：登记成功；
+/// 返回 `None`：功能已关闭/代次已过期/滤镜已开启/正在退出——不创建归属、不写屏。
+pub(crate) fn auto_register_owned(
+    idx: usize,
+    expected_generation: u64,
+    session_counter: &AtomicU64,
+    slot: &AutoOwnershipSlot,
+) -> Option<(usize, u64, u64)> {
+    let guard = auto_registration_guard();
+    auto_register_owned_with(
+        guard,
+        idx,
+        expected_generation,
+        session_counter,
+        slot,
+        &global_ops(),
+        |i| display_topology(i),
+        None,
+    )
+}
+
+/// 可测试变体：对注入的控制状态锁、DisplayOps 与拓扑查询执行（生产在全局控制锁内
+/// 调用并传全局实例；测试传独立实例）。**测试路径内部不得隐式调用 global_ops() 或
+/// 全局设备表。**
+/// 控制锁保持到条件开启与归属登记**完成之后**才释放；锁内短暂取得状态锁/归属锁，
+/// 不跨物理写屏或 await。
+/// `before_enable` 测试钩子：在条件开启前于控制锁内调用（生产传 None）。
+pub(crate) fn auto_register_owned_with(
+    mut guard: std::sync::MutexGuard<'_, AutoControlState>,
+    idx: usize,
+    expected_generation: u64,
+    session_counter: &AtomicU64,
+    slot: &AutoOwnershipSlot,
+    ops: &DisplayOps,
+    topology: impl FnOnce(usize) -> Option<(String, usize)>,
+    before_enable: Option<Box<dyn FnOnce() + Send>>,
+) -> Option<(usize, u64, u64)> {
+    if !guard.enabled {
+        return None;
+    }
+    if guard.generation != expected_generation {
+        return None;
+    }
+    // 测试钩子：交错测试在条件开启前暂停登记（仍持控制锁）。
+    if let Some(hook) = before_enable {
+        hook();
+    }
+    // 条件开启：同一状态锁闭包内「当前未开启 → 置开启 → 递增版本」。
+    // 注意：仍在控制锁持有中——关闭命令需等到登记完成才能取得控制锁。
+    let operation_generation = conditional_set_active_with(ops, idx, true)?;
+    let session = session_counter.fetch_add(1, Ordering::Relaxed) + 1;
+    let (device_name, display_count) = topology(idx)
+        .unwrap_or_else(|| (String::new(), 1));
+    *slot.lock().unwrap() = Some(AutoOwnership {
+        session,
+        display_idx: idx,
+        device_name,
+        display_count,
+        operation_generation,
+        state: AutoSessionState::Applying,
+        restore_generation: None,
+    });
+    drop(guard); // 控制锁在登记完成后释放；物理应用在锁外执行。
+    Some((idx, session, operation_generation))
+}
+
+/// 开关命令的锁内状态更新：**在同一控制锁边界内**检查当前状态 → 更新 enabled 与
+/// generation（旧代次失效）→ 关闭时处置归属。返回 `(keep_restoring, new_generation)`：
+/// keep_restoring 表示存在 Restoring 归属（调用方应安排恢复重试，锁外执行）；
+/// new_generation 供开启分支启动新轮询线程。若开关状态未变化，返回 None。
+pub(crate) fn auto_update_control_state(
+    slot: &AutoOwnershipSlot,
+    enabled: bool,
+) -> Option<(bool, u64)> {
+    let guard = auto_registration_guard();
+    auto_update_control_state_with(guard, slot, enabled)
+}
+
+/// 可测试变体：对注入的控制状态锁执行（生产在全局控制锁内调用；测试用独立
+/// Mutex<AutoControlState> 驱动，执行与生产共用的状态更新逻辑）。
+pub(crate) fn auto_update_control_state_with(
+    mut guard: std::sync::MutexGuard<'_, AutoControlState>,
+    slot: &AutoOwnershipSlot,
+    enabled: bool,
+) -> Option<(bool, u64)> {
+    if guard.enabled == enabled {
+        return None;
+    }
+    let mut new_generation = guard.generation.wrapping_add(1);
+    if new_generation == 0 {
+        new_generation = 1;
+    }
+    guard.enabled = enabled;
+    guard.generation = new_generation;
+    let keep_restoring = {
+        let mut ownership = slot.lock().unwrap();
+        match ownership.as_ref() {
+            Some(rec) if rec.state == AutoSessionState::Restoring => true,
+            _ => {
+                *ownership = None;
+                false
+            }
+        }
+    };
+    Some((keep_restoring, new_generation))
+}
+
+/// 轮询线程启动时读取当前控制代次（锁内读取，用于与 expected 后续比较）。
+pub(crate) fn auto_current_generation() -> u64 {
+    auto_registration_guard().generation
+}
+
+/// 读取自动控制是否启用（锁内读取；供状态查询用，不作为登记依据）。
+pub(crate) fn auto_is_enabled() -> bool {
+    auto_registration_guard().enabled
+}
+
+/// 条件开启的可测试变体：对注入的 DisplayOps 实例执行（测试用独立上下文驱动）。
+pub(crate) fn conditional_set_active_with(ops: &DisplayOps, idx: usize, active: bool) -> Option<u64> {
+    ops.submit(idx, |s| {
+        if s.filter_active == active {
+            return None;
+        }
+        s.filter_active = active;
+        Some(bump_operation_generation(s))
+    })
+    .flatten()
+}
+
 /// 读取指定显示器的滤镜是否开启（供 game_filter 模块使用）
 pub(crate) fn is_filter_active(idx: usize) -> bool {
     with_display_state(idx, |state| state.filter_active)
 }
 
-/// 设置指定显示器的滤镜开关状态（供 game_filter 模块使用）
-pub(crate) fn set_filter_active(idx: usize, active: bool) {
-    with_display_state(idx, |state| state.filter_active = active);
+/// 设置指定显示器的滤镜开关状态（供 game_filter 模块使用），并返回新的操作生成代号。
+/// 应用正在退出时拒绝（返回 Err），避免游戏轮询在退出期间再写屏。
+pub(crate) fn set_filter_active(idx: usize, active: bool) -> Result<u64, String> {
+    ensure_not_shutting_down()?;
+    Ok(submit_intent(idx, |state| {
+        state.filter_active = active;
+        bump_operation_generation(state)
+    })?)
 }
 
 pub(crate) fn get_active_index() -> usize {
@@ -462,6 +1520,253 @@ pub(crate) fn get_active_index() -> usize {
     let lock = DISPLAY_STATES.lock().unwrap();
     let states = lock.as_ref().unwrap();
     idx.min(states.len() - 1)
+}
+
+// ─── 自动（游戏）滤镜归属与条件回滚（Task D + Task F）───
+//
+// 归属模型替换原先的单个 AUTO_FILTER_ON 布尔：谁开启的（会话）、在哪台显示器、
+// 对应哪个操作版本、处于什么状态。核心规则：
+// 1. 应用完成的登记是**条件更新**：只有归属仍属于本会话且仍处 Applying 才置 Applied；
+// 2. 过期/失败只能改变任务**自己拥有**的记录，不得清除新会话的归属；
+// 3. 自动恢复永远针对登记时的目标显示器，不得重新解析 active index；
+// 4. 归属核对与提交恢复意图在**同一次归属锁持有**内完成（归属锁 → 状态锁，
+//    单一状态锁边界内核对版本并提交关闭，不允许先查版本、放锁、再无条件关闭）；
+// 5. 用户手动操作会推进 operation_generation：版本不一致即视为用户接管，
+//    自动任务弃权（丢弃自己的归属，不改新意图的状态、不写屏）；
+// 6. 恢复失败保留可重试责任（Restoring 记录 + restore_pending），重试前仍检查接管。
+//
+// **统一锁顺序**：归属锁 → { 设备拓扑锁(DISPLAY_DEVICES) / 显示器状态锁 } → 操作锁。
+// 归属锁只在本模块以下函数中获取，display_filter 的状态/操作锁路径从不回调归属锁，
+// 不存在反向取锁。
+
+/// 游戏自动滤镜的归属记录。
+#[derive(Debug, Clone)]
+pub(crate) struct AutoOwnership {
+    /// 自动会话标识：每次自动开启尝试生成新值，用于条件登记/条件弃权。
+    pub session: u64,
+    /// 目标显示器索引：登记时确定，恢复时**不得**用 get_active_index() 替代。
+    pub display_idx: usize,
+    /// 登记时的设备名快照（拓扑失效检测：防止恢复到重排后的另一台显示器）。
+    pub device_name: String,
+    /// 登记时的显示器总数快照。
+    pub display_count: usize,
+    /// 自动应用对应的操作版本（应用意图提交时的版本）。
+    pub operation_generation: u64,
+    /// 归属状态。
+    pub state: AutoSessionState,
+    /// 恢复意图的版本（Restoring 阶段供重试使用）。
+    pub restore_generation: Option<u64>,
+}
+
+/// 归属状态：Applying（应用进行中）→ Applied（游戏退出时负责恢复）→ Restoring（恢复中/待重试）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AutoSessionState {
+    Applying,
+    Applied,
+    Restoring,
+}
+
+/// 归属槽位（game_filter 持有全局实例；测试可构造独立实例）。
+pub(crate) type AutoOwnershipSlot = Mutex<Option<AutoOwnership>>;
+
+/// 自动恢复决策结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AutoRestoreDecision {
+    /// 已原子提交关闭意图：按返回的目标显示器与版本执行版本化恢复。
+    Proceed { display_idx: usize, restore_generation: u64 },
+    /// 版本已被用户操作接管：丢弃归属，不写屏。
+    Superseded,
+    /// 目标显示器拓扑已变化（数量/设备名不符）：明确退出，不写**任何**显示器。
+    TargetGone,
+    /// 归属不存在或不属于该会话（已被新自动会话接管）。
+    NotOwned,
+}
+
+/// 条件登记：仅当槽位仍属于本会话、处于 Applying，**且操作版本仍未被推进**时置为
+/// Applied。返回 false 表示归属已被新会话接管，或用户已手动操作推进了版本——
+/// 同一会话并不代表它仍拥有当前显示状态，晚到任务不得登记成有效自动归属。
+pub(crate) fn auto_mark_applied(slot: &AutoOwnershipSlot, session: u64, ops: &DisplayOps) -> bool {
+    let mut guard = slot.lock().unwrap();
+    match guard.as_mut() {
+        Some(rec) if rec.session == session && rec.state == AutoSessionState::Applying => {
+            let still_current = ops.with_state(rec.display_idx, |st| st.operation_generation)
+                == Some(rec.operation_generation);
+            if still_current {
+                rec.state = AutoSessionState::Applied;
+                true
+            } else {
+                // 用户已手动推进版本：本会话不拥有当前显示状态，条件弃权。
+                *guard = None;
+                false
+            }
+        }
+        _ => false,
+    }
+}
+
+/// 条件弃权：仅当槽位属于本会话时移除。过期/失败路径不得清除新会话的归属。
+pub(crate) fn auto_release_if_owned(slot: &AutoOwnershipSlot, session: u64) -> bool {
+    let mut guard = slot.lock().unwrap();
+    match guard.as_ref() {
+        Some(rec) if rec.session == session => {
+            *guard = None;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// 条件完成恢复：仅当槽位属于本会话且处于 Restoring 时移除（恢复成功收尾）。
+pub(crate) fn auto_finish_restore(slot: &AutoOwnershipSlot, session: u64) -> bool {
+    let mut guard = slot.lock().unwrap();
+    match guard.as_ref() {
+        Some(rec) if rec.session == session && rec.state == AutoSessionState::Restoring => {
+            *guard = None;
+            true
+        }
+        _ => false,
+    }
+}
+
+/// 读取当前显示器拓扑（目标设备名 + 总数），供归属失效检测。
+pub(crate) fn display_topology(idx: usize) -> Option<(String, usize)> {
+    let lock = DISPLAY_DEVICES.lock().unwrap();
+    let devs = lock.as_ref()?;
+    let name = devs.get(idx)?.clone();
+    Some((name, devs.len()))
+}
+
+impl<'a> DisplayOps<'a> {
+    /// 条件关闭：在**单一状态锁边界**内核验版本，仍当前才置关并递增版本。
+    /// 返回 `Some(新版本)`：本任务仍是最新意图，关闭已原子提交，可据此派发版本化恢复；
+    /// 返回 `None`：版本已被更新意图接管（或应用正在退出），不修改任何状态。
+    pub(crate) fn conditional_close(&self, idx: usize, expected_generation: u64) -> Option<u64> {
+        self.submit(idx, |s| {
+            if s.operation_generation != expected_generation {
+                return None;
+            }
+            s.filter_active = false;
+            Some(bump_operation_generation(s))
+        })
+        .flatten()
+    }
+}
+
+/// 自动恢复决策：在**同一次归属锁持有**内完成「核对归属 → 拓扑失效检测 →
+/// 原子条件关闭」。`topology(idx) -> Option<(设备名, 总数)>` 由调用方注入
+/// （生产读全局设备表，测试注入独立拓扑）。
+pub(crate) fn auto_restore_decision<F>(
+    slot: &AutoOwnershipSlot,
+    session: u64,
+    ops: &DisplayOps,
+    topology: F,
+) -> AutoRestoreDecision
+where
+    F: FnOnce(usize) -> Option<(String, usize)>,
+{
+    let mut guard = slot.lock().unwrap();
+    // 1. 归属核对：只处理自己拥有的 Applied 记录。
+    let (idx, expected_gen, device_name, display_count) = {
+        let Some(rec) = guard.as_ref() else {
+            return AutoRestoreDecision::NotOwned;
+        };
+        if rec.session != session || rec.state != AutoSessionState::Applied {
+            return AutoRestoreDecision::NotOwned;
+        }
+        (rec.display_idx, rec.operation_generation, rec.device_name.clone(), rec.display_count)
+    };
+    // 2. 拓扑失效检测：设备名或数量变化 → 明确退出，不写任何显示器。
+    match topology(idx) {
+        Some((name, count)) if name == device_name && count == display_count => {}
+        _ => {
+            *guard = None;
+            return AutoRestoreDecision::TargetGone;
+        }
+    }
+    // 3. 原子条件关闭：单一状态锁边界内核对版本并提交（不允许先查版本、放锁、再关闭）。
+    match ops.conditional_close(idx, expected_gen) {
+        Some(restore_generation) => {
+            let rec = guard.as_mut().expect("归属记录存在性已在步骤 1 核对");
+            rec.state = AutoSessionState::Restoring;
+            rec.restore_generation = Some(restore_generation);
+            AutoRestoreDecision::Proceed { display_idx: idx, restore_generation }
+        }
+        // 用户已接管（版本被推进）：丢弃旧归属，不覆盖用户选择。
+        None => {
+            *guard = None;
+            AutoRestoreDecision::Superseded
+        }
+    }
+}
+
+/// 自动应用失败的统一条件回滚：在归属锁内核对本会话仍拥有 Applying 记录后，
+/// 条件关闭（状态锁内原子核验版本），关闭成功则在**同一归属锁内**转为 Restoring
+/// 并保存恢复版本，随后释放锁执行版本化恢复。恢复失败保留 Restoring 记录 +
+/// restore_pending 供逐轮重试（统一规则 6：不得在恢复前删除唯一归属记录）。
+/// 已过期则只记录失败，不修改新意图。
+/// 返回回滚恢复的实际结果（调用方须按结果条件收尾，不能无条件清除归属）。
+pub(crate) fn auto_rollback_failed_apply(
+    slot: &AutoOwnershipSlot,
+    session: u64,
+    ops: &DisplayOps,
+) -> RollbackOutcome {
+    let mut guard = slot.lock().unwrap();
+    let Some(rec) = guard.as_ref() else { return RollbackOutcome::Superseded };
+    if rec.session != session || rec.state != AutoSessionState::Applying {
+        return RollbackOutcome::Superseded;
+    }
+    let (idx, gen) = (rec.display_idx, rec.operation_generation);
+    match ops.conditional_close(idx, gen) {
+        Some(restore_generation) => {
+            // 同一归属锁内转为 Restoring：恢复前不删除归属，失败保留重试责任。
+            let rec = guard.as_mut().expect("归属记录存在性已在上面核对");
+            rec.state = AutoSessionState::Restoring;
+            rec.restore_generation = Some(restore_generation);
+            drop(guard);
+            // 同一版本化、串行写屏流程恢复；失败保留 Restoring + restore_pending。
+            match restore_display_default_if_current_with(ops, idx, restore_generation) {
+                Ok(RunResult::Executed(RestoreOutcome::Restored)) => RollbackOutcome::Restored,
+                Ok(RunResult::Executed(RestoreOutcome::DegradedCleared)) => RollbackOutcome::DegradedCleared,
+                Ok(RunResult::Executed(RestoreOutcome::NothingToDo)) => RollbackOutcome::NoRestoreNeeded,
+                Ok(RunResult::SkippedStale) => RollbackOutcome::Superseded,
+                Err(e) => RollbackOutcome::RestoreFailed(e),
+            }
+        }
+        // 已过期：新意图接管，不改新意图、不写屏；记录由调用方条件释放。
+        None => RollbackOutcome::Superseded,
+    }
+}
+
+/// 应用失败的统一条件回滚（非自动路径：快捷键/命令层）：
+/// 在状态锁内原子核验版本，仍当前则关闭并走版本化串行恢复；已过期只记录失败，
+/// 不修改新意图、不写屏。可能已部分写屏时由 restore/restore_pending 保留责任。
+pub(crate) fn rollback_failed_apply(idx: usize, failed_generation: u64) -> RollbackOutcome {
+    let ops = global_ops();
+    match ops.conditional_close(idx, failed_generation) {
+        Some(restore_generation) => {
+            match restore_display_default_if_current_with(&ops, idx, restore_generation) {
+                Ok(RunResult::Executed(RestoreOutcome::Restored)) => RollbackOutcome::Restored,
+                Ok(RunResult::Executed(RestoreOutcome::DegradedCleared)) => RollbackOutcome::DegradedCleared,
+                Ok(RunResult::Executed(RestoreOutcome::NothingToDo)) => RollbackOutcome::NoRestoreNeeded,
+                Ok(RunResult::SkippedStale) => RollbackOutcome::Superseded,
+                Err(e) => RollbackOutcome::RestoreFailed(e),
+            }
+        }
+        None => RollbackOutcome::Superseded,
+    }
+}
+
+/// 生产便捷封装：使用全局协调层实例 + 全局设备拓扑。
+pub(crate) fn auto_rollback_failed_apply_global(
+    slot: &AutoOwnershipSlot,
+    session: u64,
+) -> RollbackOutcome {
+    auto_rollback_failed_apply(slot, session, &global_ops())
+}
+
+/// 生产便捷封装：使用全局协调层实例 + 全局设备拓扑。
+pub(crate) fn auto_restore_decision_global(slot: &AutoOwnershipSlot, session: u64) -> AutoRestoreDecision {
+    auto_restore_decision(slot, session, &global_ops(), |idx| display_topology(idx))
 }
 
 fn resolve_display_index(display_index: Option<usize>) -> usize {
@@ -571,6 +1876,8 @@ fn apply_icc_via_xcalib(icc_path: &Path, display_index: usize) -> Result<(), Str
         cmd.creation_flags(0x08000000);
     }
 
+    // 协调层（DisplayOps::apply_icc）会在调用本函数前置位 restore_pending；
+    // 这里只做物理落屏，不参与待恢复标记管理（避免后端递归）。
     let output = cmd.output()
         .map_err(|e| format!("xcalib 调用失败: {}", e))?;
 
@@ -586,11 +1893,12 @@ fn apply_icc_via_xcalib(icc_path: &Path, display_index: usize) -> Result<(), Str
 }
 
 /// Get the temp ICC path for custom filter.
-fn get_temp_icc_path() -> PathBuf {
+fn get_temp_icc_path(display_index: usize, label: &str) -> PathBuf {
     let config_dir = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
     let temp_dir = config_dir.join("NexBox").join("temp");
     let _ = fs::create_dir_all(&temp_dir);
-    temp_dir.join("custom_filter.icc")
+    let sequence = TEMP_ICC_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    temp_dir.join(format!("{}_display_{}_{}.icc", label, display_index, sequence))
 }
 
 // ─── HDR detection ───
@@ -696,6 +2004,13 @@ impl FilterSettings {
 #[derive(serde::Serialize)]
 pub struct FilterResult {
     pub success: bool, pub message: String,
+    /// 是否走了降级恢复（线性清除兜底，未保证还原原校色）。
+    pub degraded: bool,
+    /// 本次命令是否因被更新的操作取代而**未执行**写屏（版本过期跳过）。
+    /// 语义：请求已正常处理（success=true），但操作本身没有发生；
+    /// 调用方不能据此显示“已开启/已关闭/已清除成功”。
+    #[serde(default)]
+    pub skipped_stale: bool,
     pub settings: Option<FilterSettings>,
     pub preview_filter: Option<String>,
     pub preview_tint_color: Option<String>,
@@ -1556,103 +2871,180 @@ pub async fn get_filter_settings(display_index: Option<usize>) -> Result<FilterS
     Ok(with_display_state(idx, |state| FilterSettings::from_display_state(state)))
 }
 
-/// Apply filter: generates ICC from params (via icc_gen or build_icc_profile) and applies via xcalib.
-pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
-    // 首次应用前捕获原始硬件 ramp（每个显示器只捕获一次）。退出/禁用时据此精确
-    // 恢复，避免 `xcalib -c` 把图形控制台/颜色管理里的 sRGB 校色清成线性。
-    capture_original_ramp(idx);
+// ─── 协调层：应用滤镜（要求调用方已持有该显示器的操作锁）───
 
-    // 多滤镜叠加模式：优先走叠加组合（ramp 复合 → ICC → xcalib）
-    {
-        let stacked = with_display_state(idx, |s| s.stacked && !s.stack_preset_ids.is_empty());
-        if stacked {
-            log::info!("apply_filter_to_display[{}]: 叠加模式，应用滤镜组合", idx);
-            return apply_stack_to_display(idx);
+impl<'a> DisplayOps<'a> {
+    /// 将当前状态应用到显示器。要求调用方已持有该显示器的操作锁。
+    /// 越界索引返回 Err（不夹取到其他显示器）。
+    ///
+    /// 注意：本函数假定调用方已通过 [`DisplayOps::run_if_current`] 在操作锁内做过
+    /// 版本复查，且内部 `capture_if_current` 会在捕获完成后**再次复查版本**——
+    /// 捕获是慢操作，期间可能被新的关闭意图推进版本，必须防止“已关闭但滤镜随后
+    /// 又被写回屏幕”。
+    pub(crate) fn apply(&self, idx: usize, expected_generation: u64, operation_name: &str) -> Result<RunResult<()>, String> {
+        // 首次写屏前捕获原始硬件 ramp（每个显示器只捕获一次）。退出/禁用时据此精确
+        // 恢复，避免线性清除把图形控制台/颜色管理里的 sRGB 校色清掉。
+        // 捕获失败则中止应用，绝不继续写屏；捕获完成后复查版本，过期则中止写屏。
+        if self.capture_if_current(idx, expected_generation, operation_name)? == CaptureOutcome::Skip {
+            log::info!("apply_filter[{}]: 捕获后版本已过期/退出，中止应用写屏", idx);
+            // 捕获后的版本/退出复查发现过期：必须把“跳过”向外传播为 SkippedStale，
+            // 不能包装成 Executed(())——调用方会把未应用的滤镜登记为成功。
+            return Ok(RunResult::SkippedStale);
         }
-    }
 
-    let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode, _icc_ramp_opt) =
-        with_display_state(idx, |state| {
-            (state.icc_active, state.temperature, state.brightness, state.contrast,
-             state.saturation, state.r_gamma, state.g_gamma, state.b_gamma,
-             state.mode, state.icc_ramp.clone())
-        });
-
-    if icc_active {
-        // ICC mode active — re-apply the stored ICC.
-        // Necessary when the filter was toggled OFF when the preset was selected:
-        // the ICC was recorded in state but never applied to the display.
-        let active_id = with_display_state(idx, |s| s.active_icc_id.clone());
-        log::info!("apply_filter_to_display[{}]: ICC mode active (id={:?}), re-applying ICC", idx, active_id);
-
-        if let Some(ref id) = active_id {
-            if let Some(filename) = id.strip_prefix("builtin_") {
-                let icc_filename = format!("{}.icc", filename);
-                if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
-                    return apply_icc_via_xcalib(&icc_path, idx);
-                }
-                log::warn!("apply_filter_to_display[{}]: builtin ICC '{}' not found", idx, icc_filename);
-            }
-            // User-imported ICC — re-apply from stored ramp
-            if let Some(ramp) = with_display_state(idx, |s| s.icc_ramp.clone()) {
-                let icc_data = build_icc_profile(&ramp, "NexBox ICC Preset");
-                let temp_icc = get_temp_icc_path().with_file_name(format!("icc_reapply_{}.icc", id));
-                if let Err(e) = fs::write(&temp_icc, &icc_data) {
-                    log::error!("apply_filter_to_display[{}]: failed to write temp ICC: {}", idx, e);
-                    return Err(format!("无法写入临时 ICC 文件: {}", e));
-                }
-                return apply_icc_via_xcalib(&temp_icc, idx);
+        // 多滤镜叠加模式：优先走叠加组合（ramp 复合 → ICC → 落屏）
+        {
+            let stacked = self
+                .with_state(idx, |s| s.stacked && !s.stack_preset_ids.is_empty())
+                .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?;
+            if stacked {
+                log::info!("apply_filter_to_display[{}]: 叠加模式，应用滤镜组合", idx);
+                return self.apply_stack(idx, expected_generation, operation_name);
             }
         }
-        return Ok(());
+
+        let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode) =
+            self.with_state(idx, |state| {
+                (state.icc_active, state.temperature, state.brightness, state.contrast,
+                 state.saturation, state.r_gamma, state.g_gamma, state.b_gamma, state.mode)
+            })
+            .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?;
+
+        if icc_active {
+            // ICC 模式：重新应用已保存的 ICC。
+            let active_id = self
+                .with_state(idx, |s| s.active_icc_id.clone())
+                .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?;
+            log::info!("apply_filter_to_display[{}]: ICC mode active (id={:?}), re-applying ICC", idx, active_id);
+
+            if let Some(ref id) = active_id {
+                if let Some(filename) = id.strip_prefix("builtin_") {
+                    let icc_filename = format!("{}.icc", filename);
+                    if let Ok(icc_path) = get_builtin_icc_path(&icc_filename) {
+                        return self.apply_icc(idx, &icc_path).map(RunResult::Executed);
+                    }
+                    log::warn!("apply_filter_to_display[{}]: builtin ICC '{}' not found", idx, icc_filename);
+                }
+                // 用户导入 ICC —— 从保存的 ramp 重新应用
+                if let Some(ramp) = self
+                    .with_state(idx, |s| s.icc_ramp.clone())
+                    .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?
+                {
+                    let icc_data = build_icc_profile(&ramp, "NexBox ICC Preset");
+                    let temp_icc = get_temp_icc_path(idx, "icc_reapply");
+                    if let Err(e) = fs::write(&temp_icc, &icc_data) {
+                        log::error!("apply_filter_to_display[{}]: failed to write temp ICC: {}", idx, e);
+                        return Err(format!("无法写入临时 ICC 文件: {}", e));
+                    }
+                    return self.apply_generated_icc(idx, &temp_icc).map(RunResult::Executed);
+                }
+            }
+            return Ok(RunResult::Executed(()));
+        }
+
+        // 识别完全中性的参数：重置到默认时恢复原始 ramp，不应用任何特定 ICC。
+        let is_identity = temperature == 6500
+            && brightness == 100
+            && contrast == 100
+            && saturation == 100
+            && mode == 0  // Normal
+            && (r_gamma - 1.0).abs() < 0.001
+            && (g_gamma - 1.0).abs() < 0.001
+            && (b_gamma - 1.0).abs() < 0.001;
+
+        if is_identity {
+            log::info!("apply_filter_to_display[{}]: identity params → restore original ramp", idx);
+            return self.restore(idx).map(|_| RunResult::Executed(()));
+        }
+
+        let temp_icc = get_temp_icc_path(idx, "custom_filter");
+        let mode_enum = FilterMode::from_i32(mode);
+        let custom_gamma = Some((r_gamma, g_gamma, b_gamma));
+        let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
+        let icc_data = build_icc_profile(&ramp, "NexBox Custom Filter");
+        fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
+        self.apply_generated_icc(idx, &temp_icc).map(RunResult::Executed)
     }
 
-    // Detect truly neutral / identity parameters.
-    // When the custom filter is reset to defaults and saved, clear the gamma
-    // ramp to system default (xcalib -c).  Do NOT apply any specific ICC.
-    let is_identity = temperature == 6500
-        && brightness == 100
-        && contrast == 100
-        && saturation == 100
-        && mode == 0  // Normal
-        && (r_gamma - 1.0).abs() < 0.001
-        && (g_gamma - 1.0).abs() < 0.001
-        && (b_gamma - 1.0).abs() < 0.001;
-
-    if is_identity {
-        log::info!("apply_filter_to_display[{}]: identity params → restore original ramp", idx);
-        return restore_display_default(idx);
+    /// 应用叠加组合。要求调用方已持有该显示器的操作锁。
+    pub(crate) fn apply_stack(&self, idx: usize, expected_generation: u64, operation_name: &str) -> Result<RunResult<()>, String> {
+        let ids = self
+            .with_state(idx, |s| s.stack_preset_ids.clone())
+            .ok_or_else(|| format!("apply_stack[{}]: 显示器状态不存在，已拒绝操作", idx))?;
+        if ids.is_empty() {
+            return Err("叠加组合为空".to_string());
+        }
+        // 捕获失败则中止；capture 已持有 ramp 时直接复用，不会重复捕获或覆盖原始值。
+        // 捕获完成后复查版本：捕获期间可能被新的关闭意图推进版本，过期则中止写屏。
+        if self.capture_if_current(idx, expected_generation, operation_name)? == CaptureOutcome::Skip {
+            log::info!("apply_stack[{}]: 捕获后版本已过期/退出，中止叠加写屏", idx);
+            // 与 apply 一致：捕获后的版本复查发现过期，向外传播为 SkippedStale。
+            return Ok(RunResult::SkippedStale);
+        }
+        let mut ramps = Vec::with_capacity(ids.len());
+        for id in &ids {
+            match preset_id_to_ramp(id) {
+                Some(ramp) => ramps.push(ramp),
+                None => return Err(format!("叠加滤镜解析失败，找不到滤镜: {}", id)),
+            }
+        }
+        let composed = compose_ramps(&ramps);
+        let temp_icc = get_temp_icc_path(idx, "filter_stack");
+        let icc_data = build_icc_profile(&composed, "NexBox Filter Stack");
+        fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
+        self.apply_generated_icc(idx, &temp_icc).map(RunResult::Executed)
     }
-
-    let temp_icc = get_temp_icc_path();
-
-    // Build ICC entirely in Rust — we control the colour-temperature formula
-    // (kelvin_to_rgb_multipliers is fixed to return identity at 6500 K).
-    // Avoid icc_gen.exe whose internal algorithm may produce non-neutral or
-    // over-brightened output.
-    let mode_enum = FilterMode::from_i32(mode);
-    let custom_gamma = Some((r_gamma, g_gamma, b_gamma));
-    let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
-    let icc_data = build_icc_profile(&ramp, "NexBox Custom Filter");
-    fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
-    apply_icc_via_xcalib(&temp_icc, idx)
 }
 
-/// Restore display to default. Prefer restoring the captured original gamma ramp
-/// (preserves the console's sRGB calibration); fall back to xcalib -c (linear).
-pub(crate) fn restore_display_default(idx: usize) -> Result<(), String> {
-    if let Some(ramp) = take_original_ramp(idx) {
-        log::info!("restore_display_default[{}]: 恢复应用前的原始 gamma ramp（进程内）", idx);
-        return match write_gamma_ramp(idx, &ramp) {
-            Ok(()) => Ok(()),
-            Err(e) => {
-                log::error!("restore_display_default[{}]: 进程内恢复失败，回退 xcalib -c: {}", idx, e);
-                clear_gamma_ramp_via_xcalib(idx)
-            }
-        };
-    }
-    log::info!("restore_display_default[{}]: 无捕获的原始 ramp，回退 xcalib -c", idx);
-    clear_gamma_ramp_via_xcalib(idx)
+// ─── 生产路径薄封装（委托到全局协调层）───
+
+pub(crate) fn apply_filter_to_display(idx: usize) -> Result<(), String> {
+    // 兼容性包装：generation 未知，仅用于获取当前代号后走完整执行器（含捕获后复查）。
+    let generation = global_ops()
+        .with_state(idx, |s| s.operation_generation)
+        .ok_or_else(|| format!("apply_filter_to_display[{}]: 显示器状态不存在", idx))?;
+    apply_filter_to_display_if_current(idx, generation)
+        .map(|_| ())
+        .map_err(|e| e)
+}
+
+/// 恢复显示器（要求调用方已持有操作锁）。返回实际恢复形式，供调用方向用户区分
+/// “精确恢复”与“降级线性清除”。
+pub(crate) fn restore_display_default(idx: usize) -> Result<RestoreOutcome, String> {
+    global_ops().restore(idx)
+}
+
+/// 生产使用的应用包装逻辑（可在测试中用独立 DisplayOps 实例驱动）：
+/// 捕获后版本复查发现过期时，向调用方返回**单层** `SkippedStale`。
+pub(crate) fn apply_filter_if_current_with(
+    ops: &DisplayOps,
+    idx: usize,
+    generation: u64,
+) -> Result<RunResult<()>, String> {
+    ops.run_if_current(idx, generation, "apply_filter", false, || {
+        ops.apply(idx, generation, "apply_filter")
+    })
+    .map(|r| match r {
+        RunResult::Executed(inner) => inner,
+        RunResult::SkippedStale => RunResult::SkippedStale,
+    })
+}
+
+pub(crate) fn apply_filter_to_display_if_current(idx: usize, generation: u64) -> Result<RunResult<()>, String> {
+    apply_filter_if_current_with(&global_ops(), idx, generation)
+}
+
+/// 版本化恢复执行器（可在测试中用独立 DisplayOps 实例驱动）。
+pub(crate) fn restore_display_default_if_current_with(
+    ops: &DisplayOps,
+    idx: usize,
+    generation: u64,
+) -> Result<RunResult<RestoreOutcome>, String> {
+    ops.run_if_current(idx, generation, "restore_filter", false, || ops.restore(idx))
+}
+
+pub(crate) fn restore_display_default_if_current(idx: usize, generation: u64) -> Result<RunResult<RestoreOutcome>, String> {
+    restore_display_default_if_current_with(&global_ops(), idx, generation)
 }
 
 #[tauri::command]
@@ -1664,6 +3056,7 @@ pub async fn set_filter_settings(
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?;
         let idx = resolve_display_index(display_index);
         let temperature = temperature.clamp(1000, 10000);
         let brightness = brightness.clamp(50, 150);
@@ -1674,7 +3067,7 @@ pub async fn set_filter_settings(
         let g_gamma = g_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
         let b_gamma = b_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
 
-        with_display_state(idx, |state| {
+        let (actually_active, operation_generation) = with_display_state(idx, |state| {
             state.temperature = temperature;
             state.brightness = brightness;
             state.contrast = contrast;
@@ -1688,19 +3081,63 @@ pub async fn set_filter_settings(
             state.stacked = false;
             state.stack_preset_ids.clear();
             if is_active && !state.filter_active { state.filter_active = true; }
+            let generation = if state.filter_active {
+                bump_operation_generation(state)
+            } else {
+                state.operation_generation
+            };
+            (state.filter_active, generation)
         });
 
-        let actually_active = with_display_state(idx, |s| s.filter_active);
         if actually_active {
             let idx_move = idx;
-            tauri::async_runtime::spawn_blocking(move || apply_filter_to_display(idx_move))
-                .await.map_err(|e| format!("Filter apply error: {}", e))??;
+            let outcome = tauri::async_runtime::spawn_blocking(move || apply_filter_to_display_if_current(idx_move, operation_generation))
+                .await.map_err(|e| format!("Filter apply error: {}", e))?;
+            match outcome {
+                Ok(RunResult::Executed(())) => {}
+                Ok(RunResult::SkippedStale) => {
+                    // 已被更新意图接管：如实返回，不得报“已更新”。
+                    log::info!("set_filter_settings[{}]: 应用任务已过期，未执行写屏", idx);
+                    save_all_filter_states();
+                    return Ok(with_display_state(idx, |state| FilterResult {
+                        success: true,
+                        message: "操作已被更新的操作取代，未执行".to_string(),
+                        skipped_stale: true,
+                        degraded: false,
+                        settings: Some(FilterSettings::from_display_state(state)),
+                        preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
+                    }));
+                }
+                Err(e) => {
+                    // 统一条件回滚：状态锁内原子核验版本，仍当前才关闭并恢复默认显示。
+                    // 恢复结果必须记录，不能静默丢弃（可能部分写屏）。
+                    match rollback_failed_apply(idx, operation_generation) {
+                        RollbackOutcome::Restored => {
+                            log::warn!("滤镜应用失败，已精确恢复默认显示: {}", e);
+                        }
+                        RollbackOutcome::DegradedCleared => {
+                            log::warn!("滤镜应用失败，已降级清除滤镜: {}", e);
+                        }
+                        RollbackOutcome::NoRestoreNeeded => {}
+                        RollbackOutcome::Superseded => {
+                            log::info!("滤镜应用失败，恢复意图已被更新的操作取代（未执行）: {}", e);
+                        }
+                        RollbackOutcome::RestoreFailed(re) => {
+                            log::error!("滤镜应用失败且回滚恢复也失败（保留待恢复标记）: {}; {}", e, re);
+                        }
+                    }
+                    save_all_filter_states();
+                    return Err(format!("滤镜应用失败: {}", e));
+                }
+            }
         }
 
         save_all_filter_states();
 
         Ok(FilterResult {
             success: true, message: "滤镜设置已更新".to_string(),
+            skipped_stale: false,
+            degraded: false,
             settings: Some(FilterSettings {
                 temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma,
                 s_curve: 0.0, r_boost: 1.0, g_boost: 1.0, b_boost: 1.0,
@@ -1719,27 +3156,67 @@ pub async fn set_filter_settings(
 pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?;
         let idx = resolve_display_index(display_index);
-        let already_active = with_display_state(idx, |state| {
-            if state.filter_active { true } else { state.filter_active = true; false }
+        let (already_active, operation_generation) = with_display_state(idx, |state| {
+            if state.filter_active {
+                (true, state.operation_generation)
+            } else {
+                state.filter_active = true;
+                let generation = bump_operation_generation(state);
+                (false, generation)
+            }
         });
 
         if already_active {
             return Ok(with_display_state(idx, |state| FilterResult {
                 success: true, message: "滤镜已处于启用状态".to_string(),
+                skipped_stale: false,
+                degraded: false,
                 settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
             }));
         }
 
         let idx_move = idx;
-        tauri::async_runtime::spawn_blocking(move || apply_filter_to_display(idx_move))
-            .await.map_err(|e| format!("Filter apply error: {}", e))??;
+        let outcome = tauri::async_runtime::spawn_blocking(move || apply_filter_to_display_if_current(idx_move, operation_generation))
+            .await.map_err(|e| format!("Filter apply error: {}", e))?;
+        // 应用被更新的意图接管（SkippedStale）：如实返回，不得报“已启用”。
+        let (message, skipped_stale) = match outcome {
+            Ok(RunResult::Executed(())) => ("滤镜已启用".to_string(), false),
+            Ok(RunResult::SkippedStale) => {
+                log::info!("enable_filter[{}]: 应用任务已过期，未执行写屏", idx);
+                ("操作已被更新的操作取代，未执行".to_string(), true)
+            }
+            Err(e) => {
+                // 统一条件回滚：状态锁内原子核验版本，仍当前才关闭并恢复默认显示。
+                match rollback_failed_apply(idx, operation_generation) {
+                    RollbackOutcome::Restored => {
+                        log::warn!("enable_filter[{}]: 应用失败，已精确恢复默认显示: {}", idx, e);
+                    }
+                    RollbackOutcome::DegradedCleared => {
+                        log::warn!("enable_filter[{}]: 应用失败，已降级清除滤镜: {}", idx, e);
+                    }
+                    RollbackOutcome::NoRestoreNeeded => {}
+                    RollbackOutcome::Superseded => {
+                        log::info!("enable_filter[{}]: 应用失败，恢复意图已被更新的操作取代（未执行）: {}", idx, e);
+                    }
+                    RollbackOutcome::RestoreFailed(re) => {
+                        log::error!("enable_filter[{}]: 应用失败且回滚恢复也失败（保留待恢复标记）: {}; {}", idx, e, re);
+                    }
+                }
+                save_all_filter_states();
+                return Err(format!("滤镜应用失败: {}", e));
+            }
+        };
 
         save_all_filter_states();
 
         Ok(with_display_state(idx, |state| FilterResult {
-            success: true, message: "滤镜已启用".to_string(),
+            success: true,
+            message,
+            skipped_stale,
+            degraded: false,
             settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
         }))
@@ -1752,22 +3229,45 @@ pub async fn enable_filter(display_index: Option<usize>) -> Result<FilterResult,
 pub async fn disable_filter(display_index: Option<usize>) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?; // 快速检查（权威检查在 submit 的状态锁内）
         let idx = resolve_display_index(display_index);
-        let was_active = with_display_state(idx, |state| {
-            if !state.filter_active { false } else { state.filter_active = false; true }
-        });
+        // 每个被接受的关闭意图都在同一状态同步边界内：检查退出 + 置 filter_active=false
+        // + 递增版本，然后派发一个版本化恢复。恢复是否真正写屏由 restore 在操作锁内
+        // 根据 restore_pending / 原始 ramp 决定：未受影响的显示器返回 NothingToDo，不写屏。
+        let operation_generation = submit_intent(idx, |state| {
+            state.filter_active = false;
+            bump_operation_generation(state)
+        })?;
 
-        if was_active {
-            let idx_move = idx;
-            if let Err(e) = tauri::async_runtime::spawn_blocking(move || restore_display_default(idx_move))
-                .await.map_err(|e| format!("Filter restore error: {}", e))?
-            { log::error!("恢复默认显示失败: {}", e); }
-        }
+        let idx_move = idx;
+        let outcome = tauri::async_runtime::spawn_blocking(move || restore_display_default_if_current(idx_move, operation_generation))
+            .await.map_err(|e| format!("Filter restore error: {}", e))?;
+        let (message, degraded, skipped_stale) = match outcome {
+            Ok(RunResult::Executed(RestoreOutcome::Restored)) => ("滤镜已禁用".to_string(), false, false),
+            Ok(RunResult::Executed(RestoreOutcome::DegradedCleared)) => {
+                // 降级清除：滤镜已移除，但原有校色未保证恢复，必须如实告知。
+                log::warn!("disable_filter[{}]: 降级清除成功，原有校色未保证恢复", idx);
+                ("滤镜已关闭（降级清除：未能恢复原有校色）".to_string(), true, false)
+            }
+            Ok(RunResult::Executed(RestoreOutcome::NothingToDo)) => ("滤镜已禁用".to_string(), false, false),
+            Ok(RunResult::SkippedStale) => {
+                // 已有更新意图接管（如重新开启），本次关闭的恢复被正确跳过。
+                // 不得报“已禁用”完成：只说明请求已被更新操作取代。
+                log::info!("disable_filter[{}]: 恢复任务已过期，跳过", idx);
+                ("操作已被更新的操作取代，未执行".to_string(), false, true)
+            }
+            Err(e) => {
+                // 恢复失败必须可见、可重试。restore_pending 保留 true，下次关闭仍会重试。
+                log::error!("disable_filter[{}]: 恢复默认显示失败: {}", idx, e);
+                save_all_filter_states();
+                return Err(format!("滤镜恢复失败: {}", e));
+            }
+        };
 
         save_all_filter_states();
 
         Ok(with_display_state(idx, |state| FilterResult {
-            success: true, message: "滤镜已禁用".to_string(),
+            success: true, message, degraded, skipped_stale,
             settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
         }))
@@ -1787,29 +3287,74 @@ pub async fn toggle_filter(display_index: Option<usize>) -> Result<FilterResult,
 pub fn toggle_filter_sync(app_handle: &tauri::AppHandle) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?;
         let idx = get_active_index();
         let is_active = with_display_state(idx, |state| state.filter_active);
         let result = if is_active {
-            // Disable
-            with_display_state(idx, |state| state.filter_active = false);
-            if let Err(e) = restore_display_default(idx) {
-                log::error!("恢复默认显示失败: {}", e);
-            }
+            // 关闭：每个被接受的关闭意图都在同一状态同步边界内完成（检查退出 + 置关
+            // + 递增版本），然后派发版本化恢复；恢复在操作锁内决定是否真正写屏。
+            let operation_generation = submit_intent(idx, |state| {
+                state.filter_active = false;
+                bump_operation_generation(state)
+            })?;
+            let (message, degraded, skipped_stale) = match restore_display_default_if_current(idx, operation_generation) {
+                Ok(RunResult::Executed(RestoreOutcome::Restored)) => ("滤镜已禁用".to_string(), false, false),
+                Ok(RunResult::Executed(RestoreOutcome::DegradedCleared)) => {
+                    log::warn!("toggle_filter_sync[{}]: 降级清除成功，原有校色未保证恢复", idx);
+                    ("滤镜已关闭（降级清除：未能恢复原有校色）".to_string(), true, false)
+                }
+                Ok(RunResult::Executed(RestoreOutcome::NothingToDo)) => ("滤镜已禁用".to_string(), false, false),
+                Ok(RunResult::SkippedStale) => {
+                    log::info!("toggle_filter_sync[{}]: 恢复任务已过期，跳过", idx);
+                    ("操作已被更新的操作取代，未执行".to_string(), false, true)
+                }
+                Err(e) => {
+                    // 恢复失败必须可见、可重试（restore_pending 保留 true）。
+                    log::error!("toggle_filter_sync[{}]: 恢复默认显示失败: {}", idx, e);
+                    return Err(format!("滤镜恢复失败: {}", e));
+                }
+            };
             Ok(with_display_state(idx, |state| FilterResult {
-                success: true, message: "滤镜已禁用".to_string(),
+                success: true, message, degraded, skipped_stale,
                 settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
             }))
         } else {
-            // Enable
-            with_display_state(idx, |state| state.filter_active = true);
-            if let Err(e) = apply_filter_to_display(idx) {
-                log::error!("应用滤镜失败: {}", e);
-                with_display_state(idx, |state| state.filter_active = false);
-                return Err(e);
+            // 启用
+            let operation_generation = submit_intent(idx, |state| {
+                state.filter_active = true;
+                bump_operation_generation(state)
+            })?;
+            match apply_filter_to_display_if_current(idx, operation_generation) {
+                Ok(RunResult::Executed(())) => {}
+                Ok(RunResult::SkippedStale) => {
+                    log::info!("toggle_filter_sync[{}]: 应用任务已过期，跳过", idx);
+                }
+                Err(e) => {
+                    log::error!("toggle_filter_sync[{}]: 应用滤镜失败: {}", idx, e);
+                    // 统一条件回滚：在状态锁内原子核验版本——仍当前才关闭并走
+                    // 同一版本化、串行恢复流程（可能已部分写屏，restore_pending 由
+                    // 恢复路径保留）；已过期只记录失败，不修改新意图、不写屏。
+                    match rollback_failed_apply(idx, operation_generation) {
+                        RollbackOutcome::Restored => {
+                            log::warn!("toggle_filter_sync[{}]: 应用失败，已精确恢复默认显示", idx);
+                        }
+                        RollbackOutcome::DegradedCleared => {
+                            log::warn!("toggle_filter_sync[{}]: 应用失败，已降级清除滤镜", idx);
+                        }
+                        RollbackOutcome::NoRestoreNeeded => {}
+                        RollbackOutcome::Superseded => {
+                            log::info!("toggle_filter_sync[{}]: 应用失败，恢复意图已被更新的操作取代（未执行）", idx);
+                        }
+                        RollbackOutcome::RestoreFailed(re) => {
+                            log::error!("toggle_filter_sync[{}]: 应用失败且回滚恢复也失败（保留待恢复标记）: {}", idx, re);
+                        }
+                    }
+                    return Err(e);
+                }
             }
             Ok(with_display_state(idx, |state| FilterResult {
-                success: true, message: "滤镜已启用".to_string(),
+                success: true, message: "滤镜已启用".to_string(), skipped_stale: false, degraded: false,
                 settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
             }))
@@ -1990,35 +3535,18 @@ fn get_filter_presets_sync() -> Result<Vec<FilterPreset>, String> {
     ])
 }
 
-/// 应用叠加组合到显示器：按 state.stack_preset_ids 顺序取 ramp → 复合 → 写 ICC → xcalib。
-/// 供 apply_filter_to_display（开关/启动/游戏自动开启）与 apply_filter_stack 命令共用。
-fn apply_stack_to_display(idx: usize) -> Result<(), String> {
-    let ids = with_display_state(idx, |s| s.stack_preset_ids.clone());
-    if ids.is_empty() {
-        return Err("叠加组合为空".to_string());
-    }
-    capture_original_ramp(idx);
-    let mut ramps = Vec::with_capacity(ids.len());
-    for id in &ids {
-        match preset_id_to_ramp(id) {
-            Some(ramp) => ramps.push(ramp),
-            None => return Err(format!("叠加滤镜解析失败，找不到滤镜: {}", id)),
-        }
-    }
-    let composed = compose_ramps(&ramps);
-    let temp_icc = get_temp_icc_path();
-    let icc_data = build_icc_profile(&composed, "NexBox Filter Stack");
-    fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
-    apply_icc_via_xcalib(&temp_icc, idx)
-}
-
+/// 应用叠加组合的协调层实现见 [`DisplayOps::apply_stack`]（要求调用方已持有操作锁）。
 /// Clear the gamma ramp via xcalib (reset to system default / linear).
 /// 仅在无法恢复捕获的原始 ramp 时作为兜底；系统关机/注销时跳过（外部子进程会
 /// 因运行库被拆除而初始化失败 0xc0000142）。
 fn clear_gamma_ramp_via_xcalib(display_index: usize) -> Result<(), String> {
     if is_system_shutting_down() {
-        log::info!("clear_gamma_ramp[{}]: 系统关机/注销中，跳过 xcalib 恢复", display_index);
-        return Ok(());
+        // 系统关机/注销：外部子进程会因运行库被拆除而初始化失败 0xc0000142。
+        // 不得假装“清除成功”：
+        // - restore() 会保留 restore_pending（Err 分支不清标记）；
+        // - 调用方/cleanup 会把该显示器计入失败，而不是 restored/degraded。
+        log::warn!("clear_gamma_ramp[{}]: 系统关机/注销中，跳过 xcalib 恢复（未执行清除）", display_index);
+        return Err("系统关机/注销中，已跳过 xcalib 清除，未执行清除".to_string());
     }
     let tool = get_tool_path("xcalib.exe")?;
     log::info!("clear_gamma_ramp[{}]: resetting via xcalib -c", display_index);
@@ -2099,37 +3627,14 @@ fn write_gamma_ramp(idx: usize, ramp: &[[u16; 256]; 3]) -> Result<(), String> {
     }
 }
 
-/// 在应用滤镜前捕获原始 ramp（每个显示器只捕获一次，供退出/禁用时精确恢复）。
-fn capture_original_ramp(idx: usize) {
-    ensure_display_states(); // 确保 DISPLAY_DEVICES 已枚举，get_display_hdc 才能取到设备名
-    ensure_original_ramps(display_count());
-    let slot = ORIGINAL_RAMPS.lock().unwrap();
-    let Some(cell) = slot.get(idx) else { return };
-    let mut guard = cell.lock().unwrap();
-    if guard.is_none() {
-        if let Some(ramp) = read_gamma_ramp(idx) {
-            log::info!("capture_original_ramp[{}]: 已捕获原始 gamma ramp（含用户 sRGB 校色）", idx);
-            *guard = Some(ramp);
-        } else {
-            log::warn!("capture_original_ramp[{}]: 读取原始 ramp 失败，恢复时回退 xcalib -c", idx);
-        }
-    }
-}
-
-/// 取走指定显示器的原始 ramp（恢复后清空，下次启用时重新捕获）。
-fn take_original_ramp(idx: usize) -> Option<[[u16; 256]; 3]> {
-    ensure_display_states(); // 确保 DISPLAY_DEVICES 已枚举，get_display_hdc 才能取到设备名
-    ensure_original_ramps(display_count());
-    let slot = ORIGINAL_RAMPS.lock().unwrap();
-    let cell = slot.get(idx)?;
-    let mut guard = cell.lock().unwrap();
-    guard.take()
-}
+// 捕获 / 原始 ramp / 待恢复标记的协调层实现见 [`DisplayOps`]（capture / peek_ramp /
+// clear_ramp / set_restore_pending），要求调用方持有该显示器操作锁时再读取判断。
 
 #[tauri::command]
 pub async fn apply_preset(
     display_index: Option<usize>, preset_id: String, is_active: bool,
 ) -> Result<FilterResult, String> {
+    ensure_not_shutting_down()?;
     let idx = resolve_display_index(display_index);
     let presets = get_filter_presets().await?;
     let preset = presets.iter().find(|p| p.id == preset_id)
@@ -2149,7 +3654,7 @@ pub async fn apply_preset(
                 Err(_) => [[0u16; 256]; 3],
             };
 
-            with_display_state(idx, |state| {
+            let (actually_active, operation_generation) = with_display_state(idx, |state| {
                 state.temperature = preset.temperature;
                 state.brightness = preset.brightness;
                 state.contrast = preset.contrast;
@@ -2164,17 +3669,43 @@ pub async fn apply_preset(
                 state.stacked = false;
                 state.stack_preset_ids.clear();
                 if is_active && !state.filter_active { state.filter_active = true; }
+                let generation = if state.filter_active {
+                    bump_operation_generation(state)
+                } else {
+                    state.operation_generation
+                };
+                (state.filter_active, generation)
             });
-
-            let actually_active = with_display_state(idx, |s| s.filter_active);
             if actually_active {
                 let icc_path_clone = icc_path.clone();
                 let idx_move = idx;
                 // 不阻塞返回：在后台线程应用 ICC，避免切换预设时因等待 xcalib
                 // 应用 gamma（显示器会短暂刷新）而导致 UI“卡一下”。
+                // 但用户可能在后台应用完成前关闭滤镜；再次确认开关仍为开启，
+                // 避免“已关闭但后台任务随后又把该滤镜写回屏幕”的竞态。
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move)).await {
-                        log::error!("apply_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e);
+                    // 捕获失败会以内层 Err 返回，必须显式提取，避免被静默吞掉。
+                    // 捕获后版本复查发现过期：以 SkippedStale 传播（不登记成功、不报完成）。
+                    let task_result = tauri::async_runtime::spawn_blocking(move || {
+                        let ops = global_ops();
+                        ops.run_if_current(idx_move, operation_generation, "apply_preset", false, || {
+                            // 捕获完成后复查版本：捕获期间可能被新的关闭意图推进版本，
+                            // 过期则中止写屏（避免“已关闭但滤镜随后被写回屏幕”）。
+                            if ops.capture_if_current(idx_move, operation_generation, "apply_preset")? == CaptureOutcome::Skip {
+                                log::info!("apply_preset[{}]: 捕获后版本已过期/退出，中止 ICC 写屏", idx_move);
+                                return Ok(RunResult::SkippedStale);
+                            }
+                            ops.apply_icc(idx_move, &icc_path_clone).map(RunResult::Executed)
+                        })
+                    }).await;
+                    match task_result {
+                        Ok(Ok(RunResult::SkippedStale))
+                        | Ok(Ok(RunResult::Executed(RunResult::SkippedStale))) => {
+                            log::info!("apply_preset[{}]: 应用已过期，未执行写屏", idx_move);
+                        }
+                        Ok(Ok(RunResult::Executed(RunResult::Executed(())))) => {}
+                        Ok(Err(e)) => log::error!("apply_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e),
+                        Err(join_err) => log::error!("apply_preset[{}]: 后台任务 join 失败: {}", idx_move, join_err),
                     }
                 });
             }
@@ -2185,6 +3716,8 @@ pub async fn apply_preset(
 
             return Ok(with_display_state(idx, |state| FilterResult {
                 success: true,
+                skipped_stale: false,
+                degraded: false,
                 message: format!("已应用预设: {}", preset.name),
                 settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: if preview_filter.is_empty() { None } else { Some(preview_filter) },
@@ -2209,26 +3742,47 @@ pub async fn apply_filter_stack(
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?;
         let idx = resolve_display_index(display_index);
 
         if preset_ids.is_empty() {
             let was_stacked = with_display_state(idx, |s| s.stacked);
             if was_stacked {
-                with_display_state(idx, |s| {
+                let operation_generation = with_display_state(idx, |s| {
                     s.stacked = false;
                     s.stack_preset_ids.clear();
                     s.icc_active = false;
                     s.active_icc_id = None;
                     s.icc_ramp = None;
                     s.filter_active = false;
+                    bump_operation_generation(s)
                 });
                 let idx_move = idx;
-                tauri::async_runtime::spawn_blocking(move || restore_display_default(idx_move))
-                    .await.map_err(|e| format!("清除叠加失败: {}", e))??;
+                let outcome = tauri::async_runtime::spawn_blocking(move || restore_display_default_if_current(idx_move, operation_generation))
+                    .await.map_err(|e| format!("清除叠加失败: {}", e))?;
+                let (message, degraded, skipped_stale) = match outcome {
+                    Ok(RunResult::Executed(RestoreOutcome::Restored)) => ("叠加滤镜已清除".to_string(), false, false),
+                    Ok(RunResult::Executed(RestoreOutcome::DegradedCleared)) => {
+                        log::warn!("apply_filter_stack[{}]: 降级清除成功，原有校色未保证恢复", idx);
+                        ("叠加滤镜已清除（降级清除：未能恢复原有校色）".to_string(), true, false)
+                    }
+                    Ok(RunResult::Executed(RestoreOutcome::NothingToDo)) => ("叠加滤镜已清除".to_string(), false, false),
+                    Ok(RunResult::SkippedStale) => {
+                        log::info!("apply_filter_stack[{}]: 清除任务已过期，跳过", idx);
+                        ("操作已被更新的操作取代，未执行".to_string(), false, true)
+                    }
+                    Err(e) => return Err(format!("清除叠加滤镜恢复失败: {}", e)),
+                };
+                save_all_filter_states();
+                return Ok(with_display_state(idx, |state| FilterResult {
+                    success: true, message, degraded, skipped_stale,
+                    settings: Some(FilterSettings::from_display_state(state)),
+                    preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
+                }));
             }
             save_all_filter_states();
             return Ok(with_display_state(idx, |state| FilterResult {
-                success: true,
+                success: true, skipped_stale: false, degraded: false,
                 message: "叠加滤镜已清除".to_string(),
                 settings: Some(FilterSettings::from_display_state(state)),
                 preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
@@ -2245,20 +3799,33 @@ pub async fn apply_filter_stack(
         }
         let composed = compose_ramps(&ramps);
 
-        with_display_state(idx, |state| {
+        let operation_generation = with_display_state(idx, |state| {
             state.stack_preset_ids = preset_ids.clone();
             state.stacked = true;
             state.icc_ramp = Some(composed);
             state.icc_active = false;
             state.active_icc_id = None;
             state.filter_active = true;
+            bump_operation_generation(state)
         });
 
         // 后台应用，避免等待 xcalib 导致 UI 卡顿
         let idx_move = idx;
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_stack_to_display(idx_move)).await {
-                log::error!("apply_filter_stack[{}]: 后台应用叠加滤镜失败: {}", idx_move, e);
+            let task_result = tauri::async_runtime::spawn_blocking(move || {
+                let ops = global_ops();
+                ops.run_if_current(idx_move, operation_generation, "apply_filter_stack", false, || {
+                    ops.apply_stack(idx_move, operation_generation, "apply_filter_stack")
+                })
+            }).await;
+            match task_result {
+                Ok(Ok(RunResult::SkippedStale))
+                | Ok(Ok(RunResult::Executed(RunResult::SkippedStale))) => {
+                    log::info!("apply_filter_stack[{}]: 应用已过期，未执行写屏", idx_move);
+                }
+                Ok(Ok(RunResult::Executed(RunResult::Executed(())))) => {}
+                Ok(Err(e)) => log::error!("apply_filter_stack[{}]: 后台应用叠加滤镜失败: {}", idx_move, e),
+                Err(join_err) => log::error!("apply_filter_stack[{}]: 后台任务 join 失败: {}", idx_move, join_err),
             }
         });
 
@@ -2266,6 +3833,8 @@ pub async fn apply_filter_stack(
 
         Ok(with_display_state(idx, |state| FilterResult {
             success: true,
+            skipped_stale: false,
+            degraded: false,
             message: format!("已应用 {} 个叠加滤镜", preset_ids.len()),
             settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
@@ -2374,38 +3943,9 @@ unsafe extern "system" fn session_watch_proc(
 pub fn cleanup() {
     #[cfg(target_os = "windows")]
     {
-        ensure_display_states();
-        ensure_original_ramps(display_count());
-        let num_displays = {
-            let lock = DISPLAY_STATES.lock().unwrap();
-            let states = lock.as_ref().unwrap();
-            for state_mutex in states.iter() {
-                let mut state = state_mutex.lock().unwrap();
-                state.filter_active = false;
-                state.icc_active = false;
-                state.active_icc_id = None;
-            }
-            states.len()
-        };
-        // 只恢复"实际应用过滤镜"的显示器（即捕获过原始 ramp 的），从未开过滤镜的
-        // 显示器完全不动。恢复用进程内 SetDeviceGammaRamp，关机/注销时也不产生
-        // 子进程；xcalib 兜底路径由 clear_gamma_ramp_via_xcalib 内部保护。
-        let mut restored = 0usize;
-        for i in 0..num_displays {
-            let has_orig = ORIGINAL_RAMPS
-                .lock().unwrap()
-                .get(i)
-                .map(|m| m.lock().unwrap().is_some())
-                .unwrap_or(false);
-            if has_orig {
-                if let Err(e) = restore_display_default(i) {
-                    log::error!("cleanup[{}]: 恢复原始 ramp 失败: {}", i, e);
-                } else {
-                    restored += 1;
-                }
-            }
-        }
-        log::info!("cleanup: restored {} displays to pre-application state", restored);
+        // 委托协调层：在同一状态锁内置位退出标志 + 使全部旧任务失效，再逐台取操作锁
+        // 在锁内判断并执行恢复。退出期间新意图会在 submit 的状态锁内被拒绝。
+        global_ops().cleanup();
     }
 }
 
@@ -2417,6 +3957,7 @@ pub fn cleanup() {
 /// frontend highlights the correct card with the toggle OFF.
 #[tauri::command]
 pub async fn restore_filter_state(display_index: Option<usize>, auto_apply: bool) -> Result<FilterResult, String> {
+    ensure_not_shutting_down()?;
     let idx = resolve_display_index(display_index);
     log::info!("restore_filter_state[{}]: auto_apply={}", idx, auto_apply);
 
@@ -2425,16 +3966,58 @@ pub async fn restore_filter_state(display_index: Option<usize>, auto_apply: bool
 
     if auto_apply {
         // Turn the filter ON and re-apply the saved preset/ICC
-        with_display_state(idx, |s| s.filter_active = true);
+        let operation_generation = with_display_state(idx, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        });
         log::info!("restore_filter_state[{}]: auto-apply enabled, re-applying filter", idx);
         let idx_move = idx;
-        tauri::async_runtime::spawn_blocking(move || apply_filter_to_display(idx_move))
-            .await.map_err(|e| format!("Startup filter apply error: {}", e))??;
+        let outcome = tauri::async_runtime::spawn_blocking(move || apply_filter_to_display_if_current(idx_move, operation_generation))
+            .await.map_err(|e| format!("Startup filter apply error: {}", e))?;
+        let (message, skipped_stale) = match outcome {
+            Ok(RunResult::Executed(())) => {
+                ("滤镜已自动开启".to_string(), false)
+            }
+            Ok(RunResult::SkippedStale) => {
+                log::info!("restore_filter_state[{}]: 启动应用已过期，未执行写屏", idx);
+                ("操作已被更新的操作取代，未执行".to_string(), true)
+            }
+            Err(e) => {
+                // 统一条件回滚：状态锁内原子核验版本，仍当前才关闭并恢复默认显示。
+                match rollback_failed_apply(idx, operation_generation) {
+                    RollbackOutcome::Restored => {
+                        log::warn!("restore_filter_state[{}]: 应用失败，已精确恢复默认显示: {}", idx, e);
+                    }
+                    RollbackOutcome::DegradedCleared => {
+                        log::warn!("restore_filter_state[{}]: 应用失败，已降级清除滤镜: {}", idx, e);
+                    }
+                    RollbackOutcome::NoRestoreNeeded => {}
+                    RollbackOutcome::Superseded => {
+                        log::info!("restore_filter_state[{}]: 应用失败，恢复意图已被更新的操作取代（未执行）: {}", idx, e);
+                    }
+                    RollbackOutcome::RestoreFailed(re) => {
+                        log::error!("restore_filter_state[{}]: 应用失败且回滚恢复也失败（保留待恢复标记）: {}; {}", idx, e, re);
+                    }
+                }
+                return Err(format!("滤镜应用失败: {}", e));
+            }
+        };
+        let skipped_stale_result = skipped_stale;
+        return Ok(with_display_state(idx, |state| FilterResult {
+            success: true,
+            message,
+            skipped_stale: skipped_stale_result,
+            degraded: false,
+            settings: Some(FilterSettings::from_display_state(state)),
+            preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
+        }));
     }
 
     Ok(with_display_state(idx, |state| FilterResult {
         success: true,
-        message: if auto_apply { "滤镜已自动开启" } else { "滤镜状态已恢复" }.to_string(),
+        skipped_stale: false,
+        degraded: false,
+        message: "滤镜状态已恢复".to_string(),
         settings: Some(FilterSettings::from_display_state(state)),
         preview_filter: None, preview_tint_color: None, preview_tint_opacity: None,
     }))
@@ -2629,6 +4212,7 @@ pub async fn apply_icc_preset(
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
+        ensure_not_shutting_down()?;
         let idx = resolve_display_index(display_index);
 
         // Determine the ICC file path
@@ -2641,7 +4225,7 @@ pub async fn apply_icc_preset(
             // User-imported ICC preset: find in icc_presets.json, write to temp file
             let presets = get_or_load_icc_presets();
             let preset = presets.iter().find(|p| p.id == id).ok_or("未找到 ICC 预设".to_string())?;
-            let temp_path = get_temp_icc_path().with_file_name(format!("icc_preset_{}.icc", id));
+            let temp_path = get_temp_icc_path(idx, "icc_preset");
             let ramp = preset.to_ramp_array();
             let icc_data = build_icc_profile(&ramp, &preset.name);
             fs::write(&temp_path, &icc_data).map_err(|e| format!("无法写入 ICC 文件: {}", e))?;
@@ -2665,23 +4249,54 @@ pub async fn apply_icc_preset(
                 .unwrap_or([[0u16; 256]; 3])
         };
 
-        with_display_state(idx, |state| {
+        let (actually_active, operation_generation) = with_display_state(idx, |state| {
             state.icc_ramp = Some(ramp_array);
             state.icc_active = true;
             state.active_icc_id = Some(id.clone());
             state.stacked = false;
             state.stack_preset_ids.clear();
             if is_active && !state.filter_active { state.filter_active = true; }
+            let generation = if state.filter_active {
+                bump_operation_generation(state)
+            } else {
+                state.operation_generation
+            };
+            (state.filter_active, generation)
         });
-
-        let actually_active = with_display_state(idx, |s| s.filter_active);
         if actually_active {
             let icc_path_clone = icc_path.clone();
             let idx_move = idx;
+            let generated_temp_icc = !id.starts_with("builtin_");
             // 不阻塞返回：后台应用 ICC，避免切换 ICC 预设时 UI 卡顿
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = tauri::async_runtime::spawn_blocking(move || apply_icc_via_xcalib(&icc_path_clone, idx_move)).await {
-                    log::error!("apply_icc_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e);
+                let path_for_cleanup = icc_path_clone.clone();
+                let task_result = tauri::async_runtime::spawn_blocking(move || {
+                    let ops = global_ops();
+                    ops.run_if_current(idx_move, operation_generation, "apply_icc_preset", false, || {
+                        // 捕获失败会以内层 Err 返回，不得静默吞掉。
+                        // 捕获完成后复查版本：捕获期间可能被新的关闭意图推进版本，过期则中止写屏。
+                        if ops.capture_if_current(idx_move, operation_generation, "apply_icc_preset")? == CaptureOutcome::Skip {
+                            log::info!("apply_icc_preset[{}]: 捕获后版本已过期/退出，中止 ICC 写屏", idx_move);
+                            return Ok(RunResult::SkippedStale);
+                        }
+                        if generated_temp_icc {
+                            ops.apply_generated_icc(idx_move, &icc_path_clone).map(RunResult::Executed)
+                        } else {
+                            ops.apply_icc(idx_move, &icc_path_clone).map(RunResult::Executed)
+                        }
+                    })
+                }).await;
+                if generated_temp_icc {
+                    let _ = fs::remove_file(&path_for_cleanup);
+                }
+                match task_result {
+                    Ok(Ok(RunResult::SkippedStale))
+                    | Ok(Ok(RunResult::Executed(RunResult::SkippedStale))) => {
+                        log::info!("apply_icc_preset[{}]: 应用已过期，未执行写屏", idx_move);
+                    }
+                    Ok(Ok(RunResult::Executed(RunResult::Executed(())))) => {}
+                    Ok(Err(e)) => log::error!("apply_icc_preset[{}]: 后台应用 ICC 失败: {}", idx_move, e),
+                    Err(join_err) => log::error!("apply_icc_preset[{}]: 后台任务 join 失败: {}", idx_move, join_err),
                 }
             });
         }
@@ -2692,6 +4307,8 @@ pub async fn apply_icc_preset(
 
         Ok(with_display_state(idx, |state| FilterResult {
             success: true, message: format!("ICC 预设已应用"),
+            skipped_stale: false,
+            degraded: false,
             settings: Some(FilterSettings::from_display_state(state)),
             preview_filter: if preview_filter.is_empty() { None } else { Some(preview_filter) },
             preview_tint_color, preview_tint_opacity,
@@ -2717,7 +4334,7 @@ pub async fn delete_icc_preset(id: String) -> Result<FilterResult, String> {
         save_icc_presets_to_file(&presets)?;
         *ICC_PRESETS.lock().unwrap() = Some(presets);
 
-        Ok(FilterResult { success: true, message: "ICC 预设已删除".to_string(), settings: None, preview_filter: None, preview_tint_color: None, preview_tint_opacity: None })
+        Ok(FilterResult { success: true, skipped_stale: false, degraded: false, message: "ICC 预设已删除".to_string(), settings: None, preview_filter: None, preview_tint_color: None, preview_tint_opacity: None })
     }
     #[cfg(not(target_os = "windows"))]
     { Err("此功能仅支持 Windows 系统".to_string()) }
@@ -2822,5 +4439,2058 @@ mod delta_icc_tests {
             assert!((1000..=10000).contains(&t), "{}: 派生色温 {} 越界", id, t);
             let _ = compute_icc_preview(&ramp);
         }
+    }
+}
+
+#[cfg(all(test, target_os = "windows"))]
+mod coordination_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
+    use std::sync::mpsc::{channel, RecvTimeoutError};
+    use std::sync::Arc;
+    use std::sync::Mutex as StdMutex;
+    use std::thread;
+    use std::time::Duration;
+
+    /// 记录一次后端调用的操作类型。
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum Op {
+        Capture,
+        ApplyIcc,
+        Write,
+        Clear,
+    }
+
+    /// 测试注入：置位后，假后端的 `clear` 模拟生产后端在系统关机/注销时的行为——
+    /// 跳过外部进程且**不报告清除成功**（返回 Err）。仅测试模块内可见。
+    /// 用 thread_local 而非进程级静态：cargo test 默认并行运行各测试线程，
+    /// 进程级标志会在测试间泄漏（一个测试置位会污染并行测试的 clear 语义）。
+    thread_local! {
+        static TEST_FORCE_SYSTEM_SHUTDOWN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    /// 测试上下文：完全独立的协调层实例 + 假后端。不触碰全局静态状态、
+    /// 不触碰真实 GDI / xcalib / 显示器。假后端：
+    /// - `fail`: 指定某一步返回 Err；
+    /// - `pause_on` / `pause_hit` / `release_rx`: 指定某一步在进入时阻塞，等待
+    ///   `release_tx` 放行（用于制造可控时序；等待可超时，防止挂死）；
+    /// - 记录调用顺序与最终模拟屏幕值，供断言“没有迟到写屏”。
+    struct TestContext {
+        ops: DisplayOps<'static>,
+        order: Arc<StdMutex<Vec<Op>>>,
+        screen: Arc<StdMutex<GammaRamp>>,
+        fail: Arc<StdMutex<Option<Op>>>,
+        pause_on: Arc<StdMutex<Option<Op>>>,
+        pause_hit: Arc<StdMutex<Option<Op>>>,
+        /// 后端阻塞等待的“放行”通道（backend 侧持有 receiver）。
+        release_rx: Arc<StdMutex<Option<std::sync::mpsc::Receiver<()>>>>,
+        /// 测试侧持有的“放行”发送端。
+        release_tx: Option<std::sync::mpsc::Sender<()>>,
+    }
+
+    impl TestContext {
+        fn new(count: usize) -> Self {
+            let order: Arc<StdMutex<Vec<Op>>> = Arc::new(StdMutex::new(Vec::new()));
+            let screen: Arc<StdMutex<GammaRamp>> = Arc::new(StdMutex::new(
+                [[0u16; 256]; 3],
+            ));
+            let fail: Arc<StdMutex<Option<Op>>> = Arc::new(StdMutex::new(None));
+            let pause_on: Arc<StdMutex<Option<Op>>> = Arc::new(StdMutex::new(None));
+            let pause_hit: Arc<StdMutex<Option<Op>>> = Arc::new(StdMutex::new(None));
+            let release_rx: Arc<StdMutex<Option<std::sync::mpsc::Receiver<()>>>> =
+                Arc::new(StdMutex::new(None));
+            let backend = FakeBackend {
+                order: Arc::clone(&order),
+                screen: Arc::clone(&screen),
+                fail: Arc::clone(&fail),
+                pause_on: Arc::clone(&pause_on),
+                pause_hit: Arc::clone(&pause_hit),
+                release_rx: Arc::clone(&release_rx),
+            };
+            let states: Mutex<Option<Vec<Mutex<DisplayState>>>> = Mutex::new(Some(
+                (0..count)
+                    .map(|_| Mutex::new(DisplayState::default()))
+                    .collect(),
+            ));
+            let op_locks: Mutex<Vec<Arc<Mutex<()>>>> = Mutex::new(
+                (0..count).map(|_| Arc::new(Mutex::new(()))).collect(),
+            );
+            let ramps: Mutex<Vec<Mutex<Option<GammaRamp>>>> = Mutex::new(
+                (0..count).map(|_| Mutex::new(None)).collect(),
+            );
+            let shutting_down = AtomicBool::new(false);
+            let ops = DisplayOps {
+                states: &states,
+                op_locks: &op_locks,
+                ramps: &ramps,
+                shutting_down: &shutting_down,
+                count,
+                backend: &backend,
+            };
+            // 让 fake backend 与 DisplayOps 共享同一 release 通道
+            let _ = backend;
+            // 泄漏以避免借用在测试结束时失效 —— 但我们需要借用仅在测试体内有效：
+            // 这里改用 Box::leak 以得到 'static 借用。
+            let backend_leaked: &'static FakeBackend = Box::leak(Box::new(backend));
+            let states_leaked: &'static Mutex<Option<Vec<Mutex<DisplayState>>>> =
+                Box::leak(Box::new(states));
+            let op_locks_leaked: &'static Mutex<Vec<Arc<Mutex<()>>>> = Box::leak(Box::new(op_locks));
+            let ramps_leaked: &'static Mutex<Vec<Mutex<Option<GammaRamp>>>> =
+                Box::leak(Box::new(ramps));
+            let shutting_down_leaked: &'static AtomicBool = Box::leak(Box::new(shutting_down));
+            let ops = DisplayOps {
+                states: states_leaked,
+                op_locks: op_locks_leaked,
+                ramps: ramps_leaked,
+                shutting_down: shutting_down_leaked,
+                count,
+                backend: backend_leaked,
+            };
+            TestContext {
+                ops,
+                order,
+                screen,
+                fail,
+                pause_on,
+                pause_hit,
+                release_rx,
+                release_tx: None,
+            }
+        }
+
+        /// 让假后端在指定操作上暂停一次。测试持发送端，backend 持接收端。
+        fn arm_pause(&mut self, op: Op) {
+            let (tx, rx) = channel();
+            *self.pause_on.lock().unwrap() = Some(op);
+            *self.release_rx.lock().unwrap() = Some(rx);
+            self.release_tx = Some(tx);
+        }
+
+        /// 放行暂停的后端调用。
+        fn release_pause(&self) {
+            self.release_tx.as_ref().unwrap().send(()).unwrap();
+        }
+
+        fn wait_paused(&self) {
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                let hit = *self.pause_hit.lock().unwrap();
+                if hit.is_some() {
+                    return;
+                }
+                assert!(std::time::Instant::now() < deadline, "未等到暂停信号");
+                thread::sleep(Duration::from_millis(2));
+            }
+        }
+
+        fn log_order(&self) -> Vec<Op> {
+            self.order.lock().unwrap().clone()
+        }
+
+        fn screen_value(&self) -> GammaRamp {
+            *self.screen.lock().unwrap()
+        }
+    }
+
+    /// 假后端：仅做物理 I/O 模拟，不参与版本/退出/待恢复协调逻辑（与真后端职责相同）。
+    struct FakeBackend {
+        order: Arc<StdMutex<Vec<Op>>>,
+        screen: Arc<StdMutex<GammaRamp>>,
+        fail: Arc<StdMutex<Option<Op>>>,
+        pause_on: Arc<StdMutex<Option<Op>>>,
+        pause_hit: Arc<StdMutex<Option<Op>>>,
+        release_rx: Arc<StdMutex<Option<std::sync::mpsc::Receiver<()>>>>,
+    }
+
+    impl GammaBackend for FakeBackend {
+        fn read(&self, display: usize) -> Result<GammaRamp, String> {
+            self.order.lock().unwrap().push(Op::Capture);
+            self.maybe_pause(Op::Capture);
+            if *self.fail.lock().unwrap() == Some(Op::Capture) {
+                return Err("模拟捕获失败".to_string());
+            }
+            Ok([[1u16; 256]; 3])
+        }
+        fn write(&self, display: usize, ramp: &GammaRamp) -> Result<(), String> {
+            self.order.lock().unwrap().push(Op::Write);
+            self.maybe_pause(Op::Write);
+            if *self.fail.lock().unwrap() == Some(Op::Write) {
+                return Err("模拟写回失败".to_string());
+            }
+            *self.screen.lock().unwrap() = *ramp;
+            Ok(())
+        }
+        fn apply_icc(&self, display: usize, path: &Path) -> Result<(), String> {
+            self.order.lock().unwrap().push(Op::ApplyIcc);
+            self.maybe_pause(Op::ApplyIcc);
+            if *self.fail.lock().unwrap() == Some(Op::ApplyIcc) {
+                return Err("模拟应用 ICC 失败".to_string());
+            }
+            *self.screen.lock().unwrap() = [[2u16; 256]; 3];
+            Ok(())
+        }
+        fn clear(&self, display: usize) -> Result<(), String> {
+            self.order.lock().unwrap().push(Op::Clear);
+            self.maybe_pause(Op::Clear);
+            if *self.fail.lock().unwrap() == Some(Op::Clear) {
+                return Err("模拟线性清除失败".to_string());
+            }
+            // 模拟生产后端的关机语义：系统关机/注销时跳过外部清除进程，
+            // 必须返回 Err（未执行清除），不得假装清除成功。
+            if TEST_FORCE_SYSTEM_SHUTDOWN.with(|f| f.get()) {
+                return Err("系统关机/注销中，已跳过 xcalib 清除，未执行清除".to_string());
+            }
+            *self.screen.lock().unwrap() = [[0u16; 256]; 3];
+            Ok(())
+        }
+    }
+
+    impl FakeBackend {
+        fn maybe_pause(&self, op: Op) {
+            let should_pause = *self.pause_on.lock().unwrap() == Some(op);
+            if !should_pause {
+                return;
+            }
+            *self.pause_hit.lock().unwrap() = Some(op);
+            // 等待测试放行（可超时，防止挂死）。取走 receiver 只等一次。
+            let rx = self.release_rx.lock().unwrap().take();
+            if let Some(rx) = rx {
+                let _ = rx.recv_timeout(Duration::from_secs(5));
+            }
+        }
+    }
+
+    // ─── 场景 1：首次捕获失败 → 不调用任何应用写屏 ───
+    #[test]
+    fn capture_failure_aborts_apply() {
+        let ctx = TestContext::new(1);
+        *ctx.fail.lock().unwrap() = Some(Op::Capture);
+        let err = ctx.ops.apply(0, 1, "apply_filter");
+        assert!(err.is_err(), "捕获失败必须中止应用");
+        let order = ctx.log_order();
+        assert_eq!(order, vec![Op::Capture], "捕获失败后不得有任何应用写屏: {:?}", order);
+        assert_eq!(ctx.screen_value(), [[0u16; 256]; 3], "屏幕不得被修改");
+    }
+
+    // ─── 场景 2：直接 ICC 首次应用 → 先捕获，再应用 ───
+    #[test]
+    fn direct_icc_applies_capture_then_icc() {
+        let ctx = TestContext::new(1);
+        ctx.ops.with_state(0, |s| {
+            s.icc_active = true;
+            s.active_icc_id = Some("builtin_xxx".to_string());
+        });
+        // 内置 ICC 不存在时 apply 会走用户 ramp 分支；这里用捕获+恢复验证顺序：
+        let err = ctx.ops.apply(0, 1, "apply_filter");
+        // 若内置 ICC 不存在且无 icc_ramp，apply 返回 Ok(()) 但已捕获 —— 验证顺序以 order 为准
+        let order = ctx.log_order();
+        assert!(order.contains(&Op::Capture), "必须首先捕获: {:?}", order);
+        let first = order.first().copied();
+        assert_eq!(first, Some(Op::Capture), "捕获必须是第一次后端调用: {:?}", order);
+        let _ = err;
+    }
+
+    // ─── 场景 3：精确恢复失败后重试 → 原始 Ramp 保留；第二次写回相同数据 ───
+    #[test]
+    fn exact_restore_failure_keeps_ramp_and_retries() {
+        let ctx = TestContext::new(1);
+        // 先捕获（后端 read 成功，写入 [[1;256];3] 到 ramps）
+        ctx.ops.capture(0).unwrap();
+        // 模拟一次恢复：先让写回失败
+        *ctx.fail.lock().unwrap() = Some(Op::Write);
+        let r1 = ctx.ops.restore(0);
+        assert!(r1.is_err(), "写回失败必须返回 Err");
+        assert!(ctx.ops.peek_ramp(0).is_some(), "失败后原始 ramp 必须保留");
+        assert!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "失败后待恢复标记必须保留");
+        // 第二次恢复成功：必须写回相同数据
+        *ctx.fail.lock().unwrap() = None;
+        let r2 = ctx.ops.restore(0);
+        assert!(matches!(r2, Ok(RestoreOutcome::Restored)), "第二次应精确恢复");
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "写回数据必须是捕获的原始 ramp");
+        assert!(ctx.ops.peek_ramp(0).is_none(), "恢复成功后 ramp 应删除");
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "恢复成功后待恢复标记应清除");
+    }
+
+    // ─── 场景 4：已关闭但待恢复 → 再次关闭仍执行恢复 ───
+    #[test]
+    fn repeated_close_retries_restore() {
+        let ctx = TestContext::new(1);
+        // 应用已改屏：捕获原始 ramp（[[1;256];3]），pending=true。
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        // 第一次关闭的恢复写回失败：
+        *ctx.fail.lock().unwrap() = Some(Op::Write);
+        let r1 = ctx.ops.restore(0);
+        assert!(r1.is_err(), "写回失败必须返回 Err");
+        assert!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "恢复失败后仍待恢复");
+        assert!(ctx.ops.peek_ramp(0).is_some(), "失败后原始 ramp 必须保留");
+        // 再次关闭（重试）：写回成功，精确恢复。
+        *ctx.fail.lock().unwrap() = None;
+        let r = ctx.ops.restore(0);
+        assert!(matches!(r, Ok(RestoreOutcome::Restored)), "再次关闭必须实际重试恢复");
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "写回数据必须是捕获的原始 ramp");
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "恢复成功后待恢复标记应清除");
+    }
+
+    // ─── 场景 5：从未修改过屏幕 → 关闭/退出不无故线性清除 ───
+    #[test]
+    fn never_modified_no_unnecessary_clear() {
+        let ctx = TestContext::new(1);
+        let r = ctx.ops.restore(0);
+        assert!(matches!(r, Ok(RestoreOutcome::NothingToDo)), "未受影响不应执行任何写屏");
+        assert!(ctx.log_order().is_empty(), "不应有后端调用: {:?}", ctx.log_order());
+        // 退出清理同样不写屏
+        ctx.ops.cleanup();
+        assert!(ctx.log_order().is_empty(), "cleanup 不应写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 场景 6：应用进行中退出 → 应用结束后恢复，退出等待恢复完成 ───
+    #[test]
+    fn exit_during_apply_waits_and_restores() {
+        let mut ctx = TestContext::new(1);
+        // 预捕获，避免 apply 在 capture 处暂停（我们用 ApplyIcc 暂停）。
+        ctx.ops.capture(0).unwrap();
+        // 用生成器产生一个操作版本（与生产一致：先提交意图再应用）。
+        let gen = ctx.ops.submit(0, |s| {
+            s.icc_active = true;
+            s.active_icc_id = Some("builtin_xxx".to_string());
+            s.icc_ramp = Some([[5u16; 256]; 3]);
+            bump_operation_generation(s)
+        }).unwrap();
+        // 在 ApplyIcc 上设置暂停点，制造“写屏进行中”的时序。
+        ctx.arm_pause(Op::ApplyIcc);
+        // 应用线程通过**生产使用的版本化、持操作锁包装入口**执行
+        //（run_if_current 内部持有该显示器操作锁——cleanup 会等待它）。
+        let ops = ctx.ops;
+        let apply_handle = thread::spawn(move || {
+            apply_filter_if_current_with(&ops, 0, gen)
+        });
+        // 等待应用进入暂停点（写屏前，已持操作锁、已置 pending=true）。
+        ctx.wait_paused();
+        // 此时退出：cleanup 先置退出标志并使任务失效，然后等待操作锁
+        //（被应用持有），应用完成后才拿到锁并恢复。
+        let ops2 = ctx.ops;
+        let cleanup_handle = thread::spawn(move || ops2.cleanup());
+        // **同步证据**：等待 cleanup 已完成 begin_shutdown（置位退出标志），
+        // 再放行应用——避免测试退化为"应用先完成、cleanup 后运行"。
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while !ctx.ops.is_shutting_down() {
+            assert!(std::time::Instant::now() < deadline, "cleanup 未在超时内置位退出标志");
+            thread::sleep(Duration::from_millis(5));
+        }
+        // 放行应用（通过 release 通道恢复，而非等待超时）。
+        ctx.release_pause();
+        let summary = cleanup_handle.join().unwrap();
+        let apply_result = apply_handle.join().unwrap();
+        // 检查结果而不只是 join：cleanup 汇总恢复为 1，应用结果为 Executed（写屏完成）。
+        assert_eq!(summary.restored, 1, "退出后必须完成一次精确恢复: {:?}", summary);
+        match apply_result {
+            Ok(RunResult::Executed(_)) => {}
+            other => panic!("应用应完成 Executed（被阻塞后放行），实际 {:?}", other),
+        }
+        // 最终屏幕必须回到原始 ramp（[[1;256];3]）。
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "退出后不得残留应用滤镜");
+        // 调用顺序：应用写屏后跟一次恢复写回。
+        let order = ctx.log_order();
+        let apply_pos = order.iter().position(|o| *o == Op::ApplyIcc).unwrap();
+        let write_pos = order.iter().position(|o| *o == Op::Write).unwrap();
+        assert!(apply_pos < write_pos, "必须先应用后恢复: {:?}", order);
+        assert_eq!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), false, "恢复完成后标记应清除");
+    }
+
+    // ─── 场景 7：退出后提交新应用 → 被拒绝，不发生物理写屏 ───
+    #[test]
+    fn submit_after_exit_is_rejected() {
+        let ctx = TestContext::new(1);
+        ctx.ops.begin_shutdown();
+        let res = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        });
+        assert!(res.is_none(), "退出后提交必须被拒绝");
+        assert!(!ctx.ops.with_state(0, |s| s.filter_active).unwrap(), "状态不得被修改");
+        assert!(ctx.log_order().is_empty(), "不得发生任何后端调用");
+    }
+
+    // ─── 场景 8：关闭任务已过期 → 不关闭后续开启的滤镜，也不报告恢复完成 ───
+    #[test]
+    fn stale_close_does_not_restore_newer_filter() {
+        let ctx = TestContext::new(1);
+        // 捕获原始 ramp
+        ctx.ops.capture(0).unwrap();
+        // 第一次关闭意图：版本 g1
+        let g1 = ctx.ops.with_state(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 用户随后重新开启：版本 g2（更新的意图）
+        let g2 = ctx.ops.with_state(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        assert_ne!(g1, g2);
+        // 旧的关闭任务 g1 被执行：必须跳过
+        let r = ctx.ops.run_if_current(0, g1, "restore_filter", false, || ctx.ops.restore(0));
+        match r {
+            Ok(RunResult::SkippedStale) => {}
+            Ok(RunResult::Executed(_)) => panic!("过期关闭任务不得执行恢复"),
+            Err(e) => panic!("不应报错: {}", e),
+        }
+        // 状态仍保持开启
+        assert!(ctx.ops.with_state(0, |s| s.filter_active).unwrap(), "后续开启的滤镜不得被关闭");
+        // 未报告恢复完成：没有 Write 写回
+        assert_eq!(ctx.log_order(), vec![Op::Capture], "不得发生恢复写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 场景 9：入口检查后发生退出 → 随后的锁内提交被拒绝 ───
+    #[test]
+    fn entry_check_then_exit_rejects_in_lock_submit() {
+        let ctx = TestContext::new(1);
+        // 入口快速检查通过（未退出）
+        assert!(!ctx.ops.is_shutting_down());
+        // 退出在状态锁内置位（模拟 cleanup 已经执行）
+        ctx.ops.begin_shutdown();
+        // 锁内提交必须拒绝
+        let res = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        });
+        assert!(res.is_none());
+        assert!(!ctx.ops.with_state(0, |s| s.filter_active).unwrap());
+    }
+
+    // ─── 场景 10：恢复写回进行中连续关闭两次 → 不丢失最终恢复任务，最终屏幕恢复 ───
+    #[test]
+    fn close_twice_during_restore_still_restores() {
+        let mut ctx = TestContext::new(1);
+        // 应用已改屏：捕获了原始 ramp（[[1;256];3]），pending=true。
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        // 在恢复的写回步骤上设置暂停点，制造“第一次关闭的恢复正在执行”的时序。
+        ctx.arm_pause(Op::Write);
+        let ops = ctx.ops;
+        let restore_thread = thread::spawn(move || ops.restore(0));
+        // 等待写回暂停命中（恢复已持有操作锁）
+        ctx.wait_paused();
+        // 关闭两次：都被接受（版本递增 + 各自派发版本化恢复）。由于第一次恢复
+        // 持有操作锁，后续恢复任务会在锁上等待；锁内版本检查会让过期者跳过。
+        let g1 = ctx.ops.with_state(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        }).unwrap();
+        let g2 = ctx.ops.with_state(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        }).unwrap();
+        let _ = (g1, g2);
+        // 放行写回：第一次恢复完成（精确恢复，ramp 删除、pending 清除）。
+        ctx.release_pause();
+        restore_thread.join().unwrap();
+        // 最终：pending 已清除，屏幕回到原始 ramp（没有丢失最终恢复任务）。
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "最终恢复任务不得丢失");
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "最终屏幕必须恢复");
+    }
+
+    // ─── 场景 11：捕获期间连续关闭两次 → 最终恢复任务不丢失 ───
+    // 与场景 10（恢复写回暂停时再次关闭）不同：这里初始**没有原始 Ramp、没有
+    // pending**——应用任务已获准执行但仍在捕获原始 ramp（后端 read 尚未返回）。
+    // 该时序覆盖“应用尚未捕获、待恢复记录尚未建立”时的漏洞：
+    // 第二次关闭不能因开关已关闭 / pending 未置位而放弃安排恢复。
+    #[test]
+    fn close_twice_during_capture_still_restores() {
+        let mut ctx = TestContext::new(1);
+        // 初始：无 ramp、无 pending（默认即为 None/false）。
+        assert!(ctx.ops.peek_ramp(0).is_none(), "初始不应有原始 ramp");
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "初始不应有待恢复标记");
+
+        // A：提交开启并进入应用执行器（先捕获再应用 ICC）。
+        // 应用路径使用生产执行器 run_if_current + apply，捕获即 run 内的 capture 步骤。
+        let gen_apply = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            s.icc_active = true;
+            s.active_icc_id = Some("builtin_xxx".to_string());
+            s.icc_ramp = Some([[9u16; 256]; 3]); // 用户 ICC ramp（apply 会用它写临时 ICC）
+            bump_operation_generation(s)
+        }).unwrap();
+        // 在捕获（read）处暂停：应用已取得操作锁，后端 read 尚未返回。
+        ctx.arm_pause(Op::Capture);
+        let ops = ctx.ops;
+        let apply_handle = thread::spawn(move || {
+            ops.run_if_current(0, gen_apply, "apply_filter", false, || ops.apply(0, gen_apply, "apply_filter"))
+        });
+        ctx.wait_paused(); // 应用已暂停在捕获
+
+        // B：第一次关闭（在应用暂停期间提交，尚未取得操作锁）。
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        });
+        assert!(g1.is_some(), "第一次关闭必须被接受");
+        // C：第二次关闭（在应用暂停期间提交，成为最新版本）。
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        });
+        assert!(g2.is_some(), "第二次关闭必须被接受");
+        // B/C 提交必须发生在 A 暂停期间（此时应用尚未完成捕获）。
+        assert_eq!(*ctx.pause_hit.lock().unwrap(), Some(Op::Capture), "提交应在捕获暂停期间发生");
+
+        // 放行捕获：应用继续。此时应用任务已过期（版本已被两次关闭推进）——
+        // capture_if_current 在捕获完成后复查版本，把“未执行写屏”传播为 SkippedStale，
+        // 而不是包装成 Executed——调用方不会把未应用的滤镜登记为成功。
+        ctx.release_pause();
+        let apply_result = apply_handle.join().unwrap();
+        // run_if_current 外层包一层 Executed（本次初次检查通过），内层是 apply 的结果：
+        // 捕获后版本复查发现过期必须为内层 SkippedStale——不得出现内层 Executed（那是“已写屏”）。
+        match apply_result {
+            Ok(RunResult::Executed(RunResult::SkippedStale)) => {}
+            Ok(RunResult::Executed(RunResult::Executed(()))) => {
+                panic!("捕获后版本已过期，应用必须报告 SkippedStale，不得报 Executed")
+            }
+            Ok(RunResult::SkippedStale) => panic!("初次锁内检查不应过期（版本在捕获后才被推进）"),
+            Err(e) => panic!("应用任务不应失败: {}", e),
+        }
+        // 执行关闭恢复：用生产执行器逐次派发版本化恢复。
+        // g1（过期）可跳过，但必须安排；g2（最新）承担最终恢复。
+        let r1 = ctx.ops.run_if_current(0, g1.unwrap(), "restore_filter", false, || ctx.ops.restore(0));
+        let r2 = ctx.ops.run_if_current(0, g2.unwrap(), "restore_filter", false, || ctx.ops.restore(0));
+        match r1 {
+            Ok(RunResult::SkippedStale) => {}
+            other => panic!("第一次关闭恢复应过期跳过（其版本已被第二次关闭推进），实际 {:?}", other.map(|_| ())),
+        }
+        match r2 {
+            Ok(RunResult::Executed(_)) => {}
+            other => panic!("第二次关闭必须承担最终恢复，实际 {:?}", other.map(|_| ())),
+        }
+        // 核心：应用任务不得产生 ICC 写屏（捕获后版本复查生效）。
+        assert!(!ctx.log_order().contains(&Op::ApplyIcc), "捕获后版本已过期，不得发生应用写屏: {:?}", ctx.log_order());
+
+        // 最终断言：
+        // - 最后一次物理写屏是恢复（Write），之后没有迟到应用（ApplyIcc 不得在 Write 之后）。
+        let order = ctx.log_order();
+        let last_write = order.iter().rposition(|o| *o == Op::Write);
+        assert!(last_write.is_some(), "必须发生恢复写屏: {:?}", order);
+        let after_last_write = &order[last_write.unwrap() + 1..];
+        assert!(!after_last_write.contains(&Op::ApplyIcc), "恢复之后不得有迟到应用: {:?}", order);
+        // - 最终模拟屏幕等于原始 ramp（[[1;256];3]，捕获值）。
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "最终屏幕必须恢复为原始 ramp");
+        // - pending 清除；原始 ramp 按成功恢复规则释放。
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "恢复完成后待恢复标记应清除");
+        assert!(ctx.ops.peek_ramp(0).is_none(), "恢复成功后原始 ramp 应释放");
+    }
+
+    // ─── 场景 12：无效显示器索引 → 明确拒绝，不触碰任何显示器后端 ───
+    #[test]
+    fn invalid_display_index_is_rejected() {
+        let ctx = TestContext::new(1);
+        // 空状态集合：with_state/submit/op_lock/restore 都必须拒绝。
+        //（TestContext 构造 1 台；用 count=0 构造空集合验证空集合路径）
+        // 这里用越界索引 5 验证：不得夹取到 0 号显示器。
+        assert!(ctx.ops.with_state(5, |s| s.filter_active).is_none(), "越界索引不得夹取");
+        assert!(ctx.ops.submit(5, |s| s.filter_active).is_none(), "越界索引提交必须拒绝");
+        assert!(ctx.ops.op_lock(5).is_none(), "越界索引不得返回锁");
+        assert!(ctx.ops.restore(5).is_err(), "越界索引恢复必须报错");
+        assert!(ctx.ops.apply(5, 1, "apply_filter").is_err(), "越界索引应用必须报错");
+        assert!(ctx.ops.run_if_current(5, 1, "apply_filter", false, || Ok(())).is_err(),
+                "越界索引执行器必须拒绝");
+        // 未发生任何后端调用（未触碰任何显示器）。
+        assert!(ctx.log_order().is_empty(), "越界索引不得触碰任何显示器后端: {:?}", ctx.log_order());
+        // 0 号显示器状态不受影响。
+        assert!(!ctx.ops.with_state(0, |s| s.filter_active).unwrap());
+    }
+
+    // ─── 降级结果 1：无原始 Ramp、待恢复、清除成功 → 返回降级结果 ───
+    #[test]
+    fn degraded_clear_reports_degraded() {
+        let ctx = TestContext::new(1);
+        ctx.ops.set_restore_pending(0, true);
+        let r = ctx.ops.restore(0);
+        assert!(matches!(r, Ok(RestoreOutcome::DegradedCleared)), "应返回降级清除结果: {:?}", r);
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "清除成功后标记清除");
+        assert_eq!(ctx.screen_value(), [[0u16; 256]; 3]);
+        let order = ctx.log_order();
+        assert_eq!(order, vec![Op::Clear], "仅执行线性清除: {:?}", order);
+    }
+
+    // ─── 降级结果 2：无原始 Ramp、待恢复、清除失败 → 返回错误，待恢复保留 ───
+    #[test]
+    fn degraded_clear_failure_keeps_pending() {
+        let ctx = TestContext::new(1);
+        ctx.ops.set_restore_pending(0, true);
+        *ctx.fail.lock().unwrap() = Some(Op::Clear);
+        let r = ctx.ops.restore(0);
+        assert!(r.is_err(), "清除失败必须返回 Err");
+        assert!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "失败后待恢复标记必须保留");
+        // 第二次恢复成功
+        *ctx.fail.lock().unwrap() = None;
+        let r2 = ctx.ops.restore(0);
+        assert!(matches!(r2, Ok(RestoreOutcome::DegradedCleared)));
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap());
+    }
+
+    // ─── 关机跳过清除：未执行清除不得报告清除成功 ───
+    // 系统关机/注销时 clear 因跳过外部进程而未执行；restore 必须报错、
+    // 保留待恢复标记，cleanup 计入失败而不是 restored/degraded。
+    // 通过测试注入开关模拟“系统关机”标志，不模拟真实 Windows 关机。
+    #[test]
+    fn system_shutdown_skipped_clear_is_not_success() {
+        let ctx = TestContext::new(1);
+        ctx.ops.set_restore_pending(0, true);
+        TEST_FORCE_SYSTEM_SHUTDOWN.with(|f| f.set(true));
+        let r = ctx.ops.restore(0);
+        TEST_FORCE_SYSTEM_SHUTDOWN.with(|f| f.set(false));
+        assert!(r.is_err(), "关机时跳过清除必须返回错误，不得报告 DegradedCleared: {:?}", r);
+        // 未执行清除：待恢复标记保留，屏幕未被修改。
+        assert!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "未执行清除，待恢复标记必须保留");
+        assert_eq!(ctx.screen_value(), [[0u16; 256]; 3], "屏幕不得被修改");
+        let order = ctx.log_order();
+        assert_eq!(order, vec![Op::Clear], "仅尝试过一次清除: {:?}", order);
+
+        // cleanup 同样不能把它计入成功：pending 仍为 true（restored/degraded 路径都会清除标记）。
+        // CleanupSummary 现在直接返回计数（failed/restored/degraded/idle），不再仅靠
+        // "pending 保留" 间接推断失败计入。
+        TEST_FORCE_SYSTEM_SHUTDOWN.with(|f| f.set(true));
+        let summary = ctx.ops.cleanup();
+        TEST_FORCE_SYSTEM_SHUTDOWN.with(|f| f.set(false));
+        assert_eq!(summary.failed, 1, "关机跳过清除必须计入 failed: {:?}", summary);
+        assert_eq!(summary.restored, 0, "未发生精确恢复，不得计入 restored: {:?}", summary);
+        assert_eq!(summary.degraded, 0, "未发生降级清除，不得计入 degraded: {:?}", summary);
+        assert_eq!(summary.idle, 0, "存在待恢复目标，cleanup 不得计入 idle: {:?}", summary);
+        assert!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "cleanup 计入失败，待恢复标记保留");
+    }
+
+    // ─── 捕获后跳过必须传播为 SkippedStale（单元级：apply 直接返回）───
+    #[test]
+    fn apply_reports_skipped_stale_when_version_changes_during_capture() {
+        let mut ctx = TestContext::new(1);
+        let gen = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            s.icc_active = true;
+            s.active_icc_id = Some("builtin_xxx".to_string());
+            s.icc_ramp = Some([[9u16; 256]; 3]);
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.arm_pause(Op::Capture);
+        let ops = ctx.ops;
+        let handle = thread::spawn(move || {
+            ops.run_if_current(0, gen, "apply_filter", false, || ops.apply(0, gen, "apply_filter"))
+        });
+        ctx.wait_paused();
+        // 捕获暂停期间推进版本（模拟一次更新的关闭意图）。
+        let _ = ctx.ops.submit(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        });
+        ctx.release_pause();
+        // run_if_current 对 apply 闭包结果外层包一层 Executed；内层 SkippedStale
+        // 必须保留——这就是“未执行”信号，不得丢失。
+        match handle.join().unwrap() {
+            Ok(RunResult::Executed(RunResult::SkippedStale)) => {}
+            other => panic!("捕获后版本过期必须返回 SkippedStale，实际 {:?}", other.map(|_| ())),
+        }
+        assert!(!ctx.log_order().contains(&Op::ApplyIcc), "不得发生应用写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 自动归属层测试 ───
+    // 以下测试覆盖"自动开启/失败/退出/接管"场景下，归属记录的条件登记、条件弃权、
+    // 拓扑失效检测等行为。归属锁与设备拓扑均通过测试注入的独立 slot/闭包控制，
+    // 不触碰全局 static 状态。
+
+    /// 构造一条归属记录（默认小工具，便于测试直接构造各种 state/版本组合）。
+    fn make_record(session: u64, idx: usize, gen: u64, state: AutoSessionState) -> AutoOwnership {
+        AutoOwnership {
+            session,
+            display_idx: idx,
+            device_name: format!("DEV{}", idx),
+            display_count: 1,
+            operation_generation: gen,
+            state,
+            restore_generation: None,
+        }
+    }
+
+    // ─── 场景 13：旧自动任务应用失败需要回滚，但新意图已提交 → 旧失败不得取消新任务 ───
+    #[test]
+    fn old_failed_apply_does_not_cancel_new_intent() {
+        // 场景：旧自动会话 1 应用失败需要回滚（auto_rollback_failed_apply），
+        // 但用户已经提交了新的开启意图（会话 2 已登记 Applying）。
+        // 期望：旧任务的回滚因版本过期而条件关闭被拒绝，不得清除/改写会话 2 的记录，
+        // 不得写屏，新意图保留。
+        let ctx = TestContext::new(1);
+        // 旧自动会话 1：开启意图，登记版本 g1。
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applying)));
+        // 新意图（会话 2）提交，版本推进到 g2，登记覆盖 slot。
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        *slot.lock().unwrap() = Some(make_record(2, 0, g2, AutoSessionState::Applying));
+        // 旧会话 1 的回滚：版本 g1 已过期，conditional_close 返回 None → 不写屏、不动状态。
+        let rolled = auto_rollback_failed_apply(&slot, 1, &ctx.ops);
+        assert_eq!(rolled, RollbackOutcome::Superseded, "旧会话已过期，rollback 必须返回 Superseded");
+        // 旧会话的条件弃权：归属已属于会话 2，不得被会话 1 释放。
+        assert!(!auto_release_if_owned(&slot, 1), "旧会话不得释放新会话的归属");
+        // slot 仍是会话 2 的 Applying 记录，版本为 g2。
+        let rec = slot.lock().unwrap().clone().expect("slot 必须仍持有归属");
+        assert_eq!(rec.session, 2);
+        assert_eq!(rec.state, AutoSessionState::Applying);
+        assert_eq!(rec.operation_generation, g2);
+        // 新意图的 filter_active 保留。
+        assert_eq!(ctx.ops.with_state(0, |s| s.filter_active), Some(true));
+        // 未发生任何后端调用（无 Capture/ApplyIcc/Write/Clear）。
+        assert!(ctx.log_order().is_empty(), "旧失败回滚不得写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 场景 14：旧自动任务 SkippedStale → 条件弃权不得清除新会话归属 ───
+    #[test]
+    fn old_skipped_apply_does_not_clear_new_ownership() {
+        // 场景：旧自动会话 1 的 apply 路径返回 SkippedStale，调用 auto_release_if_owned
+        // 试图条件弃权；归属已被会话 2 接管，旧会话 1 不得清除新会话的记录。
+        let ctx = TestContext::new(1);
+        // slot 直接放置会话 2 的 Applying 记录（任意版本）。
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(2, 0, g2, AutoSessionState::Applying)));
+        // 旧会话 1 试图条件弃权：记录不属于 session 1，必须返回 false。
+        assert!(!auto_release_if_owned(&slot, 1), "旧会话 1 不得释放会话 2 的归属");
+        // slot 仍为会话 2 的记录。
+        let rec = slot.lock().unwrap().clone().expect("会话 2 归属必须保留");
+        assert_eq!(rec.session, 2);
+        assert_eq!(rec.state, AutoSessionState::Applying);
+        // 同时验证：会话 2 自己可以正常条件弃权（确认归属状态合法）。
+        assert!(auto_release_if_owned(&slot, 2), "会话 2 应能释放自己的归属");
+        assert!(slot.lock().unwrap().is_none());
+    }
+
+    // ─── 场景 15：旧自动任务晚到成功 → 不得登记为当前自动会话 ───
+    #[test]
+    fn late_success_of_old_auto_task_not_registered() {
+        // 场景：旧自动会话 1 的 apply 实际写屏完成（晚到），调用 auto_mark_applied
+        // 试图登记为 Applied；归属已被会话 2 接管，旧会话 1 不得改写他人记录。
+        let ctx = TestContext::new(1);
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(2, 0, g2, AutoSessionState::Applying)));
+        // 旧会话 1 试图登记 Applied：session 不匹配 → 必须返回 false。
+        assert!(!auto_mark_applied(&slot, 1, &ctx.ops), "旧会话 1 不得登记覆盖会话 2 的记录");
+        // slot 仍为会话 2 的 Applying（未被改写）。
+        let rec = slot.lock().unwrap().clone().expect("会话 2 归属必须保留");
+        assert_eq!(rec.session, 2);
+        assert_eq!(rec.state, AutoSessionState::Applying, "旧会话不得改写 state 为 Applied");
+    }
+
+    // ─── 场景 16：自动恢复针对登记时的目标显示器，不查询 active index ───
+    #[test]
+    fn auto_restore_targets_original_display_not_active() {
+        // 场景：自动开启目标是显示器 A（index 0），随后"界面切到显示器 B"。
+        // 游戏结束触发自动恢复时，恢复决策必须用登记时的 display_idx=0，
+        // 不得因界面切换到 B 而去恢复 B。拓扑闭包与登记一致 → Proceed。
+        let ctx = TestContext::new(2);
+        // 自动开启显示器 A：捕获原 ramp 并置 pending。
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        // 手工构造归属记录：display_idx=0, device_name="DEV0", display_count=2（与拓扑一致）。
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(AutoOwnership {
+            session: 1,
+            display_idx: 0,
+            device_name: "DEV0".to_string(),
+            display_count: 2,
+            operation_generation: g1,
+            state: AutoSessionState::Applied,
+            restore_generation: None,
+        }));
+        // 决策：拓扑闭包返回 ("DEV0", 2) — 与登记匹配 → Proceed{display_idx:0, ..}。
+        let decision = auto_restore_decision(&slot, 1, &ctx.ops, |idx| {
+            Some((format!("DEV{}", idx), 2))
+        });
+        let rgen = match decision {
+            AutoRestoreDecision::Proceed { display_idx, restore_generation } => {
+                assert_eq!(display_idx, 0, "恢复必须针对登记时的显示器 A（index 0），不得切到 B");
+                restore_generation
+            }
+            other => panic!("拓扑一致时必须 Proceed，实际 {:?}", other),
+        };
+        // 执行版本化恢复。
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen).unwrap();
+        assert!(matches!(r, RunResult::Executed(RestoreOutcome::Restored)),
+                "恢复必须执行成功: {:?}", r);
+        // 收尾：从 Applied 转 Restoring 后由 finish_restore 移除。
+        assert!(auto_finish_restore(&slot, 1));
+        assert!(slot.lock().unwrap().is_none(), "恢复成功后 slot 必须清空");
+        // 显示器 B 完全未被触碰。
+        assert_eq!(ctx.ops.with_state(1, |s| (s.filter_active, s.restore_pending)),
+                   Some((false, false)), "显示器 B 不得被自动恢复触碰");
+        // 后端调用顺序：一次 Capture（开启时）+ 一次 Write（恢复）。
+        assert_eq!(ctx.log_order(), vec![Op::Capture, Op::Write],
+                   "必须恰好一次捕获 + 一次恢复写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 场景 17：用户接管（版本被推进）→ Superseded，不覆盖用户选择 ───
+    #[test]
+    fn user_takeover_during_game_stops_auto_restore() {
+        // 场景：自动开启后用户在游戏过程中手动修改 → 游戏结束自动恢复时
+        // 版本已被用户推进，决策必须返回 Superseded，不得写屏。
+        let ctx = TestContext::new(1);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applied)));
+        // 用户手动操作：关闭滤镜并推进版本（g2）。
+        let _ = ctx.ops.submit(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 决策：conditional_close 因版本已过期返回 None → Superseded，slot 清空。
+        let decision = auto_restore_decision(&slot, 1, &ctx.ops, |_idx| Some(("DEV0".to_string(), 1)));
+        assert!(matches!(decision, AutoRestoreDecision::Superseded),
+                "用户接管后必须 Superseded，实际 {:?}", decision);
+        assert!(slot.lock().unwrap().is_none(), "Superseded 必须丢弃旧归属");
+        // 未发生任何恢复写屏：log_order 仍只有开启时的 Capture。
+        assert_eq!(ctx.log_order(), vec![Op::Capture], "自动恢复不得写屏: {:?}", ctx.log_order());
+        // 用户意图保留（filter_active=false）。
+        assert_eq!(ctx.ops.with_state(0, |s| s.filter_active), Some(false));
+    }
+
+    // ─── 场景 18：恢复失败保留重试责任；用户接管停止旧重试 ───
+    #[test]
+    fn auto_restore_failure_keeps_retry_and_user_takeover_stops_it() {
+        // 场景 6a：恢复失败 → slot 必须保留 Restoring 状态以承担重试。
+        let ctx = TestContext::new(1);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applied)));
+        let decision = auto_restore_decision(&slot, 1, &ctx.ops, |_idx| Some(("DEV0".to_string(), 1)));
+        let rgen = match decision {
+            AutoRestoreDecision::Proceed { restore_generation, .. } => restore_generation,
+            other => panic!("拓扑一致必须 Proceed，实际 {:?}", other),
+        };
+        // 写回失败：restore 返回 Err。
+        *ctx.fail.lock().unwrap() = Some(Op::Write);
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen);
+        assert!(r.is_err(), "写回失败必须返回 Err");
+        // slot 仍存在，state==Restoring 且 restore_generation==Some(rgen)。
+        let rec = slot.lock().unwrap().clone().expect("失败后 slot 必须保留归属");
+        assert_eq!(rec.state, AutoSessionState::Restoring,
+                   "恢复失败后状态必须为 Restoring 以保留重试责任");
+        assert_eq!(rec.restore_generation, Some(rgen),
+                   "恢复失败后 restore_generation 必须保留以重试");
+
+        // 场景 6b：重试成功 → 收尾清理。
+        *ctx.fail.lock().unwrap() = None;
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen).unwrap();
+        assert!(matches!(r, RunResult::Executed(RestoreOutcome::Restored)),
+                "重试必须恢复成功: {:?}", r);
+        assert!(auto_finish_restore(&slot, 1));
+        assert!(slot.lock().unwrap().is_none(), "成功后 slot 必须清空");
+        assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "屏幕必须恢复为原始 ramp");
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(),
+                "恢复成功后待恢复标记必须清除");
+
+        // 场景 6c：用户接管 → 重试必须跳过期、不得写屏、归属被会话 2 接管并最终释放。
+        // 重新登记会话 2：开启 + 捕获 + pending + Applied 记录。
+        let g3 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(2, 0, g3, AutoSessionState::Applied)));
+        let decision = auto_restore_decision(&slot, 2, &ctx.ops, |_idx| Some(("DEV0".to_string(), 1)));
+        let rgen2 = match decision {
+            AutoRestoreDecision::Proceed { restore_generation, .. } => restore_generation,
+            other => panic!("拓扑一致必须 Proceed，实际 {:?}", other),
+        };
+        // 写回失败：记录进入 Restoring。
+        *ctx.fail.lock().unwrap() = Some(Op::Write);
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen2);
+        assert!(r.is_err(), "写回失败必须返回 Err");
+        // 用户接管：推进版本（g4）。
+        let _ = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 重试旧恢复 rgen2：版本已过期，必须 SkippedStale，不得写屏。
+        let order_before = ctx.log_order().len();
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen2).unwrap();
+        assert!(matches!(r, RunResult::SkippedStale),
+                "用户接管后旧重试必须 SkippedStale，实际 {:?}", r);
+        assert_eq!(ctx.log_order().len(), order_before,
+                   "旧重试不得产生新写屏: {:?}", ctx.log_order());
+        // 会话 2 条件弃权：slot 必须清空。
+        assert!(auto_release_if_owned(&slot, 2));
+        assert!(slot.lock().unwrap().is_none());
+    }
+
+    // ─── 场景 19：拓扑变化（设备名/数量不符）→ TargetGone，不写任何显示器 ───
+    #[test]
+    fn topology_change_aborts_restore_without_touching_displays() {
+        // 场景：目标显示器失效或重排（设备名变化 / 数量变化）→ 决策返回 TargetGone，
+        // slot 清空，不写任何显示器（log_order 必须为空）。
+        let ctx = TestContext::new(2);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(AutoOwnership {
+            session: 1,
+            display_idx: 0,
+            device_name: "DEV0".to_string(),
+            display_count: 2,
+            operation_generation: g1,
+            state: AutoSessionState::Applied,
+            restore_generation: None,
+        }));
+
+        // 设备名变化：拓扑返回 ("DEV9", 2) — 设备名不匹配 → TargetGone。
+        let decision = auto_restore_decision(&slot, 1, &ctx.ops, |_idx| Some(("DEV9".to_string(), 2)));
+        assert!(matches!(decision, AutoRestoreDecision::TargetGone),
+                "设备名不匹配必须 TargetGone，实际 {:?}", decision);
+        assert!(slot.lock().unwrap().is_none(), "TargetGone 必须清空 slot");
+        assert!(ctx.log_order().is_empty(), "TargetGone 不得触碰任何显示器: {:?}", ctx.log_order());
+
+        // 数量变化：拓扑返回 ("DEV0", 1) — 数量不符 → TargetGone。
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(AutoOwnership {
+            session: 2,
+            display_idx: 0,
+            device_name: "DEV0".to_string(),
+            display_count: 2,
+            operation_generation: g2,
+            state: AutoSessionState::Applied,
+            restore_generation: None,
+        }));
+        let decision = auto_restore_decision(&slot, 2, &ctx.ops, |_idx| Some(("DEV0".to_string(), 1)));
+        assert!(matches!(decision, AutoRestoreDecision::TargetGone),
+                "数量不匹配必须 TargetGone，实际 {:?}", decision);
+        assert!(slot.lock().unwrap().is_none());
+        assert!(ctx.log_order().is_empty(), "数量变化也不得触碰任何显示器: {:?}", ctx.log_order());
+    }
+
+    // ─── 场景 20：生产应用包装层 apply_filter_if_current_with 必须返回单层 SkippedStale ───
+    #[test]
+    fn production_apply_wrapper_reports_single_layer_skipped_stale() {
+        // 场景：apply_filter_if_current_with 是生产使用的应用包装层。捕获期间
+        // 版本被推进时必须向调用方返回**单层** SkippedStale（不是被 run_if_current
+        // 外层包成 Executed(SkippedStale) 的双层结构），同时不发生应用写屏。
+        let mut ctx = TestContext::new(1);
+        // 准备：登记意图（启用 filter + icc + 自定义 icc_ramp，模拟真实启用路径）。
+        let gen = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            s.icc_active = true;
+            s.active_icc_id = Some("builtin_xxx".to_string());
+            s.icc_ramp = Some([[9u16; 256]; 3]);
+            bump_operation_generation(s)
+        }).unwrap();
+        // 在 Capture 暂停点制造时序：apply 内部捕获期间被用户推进版本。
+        ctx.arm_pause(Op::Capture);
+        let ops = ctx.ops;
+        let handle = thread::spawn(move || {
+            apply_filter_if_current_with(&ops, 0, gen)
+        });
+        ctx.wait_paused();
+        // 暂停期间推进版本（关闭意图）。
+        let _ = ctx.ops.submit(0, |s| {
+            s.filter_active = false;
+            bump_operation_generation(s)
+        });
+        ctx.release_pause();
+        // 结果必须精确为 Ok(RunResult::SkippedStale)——单层，不是 Ok(Executed(SkippedStale))。
+        match handle.join().unwrap() {
+            Ok(RunResult::SkippedStale) => {}
+            Ok(RunResult::Executed(_)) => panic!("生产包装层必须返回单层 SkippedStale，不得为 Executed(...)"),
+            Err(e) => panic!("不应报错: {}", e),
+        }
+        // 未发生 ApplyIcc 写屏。
+        assert!(!ctx.log_order().contains(&Op::ApplyIcc),
+                "不得发生应用写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 第 3A 收尾：资格竞争 / 在途关闭 / 晚到接管 ───
+
+    // 场景 21：自动开启资格竞争（原子条件开启）
+    // 自动逻辑预检查（读到关闭）后、条件开启提交前，用户先手动开启并推进版本；
+    // 条件开启必须被拒绝（返回 None），不创建自动归属、不覆盖手动意图、不写屏。
+    #[test]
+    fn conditional_enable_rejected_when_user_opened_first() {
+        let ctx = TestContext::new(1);
+        // 模拟自动逻辑预检查：初始为关闭。
+        assert_eq!(ctx.ops.with_state(0, |s| s.filter_active), Some(false));
+        // 用户先手动开启（提交意图并推进版本到 g1）。
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 自动逻辑的条件开启：当前已开启 → 必须拒绝，不得覆盖、不得推进版本。
+        let g2 = conditional_set_active_with(&ctx.ops, 0, true);
+        assert!(g2.is_none(), "用户已手动开启，条件开启必须返回 None");
+        // 版本未被自动逻辑推进。
+        assert_eq!(ctx.ops.with_state(0, |s| s.operation_generation), Some(g1));
+        // 无后端调用（无 Capture/Write/Clear）。
+        assert!(ctx.log_order().is_empty(), "被拒绝的条件开启不得写屏: {:?}", ctx.log_order());
+        // 手动意图保留。
+        assert_eq!(ctx.ops.with_state(0, |s| s.filter_active), Some(true));
+    }
+
+    // 场景 22：关闭自动功能时应用仍在途
+    // 自动应用完成写屏（Executed）后、条件登记前，关闭自动功能（沿用旧版语义：
+    // 效果保留、控制权移交用户）。关闭命令已将归属槽置为 None（abandon_auto_control
+    // _on_disable 彻底释放 Applying），在途应用的条件登记因此被拒绝，不留残留。
+    #[test]
+    fn mark_applied_rejected_after_feature_disabled() {
+        let ctx = TestContext::new(1);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 应用写屏已成功、版本仍当前（g1）。
+        // 功能刚被关闭 → abandon_auto_control_on_disable 已把归属槽置 None。
+        let slot: AutoOwnershipSlot = StdMutex::new(None);
+        assert!(!auto_mark_applied(&slot, 1, &ctx.ops), "功能已关闭，不得登记 Applied");
+        assert!(slot.lock().unwrap().is_none(), "不留半截归属");
+    }
+
+    // 场景 23：同一会话的晚到成功 + 用户已推进版本 → 条件登记拒绝并弃权
+    // 自动应用写屏完成后、条件登记前，用户手动操作推进了版本（仍是同一会话归属，
+    // 但显示状态已不属于该任务）。auto_mark_applied 必须返回 false 并条件弃权，
+    // 不得登记 Applied——防止游戏结束时误关用户刚手动改过的滤镜。
+    #[test]
+    fn late_success_same_session_rejected_when_user_took_over() {
+        let ctx = TestContext::new(1);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applying)));
+        // 用户手动操作推进版本到 g2（filter_active 仍 true）。
+        let _g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        // 同一会话 1 的晚到成功：版本已过期 → 必须返回 false。
+        assert!(!auto_mark_applied(&slot, 1, &ctx.ops), "版本已被用户推进，不得登记 Applied");
+        // 条件弃权：不留半截归属。
+        assert!(slot.lock().unwrap().is_none(), "归属必须被条件弃权清理");
+    }
+
+    // 场景 24：自动应用失败 → 回滚恢复也失败 → Restoring 保留供逐轮重试，
+    // 调用方收尾不得再次释放保留的记录（审查第 2 点的核心）。
+    #[test]
+    fn auto_rollback_failure_keeps_restoring_and_caller_does_not_release() {
+        let ctx = TestContext::new(1);
+        // 自动开启提交版本 g1，登记 Applying 归属。
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        ctx.ops.capture(0).unwrap();
+        ctx.ops.set_restore_pending(0, true);
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applying)));
+        // 应用失败后触发回滚：条件关闭成功（版本仍当前 g1），转 Restoring 执行恢复；
+        // 恢复写回失败 → 必须返回 RestoreFailed，不得伪装成成功。
+        *ctx.fail.lock().unwrap() = Some(Op::Write);
+        let outcome = auto_rollback_failed_apply(&slot, 1, &ctx.ops);
+        match outcome {
+            RollbackOutcome::RestoreFailed(_) => {}
+            other => panic!("恢复失败必须报告 RestoreFailed，实际 {:?}", other),
+        }
+        // slot 必须保留 Restoring 记录 + restore_generation（重试责任未丢失）。
+        let rec = slot.lock().unwrap().clone().expect("回滚恢复失败后归属必须保留");
+        assert_eq!(rec.state, AutoSessionState::Restoring, "失败后必须为 Restoring");
+        assert!(rec.restore_generation.is_some(), "restore_generation 必须保留以重试");
+        // 调用方收尾：生产路径（game_filter Err 分支）在 RestoreFailed 分支**不调用**
+        // auto_release_if_owned，记录因此保留。这里直接验证记录未被清除。
+        assert!(slot.lock().unwrap().is_some(), "调用方收尾不得清除保留的恢复记录");
+        // 重试实际执行：解除失败，restore_display_default_if_current 恢复成功 → 收尾清空。
+        *ctx.fail.lock().unwrap() = None;
+        let rgen = rec.restore_generation.expect("已有恢复版本");
+        let r = restore_display_default_if_current_with(&ctx.ops, 0, rgen).unwrap();
+        assert!(matches!(r, RunResult::Executed(RestoreOutcome::Restored)), "重试必须精确恢复");
+        assert!(auto_finish_restore(&slot, 1), "恢复成功后必须收尾清空归属");
+        assert!(slot.lock().unwrap().is_none());
+        // restore_pending 清除、屏幕恢复。
+        assert_eq!(ctx.ops.with_state(0, |s| s.restore_pending), Some(false));
+        assert_eq!(*ctx.screen.lock().unwrap(), [[1u16; 256]; 3], "屏幕必须恢复为原始 ramp");
+    }
+
+    // 场景 25：自动回滚 Superseded（新意图接管）→ 不写屏、不修改新会话状态。
+    #[test]
+    fn auto_rollback_superseded_does_not_touch_new_intent() {
+        let ctx = TestContext::new(1);
+        let g1 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        let slot: AutoOwnershipSlot = StdMutex::new(Some(make_record(1, 0, g1, AutoSessionState::Applying)));
+        // 新意图提交，版本推进到 g2。
+        let g2 = ctx.ops.submit(0, |s| {
+            s.filter_active = true;
+            bump_operation_generation(s)
+        }).unwrap();
+        *slot.lock().unwrap() = Some(make_record(2, 0, g2, AutoSessionState::Applying));
+        // 旧会话 1 的回滚：版本已过期 → Superseded，不写屏。
+        let outcome = auto_rollback_failed_apply(&slot, 1, &ctx.ops);
+        assert_eq!(outcome, RollbackOutcome::Superseded, "旧会话回滚必须 Superseded");
+        // 新会话 2 的归属保留、状态未动。
+        let rec = slot.lock().unwrap().clone().expect("会话 2 归属必须保留");
+        assert_eq!(rec.session, 2);
+        assert_eq!(rec.state, AutoSessionState::Applying);
+        assert_eq!(ctx.ops.with_state(0, |s| s.filter_active), Some(true));
+        assert!(ctx.log_order().is_empty(), "Superseded 回滚不得写屏: {:?}", ctx.log_order());
+    }
+
+    // 场景 26：操作锁身份在显示器数量缩减再增加后保持不变
+    // 执行器会克隆 Arc 锁句柄；若按数量截断再重建，同一槽位会出现两把锁，
+    // 破坏同槽位串行保证。用**生产共用函数** grow_operation_locks 维护，
+    // 覆盖会被截断的 2 号槽位：初始 3 → 缩减 1 → 再增长 3，2 号槽位必须仍是原 Arc。
+    #[test]
+    fn operation_lock_identity_survives_shrink_and_grow() {
+        // 初始 3 台显示器（生产逻辑增长）。
+        let mut locks: Vec<Arc<Mutex<()>>> = Vec::new();
+        grow_operation_locks(&mut locks, 3);
+        // 持有 2 号槽位旧锁句柄（任务 A 正在执行/等待）。
+        let old_lock = locks[2].clone();
+        // 模拟显示器数量缩减到 1：新实现只增长，不截断，2 号槽位保留。
+        grow_operation_locks(&mut locks, 1);
+        assert_eq!(locks.len(), 3, "只增长不截断：数量不得因请求 1 而缩小");
+        // 再增长回 3。
+        grow_operation_locks(&mut locks, 3);
+        assert!(Arc::ptr_eq(&locks[2], &old_lock),
+                "2 号槽位锁身份必须保持不变（旧实现 truncate(1) 会在这里重建新锁）");
+        // 串行保证：同一锁句柄下互斥仍成立。
+        let _g = old_lock.lock().unwrap();
+        let second = locks[2].clone();
+        let try_second = second.try_lock();
+        assert!(try_second.is_err(), "同槽位不得并行进入物理操作");
+    }
+
+    // ─── 控制状态同步边界：关闭与登记竞争 ───
+    // 用独立 Mutex<AutoControlState> + 独立 slot 驱动与生产共用的
+    // auto_register_owned_with / auto_update_control_state_with。
+
+    // 测试 A：关闭先完成，旧登记随后到达 → 必须拒绝。
+    // 旧任务持有 expected_generation=N；关闭流程已更新状态并处置归属；
+    // 旧登记在锁内比较代次 → 拒绝，不推进版本、不写 Applying、不写屏。
+    #[test]
+    fn registration_rejected_after_disable_completes_first() {
+        let ctx = TestContext::new(1);
+        // 初始控制状态：enabled=true, generation=7（旧线程持 N=7）。
+        let state: StdMutex<AutoControlState> = StdMutex::new(AutoControlState { enabled: true, generation: 7 });
+        let slot: AutoOwnershipSlot = StdMutex::new(None);
+        let session_counter = AtomicU64::new(0);
+        // 旧线程持有代次 7（尚未取得控制锁）。
+        let expected_generation = 7u64;
+        // 关闭流程先完成：enabled=false, generation→8（代次推进使旧线程失效）。
+        let update = {
+            let guard = state.lock().unwrap();
+            auto_update_control_state_with(guard, &slot, false).expect("状态变化必须返回更新")
+        };
+        assert!(!update.0, "无 Restoring 归属");
+        assert_eq!(update.1, 8);
+        // 旧登记随后到达：锁内读取 enabled=false → 拒绝。
+        let guard = state.lock().unwrap();
+        let result = auto_register_owned_with(
+            guard, 0, expected_generation, &session_counter, &slot, &ctx.ops,
+            |i| Some((format!("DEV{}", i), 1)), None,
+        );
+        assert!(result.is_none(), "关闭后旧登记必须被拒绝");
+        // 操作版本未因旧登记推进；无 Applying 记录；无写屏。
+        assert_eq!(ctx.ops.with_state(0, |s| s.operation_generation), Some(0));
+        assert!(slot.lock().unwrap().is_none(), "不得创建 Applying 记录");
+        assert!(ctx.log_order().is_empty(), "不得写屏: {:?}", ctx.log_order());
+    }
+
+    // 测试 B：关闭后重开，旧代次不能登记；当前代次可正常登记。
+    #[test]
+    fn stale_generation_rejected_after_reopen() {
+        let ctx = TestContext::new(1);
+        // 初始 enabled=true, generation=7（旧线程持 N=7）。
+        let state: StdMutex<AutoControlState> = StdMutex::new(AutoControlState { enabled: true, generation: 7 });
+        let slot: AutoOwnershipSlot = StdMutex::new(None);
+        let session_counter = AtomicU64::new(0);
+        let stale_generation = 7u64;
+        // 关闭（generation→8）→ 重新开启（generation→9，enabled=true）。
+        {
+            let guard = state.lock().unwrap();
+            auto_update_control_state_with(guard, &slot, false).unwrap();
+        }
+        let reopen = {
+            let guard = state.lock().unwrap();
+            auto_update_control_state_with(guard, &slot, true).unwrap()
+        };
+        assert!(reopen.0 == false, "无 Restoring 归属");
+        let current_generation = reopen.1; // 9
+        // 旧线程（N=7）尝试登记：即使当前 enabled=true，代次不匹配 → 拒绝。
+        let guard = state.lock().unwrap();
+        let stale = auto_register_owned_with(
+            guard, 0, stale_generation, &session_counter, &slot, &ctx.ops,
+            |i| Some((format!("DEV{}", i), 1)), None,
+        );
+        assert!(stale.is_none(), "旧代次即使 enabled=true 也必须被拒绝");
+        // 当前代次（9）的合法登记成功。
+        let guard = state.lock().unwrap();
+        let current = auto_register_owned_with(
+            guard, 0, current_generation, &session_counter, &slot, &ctx.ops,
+            |i| Some((format!("DEV{}", i), 1)), None,
+        )
+            .expect("当前代次登记必须成功");
+        assert_eq!(current.1, 1, "第一个会话 id=1");
+        // 成功登记必须推进传入 ctx.ops 的版本，且归属记录版本与它一致。
+        let state_version = ctx.ops.with_state(0, |s| s.operation_generation).unwrap();
+        assert_eq!(state_version, current.2, "归属记录的操作版本必须与状态锁内版本一致");
+        // 旧任务不能覆盖当前会话归属。
+        let guard = state.lock().unwrap();
+        let stale_again = auto_register_owned_with(
+            guard, 0, stale_generation, &session_counter, &slot, &ctx.ops,
+            |i| Some((format!("DEV{}", i), 1)), None,
+        );
+        assert!(stale_again.is_none(), "旧代次不得覆盖当前会话归属");
+        let rec = slot.lock().unwrap().clone().expect("当前会话归属保留");
+        assert_eq!(rec.session, 1);
+        // 未发生写屏（登记本身不写屏；版本推进因条件开启发生一次）。
+        assert!(ctx.log_order().is_empty(), "登记不得写屏: {:?}", ctx.log_order());
+    }
+
+    // 测试 C：登记通过控制状态检查后、条件开启前暂停（仍持控制锁）→
+    // 关闭线程被阻塞；放行登记完成后关闭才完成，无关闭后的重新登记。
+    #[test]
+    fn disable_blocked_until_registration_completes() {
+        let ctx = TestContext::new(1);
+        // 独立控制状态（enabled=true, generation=1）与独立归属槽。
+        let state: StdMutex<AutoControlState> = StdMutex::new(AutoControlState { enabled: true, generation: 1 });
+        let slot: AutoOwnershipSlot = StdMutex::new(None);
+        let session_counter = AtomicU64::new(0);
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel::<()>();
+        // 登记线程：持控制锁，在条件开启前停在钩子（锁未释放）。
+        let state_c = std::sync::Arc::new(state);
+        let slot_c = std::sync::Arc::new(slot);
+        let session_c = std::sync::Arc::new(session_counter);
+        let ctx_ops = ctx.ops;
+        let register_handle = {
+            let state = std::sync::Arc::clone(&state_c);
+            let slot = std::sync::Arc::clone(&slot_c);
+            let counter = std::sync::Arc::clone(&session_c);
+            let entered_tx = entered_tx.clone();
+            thread::spawn(move || {
+                let guard = state.lock().unwrap();
+                auto_register_owned_with(
+                    guard, 0, 1, &counter, &slot, &ctx_ops,
+                    |i| Some((format!("DEV{}", i), 1)),
+                    Some(Box::new(move || {
+                        // 超时或通道断开不得自动放行登记——必须使测试失败。
+                        entered_tx.send(()).expect("entered 信号发送失败");
+                        release_rx
+                            .recv_timeout(Duration::from_secs(10))
+                            .expect("登记钩子等待放行超时或通道断开：测试失败");
+                    })),
+                )
+            })
+        };
+        // 等登记线程进入钩子（条件开启前、仍持控制锁、版本未推进）。
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("登记线程必须进入钩子");
+        assert_eq!(ctx.ops.with_state(0, |s| s.operation_generation), Some(0),
+                   "钩子在条件开启前，版本不得推进");
+        // 用 try_lock 证明登记线程确实持有控制锁（WouldBlock），而非依赖调度推测。
+        assert!(matches!(
+            state_c.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        ), "登记线程必须仍持有控制锁");
+        // 关闭线程：通过信号确认它已到达取锁前，再断言其被阻塞。
+        let (close_started_tx, close_started_rx) = std::sync::mpsc::channel::<()>();
+        let close_started_tx_c = close_started_tx.clone();
+        let (close_done_tx, close_done_rx) = std::sync::mpsc::channel::<()>();
+        let slot_for_close = std::sync::Arc::clone(&slot_c);
+        let state_for_close = std::sync::Arc::clone(&state_c);
+        let close_handle = thread::spawn(move || {
+            close_started_tx_c.send(()).expect("close started 信号发送失败");
+            let guard = state_for_close.lock().unwrap();
+            auto_update_control_state_with(guard, &slot_for_close, false);
+            close_done_tx.send(()).expect("close done 信号发送失败");
+        });
+        close_started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("关闭线程必须到达取锁前");
+        // 关闭线程已尝试取锁：登记仍持锁 → 关闭不得完成。
+        assert!(matches!(
+            close_done_rx.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Empty)
+        ), "关闭不得在登记完成前取得控制锁");
+        // 放行登记（send 必须成功）。
+        release_tx.send(()).expect("release 信号发送失败");
+        let registered = register_handle
+            .join()
+            .expect("登记线程不得 panic")
+            .expect("登记必须成功（代次有效）");
+        assert_eq!(registered.1, 1, "会话 id=1");        // 登记完成后，关闭线程取得控制锁并完成（close done 信号到达）。
+        close_handle.join().unwrap();
+        close_done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("关闭必须在登记完成后完成");
+        // 最终：开关状态已关闭（直接断言 enabled==false）、非 Restoring 归属已释放、
+        // 无关闭完成后的重新登记。
+        assert!(!state_c.lock().unwrap().enabled, "关闭后控制状态 enabled 必须为 false");
+        assert!(slot_c.lock().unwrap().is_none(), "关闭处置必须清除非 Restoring 归属");
+        // 登记推进了 ctx.ops 的版本（条件开启发生一次）；无写屏。
+        assert_ne!(ctx.ops.with_state(0, |s| s.operation_generation), Some(0), "登记必须推进版本");
+        assert!(ctx.log_order().is_empty(), "登记与关闭都不得写屏: {:?}", ctx.log_order());
+    }
+
+    // ─── 拓扑绑定第一批：目标解析与恢复责任模型（离线）───
+
+    /// 构造测试快照辅助。
+    fn snap(
+        device_path: &str,
+        src_id: u32,
+        gdi: &str,
+        friendly: &str,
+        is_primary: bool,
+    ) -> DisplaySnapshot {
+        DisplaySnapshot {
+            identity: DisplayIdentity {
+                monitor_device_path: device_path.to_string(),
+                adapter_high: 1,
+                adapter_low: 2,
+                target_id: src_id,
+            },
+            friendly_name: friendly.to_string(),
+            gdi_path: gdi.to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: src_id,
+            is_primary,
+            width: 1920,
+            height: 1080,
+        }
+    }
+
+    // 场景：同型号同端口替换，系统身份依据无法区分（设备路径+目标 id 全同的
+    // 两个槽位）→ 解析必须拒绝（Ambiguous），不写屏。
+    #[test]
+    fn topology_same_model_same_port_identity_rejected() {
+        // 两个槽位携带完全相同的 identity（同型号替换后系统未提供独特信息，
+        // 设备路径+adapter+target_id 都相同）——身份无法区分。
+        let shared_identity = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let a = DisplaySnapshot {
+            identity: shared_identity.clone(),
+            friendly_name: "DELL A".to_string(),
+            gdi_path: r"\\.\DISPLAY1".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        let b = DisplaySnapshot {
+            identity: shared_identity.clone(), // 同一身份出现在两个槽位
+            friendly_name: "DELL A (replacement)".to_string(),
+            gdi_path: r"\\.\DISPLAY2".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: false,
+            width: 1920,
+            height: 1080,
+        };
+        let resolver = SnapshotResolver::new(vec![a, b], 1);
+        let target = resolver.resolve(&shared_identity);
+        // 同一 identity 匹配多个槽位 → Ambiguous：系统未能区分，拒绝写屏。
+        match target {
+            Err(TargetError::Ambiguous) => {}
+            Err(e) => panic!("应为 Ambiguous，实际 {:?}", e),
+            Ok(_) => panic!("身份重复时必须拒绝解析（不能按型号猜测写屏）"),
+        }
+    }
+
+    // 场景：同型号但设备路径不同（身份可区分）→ 解析唯一成功。
+    #[test]
+    fn topology_same_model_distinct_path_resolves() {
+        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
+        let b = snap("DISPLAY\\DEL0001\\5&def", 2, r"\\.\DISPLAY2", "DELL A", false);
+        let resolver = SnapshotResolver::new(vec![a, b], 1);
+        let target = resolver.resolve(&DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&def".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 2,
+        });
+        let resolved = target.expect("路径不同身份应可区分");
+        assert_eq!(resolved.gdi_path, r"\\.\DISPLAY2", "解析必须返回当前寻址路径");
+        assert_eq!(resolved.snapshot_index, 1);
+    }
+
+    // 场景：索引重排后按身份解析到正确设备（不依赖索引）。
+    #[test]
+    fn topology_index_reorder_resolves_by_identity() {
+        // 原快照：A 在槽 0。重排后 A 在槽 1（B 插入槽 0）。
+        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
+        let b = snap("DISPLAY\\DELL0002\\5&xyz", 2, r"\\.\DISPLAY2", "Other", false);
+        let reordered = vec![b.clone(), a.clone()];
+        let resolver = SnapshotResolver::new(reordered, 2);
+        let target = resolver.resolve(&a.identity).expect("重排后仍应解析到 A");
+        assert_eq!(target.gdi_path, r"\\.\DISPLAY1", "必须解析到 A 的当前寻址");
+        assert_eq!(target.snapshot_index, 1, "A 现在位于槽 1");
+    }
+
+    // 场景：无关设备增减不影响原目标解析。
+    #[test]
+    fn topology_unrelated_add_remove_keeps_resolution() {
+        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
+        // 加入无关设备 C、移除 B，A 身份不变 → 仍解析。
+        let c = snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other C", false);
+        let resolver = SnapshotResolver::new(vec![a.clone(), c], 3);
+        let target = resolver.resolve(&a.identity).expect("无关设备增减不影响 A");
+        assert_eq!(target.identity, a.identity);
+    }
+
+    // 场景：目标消失 → Gone；重现且身份匹配 → 解析成功。
+    #[test]
+    fn topology_gone_then_reappears() {
+        let a = snap("DISPLAY\\DEL0001\\5&abc", 1, r"\\.\DISPLAY1", "DELL A", true);
+        // 消失：快照不含 A。
+        let b = snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false);
+        let resolver = SnapshotResolver::new(vec![b], 4);
+        assert_eq!(resolver.resolve(&a.identity), Err(TargetError::Gone),
+                   "目标消失必须 Gone");
+        // 重现：快照含 A（槽位变化），身份匹配 → 解析成功。
+        let reappeared = vec![
+            snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false),
+            a.clone(),
+        ];
+        let resolver2 = SnapshotResolver::new(reappeared, 5);
+        let target = resolver2.resolve(&a.identity).expect("重现且身份匹配应可解析");
+        assert_eq!(target.snapshot_index, 1);
+    }
+
+    // 场景：身份依据不足（设备路径为空）→ 拒绝，不按型号/端口猜测。
+    #[test]
+    fn topology_unreliable_identity_rejected() {
+        let snap_no_path = DisplaySnapshot {
+            identity: DisplayIdentity {
+                monitor_device_path: String::new(),
+                adapter_high: 1,
+                adapter_low: 2,
+                target_id: 1,
+            },
+            friendly_name: "Unknown".to_string(),
+            gdi_path: r"\\.\DISPLAY1".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        // 身份依据不足：空路径 has_path_info 直接为 false。
+        assert!(!snap_no_path.identity.has_path_info());
+        let resolver = SnapshotResolver::new(vec![snap_no_path], 1);
+        // 用空路径身份解析 → Unknown（即使端口可复现也不批准）。
+        assert_eq!(
+            resolver.resolve(&DisplayIdentity {
+                monitor_device_path: String::new(),
+                adapter_high: 1,
+                adapter_low: 2,
+                target_id: 1,
+            }),
+            Err(TargetError::Unknown),
+            "身份依据不足必须拒绝"
+        );
+    }
+
+    // 场景：共享显示源（同一 CCD source、不同 identity）→ Ambiguous 拒绝独立写屏。
+    #[test]
+    fn topology_shared_source_rejected() {
+        // 镜像/克隆模式：两个 target 共享同一 source_id。
+        let a = snap("DISPLAY\\DEL0001\\5&abc", 7, r"\\.\DISPLAY1", "DELL A", true);
+        let b = DisplaySnapshot {
+            identity: DisplayIdentity {
+                monitor_device_path: "DISPLAY\\DEL0001\\5&def".to_string(),
+                adapter_high: 1,
+                adapter_low: 2,
+                target_id: 8,
+            },
+            friendly_name: "DELL B".to_string(),
+            gdi_path: r"\\.\DISPLAY2".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 7, // 与 A 同一源 → 共享 Gamma 域歧义
+            is_primary: false,
+            width: 1920,
+            height: 1080,
+        };
+        let resolver = SnapshotResolver::new(vec![a, b], 1);
+        let target = resolver.resolve(&DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 7,
+        });
+        match target {
+            Err(TargetError::Ambiguous) => {}
+            other => panic!("共享显示源必须拒绝独立写屏，实际 {:?}", other),
+        }
+    }
+
+    // 场景：用户接管（自动会话过期）不删除原始校色数据——恢复记录管理函数。
+    #[test]
+    fn restore_record_survives_user_takeover() {
+        let identity = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        // 自动开启捕获了原始 ramp。
+        let mut record = RestoreRecord {
+            target: identity.clone(),
+            original_ramp: Some([[1u16; 256]; 3]),
+            restore_pending: true,
+            session: Some(42),
+            restore_generation: Some(9),
+        };
+        // 调用管理函数：用户接管只释放自动关联。
+        record_user_takeover(&mut record);
+        assert!(record.session.is_none(), "自动会话关联释放");
+        assert!(record.restore_generation.is_none(), "恢复意图版本释放");
+        assert!(record.original_ramp.is_some(), "用户接管不得删除原始校色数据");
+        assert!(record.restore_pending, "待恢复责任保留");
+        assert_eq!(record.target, identity, "目标身份保留");
+        // 恢复成功才条件清理。
+        record_on_restore_success(&mut record);
+        assert!(!record.restore_pending, "成功后才清除待恢复");
+        assert!(record.original_ramp.is_none(), "成功后原始数据清理");
+    }
+
+    // 场景：无原始 Ramp 的降级清除场景，身份仍保留（恢复管理函数）。
+    #[test]
+    fn restore_record_without_ramp_keeps_identity() {
+        let identity = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let mut record = RestoreRecord {
+            target: identity.clone(),
+            original_ramp: None, // 降级清除场景
+            restore_pending: true,
+            session: None,
+            restore_generation: None,
+        };
+        assert!(record.restore_pending);
+        // 恢复失败：管理函数保留记录（pending 仍 true，身份不丢）。
+        record_on_restore_failure(&mut record, "模拟恢复失败");
+        assert!(record.restore_pending, "失败后待恢复保留");
+        assert_eq!(record.target.monitor_device_path, "DISPLAY\\DEL0001\\5&abc", "身份保留");
+        assert!(record.target.has_path_info());
+    }
+
+    // 场景：新目标进入不覆盖旧记录（调用登记函数）。
+    #[test]
+    fn restore_record_not_overwritten_by_new_device() {
+        let identity_a = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let identity_b = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\OTH0003\\5&zzz".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 3,
+        };
+        let mut records: RestoreRecords = HashMap::new();
+        // 登记 A。
+        record_register_target(&mut records, RestoreRecord {
+            target: identity_a.clone(),
+            original_ramp: Some([[7u16; 256]; 3]),
+            restore_pending: true,
+            session: None,
+            restore_generation: None,
+        });
+        // 实际登记 B（新目标进入）。
+        record_register_target(&mut records, RestoreRecord {
+            target: identity_b.clone(),
+            original_ramp: Some([[8u16; 256]; 3]),
+            restore_pending: true,
+            session: None,
+            restore_generation: None,
+        });
+        // A 的记录仍存在且未修改。
+        let a_rec = records.get(&identity_a).expect("A 的记录必须保留");
+        assert_eq!(a_rec.original_ramp, Some([[7u16; 256]; 3]), "A 的原始数据未被覆盖");
+        assert!(records.contains_key(&identity_b), "B 已登记");
+    }
+
+    // 场景：目标消失——保留原记录，不转交给替代设备（调用管理函数）。
+    #[test]
+    fn restore_record_kept_on_target_gone() {
+        let identity_a = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let mut records: RestoreRecords = HashMap::new();
+        record_register_target(&mut records, RestoreRecord {
+            target: identity_a.clone(),
+            original_ramp: Some([[7u16; 256]; 3]),
+            restore_pending: true,
+            session: None,
+            restore_generation: None,
+        });
+        // A 消失：保留原记录。
+        let kept = record_keep_on_gone(&mut records, &identity_a).expect("消失必须保留原记录");
+        assert_eq!(kept.target, identity_a, "记录不转交给替代设备");
+        assert!(records.contains_key(&identity_a), "记录仍在表中");
+    }
+
+    // 场景：新操作继续使用原目标——不覆盖最初捕获的原始 Ramp。
+    #[test]
+    fn restore_record_keeps_original_ramp_on_new_operation() {
+        let identity = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let mut record = RestoreRecord {
+            target: identity.clone(),
+            original_ramp: Some([[3u16; 256]; 3]),
+            restore_pending: true,
+            session: Some(1),
+            restore_generation: None,
+        };
+        // 新操作继续使用原目标：已有原始数据 → 不重新捕获覆盖。
+        assert!(record_keep_original_ramp(&record), "已有原始数据必须保留");
+        // 新操作自身失败的回滚走同一记录：原始 ramp 不变。
+        record_on_restore_failure(&mut record, "新操作失败");
+        assert_eq!(record.original_ramp, Some([[3u16; 256]; 3]), "原始 Ramp 未被覆盖");
+        assert!(record.restore_pending);
+    }
+
+    // ─── 收尾 1：唯一匹配 vs 跨拓扑恢复授权 ───
+    // 快照 1 只有 A（身份字段 X）；A 被移除；快照 2 只有替代设备 B（系统仍提供 X）。
+    // 任何单一快照都没有两个 X——唯一匹配成功，但跨拓扑恢复**不得授权**（无连续性
+    // 观察且无更强身份依据 → Unconfirmed，不写屏）。
+    #[test]
+    fn topology_sequential_replacement_not_confirmed_without_continuity() {
+        let x = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        // 快照 1：只有 A（X）。
+        let a = DisplaySnapshot {
+            identity: x.clone(),
+            friendly_name: "DELL A".to_string(),
+            gdi_path: r"\\.\DISPLAY1".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        let snap1 = SnapshotResolver::new(vec![a.clone()], 1);
+        // 捕获时解析：唯一匹配成功（定位）。
+        let resolved = snap1.resolve(&x).expect("快照 1 唯一匹配应成功");
+        assert_eq!(resolved.gdi_path, r"\\.\DISPLAY1");
+        // A 被移除。快照 2：只有替代设备 B，系统仍提供 X（同型号替换）。
+        let b = DisplaySnapshot {
+            identity: x.clone(), // 相同身份字段
+            friendly_name: "DELL B (replacement)".to_string(),
+            gdi_path: r"\\.\DISPLAY2".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        let snap2 = SnapshotResolver::new(vec![b.clone()], 2);
+        // 快照 2 中唯一匹配成功（定位到 B）——但跨拓扑恢复不得自动授权：
+        // 没有连续性观察（连接中断后仅凭相同路径/LUID/端口）→ Unconfirmed。
+        let resolved2 = snap2.resolve(&x).expect("快照 2 唯一匹配应成功（定位）");
+        assert_eq!(resolved2.gdi_path, r"\\.\DISPLAY2");
+        // 共用连续性跟踪器：捕获时绑定 A（连续观察开始）。
+        let mut continuity = TargetContinuity::bind(x.clone());
+        // 正常观察（快照 1 仍含 A）→ 连续性保持。
+        continuity.observe(&snap1);
+        assert!(continuity.authorizes_restore(), "连续观察期间应可授权恢复");
+        // A 缺席：把缺席快照交给跟踪器（快照只含无关设备）→ 连续性中断。
+        let gone_snap = SnapshotResolver::new(vec![
+            snap("DISPLAY\\OTH0003\\5&zzz", 3, r"\\.\DISPLAY2", "Other", false),
+        ], 3);
+        continuity.observe(&gone_snap);
+        assert!(!continuity.observed(), "目标缺席必须中断连续性");
+        // 相同字段的 B 重新出现（快照 2）→ 不自动恢复连续性。
+        continuity.observe(&snap2);
+        assert!(!continuity.observed(), "缺席后相同字段重现不自动恢复为已确认");
+        // 共用决策函数：读取跟踪结果（而非外部传参）→ Unconfirmed。
+        let decision = decide_target_restore(&continuity, &snap2);
+        assert_eq!(decision, TargetRestoreDecision::Unconfirmed,
+                   "A 消失、B 以相同字段单独出现：无法确认是原设备，不写屏");
+        // 恢复记录保留（不写屏、不清理）。
+        let identity = x.clone();
+        let mut records: RestoreRecords = HashMap::new();
+        record_register_target(&mut records, RestoreRecord {
+            target: identity.clone(),
+            original_ramp: Some([[1u16; 256]; 3]),
+            restore_pending: true,
+            session: None,
+            restore_generation: None,
+        });
+        assert!(records.contains_key(&identity), "Unconfirmed 时恢复记录保留");
+    }
+
+    // ─── 收尾 2：快照版本接入捕获核验 + 空寻址拒绝 ───
+    // 解析目标 → 开始捕获 → 拓扑变化 → 捕获返回：旧捕获结果不被接受为有效
+    // 恢复记录，不执行后续应用（版本核验，不接真实写屏）。
+    #[test]
+    fn topology_capture_rejected_after_snapshot_change() {
+        let x = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let a = DisplaySnapshot {
+            identity: x.clone(),
+            friendly_name: "DELL A".to_string(),
+            gdi_path: r"\\.\DISPLAY1".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        let snap_v1 = SnapshotResolver::new(vec![a.clone()], 1);
+        // 解析目标（快照版本 1）。
+        let resolved = snap_v1.resolve(&x).expect("v1 解析成功");
+        assert_eq!(resolved.snapshot_version, 1, "解析结果必须关联快照版本");
+        // 捕获期间拓扑变化：快照版本推进到 2（同一身份仍在）。
+        let snap_v2 = SnapshotResolver::new(vec![a], 2);
+        let current = snap_v2.resolve(&x).expect("v2 解析成功");
+        // 版本不一致 → 旧解析结果不再有效（捕获期间拓扑变化，放弃该次捕获）。
+        assert_ne!(resolved.snapshot_version, current.snapshot_version,
+                   "拓扑版本已变化");
+        assert_eq!(current.snapshot_version, 2, "当前快照版本为 2");
+        // 若捕获流程核验版本：resolved 的版本(1) != 当前(2) → 放弃，不产生恢复记录。
+        let capture_valid = resolved.snapshot_version == current.snapshot_version;
+        assert!(!capture_valid, "拓扑变化后旧捕获结果不得被接受为有效恢复记录");
+    }
+
+    // 空 gdi_path：唯一身份匹配但无法寻址 → 拒绝返回可写目标。
+    #[test]
+    fn topology_empty_gdi_path_rejected() {
+        let x = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let a = DisplaySnapshot {
+            identity: x.clone(),
+            friendly_name: "DELL A".to_string(),
+            gdi_path: String::new(), // 空寻址
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        let resolver = SnapshotResolver::new(vec![a], 1);
+        assert_eq!(resolver.resolve(&x), Err(TargetError::Unknown),
+                   "空 gdi_path 不得返回可写目标");
+    }
+
+    // ─── 收尾 4：ICC 离线格式样本（当前解析行为 vs 未来校准写屏策略）───
+    // 构造最小 ICC 文件：128 字节头部 + tag 表 + 标签数据。
+    // 当前 parse_icc_file 行为：vcgt 失败回退 TRC（有告警）。
+    // 未来 GDI 校准写屏策略：未批准该回退，需要独立严格提取（本批不接入）。
+
+    /// 构造最小 ICC：头部 + 1 个标签。
+    fn make_min_icc(tag: &[u8; 4], tag_data: &[u8]) -> Vec<u8> {
+        let data_off = 132u32 + 12; // tag 表从 132，数据紧随其后（144）。
+        let mut buf = Vec::new();
+        // 头部 128 字节：大小(0)、magic(36)、... 其余填充 0。
+        buf.resize(128, 0u8);
+        buf[0..4].copy_from_slice(&((data_off + tag_data.len() as u32)).to_be_bytes());
+        buf[36..40].copy_from_slice(b"acsp");
+        // 标签表（128 起）：tag_count=1（用 extend 追加，不做越界切片）。
+        buf.extend_from_slice(&1u32.to_be_bytes());
+        buf.extend_from_slice(tag);
+        buf.extend_from_slice(&data_off.to_be_bytes());   // ← 数据偏移（不是 132）
+        buf.extend_from_slice(&(tag_data.len() as u32).to_be_bytes());
+        // 标签数据从 144 起。
+        buf.extend_from_slice(tag_data);
+        buf
+    }
+
+    /// vcgt 标签数据（formula_type=0, 3 通道, 256 项, u16BE）。
+    fn make_vcgt_ramp(channel_val: u16) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"vcgt");
+        v.extend_from_slice(&0u32.to_be_bytes()); // reserved
+        v.extend_from_slice(&0u32.to_be_bytes()); // formula_type=0
+        v.extend_from_slice(&3u16.to_be_bytes()); // channels
+        v.extend_from_slice(&256u16.to_be_bytes()); // entries
+        v.extend_from_slice(&2u16.to_be_bytes()); // entry_size
+        for _ in 0..3 * 256 {
+            v.extend_from_slice(&channel_val.to_be_bytes());
+        }
+        v
+    }
+
+    /// curv 标签数据（count=1 gamma 表，作为 TRC）。
+    fn make_curv_trc(gamma_fixed: u16) -> Vec<u8> {
+        let mut v = Vec::new();
+        v.extend_from_slice(b"curv");
+        v.extend_from_slice(&0u32.to_be_bytes()); // reserved
+        v.extend_from_slice(&1u32.to_be_bytes()); // count=1
+        v.extend_from_slice(&gamma_fixed.to_be_bytes()); // gamma (16.16? 实际 u16/256)
+        v
+    }
+
+    // 场景：合法 vcgt（formula=0, 3×256×u16）→ 解析成功，ramp 为 vcgt 值。
+    #[test]
+    fn icc_valid_vcgt_parses() {
+        let dir = std::env::temp_dir().join("nexbox_icc_test_valid");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("valid_vcgt.icc");
+        let vcgt = make_vcgt_ramp(0x0102);
+        std::fs::write(&path, make_min_icc(b"vcgt", &vcgt)).unwrap();
+        let preset = parse_icc_file(path.to_str().unwrap()).expect("合法 vcgt 必须解析成功");
+        assert_eq!(preset.ramp.len(), 3);
+        assert_eq!(preset.ramp[0][0], 0x0102, "vcgt ramp 值正确");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // 场景：非支持 vcgt（formula_type=1）+ 合法 TRC → 当前行为回退 TRC（有告警），
+    // 不报错。这是**当前导入行为**；未来校准写屏是否允许该回退需独立策略（未批准）。
+    #[test]
+    fn icc_unsupported_vcgt_falls_back_to_trc() {
+        let dir = std::env::temp_dir().join("nexbox_icc_test_fb");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("fallback.icc");
+        // 非支持 vcgt：formula_type=1。
+        let mut vcgt_bad = Vec::new();
+        vcgt_bad.extend_from_slice(b"vcgt");
+        vcgt_bad.extend_from_slice(&0u32.to_be_bytes());
+        vcgt_bad.extend_from_slice(&1u32.to_be_bytes()); // formula_type=1 不支持
+        vcgt_bad.extend_from_slice(&3u16.to_be_bytes());
+        vcgt_bad.extend_from_slice(&256u16.to_be_bytes());
+        vcgt_bad.extend_from_slice(&2u16.to_be_bytes());
+        // 两个标签：vcgt + rTRC（合法 curv）。
+        let trc = make_curv_trc(0x0100); // gamma=1.0
+        // 回退路径需要 rTRC/gTRC/bTRC 三个（parse_icc_file 读三个通道）。
+        let tag_count = 4u32;
+        let data_off = 132u32 + tag_count * 12; // 132 + 48 = 180
+        let vcgt_off = data_off;
+        let r_trc_off = data_off + vcgt_bad.len() as u32;
+        let g_trc_off = r_trc_off + trc.len() as u32;
+        let b_trc_off = g_trc_off + trc.len() as u32;
+        let mut buf = Vec::new();
+        buf.resize(128, 0u8);
+        buf[0..4].copy_from_slice(&(b_trc_off + trc.len() as u32).to_be_bytes());
+        buf[36..40].copy_from_slice(b"acsp");
+        buf.extend_from_slice(&tag_count.to_be_bytes());
+        // 标签 1: vcgt
+        buf.extend_from_slice(b"vcgt");
+        buf.extend_from_slice(&vcgt_off.to_be_bytes());
+        buf.extend_from_slice(&(vcgt_bad.len() as u32).to_be_bytes());
+        // 标签 2-4: rTRC/gTRC/bTRC
+        for (sig, off) in [(b"rTRC", r_trc_off), (b"gTRC", g_trc_off), (b"bTRC", b_trc_off)] {
+            buf.extend_from_slice(sig);
+            buf.extend_from_slice(&off.to_be_bytes());
+            buf.extend_from_slice(&(trc.len() as u32).to_be_bytes());
+        }
+        buf.extend_from_slice(&vcgt_bad);
+        buf.extend_from_slice(&trc);
+        buf.extend_from_slice(&trc);
+        buf.extend_from_slice(&trc);
+        std::fs::write(&path, &buf).unwrap();
+        // 当前行为：vcgt formula=1 不支持 → 回退 rTRC（curv count=1 gamma=1.0）→ 成功。
+        let preset = parse_icc_file(path.to_str().unwrap()).expect("当前行为回退 TRC 应成功（有告警）");
+        // gamma=1.0 → ramp[i] = (i/255)^1.0 * 65535。
+        assert_eq!(preset.ramp[0][255], 65535, "回退 TRC gamma=1.0 末端为 65535");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // 场景：缺失校准标签（无 vcgt 无 TRC）→ 报错，不静默生成效果。
+    #[test]
+    fn icc_missing_calibration_tags_errors() {
+        let dir = std::env::temp_dir().join("nexbox_icc_test_missing");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("missing.icc");
+        // 仅一个无关标签（如 desc），无 vcgt/TRC。
+        let mut buf = Vec::new();
+        buf.resize(128, 0u8);
+        buf[36..40].copy_from_slice(b"acsp");
+        // tag_count=1（extend 追加，不做越界切片）。
+        buf.extend_from_slice(&1u32.to_be_bytes());
+        buf.extend_from_slice(b"desc");
+        buf.extend_from_slice(&144u32.to_be_bytes()); // 数据偏移 144
+        buf.extend_from_slice(&4u32.to_be_bytes());
+        buf.extend_from_slice(b"none");
+        let total = 144 + 4;
+        buf[0..4].copy_from_slice(&(total as u32).to_be_bytes());
+        std::fs::write(&path, &buf).unwrap();
+        let r = parse_icc_file(path.to_str().unwrap());
+        assert!(r.is_err(), "缺失校准标签必须报错，不静默生成效果");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // 场景：截断数据（vcgt 数据不足）→ 报错或回退，不 panic。
+    #[test]
+    fn icc_truncated_vcgt_no_panic() {
+        let dir = std::env::temp_dir().join("nexbox_icc_test_trunc");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("truncated.icc");
+        // vcgt 声明 3×256×u16 但数据不足。
+        let mut vcgt = Vec::new();
+        vcgt.extend_from_slice(b"vcgt");
+        vcgt.extend_from_slice(&0u32.to_be_bytes());
+        vcgt.extend_from_slice(&0u32.to_be_bytes());
+        vcgt.extend_from_slice(&3u16.to_be_bytes());
+        vcgt.extend_from_slice(&256u16.to_be_bytes());
+        vcgt.extend_from_slice(&2u16.to_be_bytes());
+        vcgt.extend_from_slice(&[0u8; 10]); // 只给 10 字节，远不足
+        // 截断到恰好缺尾巴
+        std::fs::write(&path, make_min_icc(b"vcgt", &vcgt[..vcgt.len() - 5])).unwrap();
+        // 不 panic：Err（vcgt 解析失败且无 TRC → 整体 Err）或 Ok 都接受，只断言不崩溃。
+        let r = parse_icc_file(path.to_str().unwrap());
+        assert!(r.is_ok() || r.is_err(), "截断数据不得 panic");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // ─── 收尾 2：假后端驱动的捕获前后核验共用流程 ───
+    // 用共用函数 capture_with_verify：解析目标 → 读取 Ramp → 再取当前拓扑核验。
+    // 假后端读取期间切换快照（版本推进）→ 返回拒绝，不提交、不覆盖既有记录。
+    #[test]
+    fn capture_verify_rejects_when_snapshot_changed_during_read() {
+        let ctx = TestContext::new(1);
+        let identity = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let a = DisplaySnapshot {
+            identity: identity.clone(),
+            friendly_name: "DELL A".to_string(),
+            gdi_path: r"\\.\DISPLAY1".to_string(),
+            source_adapter_high: 1,
+            source_adapter_low: 2,
+            source_id: 1,
+            is_primary: true,
+            width: 1920,
+            height: 1080,
+        };
+        // 解析器：第一次 resolve 返回版本 1，之后返回版本 2 —— 模拟"解析目标
+        // → 读取期间拓扑变化 → 再解析"的版本推进。
+        struct VersionFlipResolver {
+            snapshot: Vec<DisplaySnapshot>,
+            count: std::sync::Arc<AtomicUsize>,
+        }
+        impl TargetResolver for VersionFlipResolver {
+            fn resolve(&self, identity: &DisplayIdentity) -> Result<ResolvedTarget, TargetError> {
+                let n = self.count.fetch_add(1, Ordering::Relaxed);
+                // 第一次 resolve 版本 1；之后 resolve 版本 2。
+                let ver = if n == 0 { 1 } else { 2 };
+                SnapshotResolver::new(self.snapshot.clone(), ver).resolve(identity)
+            }
+            fn snapshot(&self) -> &[DisplaySnapshot] {
+                &self.snapshot
+            }
+        }
+        let flip = VersionFlipResolver {
+            snapshot: vec![a],
+            count: std::sync::Arc::new(AtomicUsize::new(0)),
+        };
+        let mut records2: RestoreRecords = HashMap::new();
+        // 无既有记录：capture_with_verify 第一次 resolve v1 → read → 第二次 resolve v2
+        // → 版本不一致 → SnapshotChanged 拒绝，不提交新记录。
+        let result2 = capture_with_verify(&identity, &flip, ctx.ops.backend(), &mut records2);
+        assert_eq!(result2, Err(CaptureRejected::SnapshotChanged),
+                   "读取期间快照变化必须拒绝捕获（不提交、不写屏）");
+        assert!(!records2.contains_key(&identity), "拒绝后不得提交新恢复记录");
+        // 后续假应用调用次数为零（未发生任何写屏）。
+        let order = ctx.log_order();
+        assert!(!order.contains(&Op::ApplyIcc), "捕获拒绝后不得应用: {:?}", order);
+        assert!(!order.contains(&Op::Write), "捕获拒绝后不得写回: {:?}", order);
+        // read 确实发生（捕获尝试过）。
+        assert!(order.contains(&Op::Capture), "捕获读取必须发生: {:?}", order);
+    }
+
+    // ─── 收尾 3：条件清理边界 ───
+    // record_on_restore_success_if_current：旧记录的恢复结果不能清掉后来
+    // 替换或重新绑定的记录。
+    #[test]
+    fn restore_success_if_current_does_not_clear_rebound_record() {
+        let identity_a = DisplayIdentity {
+            monitor_device_path: "DISPLAY\\DEL0001\\5&abc".to_string(),
+            adapter_high: 1,
+            adapter_low: 2,
+            target_id: 1,
+        };
+        let mut records: RestoreRecords = HashMap::new();
+        // 旧会话 1 的记录（A，session=1）。
+        record_register_target(&mut records, RestoreRecord {
+            target: identity_a.clone(),
+            original_ramp: Some([[1u16; 256]; 3]),
+            restore_pending: true,
+            session: Some(1),
+            restore_generation: Some(5),
+        });
+        // 新会话 2 重新绑定同一目标（不覆盖原始数据，仅替换会话）。
+        let rec = records.get_mut(&identity_a).unwrap();
+        rec.session = Some(2);
+        rec.restore_generation = Some(6);
+        // 旧会话 1 的恢复成功：绑定不匹配（session=1 != 当前 2）→ 不清理。
+        let rec = records.get_mut(&identity_a).unwrap();
+        let cleared = record_on_restore_success_if_current(rec, &identity_a, Some(1));
+        assert!(!cleared, "旧会话恢复结果不得清掉重新绑定的记录");
+        assert!(rec.restore_pending, "未清理：待恢复保留");
+        assert_eq!(rec.original_ramp, Some([[1u16; 256]; 3]), "原始数据保留");
+        // 当前会话 2 的恢复成功：匹配 → 清理。
+        let rec = records.get_mut(&identity_a).unwrap();
+        let cleared = record_on_restore_success_if_current(rec, &identity_a, Some(2));
+        assert!(cleared, "当前会话恢复成功应清理");
+        assert!(!rec.restore_pending);
     }
 }

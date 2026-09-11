@@ -675,14 +675,34 @@ export default function DisplayFilterPage() {
 
       if (result.success) {
         setSettings(result.settings as FilterSettings);
-        toast({
-          title: result.settings.is_active
-            ? t("displayFilter.filterEnabled")
-            : t("displayFilter.filterDisabled"),
-          status: "success",
-          duration: 2000,
-          isClosable: true,
-        });
+        const isActive = result.settings.is_active;
+        // 先判断“跳过”：请求已处理，但操作被更新的操作取代、未执行。
+        // 此时不得展示开启/关闭/清除成功的 toast（success=true 只代表请求正常处理）。
+        if (result.skipped_stale) {
+          toast({
+            title: result.message || t("displayFilter.operationSuperseded"),
+            status: "info",
+            duration: 3000,
+            isClosable: true,
+          });
+        } else if (!isActive && result.degraded) {
+          // 降级清除：滤镜已移除，但未能恢复原有校色，必须如实提示而非“已禁用”。
+          toast({
+            title: t("displayFilter.filterDisabledDegraded"),
+            status: "warning",
+            duration: 5000,
+            isClosable: true,
+          });
+        } else {
+          toast({
+            title: isActive
+              ? t("displayFilter.filterEnabled")
+              : t("displayFilter.filterDisabled"),
+            status: "success",
+            duration: 2000,
+            isClosable: true,
+          });
+        }
       }
     } catch (error) {
       console.error("%c[FilterToggle] 操作失败!", "color: #f44336; font-weight: bold", {
