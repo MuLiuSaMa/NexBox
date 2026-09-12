@@ -170,3 +170,12 @@ NexBox-Tools/
 
 # QQ音乐调试临时文件
 .tmp_yqq_*
+
+# MSIX 打包目录（仅提交打包脚本，产物/证书/临时文件不入库）
+msix/*
+!msix/build-msix.ps1
+!msix/install-msix.ps1
+!msix/support-email.txt
+
+# NexBox 源码快照副本（下载参考用，不随主程序提交）
+NexBox-main/

@@ -130,26 +130,26 @@ interface GameFilterStatus {
 
 // Reverse mapping: builtin ICC id → filter preset id (for startup highlight)
 const ICC_TO_PRESET: Record<string, string> = {
-  "builtin_NexBox_去曝光Pro": "de-exposure-pro",
-  "builtin_NexBox_鲜艳": "vivid",
-  "builtin_NexBox_电影": "movie",
-  "builtin_NexBox_高亮": "highlight",
-  "builtin_NexBox_柔和": "soft",
-  "builtin_NexBox_游戏": "gaming",
-  "builtin_NexBox_阅读": "reading",
-  "builtin_NexBox_去曝光": "de-exposure",
-  "builtin_NexBox_暗部增强": "shadow-boost",
-  "builtin_NexBox_大坝降低对比度": "dam-contrast",
-  "builtin_NexBox_航天推荐": "aerospace",
-  "builtin_NexBox_偏白": "whiter",
-  "builtin_NexBox_偏蓝": "bluish",
-  "builtin_NexBox_原亮 冷色调": "cool-tone",
-  "builtin_NexBox_三角洲超级推荐": "delta-super",
-  "builtin_NexBox_三角洲推荐A": "delta-a",
-  "builtin_NexBox_三角洲推荐B": "delta-b",
-  "builtin_NexBox_三角洲推荐C": "delta-c",
-  "builtin_NexBox_三角洲推荐D": "delta-d",
-  "builtin_NexBox_三角洲推荐E": "delta-e",
+  "builtin_NexBox_DeExposurePro": "de-exposure-pro",
+  "builtin_NexBox_Vivid": "vivid",
+  "builtin_NexBox_Movie": "movie",
+  "builtin_NexBox_Highlight": "highlight",
+  "builtin_NexBox_Soft": "soft",
+  "builtin_NexBox_Game": "gaming",
+  "builtin_NexBox_Reading": "reading",
+  "builtin_NexBox_DeExposure": "de-exposure",
+  "builtin_NexBox_ShadowBoost": "shadow-boost",
+  "builtin_NexBox_LowerContrast": "dam-contrast",
+  "builtin_NexBox_Aerospace": "aerospace",
+  "builtin_NexBox_White": "whiter",
+  "builtin_NexBox_Bluish": "bluish",
+  "builtin_NexBox_OriginalCool": "cool-tone",
+  "builtin_NexBox_DeltaSuper": "delta-super",
+  "builtin_NexBox_DeltaA": "delta-a",
+  "builtin_NexBox_DeltaB": "delta-b",
+  "builtin_NexBox_DeltaC": "delta-c",
+  "builtin_NexBox_DeltaD": "delta-d",
+  "builtin_NexBox_DeltaE": "delta-e",
 };
 
 const presetIcons: Record<string, React.ElementType> = {
@@ -1126,7 +1126,7 @@ export default function DisplayFilterPage() {
     setActiveIccId(null);
     try {
       // Apply the 去曝光Pro ICC as display baseline
-      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_去曝光Pro", isActive: settings.is_active });
+      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_DeExposurePro", isActive: settings.is_active });
       if (result.success) {
         const rs = result.settings;
         setSettings(prev => ({

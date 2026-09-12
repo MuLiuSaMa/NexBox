@@ -4,6 +4,9 @@ fn main() {
         use std::path::PathBuf;
         use tauri_build::WindowsAttributes;
         let mut windows = WindowsAttributes::new();
+        // MSIX 限制：包内入口 exe 不允许 requireAdministrator 清单（会导致启动失败，
+        // 报"不支持该请求"）。改为 asInvoker，由 main.rs 的 ensure_elevation() 在运行时
+        // 检测权限并以 UAC 重启自身，两条分发路线（普通 exe / MSIX）行为保持一致。
         windows = windows.app_manifest( r#"
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <dependency>
@@ -21,7 +24,7 @@ fn main() {
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
     <security>
       <requestedPrivileges>
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
       </requestedPrivileges>
     </security>
   </trustInfo>

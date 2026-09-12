@@ -1,0 +1,17 @@
+﻿cargo :     Checking nexbox-installer v9.5.3 (D:\NexBox\installer\src-tauri)
+所在位置 行:445 字符: 45
++ ... r\src-tauri; cargo check *> D:\NexBox\installer\check_out.txt; $LASTE ...
++                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking ne...ller\src-tauri) 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warning: error copying object file `D:\NexBox\installer\src-tauri\target\debug\
+deps\libnexbox_installer_lib-922eb9754473b6cc.rmeta` to incremental directory a
+s `\\?\D:\NexBox\installer\src-tauri\target\debug\incremental\nexbox_installer_
+lib-2ay3filkmy6ry\s-hm6zicbj3w-1e2j8zw-working\metadata.rmeta`: 鎷掔粷璁块棶銆?(os err
+or 5)
+
+warning: `nexbox-installer` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.09s
+

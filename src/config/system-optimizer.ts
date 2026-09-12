@@ -93,7 +93,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 游戏与图形优化（12 项） ==============
   {
     id: "mmcssGameConfig",
-    regName: "MMCSS完整游戏配置",
+    regName: "mmcssGameConfig",
     category: "gaming",
     icon: Gamepad2,
     color: COLORS[0],
@@ -103,7 +103,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "gamePriority",
-    regName: "优先考虑游戏责任",
+    regName: "gamePriority",
     category: "gaming",
     icon: Gamepad2,
     color: COLORS[1],
@@ -113,7 +113,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "directXAutoHDR",
-    regName: "启用DirectX AutoHDR",
+    regName: "directXAutoHDR",
     category: "gaming",
     icon: Monitor,
     color: COLORS[3],
@@ -123,7 +123,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "directXFlipModel",
-    regName: "启用DirectX Flip Model",
+    regName: "directXFlipModel",
     category: "gaming",
     icon: Monitor,
     color: COLORS[4],
@@ -133,7 +133,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "directXVRR",
-    regName: "启用DirectX VRR优化",
+    regName: "directXVRR",
     category: "gaming",
     icon: Monitor,
     color: COLORS[5],
@@ -143,7 +143,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableDXMaxWindow",
-    regName: "禁用DX最大化窗口模式",
+    regName: "disableDXMaxWindow",
     category: "gaming",
     icon: MonitorOff,
     color: COLORS[6],
@@ -153,7 +153,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableGPUPreemption",
-    regName: "禁用 GPU 抢占",
+    regName: "disableGPUPreemption",
     category: "gaming",
     icon: Cpu,
     color: COLORS[7],
@@ -163,7 +163,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableGameBar",
-    regName: "禁用GameBar提示",
+    regName: "disableGameBar",
     category: "gaming",
     icon: Gamepad,
     color: COLORS[8],
@@ -173,7 +173,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableGameDVR",
-    regName: "禁用游戏硬盘录像机Game DVR",
+    regName: "disableGameDVR",
     category: "gaming",
     icon: Video,
     color: COLORS[9],
@@ -183,7 +183,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableBcastDVR",
-    regName: "禁用广播DVR服务",
+    regName: "disableBcastDVR",
     category: "gaming",
     icon: Radio,
     color: COLORS[10],
@@ -193,7 +193,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAutoColorMgmt",
-    regName: "关闭自动色彩管理",
+    regName: "disableAutoColorMgmt",
     category: "gaming",
     icon: Eye,
     color: COLORS[11],
@@ -203,7 +203,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "gameMode",
-    regName: "游戏模式",
+    regName: "gameMode",
     category: "gaming",
     icon: Gamepad2,
     color: COLORS[12],
@@ -226,23 +226,23 @@ export const optimizerItems: OptimizerItem[] = [
       {
         value: "program",
         labelKey: "systemOptimizer.gaming.win32PriorityProgram",
-        regName: "调整处理器以获得最佳性能-程序",
+        regName: "win32Priority_program",
       },
       {
         value: "background",
         labelKey: "systemOptimizer.gaming.win32PriorityBackground",
-        regName: "调整处理器以获得最佳性能-后台服务",
+        regName: "win32Priority_background",
       },
       {
         value: "extreme",
         labelKey: "systemOptimizer.gaming.win32PriorityExtreme",
-        regName: "调整处理器以获得最佳性能-极致前台",
+        regName: "win32Priority_extreme",
       },
     ],
   },
   {
     id: "systemResponsiveness",
-    regName: "游戏系统响应能力",
+    regName: "systemResponsiveness",
     category: "gaming",
     icon: Activity,
     color: COLORS[14],
@@ -252,7 +252,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "hags",
-    regName: "硬件加速GPU调度",
+    regName: "hags",
     category: "gaming",
     icon: Monitor,
     color: COLORS[0],
@@ -262,7 +262,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "backgroundServices",
-    regName: "优化后台服务",
+    regName: "backgroundServices",
     category: "gaming",
     icon: Server,
     color: COLORS[1],
@@ -272,7 +272,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMpo",
-    regName: "禁用MPO",
+    regName: "disableMpo",
     category: "gaming",
     icon: Layers,
     color: COLORS[2],
@@ -284,7 +284,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== NVIDIA 显卡优化（11 项） ==============
   {
     id: "lowLatencyThreshold",
-    regName: "NVIDIA低延迟阈值优化",
+    regName: "lowLatencyThreshold",
     category: "nvidia",
     icon: Zap,
     color: COLORS[0],
@@ -294,7 +294,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "perCpuDPC",
-    regName: "启用NVIDIA Per-CPU DPC",
+    regName: "perCpuDPC",
     category: "nvidia",
     icon: Cpu,
     color: COLORS[1],
@@ -304,7 +304,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "imageSharpening",
-    regName: "启用NVIDIA锐化",
+    regName: "imageSharpening",
     category: "nvidia",
     icon: Eye,
     color: COLORS[2],
@@ -314,7 +314,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableGpuPowerMgmt",
-    regName: "禁用NVIDIA GPU电源管理",
+    regName: "disableGpuPowerMgmt",
     category: "nvidia",
     icon: Power,
     color: COLORS[3],
@@ -324,7 +324,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableHDCP",
-    regName: "禁用NVIDIA HDCP",
+    regName: "disableHDCP",
     category: "nvidia",
     icon: ShieldOff,
     color: COLORS[4],
@@ -334,7 +334,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableWriteCombining",
-    regName: "禁用NVIDIA写合并",
+    regName: "disableWriteCombining",
     category: "nvidia",
     icon: Cpu,
     color: COLORS[5],
@@ -344,7 +344,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableClockGating",
-    regName: "禁用NVIDIA时钟门控",
+    regName: "disableClockGating",
     category: "nvidia",
     icon: Clock,
     color: COLORS[6],
@@ -354,7 +354,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableTelemetry",
-    regName: "禁用NVIDIA遥测",
+    regName: "disableTelemetry",
     category: "nvidia",
     icon: Eye,
     color: COLORS[7],
@@ -364,7 +364,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableDriverLog",
-    regName: "禁用NVIDIA驱动日志",
+    regName: "disableDriverLog",
     category: "nvidia",
     icon: FileText,
     color: COLORS[8],
@@ -374,7 +374,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "lockPState0",
-    regName: "锁定NVIDIA P-State 0",
+    regName: "lockPState0",
     category: "nvidia",
     icon: Zap,
     color: COLORS[9],
@@ -384,7 +384,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMiracastOverlay",
-    regName: "禁用Miracast和Overlay",
+    regName: "disableMiracastOverlay",
     category: "nvidia",
     icon: MonitorOff,
     color: COLORS[10],
@@ -396,7 +396,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== AMD 显卡优化 ==============
   {
     id: "shaderCache",
-    regName: "强制启用AMD Shader Cache",
+    regName: "shaderCache",
     category: "amd",
     icon: Cpu,
     color: COLORS[0],
@@ -406,7 +406,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "amdPowerOptimization",
-    regName: "AMD显卡功耗优化",
+    regName: "amdPowerOptimization",
     category: "amd",
     icon: Zap,
     color: COLORS[1],
@@ -418,7 +418,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== Intel 显卡优化 ==============
   {
     id: "intelGraphicsOptimization",
-    regName: "Intel显卡优化",
+    regName: "intelGraphicsOptimization",
     category: "intel",
     icon: Monitor,
     color: COLORS[0],
@@ -430,7 +430,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 系统性能调优（8 项） ==============
   {
     id: "intelTSX",
-    regName: "启用Intel TSX",
+    regName: "intelTSX",
     category: "performance",
     icon: Cpu,
     color: COLORS[1],
@@ -440,7 +440,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "mergeSvcHost",
-    regName: "合并ServiceHost进程",
+    regName: "mergeSvcHost",
     category: "performance",
     icon: Server,
     color: COLORS[2],
@@ -450,7 +450,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "shortenTaskTimeout",
-    regName: "缩短任务超时",
+    regName: "shortenTaskTimeout",
     category: "performance",
     icon: Clock,
     color: COLORS[3],
@@ -460,7 +460,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "shortenServiceTimeout",
-    regName: "缩短服务超时",
+    regName: "shortenServiceTimeout",
     category: "performance",
     icon: Clock,
     color: COLORS[4],
@@ -470,7 +470,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "mouseHoverDelay",
-    regName: "鼠标悬停延迟优化",
+    regName: "mouseHoverDelay",
     category: "performance",
     icon: MousePointer,
     color: COLORS[5],
@@ -480,7 +480,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableStartupDelay",
-    regName: "禁用启动延迟",
+    regName: "disableStartupDelay",
     category: "performance",
     icon: Zap,
     color: COLORS[6],
@@ -490,7 +490,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disablePowerSaving",
-    regName: "禁用省电模式",
+    regName: "disablePowerSaving",
     category: "performance",
     icon: Power,
     color: COLORS[7],
@@ -500,7 +500,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "nvmeTuning",
-    regName: "NVMe调优",
+    regName: "nvmeTuning",
     category: "performance",
     icon: HardDrive,
     color: COLORS[8],
@@ -510,7 +510,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMenuDelay",
-    regName: "禁用菜单显示延迟",
+    regName: "disableMenuDelay",
     category: "performance",
     icon: MousePointer,
     color: COLORS[9],
@@ -520,7 +520,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "keyboardLatency",
-    regName: "优化键盘延迟",
+    regName: "keyboardLatency",
     category: "performance",
     icon: Keyboard,
     color: COLORS[10],
@@ -530,7 +530,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAutoComplete",
-    regName: "禁用自动完成",
+    regName: "disableAutoComplete",
     category: "performance",
     icon: Search,
     color: COLORS[11],
@@ -540,7 +540,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableWindowShake",
-    regName: "禁用窗口摇晃",
+    regName: "disableWindowShake",
     category: "performance",
     icon: Monitor,
     color: COLORS[12],
@@ -550,7 +550,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "enableLowDiskCheck",
-    regName: "启用低磁盘空间检查",
+    regName: "enableLowDiskCheck",
     category: "performance",
     icon: HardDrive,
     color: COLORS[13],
@@ -560,7 +560,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableLinkResolve",
-    regName: "禁用链接解析",
+    regName: "disableLinkResolve",
     category: "performance",
     icon: Network,
     color: COLORS[14],
@@ -570,7 +570,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "excludeWUDrivers",
-    regName: "从Windows更新中排除驱动程序",
+    regName: "excludeWUDrivers",
     category: "performance",
     icon: Cpu,
     color: COLORS[0],
@@ -580,7 +580,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "ifeoProcessTuning",
-    regName: "IFEO系统进程优化",
+    regName: "ifeoProcessTuning",
     category: "performance",
     icon: Cog,
     color: COLORS[1],
@@ -592,7 +592,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 隐私与遥测（10 项） ==============
   {
     id: "disableTelemetrySvc",
-    regName: "禁用遥测服务",
+    regName: "disableTelemetrySvc",
     category: "privacy",
     icon: Eye,
     color: COLORS[0],
@@ -602,7 +602,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableCEIP",
-    regName: "禁用CEIP-SQM",
+    regName: "disableCEIP",
     category: "privacy",
     icon: Activity,
     color: COLORS[1],
@@ -612,7 +612,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableDotNetTelemetry",
-    regName: "禁用DotNet遥测",
+    regName: "disableDotNetTelemetry",
     category: "privacy",
     icon: Code,
     color: COLORS[2],
@@ -622,7 +622,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAppImpactTelemetry",
-    regName: "禁用应用影响遥测",
+    regName: "disableAppImpactTelemetry",
     category: "privacy",
     icon: Activity,
     color: COLORS[3],
@@ -632,7 +632,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAppImpactTelemetryAgent",
-    regName: "禁用应用影响遥测代理",
+    regName: "disableAppImpactTelemetryAgent",
     category: "privacy",
     icon: Activity,
     color: COLORS[4],
@@ -642,7 +642,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableLicenseTelemetry",
-    regName: "禁用许可遥测",
+    regName: "disableLicenseTelemetry",
     category: "privacy",
     icon: Shield,
     color: COLORS[5],
@@ -652,7 +652,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableScheduledDiag",
-    regName: "禁用计划诊断",
+    regName: "disableScheduledDiag",
     category: "privacy",
     icon: Clock,
     color: COLORS[6],
@@ -662,7 +662,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableWebcamTelemetry",
-    regName: "禁用网络摄像头遥测",
+    regName: "disableWebcamTelemetry",
     category: "privacy",
     icon: Camera,
     color: COLORS[7],
@@ -672,7 +672,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableWritingFeedback",
-    regName: "禁用写入反馈",
+    regName: "disableWritingFeedback",
     category: "privacy",
     icon: Pen,
     color: COLORS[8],
@@ -682,7 +682,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableErrorReporting",
-    regName: "禁用Windows错误报告",
+    regName: "disableErrorReporting",
     category: "privacy",
     icon: AlertTriangle,
     color: COLORS[9],
@@ -692,7 +692,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAdvertisingId",
-    regName: "关闭广告ID",
+    regName: "disableAdvertisingId",
     category: "privacy",
     icon: Megaphone,
     color: COLORS[10],
@@ -702,7 +702,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAdsPromotional",
-    regName: "关闭广告建议和推广",
+    regName: "disableAdsPromotional",
     category: "privacy",
     icon: SlidersHorizontal,
     color: COLORS[11],
@@ -712,7 +712,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableOnlineSpeechRecognition",
-    regName: "关闭在线语音识别",
+    regName: "disableOnlineSpeechRecognition",
     category: "privacy",
     icon: MicOff,
     color: COLORS[12],
@@ -722,7 +722,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableTailoredExperiences",
-    regName: "关闭定制体验",
+    regName: "disableTailoredExperiences",
     category: "privacy",
     icon: Sparkles,
     color: COLORS[13],
@@ -732,7 +732,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMsaCloudSearch",
-    regName: "关闭MSA云搜索",
+    regName: "disableMsaCloudSearch",
     category: "privacy",
     icon: CloudOff,
     color: COLORS[14],
@@ -742,7 +742,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableLockScreenSpotlight",
-    regName: "关闭锁屏Spotlight",
+    regName: "disableLockScreenSpotlight",
     category: "privacy",
     icon: ImageIcon,
     color: COLORS[0],
@@ -752,7 +752,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableInkingDictionary",
-    regName: "关闭墨迹书写词典",
+    regName: "disableInkingDictionary",
     category: "privacy",
     icon: Pen,
     color: COLORS[1],
@@ -762,7 +762,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableFeedbackRequests",
-    regName: "禁止Windows反馈请求",
+    regName: "disableFeedbackRequests",
     category: "privacy",
     icon: MessageSquare,
     color: COLORS[2],
@@ -772,7 +772,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableCortana",
-    regName: "禁用Cortana",
+    regName: "disableCortana",
     category: "privacy",
     icon: MicOff,
     color: COLORS[4],
@@ -782,7 +782,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableNewsAndInterests",
-    regName: "禁用新闻和兴趣",
+    regName: "disableNewsAndInterests",
     category: "privacy",
     icon: Megaphone,
     color: COLORS[5],
@@ -792,7 +792,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableCloudOptimizedContent",
-    regName: "禁用云优化内容",
+    regName: "disableCloudOptimizedContent",
     category: "privacy",
     icon: CloudOff,
     color: COLORS[6],
@@ -802,7 +802,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableEdgeTelemetry",
-    regName: "禁用Edge遥测",
+    regName: "disableEdgeTelemetry",
     category: "privacy",
     icon: Chrome,
     color: COLORS[7],
@@ -812,7 +812,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableVisualStudioTelemetry",
-    regName: "禁用VisualStudio遥测",
+    regName: "disableVisualStudioTelemetry",
     category: "privacy",
     icon: Code,
     color: COLORS[8],
@@ -822,7 +822,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableChromeTelemetry",
-    regName: "禁用Chrome遥测",
+    regName: "disableChromeTelemetry",
     category: "privacy",
     icon: Chrome,
     color: COLORS[9],
@@ -832,7 +832,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableFirefoxTelemetry",
-    regName: "禁用Firefox遥测",
+    regName: "disableFirefoxTelemetry",
     category: "privacy",
     icon: Globe,
     color: COLORS[10],
@@ -842,7 +842,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableActivityFeed",
-    regName: "禁用活动反馈",
+    regName: "disableActivityFeed",
     category: "privacy",
     icon: Activity,
     color: COLORS[11],
@@ -852,7 +852,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableCdp",
-    regName: "禁用CDP客户数据平台",
+    regName: "disableCdp",
     category: "privacy",
     icon: Boxes,
     color: COLORS[12],
@@ -862,7 +862,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableDiagnosticsToast",
-    regName: "禁用诊断弹窗",
+    regName: "disableDiagnosticsToast",
     category: "privacy",
     icon: AlertTriangle,
     color: COLORS[13],
@@ -872,7 +872,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableHandwritingSharing",
-    regName: "禁用手写数据共享",
+    regName: "disableHandwritingSharing",
     category: "privacy",
     icon: Pen,
     color: COLORS[14],
@@ -882,7 +882,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableTextInputCollection",
-    regName: "禁用文本输入数据收集",
+    regName: "disableTextInputCollection",
     category: "privacy",
     icon: Pen,
     color: COLORS[0],
@@ -892,7 +892,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableInputPersonalization",
-    regName: "禁用输入个性化",
+    regName: "disableInputPersonalization",
     category: "privacy",
     icon: Cog,
     color: COLORS[1],
@@ -902,7 +902,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableActivityUploads",
-    regName: "禁用活动上传",
+    regName: "disableActivityUploads",
     category: "privacy",
     icon: CloudOff,
     color: COLORS[2],
@@ -912,7 +912,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMessageSync",
-    regName: "禁用消息同步",
+    regName: "disableMessageSync",
     category: "privacy",
     icon: MessageSquare,
     color: COLORS[3],
@@ -922,7 +922,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSettingSync",
-    regName: "禁用设置同步",
+    regName: "disableSettingSync",
     category: "privacy",
     icon: Layers,
     color: COLORS[4],
@@ -932,7 +932,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableVoiceActivation",
-    regName: "禁用语音激活",
+    regName: "disableVoiceActivation",
     category: "privacy",
     icon: MicOff,
     color: COLORS[5],
@@ -942,7 +942,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableFindMyDevice",
-    regName: "禁用查找我的设备",
+    regName: "disableFindMyDevice",
     category: "privacy",
     icon: MapIcon,
     color: COLORS[6],
@@ -954,7 +954,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== Windows AI 优化（9 项） ==============
   {
     id: "disableCopilot",
-    regName: "关闭Windows Copilot",
+    regName: "disableCopilot",
     category: "ai",
     icon: Bot,
     color: COLORS[0],
@@ -964,7 +964,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableRecallSnapshots",
-    regName: "关闭Recall快照",
+    regName: "disableRecallSnapshots",
     category: "ai",
     icon: CameraOff,
     color: COLORS[1],
@@ -974,7 +974,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "blockRecallEnablement",
-    regName: "阻止启用Recall",
+    regName: "blockRecallEnablement",
     category: "ai",
     icon: Ban,
     color: COLORS[2],
@@ -984,7 +984,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAiDataAnalysis",
-    regName: "关闭AI数据分析",
+    regName: "disableAiDataAnalysis",
     category: "ai",
     icon: Brain,
     color: COLORS[3],
@@ -994,7 +994,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableClickToDo",
-    regName: "关闭Click to Do",
+    regName: "disableClickToDo",
     category: "ai",
     icon: MousePointer,
     color: COLORS[4],
@@ -1004,7 +1004,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAiSettingsAgent",
-    regName: "关闭AI设置代理",
+    regName: "disableAiSettingsAgent",
     category: "ai",
     icon: Cog,
     color: COLORS[5],
@@ -1014,7 +1014,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAgentConnectors",
-    regName: "关闭AI Agent连接器",
+    regName: "disableAgentConnectors",
     category: "ai",
     icon: Plug,
     color: COLORS[6],
@@ -1024,7 +1024,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAgentWorkspaces",
-    regName: "关闭AI Agent工作区",
+    regName: "disableAgentWorkspaces",
     category: "ai",
     icon: Boxes,
     color: COLORS[7],
@@ -1034,7 +1034,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableRemoteAgentConnectors",
-    regName: "关闭远程Agent连接器",
+    regName: "disableRemoteAgentConnectors",
     category: "ai",
     icon: Globe,
     color: COLORS[8],
@@ -1046,7 +1046,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 系统服务精简（11 项） ==============
   {
     id: "disableSensorSvc",
-    regName: "禁用传感器服务",
+    regName: "disableSensorSvc",
     category: "services",
     icon: Radio,
     color: COLORS[0],
@@ -1056,7 +1056,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableFaxSvc",
-    regName: "禁用传真服务",
+    regName: "disableFaxSvc",
     category: "services",
     icon: Phone,
     color: COLORS[1],
@@ -1066,7 +1066,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disablePrintSvc",
-    regName: "禁用打印服务",
+    regName: "disablePrintSvc",
     category: "services",
     icon: Printer,
     color: COLORS[2],
@@ -1076,7 +1076,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableMapsBroker",
-    regName: "禁用下载地图管理器",
+    regName: "disableMapsBroker",
     category: "services",
     icon: MapIcon,
     color: COLORS[3],
@@ -1086,7 +1086,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableUCPD",
-    regName: "禁用UCPD",
+    regName: "disableUCPD",
     category: "services",
     icon: Shield,
     color: COLORS[4],
@@ -1096,7 +1096,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableDCOM",
-    regName: "禁用DCOM",
+    regName: "disableDCOM",
     category: "services",
     icon: Server,
     color: COLORS[5],
@@ -1106,7 +1106,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableStorageSense",
-    regName: "禁用StorageSense",
+    regName: "disableStorageSense",
     category: "services",
     icon: HardDrive,
     color: COLORS[6],
@@ -1116,7 +1116,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAutoMaintenance",
-    regName: "禁用自动维护",
+    regName: "disableAutoMaintenance",
     category: "services",
     icon: Clock,
     color: COLORS[7],
@@ -1126,7 +1126,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableAppCompat",
-    regName: "禁用应用程序兼容性",
+    regName: "disableAppCompat",
     category: "services",
     icon: Shield,
     color: COLORS[8],
@@ -1136,7 +1136,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableStepRecorder",
-    regName: "禁用步骤记录器",
+    regName: "disableStepRecorder",
     category: "services",
     icon: Monitor,
     color: COLORS[9],
@@ -1146,7 +1146,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disablePerfTips",
-    regName: "禁用性能提醒",
+    regName: "disablePerfTips",
     category: "services",
     icon: Activity,
     color: COLORS[10],
@@ -1156,7 +1156,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableRemoteRegistry",
-    regName: "禁用远程注册表",
+    regName: "disableRemoteRegistry",
     category: "services",
     icon: Server,
     color: COLORS[11],
@@ -1166,7 +1166,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSysMain",
-    regName: "禁用SysMain",
+    regName: "disableSysMain",
     category: "services",
     icon: Server,
     color: COLORS[12],
@@ -1176,7 +1176,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSystemRestore",
-    regName: "禁用系统还原",
+    regName: "disableSystemRestore",
     category: "services",
     icon: ShieldOff,
     color: COLORS[13],
@@ -1186,7 +1186,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSMBv1",
-    regName: "禁用SMBv1",
+    regName: "disableSMBv1",
     category: "services",
     icon: Server,
     color: COLORS[14],
@@ -1196,7 +1196,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSMBv2",
-    regName: "禁用SMBv2",
+    regName: "disableSMBv2",
     category: "services",
     icon: Server,
     color: COLORS[0],
@@ -1208,7 +1208,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 磁盘与文件系统（5 项） ==============
   {
     id: "disable8dot3",
-    regName: "禁用8.3文件名",
+    regName: "disable8dot3",
     category: "disk",
     icon: FileText,
     color: COLORS[0],
@@ -1218,7 +1218,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableNtfsEncryption",
-    regName: "禁用NTFS加密",
+    regName: "disableNtfsEncryption",
     category: "disk",
     icon: ShieldOff,
     color: COLORS[1],
@@ -1228,7 +1228,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableLastAccess",
-    regName: "禁用最后访问更新",
+    regName: "disableLastAccess",
     category: "disk",
     icon: HardDrive,
     color: COLORS[2],
@@ -1238,7 +1238,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableReservedStorage",
-    regName: "禁用更新保留存储",
+    regName: "disableReservedStorage",
     category: "disk",
     icon: HardDrive,
     color: COLORS[3],
@@ -1248,7 +1248,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableFullFsSearch",
-    regName: "禁用搜索全文件系统",
+    regName: "disableFullFsSearch",
     category: "disk",
     icon: Search,
     color: COLORS[4],
@@ -1258,7 +1258,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "ntfsMftZone",
-    regName: "NTFS MFT区域保留",
+    regName: "ntfsMftZone",
     category: "disk",
     icon: HardDrive,
     color: COLORS[5],
@@ -1270,7 +1270,7 @@ export const optimizerItems: OptimizerItem[] = [
   // ============== 应用与界面（4 项） ==============
   {
     id: "disableBackgroundApps",
-    regName: "禁用后台应用",
+    regName: "disableBackgroundApps",
     category: "apps",
     icon: Layout,
     color: COLORS[0],
@@ -1280,7 +1280,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableEdgeStartupBoost",
-    regName: "禁用Edge启动加速",
+    regName: "disableEdgeStartupBoost",
     category: "apps",
     icon: Chrome,
     color: COLORS[1],
@@ -1290,7 +1290,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "slimEdgeAds",
-    regName: "精简Edge广告推荐",
+    regName: "slimEdgeAds",
     category: "apps",
     icon: MessageSquare,
     color: COLORS[2],
@@ -1300,7 +1300,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableSearchWebView2",
-    regName: "禁用搜索WebView2",
+    regName: "disableSearchWebView2",
     category: "apps",
     icon: Search,
     color: COLORS[3],
@@ -1310,7 +1310,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "addCopyMoveContextMenu",
-    regName: "添加复制移动上下文菜单",
+    regName: "addCopyMoveContextMenu",
     category: "apps",
     icon: Layout,
     color: COLORS[4],
@@ -1320,7 +1320,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "disableStoreAutoUpdate",
-    regName: "禁用商店自动更新",
+    regName: "disableStoreAutoUpdate",
     category: "apps",
     icon: Chrome,
     color: COLORS[5],

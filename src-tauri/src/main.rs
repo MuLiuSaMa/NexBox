@@ -3,6 +3,16 @@
 
 fn main() {
     // ═══════════════════════════════════════════════════════════════════
+    // 第零优先：权限保障。
+    // manifest 已从 requireAdministrator 改为 asInvoker（MSIX 包内禁止入口提权），
+    // 因此在运行时检测：未提权则通过 UAC（runas）重启自身。
+    // 对普通 exe：效果与原来双击弹 UAC 一致；
+    // 对 MSIX：解决"不支持该请求"启动失败，提权进程继承包身份。
+    // ═══════════════════════════════════════════════════════════════════
+    #[cfg(windows)]
+    ensure_elevation();
+
+    // ═══════════════════════════════════════════════════════════════════
     // 第一优先：初始化日志（在任何 Tauri 代码之前）
     // 这样即使 .build() 崩溃或 single-instance 插件退出，
     // 也能在日志文件中留下记录，便于排查。
@@ -33,6 +43,71 @@ fn main() {
 
     log::info!("[BOOT] 即将进入 nexbox_lib::run()");
     nexbox_lib::run();
+}
+
+/// 检测当前进程是否已提权；未提权则通过 ShellExecuteW("runas") 以管理员重启自身。
+/// UAC 被拒绝或启动失败时直接退出（NexBox 的核心功能依赖管理员权限）。
+#[cfg(windows)]
+fn ensure_elevation() {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::CloseHandle;
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    unsafe {
+        let mut token: windows_sys::Win32::Foundation::HANDLE = std::ptr::null_mut();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) == 0 {
+            // 打不开 token（极罕见）：放行，让后续逻辑按原有方式运行/报错
+            return;
+        }
+        let mut elevation: TOKEN_ELEVATION = std::mem::zeroed();
+        let mut ret_len: u32 = 0;
+        let ok = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut TOKEN_ELEVATION as *mut core::ffi::c_void,
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut ret_len,
+        );
+        CloseHandle(token);
+        if ok == 0 || elevation.TokenIsElevated != 0 {
+            // 已提权（或检测失败）：正常继续
+            return;
+        }
+
+        // 未提权：以管理员身份重启自身
+        log::info!("[BOOT] 当前未提权，尝试通过 UAC 以管理员重启自身");
+        let exe: Vec<u16> = std::env::current_exe()
+            .unwrap_or_default()
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let verb: Vec<u16> = "runas\0".encode_utf16().collect();
+        let result = ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            exe.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL as i32,
+        );
+        if result as usize > 32 {
+            // 提权实例已拉起，当前实例退出
+            std::process::exit(0);
+        } else {
+            // 用户拒绝 UAC 或启动失败：退出（无权限跑不下去）
+            log::warn!(
+                "[BOOT] UAC 提权未成功 (ShellExecuteW code={})，退出",
+                result as usize
+            );
+            std::process::exit(0);
+        }
+    }
 }
 
 /// 在 main() 最开始初始化日志，确保 .build() 之前的崩溃也能被记录。

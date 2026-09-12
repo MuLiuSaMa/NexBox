@@ -13,6 +13,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "msix": "powershell -NoProfile -ExecutionPolicy Bypass -File msix/build-msix.ps1",
+    "msix:install": "powershell -NoProfile -ExecutionPolicy Bypass -File msix/install-msix.ps1",
     "prepare": "husky"
   },
   "dependencies": {

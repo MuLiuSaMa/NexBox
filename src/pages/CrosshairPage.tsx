@@ -81,7 +81,7 @@ const PRESET_IMAGE_STYLES = [
   { id: "Preset_MMW2.0", file: "MMW2.0.png", labelKey: "crosshair.presetImagesNames.mmw20" },
   { id: "Preset_SSCJ", file: "SSCJ.png", labelKey: "crosshair.presetImagesNames.sscj" },
 
-  { id: "Preset_T字准星", file: "T字准星.png", labelKey: "crosshair.presetImagesNames.tShape" },
+  { id: "Preset_T字准星", file: "TShape.png", labelKey: "crosshair.presetImagesNames.tShape" },
 ];
 
 const CROSSHAIR_STORE_KEY = "crosshair-settings";

@@ -1,0 +1,60 @@
+════════════════════════════════════════════════════
+给微软的邮件模板（复制英文正文发送）
+收件人：reporthq@microsoft.com（Partner Center 认证支持，提交页面提示的邮箱）
+发送邮箱：务必用注册 Partner Center 的微软账号邮箱（否则无法核对账号身份）
+附件：可附上 NexBox_9.5.3.0_x64.msix（67.3 MB）或按对方要求提供下载链接
+════════════════════════════════════════════════════
+
+Subject: Microsoft Store submission fails with error code 5001 during pre-processing – app "新境盒 | NexBox" (MuLiuSaMa.NexBox)
+
+Dear Microsoft Store Developer Support,
+
+Our app submission keeps failing at the Pre-processing stage with error code 5001. We would like to request an investigation of the server-side failure and guidance on the restricted capability approvals.
+
+■ Account / Product information
+- Product name: 新境盒 | NexBox
+- Product identity: MuLiuSaMa.NexBox
+- Publisher ID: CN=30F199CB-855A-42F4-96A9-F43088B508BF
+- Publisher display name: MuLiu_SaMa
+- Submission ID: Submission 1 (first failed at 2026/09/11)
+
+■ Package information
+- File: NexBox_9.5.3.0_x64.msix (x64, 67.3 MB)
+- Identity version: 9.5.3.0
+- SHA256: 2372CEF759B20887F20A2AC4324EF48DA7456F964D3F2EFA081019D0B60342C3
+- Status in Partner Center: "Validated" (identity, reserved name and publisher checks all passed)
+
+■ Issue
+The submission fails at the Pre-processing stage with error code 5001. This is reproducible — it has failed 3+ times across different submissions on 2026/09/11. No detailed reason is shown; the error links to the generic .NET Native documentation page, which does not apply to this package (it is a full-trust Win32 desktop application with no UWP managed-code compilation).
+
+■ Troubleshooting already performed
+1. Retried the submission multiple times over several hours — same 5001 failure.
+2. Deleted and recreated the submission from scratch — same failure.
+3. Tested a reduced package with only the runFullTrust capability (removed
+   unvirtualizedResources) — still fails with 5001.
+4. Verified the package locally: makeappx packing succeeds, signature validates
+   (signtool verify), and Add-AppxPackage sideloads and launches correctly on
+   Windows 11 x64.
+
+■ About the app
+Full-trust Win32 desktop application built with Tauri/WebView2 for game and
+system optimization. The restricted capabilities are required for legitimate
+system functionality:
+- runFullTrust: hardware monitoring (WMI, LibreHardwareMonitor), NVIDIA driver
+  profile inspection, Windows power plan management, display ICC handling.
+- unvirtualizedResources: legitimate writes to HKLM for display/graphics
+  configuration and power plans; virtualization would corrupt these settings.
+
+■ Request
+Please investigate the server-side pre-processing failure (error 5001) for this
+product, and let us know the actual failure reason from your processing logs, or
+whether any action is required on our side. We are also happy to provide the
+package or any additional information.
+
+Thank you.
+
+════════════════════════════════════════════════════
+发送前替换/补充：
+1. 结尾加你的联系邮箱
+2. Submission ID 以 Partner Center 提交页显示的编号为准（如有具体 ID 填上）
+════════════════════════════════════════════════════
