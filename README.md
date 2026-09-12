@@ -2,7 +2,7 @@
   <img src="src-tauri/icons/128x128.png" alt="NexBox Logo" width="128" />
 </p>
 
-<h1 align="center">NexBox <sub>新境盒</sub></h1>
+<h1 align="center">新境盒 | NexBox</h1>
 
 <p align="center">
   <a href="https://github.com/MuLiuSaMa/NexBox/releases">
