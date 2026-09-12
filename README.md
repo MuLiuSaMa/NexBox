@@ -18,23 +18,35 @@
 </p>
 
 <p align="center">
-  🌐 官网：<a href="https://nexbox.top">nexbox.top</a> ·
-  <a href="https://github.com/MuLiuSaMa/NexBox">GitHub</a> ·
-  <a href="https://gitcode.com/MuLiuSaMa/nexbox">GitCode</a> ·
-  <a href="https://gitee.com/muliuawa/nexbox">Gitee</a>
+  <a href="https://github.com/MuLiuSaMa/NexBox"><img src="https://img.shields.io/badge/GitHub-主仓-181717?style=flat-square&logo=github" alt="GitHub" /></a>
+  <a href="https://gitee.com/muliuawa/nexbox"><img src="https://img.shields.io/badge/Gitee-镜像-C71D23?style=flat-square&logo=gitee" alt="Gitee" /></a>
+  <a href="https://gitcode.com/MuLiuSaMa/nexbox"><img src="https://img.shields.io/badge/GitCode-镜像-1677FF?style=flat-square&logo=gitcode" alt="GitCode" /></a>
+</p>
+
+<p align="center">
+  🌐 <a href="https://nexbox.cn"><strong>nexbox.cn</strong></a>
 </p>
 
 <p align="center">
   <strong>为 PC 游戏玩家打造的一站式性能工具箱</strong><br />
-  硬件监控 · 系统优化 · 显示增强 · 游戏辅助 · 影音娱乐
+  🖥️ 硬件监控 · ⚡ 系统优化 · 🎨 显示增强 · 🎮 游戏辅助 · 🎵 影音娱乐
+</p>
+
+***
+
+<p align="center">
+  <a href="#-首页">
+    <img src="docs/screenshots/home.png" alt="NexBox 首页" width="80%" />
+  </a>
 </p>
 
 ***
 
 ## 目录
 
-- [为什么选择 NexBox](#为什么选择-nexbox)
-- [核心功能](#核心功能)
+- [🚀 核心亮点](#-核心亮点)
+- [📸 界面预览](#-界面预览)
+- [🧩 核心功能](#-核心功能)
   - [硬件监控](#硬件监控)
   - [系统优化](#系统优化)
   - [显示增强](#显示增强)
@@ -42,50 +54,62 @@
   - [影音娱乐](#影音娱乐)
   - [工具集成](#工具集成)
   - [更多功能](#更多功能)
-- [安装](#安装)
-- [从源码构建](#从源码构建)
-- [项目结构](#项目结构)
-- [技术栈](#技术栈)
-- [贡献指南](#贡献指南)
-- [许可证](#许可证)
+- [📦 安装](#-安装)
+- [🔨 从源码构建](#-从源码构建)
+- [🗂️ 项目结构](#️-项目结构)
+- [🧰 技术栈](#-技术栈)
+- [🤝 贡献指南](#-贡献指南)
+- [📄 许可证](#-许可证)
 
 ***
 
-## 为什么选择 NexBox
+## 🚀 核心亮点
 
 PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看帧率需要 MSI Afterburner、调色彩需要 DisplayCAL、清内存需要 Mem Reduct……安装繁琐、切换低效，部分工具还会被反作弊系统误判。
 
 **NexBox 把这一切装进一个盒子。**
 
-- **零性能干扰** — 基于 Tauri v2 构建，内存占用极低，游戏时近乎零开销
-- **纯本地运行** — 核心功能无需联网，不上传任何隐私数据
-- **完全免费开源** — GPL-3.0 协议，代码透明可审计
-- **持续迭代** — 社区驱动，功能随玩家需求不断进化
+| ✨ 亮点 | 说明 |
+| --- | --- |
+| 🪶 **零性能干扰** | 基于 Tauri v2 构建，内存占用极低，游戏时近乎零开销 |
+| 🔒 **纯本地运行** | 核心功能无需联网，不上传任何隐私数据 |
+| 💚 **完全免费开源** | GPL-3.0 协议，代码透明可审计 |
+| 🔄 **持续迭代** | 社区驱动，功能随玩家需求不断进化 |
 
 ***
 
-## 核心功能
+## 📸 界面预览
 
-### 硬件监控
+| | |
+| :---: | :---: |
+| <a href="docs/screenshots/hardware.png"><img src="docs/screenshots/hardware.png" alt="硬件监控" width="330" /></a><br/>🖥️ 硬件监控 | <a href="docs/screenshots/system-optimize.png"><img src="docs/screenshots/system-optimize.png" alt="系统优化" width="330" /></a><br/>⚡ 系统优化 |
+| <a href="docs/screenshots/toolbox.png"><img src="docs/screenshots/toolbox.png" alt="内置工具" width="330" /></a><br/>🧰 内置工具 | <a href="docs/screenshots/steam-library.png"><img src="docs/screenshots/steam-library.png" alt="Steam 库管理" width="330" /></a><br/>🎮 Steam 库管理 |
+| <a href="docs/screenshots/music-player.png"><img src="docs/screenshots/music-player.png" alt="音乐播放器" width="330" /></a><br/>🎵 音乐播放器 | <a href="docs/screenshots/home.png"><img src="docs/screenshots/home.png" alt="首页" width="330" /></a><br/>🏠 首页 |
+
+***
+
+## 🧩 核心功能
+
+### 🖥️ 硬件监控
 
 实时监测系统硬件运行状态，支持游戏内叠加显示与独立传感器监控窗口（基于 LibreHardwareMonitorLib）。
 
-| 监控项     | 详情                          |
-| ------- | --------------------------- |
-| **CPU** | 使用率、温度、频率、电压、功耗、核心拓扑        |
+| 监控项 | 详情 |
+| --- | --- |
+| **CPU** | 使用率、温度、频率、电压、功耗、核心拓扑 |
 | **GPU** | 使用率、温度、风扇转速、功耗、频率、显存用量、驱动版本 |
-| **内存**  | 物理内存 / 虚拟内存用量、工作集大小         |
-| **磁盘**  | 各分区已用 / 总量、SMART 健康状态、接口类型  |
-| **主板**  | 型号识别、BIOS 版本、芯片组信息          |
-| **显示器** | 分辨率、刷新率、型号、生产商              |
-| **FPS** | 实时帧率采集、游戏内叠加显示              |
-| **网络**  | 适配器类型、MAC 地址、链路速率、游戏延迟      |
+| **内存** | 物理内存 / 虚拟内存用量、工作集大小 |
+| **磁盘** | 各分区已用 / 总量、SMART 健康状态、接口类型 |
+| **主板** | 型号识别、BIOS 版本、芯片组信息 |
+| **显示器** | 分辨率、刷新率、型号、生产商 |
+| **FPS** | 实时帧率采集、游戏内叠加显示 |
+| **网络** | 适配器类型、MAC 地址、链路速率、游戏延迟 |
 
-支持多 GPU 同时显示、迷你趋势图、硬件报告导出（TXT / JSON），并提供独立窗口展示全部传感器原始数据（按硬件类型分组、搜索筛选、实时刷新）。
+> 支持多 GPU 同时显示、迷你趋势图、硬件报告导出（TXT / JSON），并提供独立窗口展示全部传感器原始数据（按硬件类型分组、搜索筛选、实时刷新）。
 
 ***
 
-### 系统优化
+### ⚡ 系统优化
 
 20+ 项系统级优化工具，一键释放游戏性能。
 
@@ -111,7 +135,7 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-### 显示增强
+### 🎨 显示增强
 
 - **显示滤镜** — 屏幕色彩调节：色温、亮度、对比度、饱和度独立控制；RGB 伽马通道微调；ICC 配置文件管理；多显示器独立调校；自定义滤镜预设
 - **准星叠加** — 自定义游戏辅助准心：十字 / 圆点 / 圆形等 6 种样式；支持自定义 PNG 图片；职业选手预设准星（donk、s1mple、ropz 等）；颜色取色器
@@ -121,7 +145,7 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-### 游戏辅助
+### 🎮 游戏辅助
 
 - **Delta Force 专区**
   - **改枪码平台** — 分类浏览、关键词搜索、一键复制代码、点赞互动、提交分享
@@ -140,7 +164,7 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-### 影音娱乐
+### 🎵 影音娱乐
 
 - **音乐播放器** — 内置网易云音乐 / 酷狗音乐双平台支持：
   - 歌单浏览、歌曲搜索、播放控制
@@ -153,16 +177,17 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-### 工具集成
+### 🧰 工具集成
 
-- **第三方工具** — 内置常用工具管理器，一键检测安装状态并启动：
-  - MSI Afterburner、CPU-Z、GPU-Z、Process Lasso、FxSound
-  - 火绒安全、Geek 卸载、Optimizer、Mem Reduct
-  - OBS Studio、Wallpaper Engine 等
+内置常用工具管理器，一键检测安装状态并启动：
+
+- MSI Afterburner、CPU-Z、GPU-Z、Process Lasso、FxSound
+- 火绒安全、Geek 卸载、Optimizer、Mem Reduct
+- OBS Studio、Wallpaper Engine 等
 
 ***
 
-### 更多功能
+### ✨ 更多功能
 
 - **主题定制** — 深色 / 浅色模式、自定义主题色、毛玻璃效果、视频壁纸
 - **全局热键** — 准星叠加、叠加面板、显示滤镜均支持自定义快捷键
@@ -176,13 +201,15 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-## 安装
+## 📦 安装
 
 ### 系统要求
 
-- **操作系统** — Windows 10 22H2 或更高版本（仅 64 位）
-- **内存** — 建议 4 GB 以上
-- **磁盘** — 至少 200 MB 可用空间
+| 项目 | 要求 |
+| --- | --- |
+| **操作系统** | Windows 10 22H2 或更高版本（仅 64 位） |
+| **内存** | 建议 4 GB 以上 |
+| **磁盘** | 至少 200 MB 可用空间 |
 
 ### 下载
 
@@ -190,14 +217,14 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 
 ***
 
-## 从源码构建
+## 🔨 从源码构建
 
 ### 前置要求
 
-| 工具                            | 版本要求                     |
-| ----------------------------- | ------------------------ |
-| **Node.js**                   | >= 18.x（建议 20+）          |
-| **Rust**                      | >= 1.77.2                |
+| 工具 | 版本要求 |
+| --- | --- |
+| **Node.js** | >= 18.x（建议 20+） |
+| **Rust** | >= 1.77.2 |
 | **Visual Studio Build Tools** | Windows 专用（C++ 桌面开发工作负载） |
 
 ### 构建步骤
@@ -221,19 +248,19 @@ npm run tauri:build
 
 ### 可用命令
 
-| 命令                    | 说明                      |
-| --------------------- | ----------------------- |
-| `npm run dev`         | 启动 Vite 前端开发服务器         |
-| `npm run tauri:dev`   | 启动完整 Tauri 开发环境         |
-| `npm run build`       | TypeScript 检查 + Vite 构建 |
-| `npm run tauri:build` | 构建 Tauri 桌面应用           |
-| `npm run preview`     | 预览 Vite 构建产物            |
-| `npm run lint`        | ESLint 代码检查             |
-| `npm run format`      | Prettier 代码格式化          |
+| 命令 | 说明 |
+| --- | --- |
+| `npm run dev` | 启动 Vite 前端开发服务器 |
+| `npm run tauri:dev` | 启动完整 Tauri 开发环境 |
+| `npm run build` | TypeScript 检查 + Vite 构建 |
+| `npm run tauri:build` | 构建 Tauri 桌面应用 |
+| `npm run preview` | 预览 Vite 构建产物 |
+| `npm run lint` | ESLint 代码检查 |
+| `npm run format` | Prettier 代码格式化 |
 
 ***
 
-## 项目结构
+## 🗂️ 项目结构
 
 ```
 nexbox/
@@ -262,6 +289,7 @@ nexbox/
 ├── aq_registry/                  # 系统优化注册表脚本
 ├── aq_registry_restore/          # 注册表恢复脚本
 ├── R560-developer/               # NVIDIA NVAPI SDK
+├── docs/screenshots/             # 文档截图
 ├── public/                       # 前端公共资源
 ├── .github/workflows/            # CI（lint + build + cargo check）
 └── package.json                  # Node.js 项目配置
@@ -269,7 +297,7 @@ nexbox/
 
 ***
 
-## 技术栈
+## 🧰 技术栈
 
 **前端**
 
@@ -301,7 +329,7 @@ nexbox/
 
 ***
 
-## 贡献指南
+## 🤝 贡献指南
 
 欢迎以任何形式参与贡献！
 
@@ -319,12 +347,12 @@ npm run lint && npm run format
 
 ***
 
-## 许可证
+## 📄 许可证
 
 本项目采用 [GPL-3.0](LICENSE) 许可证。
 
 ***
 
 <p align="center">
-  <sub>Made with ❤️ by <a href="https://github.com/MuLiuSaMa">MuLiu_SaMa</a> & the NexBox community · 官网：<a href="https://nexbox.top">nexbox.top</a></sub>
+  <sub>Made with ❤️ by <a href="https://github.com/MuLiuSaMa">MuLiu_SaMa</a> & the NexBox community · 官网：<a href="https://nexbox.cn">nexbox.cn</a></sub>
 </p>
