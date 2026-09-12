@@ -280,10 +280,12 @@ mod tests {
         // EDID 头
         edid[0..8].copy_from_slice(&[0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00]);
         // 第一个描述符块 (offset 0x36): Monitor Name (tag 0xFC)
+        // 18 字节描述符布局: [0..2]=0x0000 标志, [2]=保留, [3]=tag, [4]=保留,
+        // [5..18]=13 字节名称。名称必须从 offset+5 开始，写进 [3] 会覆盖 tag。
         edid[0x36 + 3] = 0xFC;
         let name_bytes = b"DELL S2721QS";
         let name_len = name_bytes.len().min(13);
-        edid[0x39..0x39 + name_len].copy_from_slice(&name_bytes[..name_len]);
+        edid[0x36 + 5..0x36 + 5 + name_len].copy_from_slice(&name_bytes[..name_len]);
 
         let result = parse_edid_monitor_name(&edid);
         assert_eq!(result, Some("DELL S2721QS".to_string()));

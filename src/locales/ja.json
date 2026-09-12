@@ -889,6 +889,7 @@
     }
   },
   "displayFilter": {
+    "operationSuperseded": "操作は新しい操作に置き換えられたため、実行されませんでした",
     "title": "ディスプレイフィルター",
     "enable": "フィルターを有効化",
     "presets": "プリセット",
@@ -2469,5 +2470,6 @@
     "deleteSuccessMulti": "{{n}} 件の動画を削除しました",
     "deleteBodyMulti": "元に戻せません。選択した {{n}} 件の動画を完全に削除しますか？",
     "andMore": "他 {{n}} 件"
-  }
+  },
+  "filterDisabledDegraded": "フィルター無効化（劣化クリア：元の色調整は復元されない可能性があります）"
 }
