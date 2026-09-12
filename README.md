@@ -18,9 +18,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MuLiuSaMa/NexBox"><img src="https://img.shields.io/badge/GitHub-主仓-181717?style=flat-square&logo=github" alt="GitHub" /></a>
-  <a href="https://gitee.com/muliuawa/nexbox"><img src="https://img.shields.io/badge/Gitee-镜像-C71D23?style=flat-square&logo=gitee" alt="Gitee" /></a>
-  <a href="https://gitcode.com/MuLiuSaMa/nexbox"><img src="https://img.shields.io/badge/GitCode-镜像-1677FF?style=flat-square&logo=gitcode" alt="GitCode" /></a>
+  <a href="https://github.com/MuLiuSaMa/NexBox"><img src="https://img.shields.io/badge/GitHub-仓库-181717?style=flat-square&logo=github" alt="GitHub" /></a>
+  <a href="https://gitee.com/muliuawa/nexbox"><img src="https://img.shields.io/badge/Gitee-仓库-C71D23?style=flat-square&logo=gitee" alt="Gitee" /></a>
+  <a href="https://gitcode.com/MuLiuSaMa/nexbox"><img src="https://img.shields.io/badge/GitCode-仓库-1677FF?style=flat-square&logo=gitcode" alt="GitCode" /></a>
 </p>
 
 <p align="center">
