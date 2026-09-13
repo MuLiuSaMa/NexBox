@@ -10,6 +10,7 @@ mod crosshair;
 mod crosshair_hold;
 mod dattorro;
 mod delta_force;
+mod df_stats;
 mod disk_optimize;
 mod external_player;
 mod spectrum;
@@ -29,6 +30,7 @@ mod game_ping;
 mod gpu_rename;
 mod hardware;
 mod hardware_report;
+mod voice_strobe;
 
 mod feature_flags;
 mod hotkey;
@@ -393,6 +395,12 @@ pub fn run() {
                 let _ = game_win_key::init(app_handle_for_game_win_key).await;
             });
 
+            // 初始化喊话爆闪（读取持久化配置，开关开启则启动麦克风监听线程）
+            let app_handle_for_voice_strobe = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let _ = voice_strobe::init(app_handle_for_voice_strobe).await;
+            });
+
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
             let app_handle_for_game_opt = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -408,6 +416,9 @@ pub fn run() {
             // 启动时自动清理旧版开机自启残留（计划任务/启动快捷方式），
             // 确保只保留当前的注册表 Run 键启动项
             auto_start::cleanup_legacy_auto_start();
+
+            // 三角洲战绩分析：启动时恢复持久化登录 cookie（保持扫码登录态）
+            df_stats::restore_cookies_from_disk();
 
             // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
             // 并通知前端窗口可见性变化（最小化/隐藏到托盘时暂停动态背景视频，降低 CPU 占用）
@@ -856,6 +867,11 @@ pub fn run() {
         game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
+        // === 喊话爆闪命令 ===
+        voice_strobe::voice_strobe_set_enabled,
+        voice_strobe::voice_strobe_get_status,
+        voice_strobe::voice_strobe_update_config,
+        voice_strobe::voice_strobe_list_devices,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -1001,6 +1017,21 @@ pub fn run() {
         delta_force::toggle_dlss_lock,
         delta_force::get_dlss_settings_status,
         delta_force::open_platform_window,
+        df_stats::open_df_stats_login,
+        df_stats::close_df_stats_login,
+        df_stats::check_df_stats_login,
+        df_stats::logout_df_stats,
+        df_stats::is_df_stats_window_open,
+        df_stats::get_df_stats_cached_data,
+        df_stats::refresh_df_stats_collect,
+        df_stats::df_stats_qr_gen,
+        df_stats::df_stats_qr_poll,
+        df_stats::df_stats_qr_wx_gen,
+        df_stats::df_stats_qr_wx_poll,
+        df_stats::df_stats_finish_login,
+        df_stats::df_stats_battle_detail,
+        df_stats::df_stats_battle_report_season,
+        df_stats::df_stats_map_stats,
         open_mood_window,
         game_launcher::launch_game,
         game_launcher::search_delta_force_launcher,
@@ -1186,6 +1217,7 @@ pub fn run() {
                 crosshair::cleanup();
                 crosshair_hold::cleanup();
                 autoclicker::cleanup();
+                voice_strobe::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);

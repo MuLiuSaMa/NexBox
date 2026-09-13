@@ -22,6 +22,8 @@ import OverlayPanelPage from "./pages/OverlayPanelPage";
 import DeltaForcePage from "./pages/DeltaForcePage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
 import DeltaForceRoulettePage from "./pages/DeltaForceRoulettePage";
+import DeltaStatsPage from "./pages/DeltaStatsPage";
+import VoiceStrobePage from "./pages/VoiceStrobePage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
@@ -293,6 +295,22 @@ function App() {
                     element={
                       <AnimatedPage>
                         <DeltaForceRoulettePage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/delta-force/stats"
+                    element={
+                      <AnimatedPage>
+                        <DeltaStatsPage />
+                      </AnimatedPage>
+                    }
+                  />
+                  <Route
+                    path="/delta-force/voice-strobe"
+                    element={
+                      <AnimatedPage>
+                        <VoiceStrobePage />
                       </AnimatedPage>
                     }
                   />
@@ -649,6 +667,22 @@ function App() {
                   element={
                     <AnimatedPage>
                       <DeltaForceRoulettePage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/delta-force/stats"
+                  element={
+                    <AnimatedPage>
+                      <DeltaStatsPage />
+                    </AnimatedPage>
+                  }
+                />
+                <Route
+                  path="/delta-force/voice-strobe"
+                  element={
+                    <AnimatedPage>
+                      <VoiceStrobePage />
                     </AnimatedPage>
                   }
                 />

@@ -152,6 +152,8 @@ const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
     { id: "ssd_temp", label: "硬盘温度", enabled: false },
     { id: "game_ping", label: "游戏延迟", enabled: true },
     { id: "delta_password", label: "三角洲密码", enabled: false },
+    { id: "net_down", label: "下载速率", enabled: false },
+    { id: "net_up", label: "上传速率", enabled: false },
   ],
   custom_items: [],
   opacity: 200,

@@ -232,6 +232,16 @@ impl DeleteResult {
         self.failed_count += 1;
         self.failed_files.push(DeleteError { path, reason });
     }
+
+    /// 合并另一个删除结果(并行删除时用于汇总各线程的统计)
+    pub fn merge(&mut self, other: DeleteResult) {
+        self.success_count += other.success_count;
+        self.failed_count += other.failed_count;
+        self.reboot_pending_count += other.reboot_pending_count;
+        self.freed_size += other.freed_size;
+        self.needs_reboot |= other.needs_reboot;
+        self.failed_files.extend(other.failed_files);
+    }
 }
 
 impl Default for DeleteResult {

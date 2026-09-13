@@ -108,7 +108,7 @@ export const searchIndex: SearchItem[] = [
     path: "/delta-force",
     icon: Crosshair,
     category: "page",
-    keywords: ["三角洲", "delta", "force", "密码", "改枪码"],
+    keywords: ["三角洲", "delta", "force", "密码", "改枪码", "战绩"],
   },
   {
     id: "epic-free",

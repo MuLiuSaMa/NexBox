@@ -77,6 +77,120 @@ fn fetch_http_date(url: &str) -> Option<i64> {
         .map(|dt| dt.timestamp())
 }
 
+// ═══ 实时网络速率（下载/上传，KB/s）═══
+// 基于 GetIfTable 的接口字节计数（InOctets/OutOctets）两次采样差值计算。
+// 不依赖 LibreHardwareMonitor，任意网卡（有线/WiFi）均可用。
+
+/// 上一次采样时间与累计字节数
+static NET_SAMPLE_LAST: Mutex<Option<(std::time::Instant, u64, u64)>> = Mutex::new(None);
+
+/// 判断接口是否为虚拟/封装链路（Hyper-V/WSL 虚拟交换机、TAP/TUN、VPN 隧道等）。
+/// 这类接口与物理网卡共享同一链路，字节会被重复统计，求和会导致网速偏大。
+fn is_virtual_iface(row: &windows_sys::Win32::NetworkManagement::IpHelper::MIB_IF_ROW2) -> bool {
+    // 回环(24)、隧道(131)、PPP(23) 类型直接排除
+    if row.Type == 24 || row.Type == 131 || row.Type == 23 {
+        return true;
+    }
+    // 名称特征：vEthernet / TAP / WSL / VPN 客户端虚拟网卡等
+    let alias_end = row
+        .Alias
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(row.Alias.len());
+    let alias = String::from_utf16_lossy(&row.Alias[..alias_end]).to_lowercase();
+    const VIRTUAL_HINTS: [&str; 11] = [
+        "vethernet", "tap", "virtual", "loopback", "wsl", "tailscale",
+        "wireguard", "tunnel", "bluetooth", "zerotier", "tor",
+    ];
+    VIRTUAL_HINTS.iter().any(|h| alias.contains(h))
+}
+
+/// 读取所有活跃物理网络接口的累计接收/发送字节数
+fn read_if_octets() -> Option<(u64, u64)> {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        use windows_sys::Win32::NetworkManagement::IpHelper::{
+            FreeMibTable, GetIfTable2, MIB_IF_ROW2, MIB_IF_TABLE2,
+        };
+
+        // 必须用 GetIfTable2（MIB_IF_ROW2）：旧版 GetIfTable 的
+        // dwInOctets/dwOutOctets 计数器在较新 Windows 上不更新，会恒为 0
+        let mut table_ptr: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
+        if GetIfTable2(&mut table_ptr) != 0 || table_ptr.is_null() {
+            return None;
+        }
+        let table = &*table_ptr;
+        let rows = std::slice::from_raw_parts(table.Table.as_ptr(), table.NumEntries as usize);
+        // 同一物理网卡会被 WFP 过滤驱动 / QoS 调度器拆成多个共享计数器的镜像接口。
+        // 取 (InOctets+OutOctets) 最大的接口作为主接口（真实网卡）的计数器来源：
+        // 镜像接口在无流量时计数器停滞、有流量时才跳变到主接口累计值，
+        // 若按"去重求和"会把这种跳变误当成新增流量，导致速率飙到几万 MB/s。
+        let mut best: Option<(u64, u64)> = None;
+        for row in rows {
+            // 排除虚拟/封装接口（避免重复计数导致速率偏大）
+            if is_virtual_iface(row) {
+                continue;
+            }
+            // IF_OPER_STATUS_UP = 1，仅统计正常工作的接口
+            if row.OperStatus != 1 {
+                continue;
+            }
+            let total = row.InOctets.saturating_add(row.OutOctets);
+            if best.map_or(true, |(bi, bo)| total > bi.saturating_add(bo)) {
+                best = Some((row.InOctets, row.OutOctets));
+            }
+        }
+        FreeMibTable(table_ptr as *const core::ffi::c_void);
+        best
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        None
+    }
+}
+
+/// 实时下载/上传速率（KB/s）。首次采样仅记录基线，返回 None；
+/// 采样间隔过短（<0.5s）时也返回 None，等待下一次采样。
+fn get_net_speed_kbs() -> (Option<f64>, Option<f64>) {
+    let Some((down, up)) = read_if_octets() else {
+        return (None, None);
+    };
+    let now = std::time::Instant::now();
+    let mut guard = NET_SAMPLE_LAST.lock().unwrap();
+    if let Some((last_time, last_down, last_up)) = guard.as_mut() {
+        let dt = now.duration_since(*last_time).as_secs_f64();
+        if dt >= 0.5 {
+            // 计数器回绕/重置（网卡重启、驱动重置）时差值会是天文数字，跳过本次仅更新基线
+            if down < *last_down || up < *last_up {
+                *last_time = now;
+                *last_down = down;
+                *last_up = up;
+                return (None, None);
+            }
+            let down_kbs = (down - *last_down) as f64 / 1024.0 / dt;
+            let up_kbs = (up - *last_up) as f64 / 1024.0 / dt;
+            *last_time = now;
+            *last_down = down;
+            *last_up = up;
+            (Some(down_kbs), Some(up_kbs))
+        } else {
+            (None, None)
+        }
+    } else {
+        *guard = Some((now, down, up));
+        (None, None)
+    }
+}
+
+/// 格式化速率：>=1MB/s 显示 MB/s，否则 KB/s
+fn format_net_speed(kbs: f64) -> String {
+    if kbs >= 1024.0 {
+        format!("{:.1}MB/s", kbs / 1024.0)
+    } else {
+        format!("{:.0}KB/s", kbs)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct DisplayItem {
     pub id: String,
@@ -130,6 +244,8 @@ fn default_display_items() -> DisplayItems {
             DisplayItem { id: "ssd_temp".to_string(), label: "硬盘温度".to_string(), enabled: false },
             DisplayItem { id: "game_ping".to_string(), label: "游戏延迟".to_string(), enabled: true },
             DisplayItem { id: "delta_password".to_string(), label: "三角洲密码".to_string(), enabled: false },
+            DisplayItem { id: "net_down".to_string(), label: "下载速率".to_string(), enabled: false },
+            DisplayItem { id: "net_up".to_string(), label: "上传速率".to_string(), enabled: false },
         ]
 }
 
@@ -241,6 +357,10 @@ pub struct OverlayHardwareData {
     ssd_temp: Option<f64>,
     /// 网络标准时间偏移量（毫秒）：net_time = 本地时间 + 该偏移。None 表示尚未同步成功
     pub net_time_offset_ms: Option<i64>,
+    /// 实时下载速率（KB/s）
+    pub net_down_speed: Option<f64>,
+    /// 实时上传速率（KB/s）
+    pub net_up_speed: Option<f64>,
     /// 所有 GPU 的传感器数据（支持多 GPU 切换）
     pub gpu_sensors: Vec<GpuSensorData>,
     /// 当前选中的 GPU 索引
@@ -273,6 +393,8 @@ impl Default for OverlayHardwareData {
             cpu_power: None,
             ssd_temp: None,
             net_time_offset_ms: None,
+            net_down_speed: None,
+            net_up_speed: None,
             gpu_sensors: Vec::new(),
             active_gpu_index: 0,
         }
@@ -575,6 +697,8 @@ fn gpu_priority(hw_type: &str, name: &str) -> u8 {
 }
 
 pub fn collect_hardware_data() -> OverlayHardwareData {
+    // 实时网络速率（与传感器同周期采样）
+    let (net_down_speed, net_up_speed) = get_net_speed_kbs();
 let fps = crate::game_fps::get_cached_fps();
 let fps_1low = crate::game_fps::get_cached_1low_fps();
 let fps_01low = crate::game_fps::get_cached_01low_fps();
@@ -872,6 +996,8 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
         cpu_power,
         ssd_temp,
         net_time_offset_ms: get_net_offset_ms(),
+        net_down_speed,
+        net_up_speed,
         gpu_sensors,
         active_gpu_index,
     };
@@ -903,6 +1029,8 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
             cpu_power: new_data.cpu_power.or(prev.cpu_power),
             ssd_temp: new_data.ssd_temp.or(prev.ssd_temp),
             net_time_offset_ms: new_data.net_time_offset_ms.or(prev.net_time_offset_ms),
+            net_down_speed: new_data.net_down_speed.or(prev.net_down_speed),
+            net_up_speed: new_data.net_up_speed.or(prev.net_up_speed),
             gpu_sensors: if has_new_gpu_data { new_data.gpu_sensors } else { prev.gpu_sensors },
             active_gpu_index: if has_new_gpu_data { new_data.active_gpu_index } else { prev.active_gpu_index },
         }
@@ -1337,6 +1465,14 @@ mod win32 {
                 "game_ping" => {
                     let val = data.game_ping.map(|v| format!("{}ms", v)).unwrap_or_else(|| "--ms".to_string());
                     items.push(DisplayItem { label: "PING".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                }
+                "net_down" => {
+                    let val = data.net_down_speed.map(super::format_net_speed).unwrap_or_else(|| "--KB/s".to_string());
+                    items.push(DisplayItem { label: "下载".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
+                }
+                "net_up" => {
+                    let val = data.net_up_speed.map(super::format_net_speed).unwrap_or_else(|| "--KB/s".to_string());
+                    items.push(DisplayItem { label: "上传".to_string(), value: val, label_width: 0, value_width: 0, total_width: 0, custom_color: None });
                 }
                 "fps" => {
                     let (val, color) = match data.fps {

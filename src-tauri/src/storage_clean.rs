@@ -258,28 +258,98 @@ fn clean_dir_contents(path: &PathBuf) -> (u64, Vec<String>) {
         return (freed, skipped);
     }
 
-    if let Ok(entries) = fs::read_dir(path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                let (sub_freed, sub_skipped) = clean_dir_contents(&p);
-                freed += sub_freed;
-                skipped.extend(sub_skipped);
-                if fs::remove_dir(&p).is_ok() {
-                } else {
-                    skipped.push(p.to_string_lossy().to_string());
-                }
-            } else {
-                let size = get_file_size(&p);
-                match fs::remove_file(&p) {
-                    Ok(_) => freed += size,
-                    Err(_) => skipped.push(p.to_string_lossy().to_string()),
-                }
-            }
+    // 一次性遍历收集目录树中的所有文件与子目录(复用 walkdir 的目录项元数据),
+    // 随后文件并行删除、目录自底向上删除,替代旧的逐层 read_dir + 递归删除,
+    // 避免上万文件时每个文件都等待一次串行系统调用。
+    let mut files: Vec<PathBuf> = Vec::new();
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+        let p = entry.path().to_path_buf();
+        if p == *path {
+            continue;
+        }
+        if entry.file_type().is_dir() {
+            dirs.push(p);
+        } else {
+            files.push(p);
+        }
+    }
+
+    let (file_freed, file_skipped) = delete_files_parallel(&files);
+    freed += file_freed;
+    skipped.extend(file_skipped);
+
+    // 自底向上删除已清空的目录(子目录先于父目录)
+    dirs.sort_by_key(|d| std::cmp::Reverse(d.components().count()));
+    for d in dirs {
+        if fs::remove_dir(&d).is_err() {
+            skipped.push(d.to_string_lossy().to_string());
         }
     }
 
     (freed, skipped)
+}
+
+/// 并行删除文件列表,返回 (释放字节数, 失败路径列表)。
+/// 文件数量较少时直接串行,避免线程调度开销。
+fn delete_files_parallel(paths: &[PathBuf]) -> (u64, Vec<String>) {
+    const PARALLEL_THRESHOLD: usize = 256;
+
+    if paths.len() < PARALLEL_THRESHOLD {
+        let mut freed = 0u64;
+        let mut skipped = Vec::new();
+        for p in paths {
+            let size = get_file_size(p);
+            match fs::remove_file(p) {
+                Ok(_) => freed += size,
+                Err(_) => skipped.push(p.to_string_lossy().to_string()),
+            }
+        }
+        return (freed, skipped);
+    }
+
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let worker_count = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4)
+        .min(4);
+    let counter = AtomicUsize::new(0);
+
+    std::thread::scope(|scope| {
+        let mut handles = Vec::with_capacity(worker_count);
+        for _ in 0..worker_count {
+            let handle = scope.spawn(|| {
+                // 每个线程独立统计,结束后一次性合并,避免锁竞争
+                let mut freed = 0u64;
+                let mut skipped = Vec::new();
+                loop {
+                    let idx = counter.fetch_add(1, Ordering::Relaxed);
+                    if idx >= paths.len() {
+                        break;
+                    }
+                    let p = &paths[idx];
+                    let size = get_file_size(p);
+                    match fs::remove_file(p) {
+                        Ok(_) => freed += size,
+                        Err(_) => skipped.push(p.to_string_lossy().to_string()),
+                    }
+                }
+                (freed, skipped)
+            });
+            handles.push(handle);
+        }
+
+        let mut total_freed = 0u64;
+        let mut total_skipped = Vec::new();
+        for handle in handles {
+            if let Ok((freed, skipped)) = handle.join() {
+                total_freed += freed;
+                total_skipped.extend(skipped);
+            }
+        }
+        (total_freed, total_skipped)
+    })
 }
 
 fn clean_single_file(path: &PathBuf) -> (u64, Vec<String>) {
