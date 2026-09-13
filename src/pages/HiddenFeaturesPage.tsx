@@ -78,7 +78,7 @@ type StoreKind = "runtime" | "boot";
 type ActionKind = "enable" | "disable" | "reset";
 type PendingAction = { entry: FeatureFlagEntry; kind: ActionKind };
 
-const QUERY_LIMIT = 500;
+const QUERY_LIMIT = 5000;
 const PAGE_SIZE = 100;
 const TIP_LS_KEY = "nexbox_hidden_features_tip_ack";
 
@@ -232,7 +232,8 @@ export default function HiddenFeaturesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isOperating, setIsOperating] = useState(false);
   const [persistBoot, setPersistBoot] = useState(true);
-  const [namedOnly, setNamedOnly] = useState(true);
+  // 默认展示全部功能（ViVeTool /query 同款），无名字的显示 ID；可手动开启"只看有名字"
+  const [namedOnly, setNamedOnly] = useState(false);
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [tipOpen, setTipOpen] = useState(() => {
     try {
@@ -343,7 +344,8 @@ export default function HiddenFeaturesPage() {
 
   const actionsDisabled = isOperating || !status?.supported || !status?.is_admin;
   const visibleEntries = entries.slice(0, visibleCount);
-  const mayTruncate = entries.length >= QUERY_LIMIT;
+  // 仅浏览模式可能被后端 limit 截断；搜索模式返回全部匹配，不提示
+  const mayTruncate = search === "" && entries.length >= QUERY_LIMIT;
 
   return (
     <Box pt={8} w="full">

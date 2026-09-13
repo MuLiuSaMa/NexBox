@@ -28,6 +28,8 @@ import {
   Battery,
   Monitor,
   Clock,
+  Download,
+  Upload,
   type LucideIcon,
 } from "lucide-react";
 
@@ -85,6 +87,8 @@ interface HardwareData {
   gpu_vram_used: number | null;
   gpu_vram_total: number | null;
   net_time_offset_ms: number | null;
+  net_down_speed: number | null;
+  net_up_speed: number | null;
 }
 
 // ===== 图标映射 =====
@@ -112,6 +116,8 @@ const ITEM_ICONS: Record<string, LucideIcon> = {
   ssd_temp: HardDrive,
   game_ping: Wifi,
   delta_password: Key,
+  net_down: Download,
+  net_up: Upload,
 };
 
 // ===== 默认值 =====
@@ -139,6 +145,8 @@ const DEFAULT_DISPLAY_ITEMS: DisplayItemConfig[] = [
   { id: "ssd_temp", label: "硬盘温度", enabled: false },
   { id: "game_ping", label: "游戏延迟", enabled: false },
   { id: "delta_password", label: "三角洲密码", enabled: false },
+  { id: "net_down", label: "下载速率", enabled: false },
+  { id: "net_up", label: "上传速率", enabled: false },
 ];
 
 const DEFAULT_SETTINGS: OverlaySettings = {
@@ -205,9 +213,19 @@ function getItemValue(item: DisplayItemConfig, data: HardwareData | null): strin
       return data.game_ping != null ? `${data.game_ping}ms` : "--";
     case "delta_password":
       return data.delta_password ?? "--";
+    case "net_down":
+      return data.net_down_speed != null ? formatNetSpeed(data.net_down_speed) : "--";
+    case "net_up":
+      return data.net_up_speed != null ? formatNetSpeed(data.net_up_speed) : "--";
     default:
       return "--";
   }
+}
+
+/** 格式化速率：>=1MB/s 显示 MB/s，否则 KB/s（与 Rust 端 format_net_speed 一致） */
+function formatNetSpeed(kbs: number): string {
+  if (kbs >= 1024) return `${(kbs / 1024).toFixed(1)}MB/s`;
+  return `${Math.round(kbs)}KB/s`;
 }
 
 /** 格式化毫秒时间戳为 HH:MM:SS（北京时间 UTC+8） */

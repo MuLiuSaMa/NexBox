@@ -29,7 +29,7 @@ filetime = "0.2"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "devtools"] }
+tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "devtools", "unstable"] }
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
@@ -40,7 +40,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
 wmi = "0.14"
 thiserror = "2"
-reqwest = { version = "0.11", features = ["stream", "json", "blocking"] }
+reqwest = { version = "0.11", features = ["stream", "json", "blocking", "cookies"] }
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.24"
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -119,6 +119,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_SystemInformation",
     "Win32_System_SystemServices",
     "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinSock",
     "Win32_System_Services",
     "Win32_System_Registry",
@@ -134,6 +135,7 @@ windows = { version = "0.58", features = [
     "Win32_Graphics_Dwm",
     "Win32_System_Com",
     "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Accessibility",
     "Win32_UI_Shell",
     "Win32_UI_Shell_PropertiesSystem",

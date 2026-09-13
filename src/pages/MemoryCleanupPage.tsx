@@ -1,6 +1,6 @@
 import {
-  Box, VStack, Text, HStack, useColorModeValue,
-  Button, Progress, SimpleGrid, Switch, Checkbox,
+  Box, Heading, VStack, Text, HStack, useColorModeValue,
+  Button, Progress, SimpleGrid, Switch,
   Slider, SliderTrack, SliderFilledTrack, SliderThumb,
   Input, Alert, AlertIcon, AlertDescription, Badge,
 } from "@chakra-ui/react";
@@ -23,10 +23,6 @@ interface MemoryData {
 }
 interface CleanupResult { success: boolean; message: string; freed_mb: number; }
 interface GameStartCleanConfig { enabled: boolean; }
-interface MemoryListSizes {
-  available: boolean; zeroed_mb: number; free_mb: number; standby_mb: number; modified_mb: number; combined_mb: number;
-}
-interface MemoryCleanConfig { items: string[]; }
 interface AutoCleanConfig {
   enabled: boolean; interval_seconds: number; threshold_mb: number; clean_type: string;
 }
@@ -78,13 +74,14 @@ export default function MemoryCleanupPage() {
 
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [cleaning, setCleaning] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [listSizes, setListSizes] = useState<MemoryListSizes | null>(null);
+  const [cleaningAll, setCleaningAll] = useState(false);
+  const [cleaningStandby, setCleaningStandby] = useState(false);
+  const [trimmingWs, setTrimmingWs] = useState(false);
 
   const [autoClean, setAutoClean] = useState(false);
   const [autoInterval, setAutoInterval] = useState("300");
   const [autoThreshold, setAutoThreshold] = useState(12288);
+  const [autoCleanType, setAutoCleanType] = useState("all");
   const [gameStartClean, setGameStartClean] = useState(false);
 
   const [pagefile, setPagefile] = useState<PagefileStatus | null>(null);
@@ -100,56 +97,11 @@ export default function MemoryCleanupPage() {
     { value: "3600", label: t("optimization.memoryCleanup.interval1hour", "1小时") },
   ];
 
-  // 可勾选的清理项定义（sizeKey 对应后端 get_memory_list_sizes 返回的字段，null 表示不展示容量）
-  const cleanItemDefs: {
-    key: string; label: string; desc: string;
-    sizeKey: keyof Omit<MemoryListSizes, "available"> | null;
-  }[] = [
-    {
-      key: "standby",
-      label: t("optimization.memoryCleanup.itemStandby", "待机列表"),
-      desc: t("optimization.memoryCleanup.itemStandbyDesc", "SuperFetch 预读缓存，回收最安全"),
-      sizeKey: "standby_mb",
-    },
-    {
-      key: "file_cache",
-      label: t("optimization.memoryCleanup.itemFileCache", "系统文件缓存"),
-      desc: t("optimization.memoryCleanup.itemFileCacheDesc", "压低缓存上限强制回收文件页"),
-      sizeKey: null,
-    },
-    {
-      key: "low_pri_standby",
-      label: t("optimization.memoryCleanup.itemLowPriStandby", "低优先级待机"),
-      desc: t("optimization.memoryCleanup.itemLowPriStandbyDesc", "仅清理 0 优先级待机页"),
-      sizeKey: null,
-    },
-    {
-      key: "modified",
-      label: t("optimization.memoryCleanup.itemModified", "修改页面列表"),
-      desc: t("optimization.memoryCleanup.itemModifiedDesc", "脏页写盘后回收，触发磁盘 I/O"),
-      sizeKey: "modified_mb",
-    },
-    {
-      key: "combined",
-      label: t("optimization.memoryCleanup.itemCombined", "组合内存"),
-      desc: t("optimization.memoryCleanup.itemCombinedDesc", "物理内存页去重，Win10+ 可用"),
-      sizeKey: "combined_mb",
-    },
-    {
-      key: "registry",
-      label: t("optimization.memoryCleanup.itemRegistry", "注册表缓存"),
-      desc: t("optimization.memoryCleanup.itemRegistryDesc", "注册表预读缓存，Win8.1+ 可用"),
-      sizeKey: null,
-    },
-    {
-      key: "working_set",
-      label: t("optimization.memoryCleanup.itemWorkingSet", "进程工作集"),
-      desc: t("optimization.memoryCleanup.itemWorkingSetDesc", "逐进程收紧，系统进程与游戏自动跳过"),
-      sizeKey: null,
-    },
+  const cleanTypeOptions = [
+    { value: "all", label: t("optimization.memoryCleanup.cleanAll") },
+    { value: "standby", label: t("optimization.memoryCleanup.cleanStandby") },
+    { value: "working_set", label: t("optimization.memoryCleanup.trimWorkingSet") },
   ];
-
-  const defaultItems = ["standby", "file_cache", "low_pri_standby", "working_set"];
 
   const fetchMemoryData = useCallback(async () => {
     try {
@@ -160,12 +112,6 @@ export default function MemoryCleanupPage() {
     } finally {
       setLoading(false);
     }
-    try {
-      const sizes = await invoke<MemoryListSizes>("get_memory_list_sizes");
-      setListSizes(sizes);
-    } catch (error) {
-      console.error("Failed to fetch memory list sizes:", error);
-    }
   }, []);
 
   // Load auto-clean config from store
@@ -175,10 +121,12 @@ export default function MemoryCleanupPage() {
         const enabled = await store.get<boolean>("auto-clean-enabled");
         const interval = await store.get<string>("auto-clean-interval");
         const threshold = await store.get<number>("auto-clean-threshold");
+        const cleanType = await store.get<string>("auto-clean-type");
 
         if (enabled !== null && enabled !== undefined) setAutoClean(enabled);
         if (interval) setAutoInterval(interval);
         if (threshold !== null && threshold !== undefined) setAutoThreshold(threshold);
+        if (cleanType) setAutoCleanType(cleanType);
       } catch (error) {
         console.error("Failed to load auto-clean config:", error);
       }
@@ -191,18 +139,6 @@ export default function MemoryCleanupPage() {
         setGameStartClean(cfg.enabled);
       } catch (error) {
         console.error("Failed to load game-start-clean config:", error);
-      }
-    })();
-
-    // 加载内存清理勾选项（后端持久化）
-    (async () => {
-      try {
-        const cfg = await invoke<MemoryCleanConfig>("get_memory_clean_config");
-        const items = cfg.items && cfg.items.length > 0 ? cfg.items : defaultItems;
-        setSelectedItems(items);
-      } catch (error) {
-        console.error("Failed to load memory clean config:", error);
-        setSelectedItems(defaultItems);
       }
     })();
   }, []);
@@ -223,7 +159,7 @@ export default function MemoryCleanupPage() {
               enabled: autoClean,
               interval_seconds: parseInt(autoInterval),
               threshold_mb: autoThreshold,
-              clean_type: "items",
+              clean_type: autoCleanType,
             },
           });
         } else {
@@ -244,14 +180,14 @@ export default function MemoryCleanupPage() {
             enabled: autoClean,
             interval_seconds: parseInt(autoInterval),
             threshold_mb: autoThreshold,
-            clean_type: "items",
+            clean_type: autoCleanType,
           },
         });
       }
     } catch (error) {
       console.error("Failed to restart auto-clean:", error);
     }
-  }, [autoClean, autoInterval, autoThreshold]);
+  }, [autoClean, autoInterval, autoThreshold, autoCleanType]);
 
   const handleAutoCleanChange = async (enabled: boolean) => {
     setAutoClean(enabled);
@@ -283,6 +219,13 @@ export default function MemoryCleanupPage() {
   };
 
   const handleThresholdChangeEnd = async (value: number) => {
+    await restartAutoClean();
+  };
+
+  const handleCleanTypeChange = async (value: string) => {
+    setAutoCleanType(value);
+    await store.set("auto-clean-type", value);
+    await store.save();
     await restartAutoClean();
   };
 
@@ -411,53 +354,46 @@ export default function MemoryCleanupPage() {
     };
   }, []);
 
-  // 勾选/取消勾选清理项，变更持久化到后端
-  const handleItemToggle = async (key: string, checked: boolean) => {
-    const next = checked
-      ? [...selectedItems, key]
-      : selectedItems.filter((i) => i !== key);
-    setSelectedItems(next);
+  const handleCleanAll = async () => {
+    setCleaningAll(true);
     try {
-      await invoke("set_memory_clean_config", { items: next });
-    } catch (error) {
-      console.error("Failed to save memory clean config:", error);
-    }
-  };
-
-  // 全选 / 清空
-  const toggleSelectAll = async () => {
-    const next =
-      selectedItems.length === cleanItemDefs.length
-        ? []
-        : cleanItemDefs.map((d) => d.key);
-    setSelectedItems(next);
-    try {
-      await invoke("set_memory_clean_config", { items: next });
-    } catch (error) {
-      console.error("Failed to save memory clean config:", error);
-    }
-  };
-
-  // 按勾选项执行清理
-  const handleCleanSelected = async () => {
-    if (selectedItems.length === 0) {
-      toast({
-        title: t("optimization.memoryCleanup.cleanAll"),
-        description: t("optimization.memoryCleanup.noItemSelected", "请先勾选要清理的项目"),
-        status: "warning",
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-    setCleaning(true);
-    try {
-      const result = await invoke<CleanupResult>("clean_memory_selected", {
-        items: selectedItems,
-      });
+      // 并行执行待机缓存清理 + 工作集收紧，缩短等待时间
+      const [result1, result2] = await Promise.all([
+        invoke<CleanupResult>("clean_standby_memory"),
+        invoke<CleanupResult>("trim_system_working_set"),
+      ]);
+      const totalFreed = result1.freed_mb + result2.freed_mb;
       await fetchMemoryData();
       toast({
         title: t("optimization.memoryCleanup.cleanAll"),
+        description:
+          totalFreed > 0
+            ? t("optimization.memoryCleanup.freedMemory", { size: totalFreed })
+            : t("optimization.memoryCleanup.noMemoryFreed"),
+        status: totalFreed > 0 ? "success" : "info",
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: t("optimization.memoryCleanup.error"),
+        description: String(error),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setCleaningAll(false);
+    }
+  };
+
+  const handleCleanStandby = async () => {
+    setCleaningStandby(true);
+    try {
+      const result = await invoke<CleanupResult>("clean_standby_memory");
+      await fetchMemoryData();
+      toast({
+        title: t("optimization.memoryCleanup.cleanStandby"),
         description:
           result.freed_mb > 0
             ? t("optimization.memoryCleanup.freedMemory", { size: result.freed_mb })
@@ -475,7 +411,35 @@ export default function MemoryCleanupPage() {
         isClosable: true,
       });
     } finally {
-      setCleaning(false);
+      setCleaningStandby(false);
+    }
+  };
+
+  const handleTrimWorkingSet = async () => {
+    setTrimmingWs(true);
+    try {
+      const result = await invoke<CleanupResult>("trim_system_working_set");
+      await fetchMemoryData();
+      toast({
+        title: t("optimization.memoryCleanup.trimWorkingSet"),
+        description:
+          result.freed_mb > 0
+            ? t("optimization.memoryCleanup.freedMemory", { size: result.freed_mb })
+            : t("optimization.memoryCleanup.noMemoryFreed"),
+        status: result.freed_mb > 0 ? "success" : "info",
+        duration: 4000,
+        isClosable: true,
+      });
+    } catch (error) {
+      toast({
+        title: t("optimization.memoryCleanup.error"),
+        description: String(error),
+        status: "error",
+        duration: 4000,
+        isClosable: true,
+      });
+    } finally {
+      setTrimmingWs(false);
     }
   };
 
@@ -561,29 +525,40 @@ export default function MemoryCleanupPage() {
             </Button>
             <HStack spacing={3}>
               <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleSelectAll}
-                color={labelColor}
-                borderRadius="xl"
-              >
-                {selectedItems.length === cleanItemDefs.length
-                  ? t("optimization.memoryCleanup.clearAll", "清空")
-                  : t("optimization.memoryCleanup.selectAll", "全选")}
-              </Button>
-              <Button
                 bg={themeConfig.primaryColor}
                 color={getContrastTextColor()}
                 size="sm"
-                onClick={handleCleanSelected}
-                isLoading={cleaning}
+                onClick={handleCleanAll}
+                isLoading={cleaningAll}
                 loadingText={t("optimization.memoryCleanup.cleaning")}
                 borderRadius="xl"
                 fontWeight="600"
                 _hover={{ bg: themeConfig.primaryColor, filter: "brightness(0.9)" }}
                 _active={{ bg: themeConfig.primaryColor, filter: "brightness(0.8)" }}
               >
-                {t("optimization.memoryCleanup.cleanSelected", "清理所选")}
+                {t("optimization.memoryCleanup.cleanAll")}
+              </Button>
+              <Button
+                colorScheme="blue"
+                variant="outline"
+                size="sm"
+                onClick={handleCleanStandby}
+                isLoading={cleaningStandby}
+                loadingText={t("optimization.memoryCleanup.cleaning")}
+                borderRadius="xl"
+              >
+                {t("optimization.memoryCleanup.cleanStandby")}
+              </Button>
+              <Button
+                colorScheme="purple"
+                variant="outline"
+                size="sm"
+                onClick={handleTrimWorkingSet}
+                isLoading={trimmingWs}
+                loadingText={t("optimization.memoryCleanup.cleaning")}
+                borderRadius="xl"
+              >
+                {t("optimization.memoryCleanup.trimWorkingSet")}
               </Button>
             </HStack>
           </HStack>
@@ -619,83 +594,6 @@ export default function MemoryCleanupPage() {
                     memoryData.working_set_total
                   )}
                 </SimpleGrid>
-
-                {/* Clean items selection card */}
-                <LiquidGlassCard w="full" p={5}>
-                  <VStack align="start" spacing={4} w="full">
-                    <HStack justify="space-between" w="full">
-                      <Box>
-                        <Text fontWeight="bold" color={headingColor} fontSize="md">
-                          {t("optimization.memoryCleanup.cleanItems", "清理项")}
-                        </Text>
-                        <Text fontSize="xs" color={subTextColor}>
-                          {t("optimization.memoryCleanup.cleanItemsHint", "勾选要清理的内存区域，定时与游戏启动清理将跟随勾选项")}
-                        </Text>
-                      </Box>
-                    </HStack>
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} w="full">
-                      {cleanItemDefs.map((item) => {
-                        const checked = selectedItems.includes(item.key);
-                        const sizeMb =
-                          item.sizeKey && listSizes ? listSizes[item.sizeKey] : 0;
-                        return (
-                          <HStack
-                            key={item.key}
-                            p={3}
-                            borderWidth="1px"
-                            borderColor={checked ? themeConfig.primaryColor : cardBorder}
-                            borderRadius="xl"
-                            justify="space-between"
-                            spacing={3}
-                            cursor="pointer"
-                            onClick={() => handleItemToggle(item.key, !checked)}
-                            _hover={{ borderColor: themeConfig.primaryColor }}
-                          >
-                            <HStack spacing={3} flex={1} minW={0}>
-                              <Checkbox
-                                isChecked={checked}
-                                onChange={(e) => handleItemToggle(item.key, e.target.checked)}
-                                onClick={(e) => e.stopPropagation()}
-                                sx={{
-                                  ".chakra-checkbox__control": {
-                                    borderColor: cardBorder,
-                                    _checked: {
-                                      bg: themeConfig.primaryColor,
-                                      borderColor: themeConfig.primaryColor,
-                                    },
-                                  },
-                                }}
-                              />
-                              <VStack align="start" spacing={0} minW={0}>
-                                <Text
-                                  fontSize="sm"
-                                  fontWeight="600"
-                                  color={textColor}
-                                  noOfLines={1}
-                                >
-                                  {item.label}
-                                </Text>
-                                <Text fontSize="xs" color={subTextColor} noOfLines={1}>
-                                  {item.desc}
-                                </Text>
-                              </VStack>
-                            </HStack>
-                            {item.sizeKey && listSizes && listSizes.available && (
-                              <Text
-                                fontSize="sm"
-                                fontWeight="600"
-                                color={sizeMb > 0 ? "green.400" : subTextColor}
-                                whiteSpace="nowrap"
-                              >
-                                {formatMemory(sizeMb)}
-                              </Text>
-                            )}
-                          </HStack>
-                        );
-                      })}
-                    </SimpleGrid>
-                  </VStack>
-                </LiquidGlassCard>
 
                 {/* Scheduled cleanup card */}
                 <LiquidGlassCard w="full" p={5}>
@@ -770,23 +668,18 @@ export default function MemoryCleanupPage() {
                         </HStack>
                       </VStack>
 
-                      {/* Clean type: follows selection */}
+                      {/* Clean type selector */}
                       <VStack align="start" spacing={1}>
                         <Text fontSize="sm" color={labelColor}>
                           {t("optimization.memoryCleanup.cleanType", "清理类型")}
                         </Text>
-                        <HStack
-                          w="full"
-                          p={3}
-                          bg={trackBg}
-                          borderRadius="xl"
-                          minH="40px"
-                          align="center"
-                        >
-                          <Text fontSize="sm" color={textColor}>
-                            {t("optimization.memoryCleanup.cleanTypeFollowsSelection", "随上方勾选项")}
-                          </Text>
-                        </HStack>
+                        <CustomSelect
+                          value={autoCleanType}
+                          onChange={handleCleanTypeChange}
+                          options={cleanTypeOptions}
+                          width="full"
+                          direction="up"
+                        />
                       </VStack>
                     </SimpleGrid>
                   </VStack>

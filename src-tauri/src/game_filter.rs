@@ -868,7 +868,8 @@ fn game_filter_loop(generation: u64) {
 
     loop {
         // 控制状态读取在锁内完成（enabled + 代次一致时继续；否则退出）。
-        let (still_enabled, still_current) = {
+        // 首轮 enabled 仅作观测，供下一轮防抖比对（变量本身不使用，前缀 _ 消除警告）。
+        let (_still_enabled, still_current) = {
             let guard = display_filter::auto_registration_guard();
             (guard.enabled, guard.generation == generation)
         };

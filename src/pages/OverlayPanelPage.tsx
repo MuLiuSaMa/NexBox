@@ -101,6 +101,8 @@ interface HardwareData {
   game_ping: number | null;
   gpu_vram_used: number | null;
   gpu_vram_total: number | null;
+  net_down_speed: number | null;
+  net_up_speed: number | null;
 }
 
 const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
@@ -126,6 +128,8 @@ const DEFAULT_DISPLAY_ITEMS: DisplayItems = [
   { id: "ssd_temp", label: "硬盘温度", enabled: false },
   { id: "game_ping", label: "游戏延迟", enabled: false },
   { id: "delta_password", label: "三角洲密码", enabled: false },
+  { id: "net_down", label: "下载速率", enabled: false },
+  { id: "net_up", label: "上传速率", enabled: false },
 ];
 
 const DEFAULT_SETTINGS: OverlaySettings = {
@@ -309,6 +313,8 @@ export default function OverlayPanelPage() {
     game_ping: null,
     gpu_vram_used: null,
     gpu_vram_total: null,
+    net_down_speed: null,
+    net_up_speed: null,
   });
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -407,6 +413,8 @@ export default function OverlayPanelPage() {
           game_ping: data.game_ping ?? prev.game_ping,
           gpu_vram_used: data.gpu_vram_used ?? prev.gpu_vram_used,
           gpu_vram_total: data.gpu_vram_total ?? prev.gpu_vram_total,
+          net_down_speed: data.net_down_speed ?? prev.net_down_speed,
+          net_up_speed: data.net_up_speed ?? prev.net_up_speed,
         };
       });
     } catch (error) {

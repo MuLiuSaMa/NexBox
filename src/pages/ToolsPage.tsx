@@ -793,7 +793,7 @@ function OfficialToolSection({
             <Box flex={1} w={"full"}>
               <HStack justify={"space-between"} align={"start"} mb={1}>
                 <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
-                  图吧工具箱WinUI3
+                  图吧工具箱-CE
                 </Text>
                 <Badge fontSize={"xs"} variant={"subtle"} color={getActiveColor()} bg={`${getActiveColor()}20`}>
                   {t("tools.recommended")}

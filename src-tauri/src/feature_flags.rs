@@ -673,10 +673,60 @@ pub async fn feature_flags_query(
         }
     }
 
-    entries.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
-    let limit = limit.unwrap_or(500).min(1000) as usize;
-    entries.truncate(limit);
+    // ViVeTool 同款"ID 直达"：输入合法功能 ID 时，即使系统存储/字典里都没有，
+    // 也返回一个可直接启用的虚拟条目（底层 API 本来就是按 ID 操作，不要求功能已存在）。
+    if !search.is_empty() {
+        if let Ok(id) = search.parse::<u32>() {
+            let present: std::collections::HashSet<u32> =
+                entries.iter().map(|e| e.feature_id).collect();
+            if !present.contains(&id) {
+                entries.push(FeatureFlagEntry {
+                    feature_id: id,
+                    name: None,
+                    priority: PRIORITY_USER,
+                    enabled_state: STATE_DEFAULT,
+                    variant: 0,
+                    variant_payload_kind: 0,
+                    is_wexp: false,
+                    has_config: false,
+                });
+            }
+        }
+    }
+
+    if search.is_empty() {
+        // 浏览模式（ViVeTool /query 同款）：列出全部功能，名字只是注释。
+        // 有名字的优先展示，其余按 ID 排序；受 limit 约束
+        entries.sort_by(|a, b| {
+            b.name
+                .is_some()
+                .cmp(&a.name.is_some())
+                .then_with(|| a.feature_id.cmp(&b.feature_id))
+        });
+        let limit = limit.unwrap_or(500).min(50_000) as usize;
+        entries.truncate(limit);
+    } else {
+        // 搜索模式：按相关性排序（名字命中 > 名字前缀命中 > 有配置 > ID 升序），
+        // 不再按 ID 硬截断，避免搜索词命中较多时把用户要找的功能挤出结果
+        entries.sort_by(|a, b| {
+            score_search(b, &search)
+                .cmp(&score_search(a, &search))
+                .then_with(|| a.feature_id.cmp(&b.feature_id))
+        });
+    }
     Ok(entries)
+}
+
+/// 搜索相关性打分：返回 (名字命中, 前缀命中, 有配置)，越大越靠前
+fn score_search(entry: &FeatureFlagEntry, search: &str) -> (u8, u8, bool) {
+    let name = entry
+        .name
+        .as_ref()
+        .map(|n| n.to_lowercase())
+        .unwrap_or_default();
+    let name_hit = name.contains(search);
+    let prefix_hit = name.starts_with(search);
+    (name_hit as u8, prefix_hit as u8, entry.has_config)
 }
 
 /// 启用/禁用功能。state: "enabled" | "disabled"；persist_boot=true 时同时写入
@@ -703,7 +753,8 @@ pub async fn feature_flags_set(
         variant: 0,
         variant_payload_kind: 0,
         variant_payload: 0,
-        operation: OP_FEATURE_STATE,
+        // 与原版 ViVeTool /enable 一致：同时写入 VariantState（清空原 Variant 字段）
+        operation: OP_FEATURE_STATE | OP_VARIANT_STATE,
     };
 
     set_runtime_configurations(&[update])?;

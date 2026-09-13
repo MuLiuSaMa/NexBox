@@ -7,6 +7,7 @@ use log::{debug, error, info, warn};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::safety_constants::{
     is_rebuildable_system_cache_path, PROTECTED_EXTENSIONS_IN_WINDOWS, PROTECTED_FILES,
@@ -179,27 +180,7 @@ impl DeleteEngine {
             self.delete_recycle_paths(&recycle_paths, &mut result);
         }
 
-        for target in normal_paths {
-            let file_path = Path::new(&target.path);
-            // 优先复用扫描阶段已知的大小,避免删除阶段对每个文件再 stat 一次
-            let size = target.size.unwrap_or_else(|| self.get_path_size(file_path));
-
-            match self.delete_single_path(file_path, size) {
-                Ok((freed, marked_for_reboot)) => {
-                    if marked_for_reboot {
-                        result.add_reboot_pending(freed);
-                        debug!("已标记重启删除: {}", target.path);
-                    } else {
-                        result.add_success(freed);
-                        debug!("成功删除: {}", target.path);
-                    }
-                }
-                Err(e) => {
-                    result.add_failure(target.path.clone(), e);
-                    warn!("删除失败: {}", target.path);
-                }
-            }
-        }
+        self.delete_normal_paths(&normal_paths, &mut result);
 
         info!(
             "删除完成: 成功 {} 个, 失败 {} 个, 待重启 {} 个, 释放空间 {} 字节",
@@ -255,6 +236,89 @@ impl DeleteEngine {
         #[cfg(not(windows))]
         {
             let _ = (paths, result);
+        }
+    }
+
+    /// 并行删除普通路径(垃圾清理的主路径)。
+    ///
+    /// 先并行删除文件(文件数量可能上万,单线程逐个删除是清理耗时的主要瓶颈),
+    /// 目录目标随后串行删除,避免目录与其内部文件的删除并发竞争。
+    fn delete_normal_paths(&self, targets: &[&DeleteTarget], result: &mut DeleteResult) {
+        if targets.is_empty() {
+            return;
+        }
+
+        // 根据删除时点是否为目录划分。目录数量通常极少,串行删除即可。
+        let (dir_targets, file_targets): (Vec<&DeleteTarget>, Vec<&DeleteTarget>) = targets
+            .iter()
+            .partition(|t| Path::new(&t.path).is_dir());
+
+        // ---- 阶段1:并行删除文件 ----
+        const PARALLEL_THRESHOLD: usize = 256;
+        if file_targets.len() < PARALLEL_THRESHOLD {
+            // 文件较少时直接串行,避免线程调度开销
+            for target in &file_targets {
+                self.delete_one_target(target, result);
+            }
+        } else {
+            let worker_count = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4)
+                .min(4);
+            let counter = AtomicUsize::new(0);
+
+            std::thread::scope(|scope| {
+                let mut handles = Vec::with_capacity(worker_count);
+                for _ in 0..worker_count {
+                    let handle = scope.spawn(|| {
+                        // 每个线程独立的本地结果,结束后一次性合并,避免锁竞争
+                        let mut local = DeleteResult::new();
+                        loop {
+                            let idx = counter.fetch_add(1, Ordering::Relaxed);
+                            if idx >= file_targets.len() {
+                                break;
+                            }
+                            self.delete_one_target(file_targets[idx], &mut local);
+                        }
+                        local
+                    });
+                    handles.push(handle);
+                }
+                for handle in handles {
+                    match handle.join() {
+                        Ok(local) => result.merge(local),
+                        Err(_) => warn!("并行删除线程异常退出"),
+                    }
+                }
+            });
+        }
+
+        // ---- 阶段2:串行删除目录 ----
+        for target in dir_targets {
+            self.delete_one_target(target, result);
+        }
+    }
+
+    /// 删除单个目标并把结果写入指定 DeleteResult。
+    fn delete_one_target(&self, target: &DeleteTarget, result: &mut DeleteResult) {
+        let file_path = Path::new(&target.path);
+        // 优先复用扫描阶段已知的大小,避免删除阶段对每个文件再 stat 一次
+        let size = target.size.unwrap_or_else(|| self.get_path_size(file_path));
+
+        match self.delete_single_path(file_path, size) {
+            Ok((freed, marked_for_reboot)) => {
+                if marked_for_reboot {
+                    result.add_reboot_pending(freed);
+                    debug!("已标记重启删除: {}", target.path);
+                } else {
+                    result.add_success(freed);
+                    debug!("成功删除: {}", target.path);
+                }
+            }
+            Err(e) => {
+                result.add_failure(target.path.clone(), e);
+                warn!("删除失败: {}", target.path);
+            }
         }
     }
 

@@ -978,7 +978,7 @@ pub(crate) fn auto_register_owned(
 /// 不跨物理写屏或 await。
 /// `before_enable` 测试钩子：在条件开启前于控制锁内调用（生产传 None）。
 pub(crate) fn auto_register_owned_with(
-    mut guard: std::sync::MutexGuard<'_, AutoControlState>,
+    guard: std::sync::MutexGuard<'_, AutoControlState>,
     idx: usize,
     expected_generation: u64,
     session_counter: &AtomicU64,

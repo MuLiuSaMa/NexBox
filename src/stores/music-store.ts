@@ -46,6 +46,8 @@ interface MusicState {
   heartbeatPlayedIds: Set<string>;
   // 实际成功播放的历史栈（末尾为最近一首）：「上一首」按此回溯真实播放顺序，会话级不持久化
   playHistory: Song[];
+  // 播放队列右侧抽屉是否展开（会话级）
+  queuePanelOpen: boolean;
 
   // 本地导入歌曲
   localSongs: Song[];
@@ -181,6 +183,15 @@ interface MusicState {
   clearArtistState: () => void;
   searchPlaylists: (keywords: string) => Promise<void>;
   playSong: (song: Song, queue?: Song[], opts?: { fromHistory?: boolean }) => Promise<void>;
+  /** 追加歌曲到播放队列尾部（去重，上限 2000），返回实际新增数量 */
+  appendToQueue: (songs: Song[]) => number;
+  /** 从播放队列移除指定位置歌曲；移除当前播放歌曲时自动续播下一首，队列空则暂停 */
+  removeFromQueue: (index: number) => void;
+  /** 拖拽调整播放顺序：把 from 位置的歌曲移动到 to 位置，当前歌曲跟随 */
+  reorderQueue: (from: number, to: number) => void;
+  /** 清空播放队列（保留当前播放歌曲，不打断播放） */
+  clearQueue: () => void;
+  setQueuePanelOpen: (open: boolean) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
@@ -582,64 +593,8 @@ async function pushSmtc(force = false) {
   invoke("smtc_update_state", { state: payload }).catch(() => {});
 }
 
-/// 后台批量加载歌单剩余曲目到播放队列（不加入歌单列表）
-/// 优化：先在本地累积所有批次，最后做一次去重 setState，避免重复歌曲和频繁 re-render
-/// 限制：播放队列最大 2000 首，超出部分不再追加，防止内存无限增长
+// 播放队列上限：防止内存无限增长
 const MAX_PLAY_QUEUE = 2000;
-let batchLoadGuard: string | null = null;
-async function batchLoadToQueue(playlistId: string, initialSongs: Song[], totalCount: number) {
-  if (initialSongs.length >= totalCount) return;
-  // 防止并发执行同一歌单的后台加载
-  if (batchLoadGuard === playlistId) return;
-  batchLoadGuard = playlistId;
-
-  // 本地累积，仅在结束时做一次 setState
-  const collected: Song[] = [];
-  const seenIds = new Set(initialSongs.map((s) => s.id));
-  let offset = initialSongs.length;
-
-  try {
-    while (offset < totalCount) {
-      const batch = await invoke<Song[]>("music_playlist_tracks_range", { id: playlistId, start: offset, count: 200 });
-      if (batch.length === 0) break;
-      // 检查用户是否已切换到其他歌单
-      const state = useMusicStore.getState();
-      if (state.leftPlaylistMeta?.id !== playlistId && state.rightPlaylistMeta?.id !== playlistId) break;
-      // 去重：跳过已收集的歌曲
-      for (const song of batch) {
-        if (!seenIds.has(song.id)) {
-          seenIds.add(song.id);
-          collected.push(song);
-        }
-      }
-      offset += 200;
-      // 队列已达上限，停止加载
-      if (initialSongs.length + collected.length >= MAX_PLAY_QUEUE) break;
-    }
-  } catch {
-    // 网络错误中断，已收集的部分仍然写入
-  } finally {
-    batchLoadGuard = null;
-  }
-
-  if (collected.length === 0) return;
-
-  // 单次 setState，并对当前 playQueue 去重
-  const state = useMusicStore.getState();
-  const isSameList = state.playQueue.length > 0
-    && state.currentSong
-    && state.playQueue.some((s) => s.id === state.currentSong!.id);
-  if (isSameList) {
-    const queueIds = new Set(state.playQueue.map((s) => s.id));
-    const unique = collected.filter((s) => !queueIds.has(s.id));
-    // 截断到最大队列长度
-    const remaining = MAX_PLAY_QUEUE - state.playQueue.length;
-    const toAdd = unique.slice(0, Math.max(0, remaining));
-    if (toAdd.length > 0) {
-      useMusicStore.setState({ playQueue: [...state.playQueue, ...toAdd] });
-    }
-  }
-}
 
 let playSongSeq = 0;
 
@@ -717,6 +672,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
   heartbeatLoading: false,
   heartbeatPlayedIds: new Set(),
   playHistory: [],
+  queuePanelOpen: false,
 
   localSongs: [],
   importingLocal: false,
@@ -1618,6 +1574,77 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
+  appendToQueue: (songs) => {
+    if (songs.length === 0) return 0;
+    const state = get();
+    const remaining = MAX_PLAY_QUEUE - state.playQueue.length;
+    if (remaining <= 0) return 0;
+    // 按 provider+id 去重（同一首歌可能来自不同平台，允许共存）
+    const queueIds = new Set(state.playQueue.map((q) => `${q.provider}-${q.id}`));
+    const unique = songs.filter((s) => !queueIds.has(`${s.provider}-${s.id}`));
+    if (unique.length === 0) return 0;
+    const toAdd = unique.slice(0, remaining);
+    set({ playQueue: [...state.playQueue, ...toAdd] });
+    return toAdd.length;
+  },
+
+  removeFromQueue: (index) => {
+    const state = get();
+    const queue = state.playQueue;
+    if (index < 0 || index >= queue.length) return;
+    const newQueue = queue.filter((_, i) => i !== index);
+    if (index < state.currentIndex) {
+      set({ playQueue: newQueue, currentIndex: state.currentIndex - 1 });
+      return;
+    }
+    if (index > state.currentIndex) {
+      set({ playQueue: newQueue });
+      return;
+    }
+    // 移除的是当前播放歌曲
+    if (newQueue.length === 0) {
+      // 队列清空：停止播放，保留 currentSong 供界面显示
+      state.audioRef?.pause();
+      set({ playQueue: [], currentIndex: 0, isPlaying: false });
+      pushSmtc(true);
+      return;
+    }
+    // 自动续播该位置的新歌（业界惯例）
+    const nextIdx = Math.min(index, newQueue.length - 1);
+    const nextSong = newQueue[nextIdx];
+    set({ playQueue: newQueue, currentIndex: nextIdx });
+    if (nextSong) void get().playSong(nextSong, newQueue);
+  },
+
+  reorderQueue: (from, to) => {
+    const state = get();
+    const len = state.playQueue.length;
+    if (from === to || from < 0 || from >= len || to < 0 || to >= len) return;
+    const queue = [...state.playQueue];
+    const [moved] = queue.splice(from, 1);
+    queue.splice(to, 0, moved);
+    // currentIndex 跟随当前歌曲的位置变化
+    let cur = state.currentIndex;
+    if (from === cur) cur = to;
+    else if (from < cur && to >= cur) cur -= 1;
+    else if (from > cur && to <= cur) cur += 1;
+    set({ playQueue: queue, currentIndex: cur });
+  },
+
+  clearQueue: () => {
+    const state = get();
+    // 保留当前播放歌曲：清空其余，不打断播放
+    if (state.currentSong) {
+      set({ playQueue: [state.currentSong], currentIndex: 0 });
+      return;
+    }
+    state.audioRef?.pause();
+    set({ playQueue: [], currentIndex: 0, isPlaying: false });
+    pushSmtc(true);
+  },
+
+  setQueuePanelOpen: (open) => set({ queuePanelOpen: open }),
+
   togglePlay: async () => {
     const { audioRef, isPlaying } = get();
     if (!audioRef) return;
@@ -2312,10 +2339,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         : "music_playlist_tracks";
       const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ leftPlaylistMeta: meta, leftPlaylistTracks: songs });
-      // 后台加载全部剩余 → 只追加到播放列表，不塞进歌单
-      if (provider === "netease") {
-        batchLoadToQueue(id, songs, meta.track_count);
-      }
     } catch {
       set({ leftPlaylistTracks: [] });
     } finally {
@@ -2392,9 +2415,26 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           break;
         }
         if (songs.length === 0) break;
-        set((s) => ({
-          leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
-        }));
+        set((s) => {
+          // 「播放全部」后台续载：若当前队列正是该歌单播放的，新页曲目去重后同步追加进队列
+          const shouldSync = s.playQueue.length > 0
+            && s.playQueue[s.currentIndex]?.id === s.currentSong?.id
+            && s.leftPlaylistTracks.length > 0
+            && s.leftPlaylistTracks[0]?.id === s.playQueue[0]?.id;
+          if (shouldSync) {
+            const queueIds = new Set(s.playQueue.map((q) => q.id));
+            const unique = songs.filter((song) => !queueIds.has(song.id));
+            const remaining = MAX_PLAY_QUEUE - s.playQueue.length;
+            const toAdd = unique.slice(0, Math.max(0, remaining));
+            return {
+              leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
+              playQueue: toAdd.length > 0 ? [...s.playQueue, ...toAdd] : s.playQueue,
+            };
+          }
+          return {
+            leftPlaylistTracks: [...s.leftPlaylistTracks, ...songs],
+          };
+        });
       }
     } finally {
       set({ leftPlaylistLoadingAll: false });
@@ -2411,9 +2451,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         : "music_playlist_tracks";
       const [meta, songs] = await invoke<[Playlist, Song[]]>(cmd, { id });
       set({ rightPlaylistMeta: meta, rightPlaylistTracks: songs });
-      if (provider === "netease") {
-        batchLoadToQueue(id, songs, meta.track_count);
-      }
     } catch {
       set({ rightPlaylistTracks: [] });
     } finally {
