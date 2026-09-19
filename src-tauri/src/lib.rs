@@ -55,6 +55,7 @@ mod sensor;
 mod sensor_monitor;
 mod shader_cache;
 mod pawnio_driver;
+mod peripheral_drivers;
 mod smart;
 mod sponsor;
 mod time_sync;
@@ -964,6 +965,8 @@ pub fn run() {
         pawnio_driver::check_pawnio_status,
         pawnio_driver::install_pawnio_driver,
         pawnio_driver::uninstall_pawnio_driver,
+        peripheral_drivers::get_peripheral_drivers,
+        peripheral_drivers::get_peripheral_driver_icon,
 
         vertical_overlay::start_vertical_overlay,
         vertical_overlay::stop_vertical_overlay,
