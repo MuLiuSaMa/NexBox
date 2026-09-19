@@ -1,7 +1,7 @@
 ﻿# ============================================================
 # NexBox MSIX 打包脚本
 # 用途：把 payload.zip（完整应用文件集）打包成可侧载测试的 MSIX
-# 流程：解包 payload -> 生成 AppxManifest + Assets -> makeappx -> 自签
+# 流程：解包 payload -> 生成 AppxManifest + Assets + resources.pri -> makeappx -> 自签
 # 重新发布前：先跑 installer\pack-payload.ps1 重建 payload.zip，再跑本脚本
 # ============================================================
 param(
@@ -17,8 +17,8 @@ param(
     [switch]$Diagnostic,
     # 诊断模式下额外保留的条目，逗号分隔字符串（如 "monitor,resources"），用于增量二分
     [string]$OnlyAdd = "",
-    # 诊断模式下从 staging 剔除的相对路径，逗号分隔（如 "resources/binaries/fxvad"）
-    [string]$RemoveFromStaging = ""
+    # 通用剔除：从 staging 移除的相对路径，逗号分隔。默认剔除 icc-tools（触发微软商店审核/预处理不过）
+    [string]$RemoveFromStaging = "resources/binaries/icc-tools"
 )
 
 $ErrorActionPreference = "Stop"
@@ -75,11 +75,35 @@ foreach ($rm in ($RemoveFromStaging -split ',' | ForEach-Object { $_.Trim() } | 
 Write-Host "[3/6] payload 解包完成：$((Get-ChildItem $Staging -Recurse -File | Measure-Object).Count) 个文件"
 
 # --- Assets 图标 ---
+# Assets 完全由本脚本重建（payload.zip 中不含 Assets）。每次打包重建 staging，
+# 因此 unplated 变体必须在此处随包重新生成，不能只手工放进 staging。
 $Assets = "$Staging\Assets"
 New-Item -ItemType Directory -Path $Assets -Force | Out-Null
 foreach ($icon in @("Square44x44Logo.png", "Square150x150Logo.png", "StoreLogo.png")) {
     Copy-Item "$IconsDir\$icon" "$Assets\$icon" -Force
 }
+# 生成 altform-unplated / altform-lightunplated 变体（修复开始菜单/任务栏图标
+# 因缺少 unplated 资产被系统回退渲染为主题色底板（红底）的问题）。
+# 源图用 icon.png（512x512，带 Alpha 通道）；基名与 Square44x44Logo 引用一致。
+# PaddingPercent=100：本应用图标为实心圆角方块（full-bleed）设计，铺满画布，
+# 任务栏原样显示（同 Chrome/Spotify），不留微软 glyph 图标约定的 20% 透明边距。
+& "$WorkDir\gen-assets.ps1" -SourcePng "$IconsDir\icon.png" -OutDir $Assets -BaseName "Square44x44Logo" -PaddingPercent 100
+
+# PRI 说明：必须用 makepri 生成 resources.pri，否则 Shell（任务栏）无法通过 MRT
+# 限定符解析 targetsize-N / _altform-unplated 等变体（无 PRI 时平铺的限定符文件
+# 不会被 Shell 枚举），任务栏会回退到不透明的 Square44x44Logo.png 并绘制主题色底板。
+# PRI 只存文件路径索引，体积小；全量索引 staging 是 MSIX Packaging Tool 的标准做法。
+$MakePri = "$($sdkVer.FullName)\x64\makepri.exe"
+& $MakePri createconfig /cf "$WorkDir\priconfig.xml" /dq zh-cn /pv 10.0.0 /o | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "makepri createconfig 失败 (exit=$LASTEXITCODE)" }
+# 去掉 packaging 节（autoResourcePackage 拆分 Scale/Language/DXFL）：单包侧载不打包 bundle，
+# 拆分出的 resources.scale-N.pri 卫星文件可能不被加载，全部并入单个 resources.pri 最稳妥
+$cfg = Get-Content "$WorkDir\priconfig.xml" -Raw
+$cfg = $cfg -replace '(?s)\s*<packaging>.*?</packaging>', ''
+[System.IO.File]::WriteAllText("$WorkDir\priconfig.xml", $cfg, (New-Object System.Text.UTF8Encoding($false)))
+& $MakePri new /pr $Staging /cf "$WorkDir\priconfig.xml" /of "$Staging\resources.pri" /o
+if ($LASTEXITCODE -ne 0) { throw "makepri new 失败 (exit=$LASTEXITCODE)" }
+Write-Host "  [PRI] resources.pri 已生成：$((Get-Item "$Staging\resources.pri").Length) 字节"
 
 # --- AppxManifest.xml ---
 if ($MinimalCaps) {
