@@ -50,11 +50,12 @@ query
 
 # Build outputs
 Output/
+# 忽略构建产物 exe，但保留 src-tauri 资源目录下随包分发的工具 exe
+*.exe
+!src-tauri/resources/binaries/icc-tools/*.exe
+!src-tauri/resources/binaries/*.exe
+!src-tauri/resources/binaries/fxvad/*.exe
 *.zip
-
-# 安装包与根目录冗余工具副本（构建产物，不入库）
-installer/*.exe
-PawnIO_setup.exe
 
 # Tauri
 src-tauri/src-tauri.zip
