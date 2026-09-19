@@ -39,7 +39,7 @@ export function LiquidGlassMenuItem({
   const outlineColor = getActiveColor();
   const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const transition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
   const isReal = liquidGlassEnabled && liquidGlassMode === "real";

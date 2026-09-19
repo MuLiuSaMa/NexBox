@@ -13,7 +13,6 @@ import {
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { AnimatePresence, motion } from "framer-motion";
-import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
@@ -366,7 +365,6 @@ export default function ShaderCachePage() {
     await doScan();
   };
 
-  const transitionMode = useTransitionMode();
 
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
@@ -464,21 +462,7 @@ export default function ShaderCachePage() {
     </VStack>
   );
 
-  return transitionMode !== "off" ? (
-    <motion.div
-      initial="initial"
-      animate="enter"
-      exit="exit"
-      variants={getVariants(transitionMode)}
-      transition={getTransitionConfig(transitionMode)}
-    >
-      {content}
-    </motion.div>
-  ) : (
-    <div>
-      {content}
-    </div>
-  );
+  return content;
 }
 
 function Grid({ children, ...props }: React.ComponentProps<typeof Box>) {

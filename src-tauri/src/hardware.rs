@@ -150,6 +150,12 @@ pub struct MonitorInfo {
     pub pnp_device_id: String,
     pub status: String,
     pub availability: Option<u16>,
+    /// 对角线尺寸（英寸），来自 WMI WmiMonitorBasicDisplayParams
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagonal_inches: Option<f64>,
+    /// 是否主显示器
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_primary: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -250,6 +256,8 @@ fn fallback_enumerate_monitors() -> Vec<MonitorInfo> {
                             pnp_device_id: format!("DISPLAY{}", i + 1),
                             status: "OK".to_string(),
                             availability: Some(3),
+                            diagonal_inches: None,
+                            is_primary: None,
                         });
                         found = true;
                         break;
@@ -262,6 +270,388 @@ fn fallback_enumerate_monitors() -> Vec<MonitorInfo> {
 
     log::info!("fallback_enumerate_monitors: 通过 EnumDisplaySettingsW 发现 {} 个显示器", monitors.len());
     monitors
+}
+
+// ───────── 显示器检测（参考 tubatools HardwareInfoService.GetActiveDisplayInfos）─────────
+
+/// DISPLAY_DEVICE.StateFlags：附加到桌面
+const DISPLAY_DEVICE_ATTACHED_TO_DESKTOP: u32 = 0x0000_0001;
+/// DISPLAY_DEVICE.StateFlags：主显示器
+const DISPLAY_DEVICE_PRIMARY_DEVICE: u32 = 0x0000_0004;
+
+/// PNP ID 前 3 字母 → 显示器厂商名（参考 EDID PNP ID 注册表，与 tubatools 一致）
+fn resolve_monitor_manufacturer(code: &str) -> Option<&'static str> {
+    let code = code.trim().trim_end_matches('_').to_uppercase();
+    let mfr = match code.as_str() {
+        "ABO" | "ACE" | "ACI" | "ACR" | "API" => "Acer(宏碁)",
+        "ACB" | "ACH" => "Achieva Shimian",
+        "AOC" | "NRC" | "OTS" => "AOC(冠捷)",
+        "GBR" => "Arzopa",
+        "ASR" => "华擎(ASRock)",
+        "ASU" | "AUS" | "WWW" => "华硕(ASUS)",
+        "AUO" | "DMO" | "CHR" => "友达(AU Optronics)",
+        "AVT" => "AVerMedia",
+        "AYA" => "AYANEO",
+        "BGO" => "Bangho",
+        "TOL" => "TCL",
+        "CSP" => "Casper",
+        "CPL" | "WOR" => "COMPAL",
+        "CRM" => "海盗船(Corsair)",
+        "CRU" => "CRUA",
+        "CSO" | "CSW" => "华星光电(CSOT)",
+        "CMN" | "CMI" => "奇美(Chimei InnoLux)",
+        "DAE" | "DWE" | "PCK" => "大宇(Daewoo)",
+        "DAH" => "大华(Dahua)",
+        "DIS" | "DEL" | "LNK" => "Dell(戴尔)",
+        "DTV" => "Digital TV",
+        "DOS" | "DST" => "Dostyle",
+        "EIZ" | "ENC" => "Eizo(艺卓)",
+        "EIA" | "ELE" | "EMT" => "Element",
+        "YUN" => "Elgato",
+        "ELA" | "ELS" => "ELSA",
+        "ETG" => "Etigroup",
+        "EMA" | "EMI" => "eMachines",
+        "FAY" => "Faytech",
+        "FND" | "FDR" => "方正(Founder)",
+        "FPT" => "FPT",
+        "FNI" => "Funai",
+        "FUR" => "Furrion",
+        "GTW" | "GWY" => "Gateway",
+        "GMX" => "GameMax",
+        "GRE" => "GreBear",
+        "GRR" | "GRU" => "Grundig",
+        "HEC" => "海信(Hisense)",
+        "HSD" | "HSP" => "瀚宇彩晶(HannStar)",
+        "HIK" => "海康威视(Hikvision)",
+        "HIT" | "HTC" => "日立(Hitachi)",
+        "HRE" => "海尔(Haier)",
+        "HAT" | "HUI" | "HUN" => "绘王(Huion)",
+        "HIQ" | "IQT" => "现代(Hyundai ImageQuest)",
+        "INL" | "INX" => "群创(InnoLux Display)",
+        "INS" => "Insignia",
+        "HKM" => "Japannext",
+        "JRP" => "晶丽泰(JINGLITAI)",
+        "KAZ" => "KAZUK",
+        "LAC" | "LCA" => "LaCie",
+        "LCS" | "LEN" | "LEO" | "LNV" | "QUA" | "QWA" => "联想(Lenovo)",
+        "LGD" | "LPL" | "LGP" | "GSM" => "LG Display",
+        "LOE" => "Loewe",
+        "MEA" | "MEB" | "MED" => "Medion",
+        "MAG" => "美格(MAG)",
+        "MSI" => "微星(MSI)",
+        "NLK" | "MST" => "MStar",
+        "NLE" => "Newline",
+        "NSL" => "Newskill",
+        "NEW" => "Newsync",
+        "NIX" | "NTI" | "NXG" => "Nixeus",
+        "MRG" | "NRL" => "Nreal Air",
+        "BDL" => "OneMeeting",
+        "OPT" | "OTM" => "Optoma",
+        "YLT" | "MEI" => "松下(Panasonic)",
+        "MEL" => "三菱(Mitsubishi)",
+        "PQA" => "PEAQ",
+        "PFL" | "PFT" | "PHA" | "PHG" | "PHI" | "PHL" | "PHP" | "PHT" | "PTS" => "飞利浦(Philips)",
+        "GDH" | "PLC" | "PHO" => "Philco",
+        "PXO" | "ICB" | "HYC" | "PNS" | "WAM" => "Pixio",
+        "HTB" | "PGS" | "PRT" => "Princeton",
+        "MKN" | "POL" => "Polaroid",
+        "NON" | "PCL" | "POS" => "Positivo",
+        "ASB" | "PRE" => "Prestigio",
+        "RAR" => "Raritan",
+        "LGE" | "SAM" | "SDC" | "SEC" | "SEM" | "SIM" | "STN" | "YM" => "三星(Samsung)",
+        "XEC" => "SANSUI",
+        "KDD" | "SEK" => "Seiki",
+        "SHC" | "SHP" | "SHV" => "夏普(Sharp)",
+        "SKY" => "创维(Skyworth)",
+        "XMI" => "小米(Xiaomi)",
+        "SNY" | "MS" => "索尼(Sony)",
+        "SOT" => "SOTEC",
+        "SUE" => "SuperFrame",
+        "TFK" => "TELEFUNKEN",
+        "PKV" | "TMN" | "TTE" => "Thomson",
+        "TRG" => "雷神(ThundeRobot)",
+        "LCD" | "TOS" | "TSB" => "东芝(Toshiba)",
+        "UPV" => "UPlusVision",
+        "XYA" => "Valday",
+        "IZI" | "VIZ" | "VZO" => "Vizio",
+        "JRY" => "VIZTA",
+        "WDE" | "WDT" | "WEH" | "WET" => "Westinghouse",
+        "WIP" => "Wipro",
+        "YSI" => "Yashi",
+        "BOE" => "京东方(BOE)",
+        "HKC" => "HKC(惠科)",
+        "IVO" => "天马(IVO)",
+        "HWP" | "HEW" => "HP(惠普)",
+        "GWR" => "长城(Great Wall)",
+        "HPC" => "惠浦(HPC)",
+        "VSC" => "优派(ViewSonic)",
+        "VIT" => "唯冠(VIT)",
+        "IMA" => "理想(IMA)",
+        "NEX" => "NEXO",
+        "ELO" => "Elo Touch",
+        "FUJ" | "FUS" => "富士通(Fujitsu)",
+        "GGL" => "Google",
+        "HHT" => "鸿合(Hitevision)",
+        "JDI" => "日本显示器(JDI)",
+        "OEM" => "OEM",
+        "PBN" => "Packard Bell",
+        "QDS" => "Quanta Display",
+        "SPT" => "Sceptre",
+        "SUN" => "Sun",
+        "UNM" => "Unisys",
+        "VES" => "Vestel",
+        "ZCM" => "Zenith",
+        _ => return None,
+    };
+    Some(mfr)
+}
+
+/// 从 DeviceID / InstanceName（如 "MONITOR\\DELA0A1A\\5&..." 或
+/// "MONITOR#DELA0A1A#5&..."）中提取 PNP 代码（如 "DELA0A1A"）。
+/// 兼容 '#' 与 '\\' 两种分隔符（tubatools ExtractMonitorPnpCode 等价实现）。
+fn extract_monitor_pnp_code(device_id: &str) -> Option<String> {
+    let normalized = device_id.replace('#', "\\");
+    extract_pnpid(&normalized)
+}
+
+/// 解码 WmiMonitorID 中的 ushort 文本数组（EDID 文本，ASCII，0 结尾）
+fn decode_wmi_edid_text(v: &wmi_query::Variant) -> String {
+    wmi_query::v_u16_arr(v)
+        .into_iter()
+        .take_while(|&c| c > 0)
+        .filter_map(|c| char::from_u32(c as u32))
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+/// WMI root\\WMI WmiMonitorID：PNP 代码 → 型号名（EDID 解码，仅取型号，不拼厂商/SN）
+fn get_wmi_monitor_labels_by_pnpid() -> std::collections::HashMap<String, String> {
+    let mut labels = std::collections::HashMap::new();
+    let query = "SELECT InstanceName, ProductName FROM WmiMonitorID";
+    let rows = match wmi_query::wmi_query_ns("ROOT\\WMI", query) {
+        Ok(rows) if !rows.is_empty() => rows,
+        Ok(_) => {
+            log::info!("WmiMonitorID 返回 0 行，将回退到注册表 EDID");
+            Vec::new()
+        }
+        Err(e) => {
+            log::warn!("WmiMonitorID 查询失败: {}，将回退到注册表 EDID", e);
+            Vec::new()
+        }
+    };
+    for row in rows {
+        let instance = row.get("InstanceName").and_then(wmi_query::v_str).unwrap_or_default();
+        let Some(pnp_code) = extract_monitor_pnp_code(&instance) else { continue };
+        if labels.contains_key(&pnp_code) {
+            continue;
+        }
+
+        let product = row.get("ProductName").map(decode_wmi_edid_text).unwrap_or_default();
+        if !product.is_empty() {
+            labels.insert(pnp_code, product);
+        }
+    }
+    labels
+}
+
+/// 型号标签（数据源为注册表 EDID）：只取 EDID 名称描述符，纯型号，不拼厂商/SN，
+/// 如 "Mi Monitor"、"U24PF14"。无名称时返回空，由调用链继续兕底。
+fn build_edid_monitor_label(info: &crate::display_cache::EdidMonitorInfo) -> String {
+    info.name.trim().to_string()
+}
+
+/// 从 EDID 物理尺寸（厘米）计算对角线英寸数
+fn edid_diagonal_inches(info: &crate::display_cache::EdidMonitorInfo) -> Option<f64> {
+    if info.max_h_cm > 0 && info.max_v_cm > 0 {
+        let diagonal_cm = ((info.max_h_cm * info.max_h_cm + info.max_v_cm * info.max_v_cm) as f64).sqrt();
+        Some(diagonal_cm / 2.54)
+    } else {
+        None
+    }
+}
+/// WMI root\\WMI WmiMonitorBasicDisplayParams：PNP 代码 → 对角线尺寸（英寸）
+fn get_wmi_monitor_diagonal_by_pnpid() -> std::collections::HashMap<String, f64> {
+    let mut sizes = std::collections::HashMap::new();
+    let query = "SELECT InstanceName, MaxHorizontalImageSize, MaxVerticalImageSize FROM WmiMonitorBasicDisplayParams";
+    let rows = match wmi_query::wmi_query_ns("ROOT\\WMI", query) {
+        Ok(rows) if !rows.is_empty() => rows,
+        Ok(_) => {
+            log::info!("WmiMonitorBasicDisplayParams 返回 0 行，将回退到注册表 EDID");
+            Vec::new()
+        }
+        Err(e) => {
+            log::warn!("WmiMonitorBasicDisplayParams 查询失败: {}，将回退到注册表 EDID", e);
+            Vec::new()
+        }
+    };
+    for row in rows {
+        let instance = row.get("InstanceName").and_then(wmi_query::v_str).unwrap_or_default();
+        let Some(pnp_code) = extract_monitor_pnp_code(&instance) else { continue };
+        if sizes.contains_key(&pnp_code) {
+            continue;
+        }
+        let w = row.get("MaxHorizontalImageSize").and_then(wmi_query::v_u32).unwrap_or(0);
+        let h = row.get("MaxVerticalImageSize").and_then(wmi_query::v_u32).unwrap_or(0);
+        if w > 0 && h > 0 {
+            let diagonal_cm = ((w * w + h * h) as f64).sqrt();
+            sizes.insert(pnp_code, diagonal_cm / 2.54);
+        }
+    }
+    sizes
+}
+
+/// 参考 tubatools ChooseDisplayLabel：
+/// WMI EDID 标签 → 驱动提供的设备名（非通用名）→ PNP 代码解析厂商。
+fn choose_display_label(wmi_label: &str, device_string: &str, pnp_code: &str) -> String {
+    let wmi_label = wmi_label.trim();
+    if !wmi_label.is_empty() {
+        return wmi_label.to_string();
+    }
+
+    let driver_label = device_string.trim();
+    if !driver_label.is_empty() && !is_generic_monitor_name(driver_label) {
+        return driver_label.to_string();
+    }
+
+    if let Some(mfr) = pnp_code.get(..3).and_then(resolve_monitor_manufacturer) {
+        return mfr.to_string();
+    }
+    String::new()
+}
+
+fn utf16_buf_to_string(buf: &[u16]) -> String {
+    let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+    String::from_utf16_lossy(&buf[..len]).trim().to_string()
+}
+
+/// 参考 tubatools GetActiveDisplayInfos：
+/// 1. EnumDisplayDevicesW 枚举活动桌面显示器（含主屏标记）
+/// 2. 子枚举监视器设备拿到 DeviceString / DeviceID，提取 PNP 代码
+/// 3. EnumDisplaySettingsW 拿当前分辨率与刷新率
+/// 4. WmiMonitorID 解码 EDID 得到 型号+厂商 标签；WmiMonitorBasicDisplayParams 算对角线尺寸
+/// 5. PNP 3字母代码解析厂商名兜底
+fn get_active_display_infos() -> Vec<MonitorInfo> {
+    use std::mem;
+    use windows_sys::Win32::Graphics::Gdi::{
+        EnumDisplayDevicesW, EnumDisplaySettingsW, DEVMODEW, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS,
+    };
+
+    let wmi_labels = get_wmi_monitor_labels_by_pnpid();
+    let wmi_sizes = get_wmi_monitor_diagonal_by_pnpid();
+    // 注册表 EDID 兕底（与 WmiMonitorID 同源数据，WMI 异常时仍能拿到型号/厂商/序列号/尺寸）
+    let edid_infos = crate::display_cache::get_edid_monitor_infos_by_pnpid();
+
+    let new_display_device = || {
+        let mut dd: DISPLAY_DEVICEW = unsafe { mem::zeroed() };
+        dd.cb = mem::size_of::<DISPLAY_DEVICEW>() as u32;
+        dd
+    };
+
+    let mut results: Vec<MonitorInfo> = Vec::new();
+
+    for i in 0..64u32 {
+        let mut adapter = new_display_device();
+        if unsafe { EnumDisplayDevicesW(std::ptr::null(), i, &mut adapter, 0) } == 0 {
+            break;
+        }
+        if (adapter.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) == 0 {
+            continue;
+        }
+
+        let adapter_name = utf16_buf_to_string(&adapter.DeviceName);
+        let name_wide: Vec<u16> = adapter_name.encode_utf16().chain(std::iter::once(0)).collect();
+
+        // 当前分辨率 / 刷新率
+        let mut dm: DEVMODEW = unsafe { mem::zeroed() };
+        dm.dmSize = mem::size_of::<DEVMODEW>() as u16;
+        let mut width = None;
+        let mut height = None;
+        let mut refresh = None;
+        if unsafe { EnumDisplaySettingsW(name_wide.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) } != 0
+            && dm.dmPelsWidth > 0
+            && dm.dmPelsHeight > 0
+        {
+            width = Some(dm.dmPelsWidth);
+            height = Some(dm.dmPelsHeight);
+            refresh = Some(dm.dmDisplayFrequency);
+        }
+
+        // 子枚举监视器设备：DeviceString（驱动名）/ DeviceID（MONITOR\\PNP码\\...）
+        // (device_string, device_id, state_flags)
+        let mut chosen: Option<(String, String, u32)> = None;
+        let mut fallback_mon: Option<(String, String, u32)> = None;
+        for j in 0..16u32 {
+            let mut mon = new_display_device();
+            if unsafe { EnumDisplayDevicesW(name_wide.as_ptr(), j, &mut mon, 0) } == 0 {
+                break;
+            }
+            let info = (
+                utf16_buf_to_string(&mon.DeviceString),
+                utf16_buf_to_string(&mon.DeviceID),
+                mon.StateFlags,
+            );
+            if fallback_mon.is_none() {
+                fallback_mon = Some(info.clone());
+            }
+            if (info.2 & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP) != 0 {
+                chosen = Some(info);
+                break;
+            }
+        }
+        let Some((device_string, device_id, _)) = chosen.or(fallback_mon) else {
+            continue;
+        };
+
+        let pnp_code = extract_monitor_pnp_code(&device_id).unwrap_or_default();
+        let is_primary = (adapter.StateFlags & DISPLAY_DEVICE_PRIMARY_DEVICE) != 0;
+        let wmi_label = wmi_labels.get(&pnp_code).cloned().unwrap_or_default();
+        let edid_info = edid_infos.get(&pnp_code).cloned().unwrap_or_default();
+
+        // 标签优先级：WMI EDID 标签 → 注册表 EDID 标签 → 驱动设备名 → PNP 厂商
+        let label = if !wmi_label.is_empty() {
+            wmi_label
+        } else if !edid_info.name.trim().is_empty()
+            && !is_generic_monitor_name(edid_info.name.trim())
+        {
+            build_edid_monitor_label(&edid_info)
+        } else {
+            choose_display_label("", &device_string, &pnp_code)
+        };
+        if label.is_empty() && width.is_none() {
+            continue;
+        }
+
+        let name = if label.is_empty() {
+            format!("DISPLAY{}", i + 1)
+        } else {
+            label
+        };
+        let manufacturer = pnp_code
+            .get(..3)
+            .and_then(resolve_monitor_manufacturer)
+            .or_else(|| resolve_monitor_manufacturer(edid_info.manufacturer_code.trim()))
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "未知".to_string());
+
+        results.push(MonitorInfo {
+            name,
+            manufacturer,
+            screen_width: width,
+            screen_height: height,
+            refresh_rate: refresh,
+            pnp_device_id: device_id,
+            status: "OK".to_string(),
+            availability: Some(3),
+            diagonal_inches: wmi_sizes
+                .get(&pnp_code)
+                .copied()
+                .or_else(|| edid_diagonal_inches(&edid_info)),
+            is_primary: Some(is_primary),
+        });
+    }
+
+    results
 }
 
 // 静态硬件信息缓存（不会变化的部分）
@@ -1437,69 +1827,19 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     });
 
     let monitor_handle = thread::spawn(move || {
-        // Win32_DesktopMonitor 在现代 Windows 上已废弃，经常返回空，
-        // 所以 WMI 失败或为空时会自动回退到 EnumDisplaySettingsW + 注册表 EDID 方案。
-        let wmi_results = wmi_query::wmi_query("SELECT Name, MonitorManufacturerName, ScreenWidth, ScreenHeight, DisplayFrequency, PNPDeviceID, Status, Availability FROM Win32_DesktopMonitor");
-
-        match wmi_results {
-            Ok(results) if !results.is_empty() => {
-                let filtered: Vec<_> = results.into_iter()
-                    .filter(|row| {
-                        let name_ok = row.get("Name").map_or(false, |v| wmi_query::v_nonempty(v));
-                        let pnp_ok = row.get("PNPDeviceID").map_or(false, |v| wmi_query::v_nonempty(v));
-                        name_ok && pnp_ok
-                    })
-                    .collect();
-                log::info!("获取到{}个显示器信息", filtered.len());
-
-                if filtered.is_empty() {
-                    log::debug!("WMI 结果经筛选后为空，回退到 EnumDisplaySettingsW");
-                    return fallback_enumerate_monitors();
-                }
-
-                let mut monitors: Vec<MonitorInfo> = filtered.into_iter().map(|row| {
-                    MonitorInfo {
-                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        manufacturer: row.get("MonitorManufacturerName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        screen_width: row.get("ScreenWidth").and_then(|v| wmi_query::v_u32(v)),
-                        screen_height: row.get("ScreenHeight").and_then(|v| wmi_query::v_u32(v)),
-                        refresh_rate: row.get("DisplayFrequency").and_then(|v| wmi_query::v_u32(v)),
-                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        availability: row.get("Availability").and_then(|v| wmi_query::v_u16(v)),
-                    }
-                }).collect::<Vec<MonitorInfo>>();
-
-                // EDID 回退（通过注册表读取，无 PowerShell）：如果名称是通用的，替换为真实型号。
-                // 关键：按 PNP 设备 ID 匹配，而不是按数组下标——WMI 的枚举顺序与注册表
-                // EDID 枚举顺序并不一致，按下标对齐会把 A 显示器的型号错配到 B 显示器。
-                let has_generic = monitors.iter().any(|m| is_generic_monitor_name(&m.name));
-                if has_generic {
-                    log::info!("检测到通用显示器名称，从注册表 EDID 获取真实型号（按 PNP ID 匹配）...");
-                    let edid_map = crate::display_cache::get_edid_monitor_names_by_pnpid();
-                    if !edid_map.is_empty() {
-                        for m in monitors.iter_mut() {
-                            if is_generic_monitor_name(&m.name) {
-                                if let Some(pnpid) = extract_pnpid(&m.pnp_device_id) {
-                                    if let Some(edid_name) = edid_map.get(&pnpid) {
-                                        if !edid_name.is_empty() {
-                                            log::info!("显示器[PNP {}]: EDID 替换 '{}' -> '{}'", pnpid, m.name, edid_name);
-                                            m.name = edid_name.clone();
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                monitors
-            }
-            _ => {
-                log::debug!("WMI Win32_DesktopMonitor 不可用或为空，回退到 EnumDisplaySettingsW 枚举显示器");
-                fallback_enumerate_monitors()
-            }
+        // 参考 tubatools HardwareInfoService：
+        // 主路径：EnumDisplayDevicesW 枚举活动桌面显示器
+        //   + WMI root\WMI WmiMonitorID 解码 EDID（型号/厂商）
+        //   + WmiMonitorBasicDisplayParams 计算对角线尺寸
+        //   + PNP 3字母代码解析厂商名
+        // 兜底：EnumDisplaySettingsW 枚举 + 注册表 EDID。
+        let monitors = get_active_display_infos();
+        if !monitors.is_empty() {
+            log::info!("通过 EnumDisplayDevices+WMI 获取到{}个显示器信息", monitors.len());
+            return monitors;
         }
+        log::debug!("EnumDisplayDevices+WMI 未获取到显示器，回退到 EnumDisplaySettingsW 枚举显示器");
+        fallback_enumerate_monitors()
     });
 
     let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {

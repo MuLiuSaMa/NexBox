@@ -355,7 +355,7 @@ export function Sidebar() {
     isFirstRender.current = false;
   }, []);
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const isReal = liquidGlassEnabled && liquidGlassMode === "real";
   const backdropFilter = isReal

@@ -10,6 +10,11 @@ declare module "*.png" {
   export default value;
 }
 
+declare module "*.svg" {
+  const value: string;
+  export default value;
+}
+
 declare module "lunar-javascript" {
   export class Solar {
     static fromYmd(year: number, month: number, day: number): Solar;

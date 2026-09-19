@@ -2,7 +2,8 @@
 // 基于 wmi crate（底层即 windows crate 的 COM 调用）
 
 use std::collections::HashMap;
-use wmi::{COMLibrary, WMIConnection, Variant};
+use wmi::{COMLibrary, WMIConnection};
+pub use wmi::Variant;
 
 fn create_connection() -> Result<WMIConnection, String> {
     let com_con =
@@ -102,14 +103,5 @@ pub fn v_u16_arr(v: &Variant) -> Vec<u16> {
         Variant::UI4(n) => vec![*n as u16],
         Variant::Array(arr) => arr.iter().filter_map(|e| v_u16(e)).collect(),
         _ => vec![],
-    }
-}
-
-/// 判断 Variant 是否非空且非空字符串
-pub fn v_nonempty(v: &Variant) -> bool {
-    match v {
-        Variant::Empty | Variant::Null => false,
-        Variant::String(s) => !s.trim().is_empty(),
-        _ => true,
     }
 }

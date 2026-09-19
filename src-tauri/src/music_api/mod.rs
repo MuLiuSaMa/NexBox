@@ -755,6 +755,134 @@ fn is_migu_domain(domain: &str) -> bool {
     d == "migu.cn" || d.ends_with(".migu.cn")
 }
 
+
+/// 为登录窗口安装第三方登录弹窗处理 (`window.open`)
+///
+/// ⭐ 这是「点了 QQ/微信/微博 图标没反应」的根因。
+///
+/// 各平台登录页的第三方登录按钮走的是 `window.open`，实参形如：
+/// ```js
+/// window.open(
+///   "https://graph.qq.com/oauth2.0/show?...",
+///   "QQ帐号",
+///   "width=502,height=390,left=,menubar=0,scrollbars=1,status=1,titlebar=0,toobar=0,location=1,resizable=yes"
+/// );
+/// ```
+/// Tauri 默认 **不处理** 新窗口请求 (返回 Deny)，于是弹窗被静默丢弃，
+/// 表现为「点了没反应、没有任何报错」。
+///
+/// 这里改成真正创建子窗口，把第三方登录页面装进去。
+/// 子窗口与父窗口共用同一个 WebView2 用户数据目录，因此第三方回跳到
+/// 平台域名后写下的登录 cookie 能被父窗口的轮询读到、从而完成登录。
+///
+/// 子窗口还会在**回跳到平台域名**后自动关闭 —— 见 `is_login_popup_done_url`。
+fn attach_login_popup_handler<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
+    builder: tauri::webview::WebviewWindowBuilder<'a, R, M>,
+    app: &AppHandle<R>,
+) -> tauri::webview::WebviewWindowBuilder<'a, R, M> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static POPUP_SEQ: AtomicU32 = AtomicU32::new(0);
+
+    let app_handle = app.clone();
+    builder.on_new_window(move |url, _features| {
+        let label = format!("music-login-popup-{}", POPUP_SEQ.fetch_add(1, Ordering::Relaxed));
+        log::info!("[MusicLogin] window.open intercepted: {url}");
+        let builder = tauri::WebviewWindowBuilder::new(
+            &app_handle,
+            &label,
+            tauri::WebviewUrl::External(url.clone()),
+        )
+        .title("帐号登录")
+        .inner_size(560.0, 640.0)
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        // OAuth 走完后第三方会回跳到平台自己的域名，此时登录已完成，
+        // 子窗口要自己关掉，否则用户得手动点叉。
+        .on_page_load(|window, payload| {
+            if payload.event() != tauri::webview::PageLoadEvent::Finished {
+                return;
+            }
+            let loaded = payload.url().clone();
+            if login_popup_should_close(&loaded) {
+                log::info!("[MusicLogin] popup reached done url, closing: {loaded}");
+                let _ = window.close();
+            }
+        });
+
+        match builder.build() {
+            Ok(window) => tauri::webview::NewWindowResponse::Create { window },
+            Err(e) => {
+                log::warn!("[MusicLogin] failed to create popup for {url}: {e}");
+                tauri::webview::NewWindowResponse::Deny
+            }
+        }
+    })
+}
+
+/// 关闭登录窗口，并顺带关掉它弹出的所有第三方登录子窗口
+///
+/// 子窗口的 label 前缀是 `music-login-popup-`。正常情况下子窗口会在
+/// OAuth 回跳到平台域名时自己关闭 (见 `login_popup_should_close`)，
+/// 但如果用户中途取消授权、或第三方页面停在某个未知域名上，
+/// 子窗口就会残留。登录成功后统一清一次，保证不留孤儿窗口。
+fn close_login_window_with_popups<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    login_label: &str,
+) {
+    for (_label, win) in app.webview_windows() {
+        if _label.starts_with("music-login-popup-") {
+            log::info!("[MusicLogin] closing leftover popup: {_label}");
+            let _ = win.close();
+        }
+    }
+    if let Some(win) = app.get_webview_window(login_label) {
+        let _ = win.close();
+    }
+}
+
+/// 判断登录子窗口当前 URL 是否表示「第三方授权已走完、可以关窗了」
+///
+/// 实际回跳链路（以 QQ 为例）：
+/// ```text
+/// graph.qq.com/oauth2.0/show?...     ← 第三方授权页
+///   → {平台域名}/...                  ← 平台收 code / 换票据
+///   → {平台域名}/...                  ← 回主站，cookie 已落地
+/// ```
+/// 所以判据是「**已经回到平台域名**」。同时必须排除第三方授权域，
+/// 否则 `graph.qq.com` 若含平台串就会误关。
+fn login_popup_should_close(url: &Url) -> bool {
+    let host = match url.host_str() {
+        Some(h) => h.to_lowercase(),
+        None => return false,
+    };
+
+    // 第三方授权域：出现这些说明还在授权流程中，绝不能关
+    const THIRD_PARTY: &[&str] = &[
+        "graph.qq.com",
+        "open.weixin.qq.com",
+        "api.weibo.com",
+        "ptlogin2.qq.com",
+        "xui.ptlogin2.qq.com",
+        "openapi.weibo.com",
+        "passport.",
+    ];
+    if THIRD_PARTY.iter().any(|d| host == *d || host.ends_with(&format!(".{d}"))) {
+        return false;
+    }
+
+    // 回到平台域名 = 授权完成
+    const PLATFORM: &[&str] = &[
+        "163.com",              // 网易云
+        "kugou.com",            // 酷狗
+        "kugoucdn.com",
+        "qq.com",               // QQ 音乐 (y.qq.com 等)
+        "migu.cn",              // 咪咕
+        "migucdn.com",
+    ];
+    PLATFORM
+        .iter()
+        .any(|d| host == *d || host.ends_with(&format!(".{d}")))
+}
+
 /// 从 webview cookies 构建指定平台的 cookie 字符串
 fn build_cookie_from_webview(cookies: &[tauri::webview::Cookie], priority: &[&str], domain_check: fn(&str) -> bool) -> String {
     use std::collections::HashMap;
@@ -814,16 +942,19 @@ async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
         return Ok("window_refreshed".into());
     }
 
-    let login_window = tauri::WebviewWindowBuilder::new(
+    let login_window = attach_login_popup_handler(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            label,
+            WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+        )
+        .title("网易云音乐登录")
+        // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .inner_size(940.0, 760.0)
+        .min_inner_size(780.0, 580.0),
         app,
-        label,
-        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
-    .title("网易云音乐登录")
-    // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
-    .inner_size(940.0, 760.0)
-    .min_inner_size(780.0, 580.0)
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
 
@@ -845,7 +976,7 @@ async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
                         log::info!("[MusicAPI] MUSIC_U cookie found, cookie length: {}", cookie_str.len());
                         let _ = cookie::save_cookie(&app_handle, "netease", &cookie_str);
                         set_app_cookie(cookie_str).await;
-                        let _ = win.close();
+                        close_login_window_with_popups(&app_handle, "netease-login");
                         let app_cookie = get_app_cookie().await;
                         match netease::login_status(&app_cookie).await {
                             Ok(info) => {
@@ -897,16 +1028,19 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
         return Ok("window_refreshed".into());
     }
 
-    let login_window = tauri::WebviewWindowBuilder::new(
+    let login_window = attach_login_popup_handler(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            label,
+            WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+        )
+        .title("酷狗音乐登录")
+        // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .inner_size(900.0, 720.0)
+        .min_inner_size(760.0, 560.0),
         app,
-        label,
-        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
-    .title("酷狗音乐登录")
-    // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
-    .inner_size(900.0, 720.0)
-    .min_inner_size(760.0, 560.0)
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
 
@@ -932,7 +1066,7 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
                         log::info!("[KugouLogin] playbackReady cookie found, length: {}", cookie_str.len());
                         let _ = cookie::save_cookie(&app_handle, "kugou", &cookie_str);
                         set_provider_cookie("kugou", cookie_str).await;
-                        let _ = win.close();
+                        close_login_window_with_popups(&app_handle, "kugou-login");
                         let kugou_cookie = get_provider_cookie("kugou").await;
                         match kugou::login_info(&kugou_cookie).await {
                             Ok(info) => {
@@ -1007,16 +1141,19 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
         return Ok("window_refreshed".into());
     }
 
-    let login_window = tauri::WebviewWindowBuilder::new(
+    let login_window = attach_login_popup_handler(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            label,
+            WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+        )
+        .title("QQ 音乐登录")
+        // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .inner_size(900.0, 720.0)
+        .min_inner_size(760.0, 560.0),
         app,
-        label,
-        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
-    .title("QQ 音乐登录")
-    // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
-    .inner_size(900.0, 720.0)
-    .min_inner_size(760.0, 560.0)
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
 
@@ -1041,7 +1178,7 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
                         log::info!("[QQLogin] playbackReady cookie found, length: {}", cookie_str.len());
                         let _ = cookie::save_cookie(&app_handle, "qqmusic", &cookie_str);
                         set_provider_cookie("qqmusic", cookie_str).await;
-                        let _ = win.close();
+                        close_login_window_with_popups(&app_handle, "qqmusic-login");
                         let qq_cookie = get_provider_cookie("qqmusic").await;
                         match qqmusic::login_info(&qq_cookie).await {
                             Ok(info) => {
@@ -1113,16 +1250,19 @@ async fn open_migu_login_window(app: &AppHandle) -> Result<String, String> {
         return Ok("window_refreshed".into());
     }
 
-    let login_window = tauri::WebviewWindowBuilder::new(
+    let login_window = attach_login_popup_handler(
+        tauri::WebviewWindowBuilder::new(
+            app,
+            label,
+            WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
+        )
+        .title("咪咕音乐登录")
+        // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
+        .inner_size(900.0, 720.0)
+        .min_inner_size(760.0, 560.0),
         app,
-        label,
-        WebviewUrl::External("about:blank".parse().map_err(|e: url::ParseError| e.to_string())?),
     )
-    .title("咪咕音乐登录")
-    // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-    .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
-    .inner_size(900.0, 720.0)
-    .min_inner_size(760.0, 560.0)
     .build()
     .map_err(|e| format!("Failed to create login window: {e}"))?;
 
@@ -1153,7 +1293,7 @@ async fn open_migu_login_window(app: &AppHandle) -> Result<String, String> {
                                 let _ = cookie::save_user_id(&app_handle, "migu", &info.user_id);
                                 set_provider_cookie("migu", cookie_str).await;
                                 set_migu_uid(info.user_id.clone()).await;
-                                let _ = win.close();
+                                close_login_window_with_popups(&app_handle, "migu-login");
                                 let _ = app_handle.emit("migu-login-success", &info);
                                 return;
                             }
@@ -1184,7 +1324,7 @@ async fn open_migu_login_window(app: &AppHandle) -> Result<String, String> {
                         let _ = cookie::save_user_id(&app_handle, "migu", &info.user_id);
                         set_provider_cookie("migu", cookie_str).await;
                         set_migu_uid(info.user_id.clone()).await;
-                        let _ = win.close();
+                        close_login_window_with_popups(&app_handle, "migu-login");
                         let _ = app_handle.emit("migu-login-success", &info);
                         return;
                     }
@@ -1331,5 +1471,84 @@ pub async fn init_cookie_cache(app: &AppHandle) {
     }
     if let Ok(uid) = cookie::load_user_id(app, "migu") {
         set_migu_uid(uid).await;
+    }
+}
+
+#[cfg(test)]
+mod login_popup_tests {
+    use super::login_popup_should_close;
+
+    fn u(s: &str) -> url::Url {
+        s.parse().expect("test url should parse")
+    }
+
+    /// 真实的 QQ 登录回跳链：每一步都不能提前关窗，最后一步必须关
+    #[test]
+    fn qq_redirect_chain_closes_only_at_end() {
+        // 1) 第三方授权页 —— 必须保持打开
+        assert!(
+            !login_popup_should_close(&u(
+                "https://graph.qq.com/oauth2.0/show?which=ConfirmPage&display=pc&client_id=100243533"
+            )),
+            "QQ 授权页不应被关闭"
+        );
+
+        // 2) 平台收 code 的中间页 —— 已回到平台域名，可以关
+        //    (票据已经写进 cookie，继续停留没有意义)
+        assert!(
+            login_popup_should_close(&u(
+                "https://music.163.com/back/qq?code=xxx"
+            )),
+            "回到网易云域名后应关闭"
+        );
+
+        // 3) 平台换票据页
+        assert!(
+            login_popup_should_close(&u("https://y.qq.com/portal/profile.html")),
+            "回到 QQ 音乐域名后应关闭"
+        );
+
+        // 4) 主站
+        assert!(
+            login_popup_should_close(&u("https://www.kugou.com/")),
+            "回到酷狗主站后应关闭"
+        );
+    }
+
+    /// 其它平台的第三方域不能误判为「已完成」
+    #[test]
+    fn other_third_party_domains_stay_open() {
+        let cases = [
+            "https://open.weixin.qq.com/connect/qrconnect?appid=wx41c1275bb3e28427",
+            "https://api.weibo.com/oauth2/authorize?client_id=2972927130",
+            "https://xui.ptlogin2.qq.com/cgi-bin/xlogin",
+        ];
+        for c in cases {
+            assert!(
+                !login_popup_should_close(&u(c)),
+                "第三方授权域不应被关闭: {c}"
+            );
+        }
+    }
+
+    /// 空 host / about:blank 不能触发关闭
+    #[test]
+    fn blank_and_hostless_urls_stay_open() {
+        assert!(!login_popup_should_close(&u("about:blank")));
+    }
+
+    /// 伪造相似域名不能被当作平台域 (防后缀混淆)
+    #[test]
+    fn lookalike_domains_are_not_treated_as_platform() {
+        for c in [
+            "https://163.com.evil.com/callback",
+            "https://notkugou.com/callback",
+            "https://fakemigu.cn.evil.com/callback",
+        ] {
+            assert!(
+                !login_popup_should_close(&u(c)),
+                "相似域名不应被误判: {c}"
+            );
+        }
     }
 }

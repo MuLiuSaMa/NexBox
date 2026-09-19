@@ -63,7 +63,9 @@
     "contextMenu": "Context Menu Manager",
     "downloadAccelerator": "Downloader",
     "nvidiaRecording": "NVIDIA Recording Manager",
-    "vacRepair": "CS:GO VAC Repair"
+    "vacRepair": "CS:GO VAC Repair",
+    "appManager": "App Manager",
+    "timeSync": "Time Sync"
   },
   "customPage": {
     "title": "Custom Dashboard",
@@ -78,7 +80,6 @@
     "exitEdit": "Exit Edit"
   },
   "steam": {
-    "loading": "Loading Steam data...",
     "notInstalled": "Steam is not installed. Please install Steam client first.",
     "running": "Running",
     "notRunning": "Not Running",
@@ -136,7 +137,8 @@
     "notInstalledBadge": "Not installed",
     "loadMore": "Load more",
     "install": "Install",
-    "installSent": "Install request sent to Steam"
+    "installSent": "Install request sent to Steam",
+    "loading": "Loading Steam data..."
   },
   "powerAdvanced": {
     "title": "Processor Advanced Settings",
@@ -980,6 +982,8 @@
     "pnpDeviceId": "PNP ID",
     "resolution": "Resolution",
     "refreshRate": "Refresh Rate",
+    "screenSize": "Size",
+    "primaryDisplay": "Primary",
     "status": "Status",
     "diskType": "Type",
     "interfaceType": "Interface",
@@ -1017,6 +1021,13 @@
     "thirdpartyTools": "Third-party Tools",
     "officialTools": "Official Recommendations",
     "recommended": "Recommended",
+    "peripheralDrivers": "Peripheral Drivers",
+    "peripheralDriversDesc": "Official driver entries for peripheral brands: online web drivers first, official download pages for brands without a web driver, all opened in the system browser",
+    "peripheralDriversLoading": "Loading peripheral drivers...",
+    "driverKind": {
+      "online": "Web Driver",
+      "download": "Download"
+    },
     "tools": {
       "assistantCrosshair": "Assistant Crosshair",
       "memreduct": "Memreduct",
@@ -1185,6 +1196,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "Operation superseded by a newer action; not executed",
+    "iccToolsTitle": "Filter tools not installed",
+    "iccToolsDesc": "This edition does not bundle the filter tools. Download them now to enable the display filter.",
+    "iccToolsDownloadBtn": "Download Filter Tools",
+    "iccToolsDownloading": "Downloading",
+    "iccToolsSuccess": "Filter tools installed",
+    "iccToolsFailed": "Failed to download filter tools",
     "title": "Display Filter",
     "enable": "Enable Filter",
     "presets": "Presets",
@@ -1329,7 +1346,20 @@
     "holdDelay": "Input Delay",
     "holdDelayDesc": "Show the crosshair this long after pressing the hotkey; hides instantly on release (0 = immediate)",
     "holdDelaySaved": "Delay saved",
-    "hotkeySaved": "Hotkey saved"
+    "hotkeySaved": "Hotkey saved",
+    "presets": "Crosshair Presets",
+    "saveAsPreset": "Save as Preset",
+    "savePresetTitle": "Save current settings as a preset",
+    "presetNamePlaceholder": "Enter preset name",
+    "presetDefaultName": "Preset",
+    "saveSuccess": "Preset saved",
+    "saveFailed": "Failed to save preset",
+    "nameRequired": "Please enter a preset name",
+    "emptyPresets": "No presets yet. Adjust parameters and save.",
+    "applySuccess": "Preset applied",
+    "applyFailed": "Failed to apply preset",
+    "deletePreset": "Delete preset",
+    "deleteConfirm": "Delete this preset?"
   },
   "hardwareReport": {
     "export": "Export Report",
@@ -1399,7 +1429,6 @@
     "mapToolDesc": "Loot spots, spawn points, extraction points and boss coordinates",
     "dlssPreset": "DLSS Preset",
     "dlssPresetDesc": "Select DLSS neural network model preset, different presets for different scenarios",
-    "loading": "Loading...",
     "noPassword": "No password data available",
     "copy": "Copy",
     "copied": "Copied",
@@ -1471,29 +1500,6 @@
     "officialWallpaper": "Official Wallpaper",
     "officialWallpaperTitle": "Delta Force - Official Wallpaper",
     "wallpaperDesc": "Official HD wallpaper download",
-    "voiceStrobe": {
-      "title": "Voice Strobe",
-      "desc": "Auto-trigger in-game strobe by shouting",
-      "modalTitle": "Voice Strobe",
-      "modalDesc": "Presses the strobe key automatically when mic volume exceeds the threshold in game",
-      "enabled": "Enable Voice Strobe",
-      "enabledDesc": "Only active while Delta Force is running",
-      "volumeMeter": "Microphone Level",
-      "volumeHint": "Shout to test the meter, then adjust the threshold line",
-      "device": "Microphone Device",
-      "deviceDefault": "System Default Microphone",
-      "threshold": "Trigger Threshold",
-      "key": "Strobe Key",
-      "keyHint": "Any keyboard key (including Ctrl/Shift) and all mouse buttons",
-      "recording": "Press any key or mouse button, Esc to cancel",
-      "keyNone": "Not set",
-      "cooldown": "Cooldown",
-      "cooldownHint": "Minimum interval between triggers, 0 for no cooldown",
-      "cooldownUnit": "s",
-      "statusListening": "Listening",
-      "statusWaitingGame": "Waiting for game",
-      "statusOff": "Off"
-    },
     "allCategories": "All Categories",
     "searchPlaceholder": "Search weapons...",
     "allWeapons": "All Weapons",
@@ -1563,7 +1569,8 @@
       "armor": "Armor",
       "specialTask": "Special Task",
       "ammoGrade": "Ammo Grade"
-    }
+    },
+    "loading": "Loading..."
   },
   "dlssPreset": {
     "title": "Delta Force DLSS Settings",
@@ -1648,7 +1655,9 @@
     "contextMenuDesc": "Manage system context menu items and extra drives/cloud drives in This PC",
     "downloadAcceleratorDesc": "Multi-threaded segmented downloads to saturate your bandwidth",
     "nvidiaRecordingDesc": "Scan NVIDIA recordings automatically, manage, preview and clean by time",
-    "vacRepairDesc": "Fix CS:GO / CS2 VAC blocking issues and restore Steam services & system settings"
+    "vacRepairDesc": "Fix CS:GO / CS2 VAC blocking issues and restore Steam services & system settings",
+    "appManagerDesc": "View and uninstall installed applications on this PC",
+    "timeSyncDesc": "Calibrate system time, check time server latency and offset"
   },
   "contextMenu": {
     "title": "Context Menu & This PC",
@@ -1661,7 +1670,6 @@
     "totalPc": "{{count}} This PC items",
     "drives": "Drives",
     "driveRestartHint": "Registry updated; takes effect after restarting Explorer or signing out",
-    "scanning": "Scanning...",
     "noMenu": "No context menu items found",
     "noPc": "No manageable items found in This PC",
     "colName": "Name",
@@ -1678,13 +1686,13 @@
     "scanError": "Failed to scan",
     "errorDenied": "Access denied: this entry lives under a system registry hive (HKLM/HKCR) and needs administrator rights. Please run this program as administrator and retry.",
     "tipTitle": "💡 Tip",
-    "tipDescription": "Hiding moves an entry to a backup location (restorable anytime) and never deletes registry data. Clean up extra drives, OneDrive etc. to keep This PC tidy. System-level items may trigger a UAC prompt under non-admin; if that fails, run as administrator."
+    "tipDescription": "Hiding moves an entry to a backup location (restorable anytime) and never deletes registry data. Clean up extra drives, OneDrive etc. to keep This PC tidy. System-level items may trigger a UAC prompt under non-admin; if that fails, run as administrator.",
+    "scanning": "Scanning..."
   },
   "vtxVirtualization": {
     "title": "VT-X Virtualization Fix",
     "subtitle": "Disable or restore Memory Integrity, VBS and Hyper-V auto-start to fix game/software virtualization popups",
     "refresh": "Re-check",
-    "checking": "Checking current virtualization state...",
     "checkFailed": "Failed to check virtualization state",
     "currentStatus": "Current Virtualization State",
     "memoryIntegrity": "Memory Integrity (Core Isolation)",
@@ -1709,13 +1717,13 @@
     "notAdmin": "Not admin",
     "adminHint": "When not running as admin, a UAC prompt will appear - please click Allow",
     "fullyFixed": "Virtualization settings are all disabled - currently in the fixed state.",
-    "fullyRestored": "Virtualization settings are all restored - currently in the default state."
+    "fullyRestored": "Virtualization settings are all restored - currently in the default state.",
+    "checking": "Checking current virtualization state..."
   },
   "vacRepair": {
     "title": "CS:GO VAC Repair",
     "subtitle": "Fix CS:GO / CS2 VAC blocking: restore the Steam launcher service, firewall and DEP system settings",
     "refresh": "Re-check",
-    "checking": "Checking Steam environment...",
     "checkFailed": "Failed to check status",
     "notInstalled": "Steam is not detected. Please install and run the Steam client first.",
     "serviceMissingHint": "steamservice.exe not found. The Steam installation may be incomplete - repair the library folders in Steam settings first.",
@@ -1742,13 +1750,13 @@
     "consoleEmpty": "Output will appear here. Click \"Start VAC Repair\" to begin...",
     "doneLine": "Repair process finished",
     "firewallHint": "If \"Add firewall exception failed\" appears, disable \"Block all incoming connections\" (no exceptions) in Windows Firewall and repair again",
-    "closeSteamHint": "The fix closes and restarts Steam automatically - exit games and save progress first. A UAC prompt appears when not running as admin - click Allow"
+    "closeSteamHint": "The fix closes and restarts Steam automatically - exit games and save progress first. A UAC prompt appears when not running as admin - click Allow",
+    "checking": "Checking Steam environment..."
   },
   "hiddenFeatures": {
     "title": "Windows Hidden Features",
     "subtitle": "Query and toggle Windows A/B experimental feature flags (based on ViVe)",
     "refresh": "Refresh",
-    "loading": "Loading feature configurations...",
     "loadFailed": "Failed to load",
     "warningTitle": "Risk Warning",
     "warningBody": "These switches control Microsoft's A/B experiments. Enabling or disabling hidden features may cause system instability. If something goes wrong, reset the feature to restore defaults. Boot store changes take effect after a reboot.",
@@ -1795,7 +1803,8 @@
     "loadMore": "Load more",
     "namedOnly": "Named features only",
     "namedOnlyHint": "Unnamed entries are internal Windows servicing configs not in the dictionary; usually no need to touch them. Turn off to show all entries",
-    "numbersExplain": "Named entries come from the community feature dictionary. Features shown as plain numbers have no public name — Microsoft never published one. Toggle the switch above to show all, or search by name across 17,000+ known features."
+    "numbersExplain": "Named entries come from the community feature dictionary. Features shown as plain numbers have no public name — Microsoft never published one. Toggle the switch above to show all, or search by name across 17,000+ known features.",
+    "loading": "Loading feature configurations..."
   },
   "gameProcessOptimize": {
     "title": "Game Process Optimize",
@@ -1875,9 +1884,31 @@
     "server": "Server",
     "serverNote": "Download: falls back to domestic CDN when node fails; upload/latency use NUAA node"
   },
+  "timeSync": {
+    "title": "Time Sync",
+    "systemTime": "Current System Time",
+    "serverTime": "Server Time",
+    "offset": "Time Offset",
+    "latency": "Network Latency",
+    "server": "Time Server",
+    "query": "Check",
+    "querying": "Checking...",
+    "redetect": "Re-detect all",
+    "apply": "Sync System Time",
+    "applying": "Syncing...",
+    "applyHint": "Set system time to the selected server's time",
+    "adminRequired": "Administrator privileges are required to change system time",
+    "adminOk": "Admin",
+    "adminNo": "Not admin",
+    "synced": "Time synced, re-checked",
+    "queryFailed": "Check failed",
+    "notQueried": "Not checked",
+    "normal": "Normal",
+    "offsetNote": "Offset = server time − local time; positive means local time is behind",
+    "lastUpdate": "Last check"
+  },
   "gpuRename": {
     "title": "GPU Rename",
-    "loading": "Loading...",
     "loadError": "Failed to load",
     "currentGpu": "Current GPU",
     "integrated": "Integrated",
@@ -1901,7 +1932,8 @@
     "success": "Success",
     "restored": "Restored",
     "error": "Error",
-    "note": "⚠️ Important Notes:\n1. Administrator privileges required to modify the registry\n2. Requires restarting the game or computer to take effect\n3. Only supports Windows systems and NVIDIA GPUs\n4. If you can't apply changes, try running as Administrator"
+    "note": "⚠️ Important Notes:\n1. Administrator privileges required to modify the registry\n2. Requires restarting the game or computer to take effect\n3. Only supports Windows systems and NVIDIA GPUs\n4. If you can't apply changes, try running as Administrator",
+    "loading": "Loading..."
   },
   "settings": {
     "general": "General",
@@ -1956,37 +1988,10 @@
       "gameRemoved": "Removed",
       "save": "Save",
       "cancel": "Cancel",
-      "error": "Operation failed",
-      "popnull": {
-        "title": "NexBoxPopNull Popup Blocker",
-        "desc": "Block popups automatically with blacklist/whitelist rules: blacklisted windows are closed and their processes terminated, whitelist always wins, system processes are unaffected",
-        "blocking": "Blocking popups",
-        "disabled": "Disabled",
-        "listBlack": "Blacklist",
-        "listWhite": "Whitelist",
-        "fieldExe": "Process",
-        "fieldPath": "Path",
-        "fieldTitle": "Title",
-        "fieldClass": "Class",
-        "modeContains": "Contains",
-        "modeExact": "Exact",
-        "modeWildcard": "Wildcard",
-        "addRule": "Add",
-        "pickWindow": "Pick window",
-        "patternPlaceholder": "e.g. flashcenter.exe or *pop*",
-        "noRules": "No rules yet, add the first rule to start blocking",
-        "delete": "Remove",
-        "duplicate": "Rule already exists",
-        "ruleAdded": "Rule added",
-        "pickerTitle": "Pick a window",
-        "pickerSearch": "Search windows",
-        "pickerEmpty": "No windows found"
-      }
-    },
-    "hotkeys": "Hotkeys",
+      "error": "Operation failed"
+    },    "hotkeys": "Hotkeys",
     "network": "Network",
     "sponsor": "Sponsor",
-    "contributor": "Contributors",
     "navigation": "Navigation",
     "about": "About",
     "generalSettings": {
@@ -2082,12 +2087,7 @@
       "sidebarShowLabelNoText": "Icons Only",
       "sidebarShowLabelWithText": "Icons & Text",
       "navButtonVisibility": "Nav Button Visibility",
-      "navButtonVisibilityDesc": "Show or hide individual navigation buttons. Settings is always visible.",
-      "pageTransitionLabel": "Page Transition Animation",
-      "pageTransitionDesc": "Disable to turn off page transition animations",
-      "pageTransitionSlide": "Slide",
-      "pageTransitionFade": "Fade",
-      "pageTransitionOff": "Off"
+      "navButtonVisibilityDesc": "Show or hide individual navigation buttons. Settings is always visible."
     },
     "appearanceSettings": {
       "title": "Appearance Settings",
@@ -2196,18 +2196,11 @@
       "alipay": "Alipay",
       "thankYou": "Thank you for your support!",
       "placeholder": "Please add QR code image",
-      "contributors": {
-        "title": "Contributors",
-        "loading": "Loading...",
-        "error": "Failed to load",
-        "empty": "No contributors yet"
-      },
       "sponsorList": {
         "title": "Sponsors",
         "loading": "Loading...",
         "error": "Failed to load",
-        "empty": "No sponsors yet",
-        "totalAmount": "Total sponsorship:"
+        "empty": "No sponsors yet"
       }
     },
     "aboutSettings": {
@@ -2223,7 +2216,10 @@
       "acknowledgments": "Acknowledgments",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "Thanks to SJTU Minecraft Club open source project",
-      "joinUs": "Join Us",
+      "specialThanks": {
+        "title": "Special Thanks"
+      },
+      "qqGroupSubtitle": "Join for the latest updates and quick solutions",
       "feedbackTitle": "Feedback",
       "qqGroup": "QQ Group",
       "joinQqGroup": "Join",
@@ -2282,7 +2278,6 @@
     "noticeTitle": "Friendly Reminder",
     "noticeContent": "The optimizations on this page involve system-level modifications. Please review each feature carefully before use, do not blindly apply all of them, and choose the ones suitable for your device.\n\nIf you don't understand it, don't optimize! If you don't understand it, don't optimize! If you don't understand it, don't optimize!\n\nIf your FPS drops after optimization, we are not responsible.",
     "noticeAgree": "I understand, let's start",
-    "loading": "Loading...",
     "scanStatus": "Scan Status",
     "scanning": "Scanning...",
     "scanComplete": "Scan Complete",
@@ -2579,7 +2574,8 @@
     "optimized": "Optimized",
     "reverted": "Reverted",
     "optimizing": "Running...",
-    "operationError": "Operation failed"
+    "operationError": "Operation failed",
+    "loading": "Loading..."
   },
   "windowsUpdate": {
     "pageTitle": "Windows Update & Defender",
@@ -2602,7 +2598,6 @@
     "enableSuccess": "Windows Update has been successfully restored",
     "disableError": "Disable failed",
     "enableError": "Restore failed",
-    "checking": "Checking status...",
     "warningTitle": "⚠️ Warning",
     "warningDesc": "After disabling Windows Update, you will no longer receive security patches and feature updates. It is recommended to manually check for updates periodically or re-enable when needed.",
     "pauseCard": {
@@ -2634,7 +2629,8 @@
       "restoreError": "Failed to restore Windows Defender",
       "manualHintTitle": "⚠️ Warning",
       "manualHint": "After disabling, the system will no longer provide virus and threat protection. If 'Tamper Protection' is on, Windows may reset these policies automatically. Turn off 'Tamper Protection' in Defender settings first for this to take effect."
-    }
+    },
+    "checking": "Checking status..."
   },
   "gpuDriverRestart": {
     "pageTitle": "Restart Graphics Driver",
@@ -2684,13 +2680,13 @@
   },
   "epic": {
     "title": "Epic Free Games",
-    "loading": "Loading free games...",
     "errorFetch": "Failed to fetch data",
     "errorNetwork": "Network request failed, please check your connection",
     "deadline": "Until {{date}}",
     "claimNow": "Claim Now",
     "noGames": "No free games available, check back later",
-    "reload": "Reload"
+    "reload": "Reload",
+    "loading": "Loading free games..."
   },
   "search": {
     "placeholder": "Search features...",
@@ -2829,7 +2825,6 @@
   },
   "audioEq": {
     "title": "EQ Tuner",
-    "loading": "Loading...",
     "virtualSoundCard": "Virtual Sound Card",
     "virtualSoundCardDesc": "Install FxSound virtual audio driver to enable system-level EQ",
     "installed": "Installed",
@@ -2876,7 +2871,8 @@
     "deleteSuccess": "Deleted",
     "deleteFailed": "Delete failed",
     "deleteConfirm": "Are you sure you want to delete \"{name}\"?",
-    "noImported": "No imported presets"
+    "noImported": "No imported presets",
+    "loading": "Loading..."
   },
   "nvidiaDriverDownload": {
     "title": "NVIDIA Driver Download",
@@ -2886,7 +2882,6 @@
     "driverList": "Driver List",
     "searchPlaceholder": "Search version...",
     "openDetail": "Open Detail Page",
-    "loading": "Fetching driver list...",
     "noDrivers": "No drivers found",
     "noSearchResults": "No matching drivers found",
     "totalDrivers": "{{count}} drivers available",
@@ -2900,7 +2895,8 @@
     "currentDriver": "Current Driver",
     "unknown": "Unknown",
     "openFailed": "Failed to open link",
-    "latest": "Latest"
+    "latest": "Latest",
+    "loading": "Fetching driver list..."
   },
   "storageClean": {
     "title": "Storage Cleanup",
@@ -2911,7 +2907,6 @@
     "selectAll": "Select All",
     "deselectAll": "Deselect All",
     "emptyRecycleBin": "Empty Recycle Bin",
-    "scanning": "Scanning...",
     "cleanButton": "Start Cleanup",
     "cleaning": "Cleaning...",
     "scanButton": "Rescan",
@@ -2932,7 +2927,6 @@
     "risk4": "High Risk",
     "risk5": "Critical",
     "junkFileTotal": "Junk Files",
-    "junkScanning": "Deep scanning...",
     "junkCleanButton": "Clean Selected",
     "junkCleaning": "Cleaning...",
     "junkNoSelection": "Please select categories to clean",
@@ -3038,7 +3032,9 @@
       "description": "Storage cleanup can safely delete system temp files and caches to free up disk space.",
       "note1": "• Items requiring admin privileges will request them automatically during cleanup",
       "note2": "• In-use files are skipped automatically and will not affect system operation"
-    }
+    },
+    "scanning": "Scanning...",
+    "junkScanning": "Deep scanning..."
   },
   "downloadAccel": {
     "urlLabel": "Download URL",
@@ -3075,7 +3071,6 @@
   "nvidiaRecording": {
     "title": "NVIDIA Recording Manager",
     "scan": "Refresh",
-    "scanning": "Scanning recordings...",
     "scanError": "Scan failed",
     "addFolder": "Add Folder",
     "addFolderError": "Failed to add folder",
@@ -3118,7 +3113,8 @@
     "copyError": "Copy failed",
     "deleteSuccessMulti": "Deleted {{n}} videos",
     "deleteBodyMulti": "This cannot be undone. Permanently delete {{n}} selected videos?",
-    "andMore": "and {{n}} more"
+    "andMore": "and {{n}} more",
+    "scanning": "Scanning recordings..."
   },
   "filterDisabledDegraded": "Filter disabled (degraded clear: original calibration may not be restored)"
 }

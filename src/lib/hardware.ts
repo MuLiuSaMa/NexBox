@@ -128,6 +128,8 @@ export interface MonitorInfo {
   pnp_device_id: string;
   status: string;
   availability: number | null;
+  diagonal_inches?: number | null;
+  is_primary?: boolean | null;
 }
 
 export interface HardwareInfo {

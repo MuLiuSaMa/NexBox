@@ -304,6 +304,9 @@ export function MainLayout({ children }: MainLayoutProps) {
       <TitleBar />
       <Sidebar />
       <Box 
+        id="app-main-scroll"
+        tabIndex={-1}
+        outline="none"
         position="relative"
         zIndex={1}
         ml={isNavTop ? 0 : "96px"}

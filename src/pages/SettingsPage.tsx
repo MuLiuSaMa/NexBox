@@ -39,7 +39,6 @@ import {
   LuUpload,
   LuX,
   LuDownload,
-  LuExternalLink,
   LuRefreshCw,
   LuPalette,
   LuWifi,
@@ -47,9 +46,8 @@ import {
   LuHeart,
   LuKeyboard,
   LuPlus,
-  LuTrash2,
-  LuUsers,
   LuBug,
+  LuTrash2,
   LuRotateCcw,
   LuSlidersHorizontal,
 } from "react-icons/lu";
@@ -69,8 +67,9 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { CustomSelect } from "@/components/special/custom-select";
-import { useQQGroups, type QqGroup } from "@/hooks/use-qq-groups";
+import { useQQIcon, useQQGroups } from "@/hooks/use-qq-groups";
 import { QqGroupIcon } from "@/components/ui/qq-group-icon";
+import { QqGroupModal } from "@/components/ui/qq-group-modal";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { useSearchParams } from "react-router-dom";
 import { useUpdate } from "@/contexts/update-context";
@@ -111,7 +110,6 @@ const settingItems = [
   { id: "advanced", labelKey: "settings.advanced.label", icon: LuSlidersHorizontal },
   { id: "hotkeys", labelKey: "settings.hotkeys", icon: LuKeyboard },
   { id: "network", labelKey: "settings.network", icon: LuWifi },
-  { id: "contributor", labelKey: "settings.contributor", icon: LuUsers },
   { id: "sponsor", labelKey: "settings.sponsor", icon: LuHeart },
   { id: "about", labelKey: "settings.about", icon: LuInfo },
 ];
@@ -187,7 +185,7 @@ function GeneralSettings() {
   const toast = useDynamicIsland("settings");
   const { config, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const [language, setLanguage] = useState(i18n.language || "zh");
@@ -221,7 +219,6 @@ function GeneralSettings() {
   );
   const dragHandleColor = useColorModeValue("gray.400", "gray.500");
   const sortableDragBg = useColorModeValue("blue.50", "rgba(59,130,246,0.1)");
-  const [pageTransitionMode, setPageTransitionMode] = useState<"slide" | "fade" | "off">("fade");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
   const [minimizedStart, setMinimizedStart] = useState(false);
@@ -426,15 +423,6 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_nav_position");
         if (ls === "top") setNavPosition("top");
-      }
-
-      // 过渡动画
-      let pm = await store.get<string>("nexbox_page_transition");
-      if (pm === "slide" || pm === "fade" || pm === "off") {
-        setPageTransitionMode(pm);
-      } else {
-        const ls = localStorage.getItem("nexbox_page_transition") as "slide" | "fade" | "off" | null;
-        if (ls) setPageTransitionMode(ls);
       }
 
       // 关闭行为
@@ -826,13 +814,6 @@ function GeneralSettings() {
       duration: 2000,
       isClosable: true,
     });
-  };
-
-  const handlePageTransitionChange = (newMode: "slide" | "fade" | "off") => {
-    setPageTransitionMode(newMode);
-    localStorage.setItem("nexbox_page_transition", newMode);
-    store.set("nexbox_page_transition", newMode).then(() => store.save());
-    window.dispatchEvent(new CustomEvent("page-transition-setting-changed", { detail: newMode }));
   };
 
   return (
@@ -1244,97 +1225,6 @@ function GeneralSettings() {
               </Box>
             </HStack>
             <Divider />
-            <HStack justify="space-between" py={2}>
-              <Box flex={1}>
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  {t("settings.generalSettings.pageTransitionLabel")}
-                </Text>
-                <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                  {t("settings.generalSettings.pageTransitionDesc")}
-                </Text>
-              </Box>
-              <HStack
-                spacing={1}
-                p={1}
-                borderRadius="xl"
-                border="1px solid"
-                borderColor={segmentedControlBorder}
-                bg={segmentedControlBg}
-                boxShadow={segmentedControlShadow}
-                backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px) saturate(160%)` : "blur(14px)"}
-                transition="backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-                position="relative"
-                overflow="hidden"
-              >
-                {liquidGlassEnabled && (
-                  <Box
-                    position="absolute"
-                    inset="0"
-                    pointerEvents="none"
-                    bgGradient={segmentedGlassSheen}
-                    opacity={0.9}
-                  />
-                )}
-                <Box
-                  position="absolute"
-                  inset="0"
-                  pointerEvents="none"
-                  borderRadius="inherit"
-                  boxShadow={`inset 0 1px 0 rgba(255,255,255,0.28), inset 0 0 0 1px ${segmentedContainerGlow}`}
-                  opacity={liquidGlassEnabled ? 1 : 0.72}
-                />
-                {(["slide", "fade", "off"] as const).map((mode) => (
-                  <Box
-                    key={mode}
-                    as="button"
-                    type="button"
-                    minW="74px"
-                    px={3.5}
-                    py={2}
-                    borderRadius="lg"
-                    border="1px solid"
-                    borderColor={pageTransitionMode === mode ? segmentedActiveBorder : "transparent"}
-                    bg={pageTransitionMode === mode ? segmentedActiveBg : "transparent"}
-                    color={pageTransitionMode === mode ? segmentedActiveText : subLabelColor}
-                    fontSize="sm"
-                    fontWeight={pageTransitionMode === mode ? "semibold" : "medium"}
-                    letterSpacing="0.01em"
-                    boxShadow={pageTransitionMode === mode ? segmentedActiveShadow : "none"}
-                    position="relative"
-                    transition="color 0.16s ease, transform 0.16s ease"
-                    transform={pageTransitionMode === mode ? "translateY(-1px)" : "translateY(0)"}
-                    _hover={{
-                      bg: pageTransitionMode === mode ? segmentedActiveBg : segmentedControlHoverBg,
-                      color: pageTransitionMode === mode ? segmentedActiveText : labelColor,
-                    }}
-                    _active={{
-                      transform: pageTransitionMode === mode ? "translateY(0)" : "scale(0.98)",
-                    }}
-                    _focusVisible={{
-                      outline: "none",
-                      boxShadow: `0 0 0 3px ${hexToRgba(config.primaryColor, 0.24)}`,
-                    }}
-                    aria-pressed={pageTransitionMode === mode}
-                    onClick={() => handlePageTransitionChange(mode)}
-                  >
-                    <Box
-                      position="absolute"
-                      inset="1px"
-                      borderRadius="inherit"
-                      opacity={pageTransitionMode === mode ? 1 : 0}
-                      transition="none"
-                      pointerEvents="none"
-                      bgGradient={segmentedActiveOverlayGradient}
-                    />
-                    <Text position="relative" zIndex={1}>
-                      {mode === "slide" ? t("settings.generalSettings.pageTransitionSlide", "滑动") :
-                       mode === "fade" ? t("settings.generalSettings.pageTransitionFade", "淡化") :
-                       t("settings.generalSettings.pageTransitionOff", "关闭")}
-                    </Text>
-                  </Box>
-                ))}
-              </HStack>
-            </HStack>
           </VStack>
           <input
             id="splash-logo-upload"
@@ -2726,206 +2616,6 @@ function NetworkSettings() {
   );
  }
 
-interface ContributorItem {
-  name: string;
-  avatar: string;
-  role: string;
-  bilibili: string;
-  douyin: string;
-}
-
-const CONTRIBUTORS: ContributorItem[] = [
-  {
-    name: "刺客边风",
-    avatar: "https://www.nexbox.top/gongxIan/ckbf.png",
-    role: "视频推广",
-    bilibili: "https://space.bilibili.com/21131684",
-    douyin: "https://v.douyin.com/bJRAiesxhgk/",
-  },
-  {
-    name: "资源汇社区",
-    avatar: "https://www.nexbox.top/gongxIan/zyhsq.png",
-    role: "视频推广",
-    bilibili: "https://space.bilibili.com/175870152",
-    douyin: "",
-  },
-  {
-    name: "FreeDw资源库",
-    avatar: "https://www.nexbox.top/gongxIan/freedw.png",
-    role: "视频推广",
-    bilibili: "https://space.bilibili.com/383210848",
-    douyin: "",
-  },
-  {
-    name: "风与诗的夏天",
-    avatar: "https://www.nexbox.top/gongxIan/fysdxt.png",
-    role: "视频推广",
-    bilibili: "https://space.bilibili.com/1587687791",
-    douyin: "",
-  },
-  {
-    name: "宝藏收藏夹",
-    avatar: "https://www.nexbox.top/gongxIan/bzscj.png",
-    role: "视频推广",
-    bilibili: "https://space.bilibili.com/3461565271509949",
-    douyin: "",
-  },
-];
-
-function ContributorSettings() {
-  const { t } = useTranslation();
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  // 优先展示远程最新名单，拉取失败时回退到内置硬编码名单
-  const [contributors, setContributors] = useState<ContributorItem[]>(CONTRIBUTORS);
-  const [contributorsLoading, setContributorsLoading] = useState(true);
-  const [contributorsError, setContributorsError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    invoke<ContributorItem[]>("get_contributors")
-      .then((data) => {
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setContributors(data);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setContributorsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setContributorsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const openUrl = (url: string) => {
-    if (url) {
-      window.open(url, "_blank");
-    }
-  };
-
-  return (
-    <Box>
-      <Text fontSize="lg" fontWeight="bold" mb={6} color={titleColor}>
-        {t("settings.sponsorSettings.contributors.title")}
-      </Text>
-
-      {!contributorsLoading && contributorsError && (
-        <Text fontSize="xs" color={subLabelColor} mb={4} textAlign="center">
-          {t("settings.sponsorSettings.sponsorList.error")}
-        </Text>
-      )}
-      {contributorsLoading ? (
-        <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
-          {t("settings.sponsorSettings.sponsorList.loading")}
-        </Text>
-      ) : (
-        <Box
-          display="grid"
-          gridTemplateColumns="repeat(auto-fill, 220px)"
-          gap={4}
-        >
-        {contributors.map((contributor, index) => (
-          <LiquidGlassCard
-            key={index}
-            p={4}
-          >
-            <Flex align="stretch" gap={3}>
-              {/* 左侧：头像 + 名字 */}
-              <VStack spacing={1} align="center" flexShrink={0} minW="60px">
-                <Box
-                  w="48px"
-                  h="48px"
-                  borderRadius="full"
-                  overflow="hidden"
-                  border="2px solid"
-                  borderColor={cardBorder}
-                >
-                  <img
-                    src={contributor.avatar}
-                    alt={contributor.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = "none";
-                    }}
-                  />
-                </Box>
-                <Text
-                  fontSize="xs"
-                  fontWeight="bold"
-                  color={labelColor}
-                  textAlign="center"
-                  lineHeight="1.2"
-                >
-                  {contributor.name}
-                </Text>
-              </VStack>
-
-              {/* 右侧：说明 + 主页 */}
-              <VStack align="flex-end" spacing={1.5} flex="1" justify="center" minW={0}>
-                <Text fontSize="xs" color={subLabelColor} whiteSpace="nowrap">
-                  {contributor.role}
-                </Text>
-                <Flex align="center" gap={2}>
-                  {contributor.bilibili && (
-                    <Tooltip label="Bilibili">
-                      <Box
-                        as="a"
-                        href={contributor.bilibili}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        color="#FB7299"
-                        fontSize="18px"
-                        display="flex"
-                        alignItems="center"
-                        _hover={{ opacity: 0.8 }}
-                        cursor="pointer"
-                        onClick={(e: React.MouseEvent) => {
-                          e.preventDefault();
-                          openUrl(contributor.bilibili);
-                        }}
-                      >
-                        <RiBilibiliFill />
-                      </Box>
-                    </Tooltip>
-                  )}
-                  {contributor.douyin && (
-                    <Tooltip label="抖音">
-                      <Box
-                        as="a"
-                        href={contributor.douyin}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        color={useColorModeValue("#111111", "#ffffff")}
-                        fontSize="18px"
-                        display="flex"
-                        alignItems="center"
-                        _hover={{ opacity: 0.8 }}
-                        cursor="pointer"
-                        onClick={(e: React.MouseEvent) => {
-                          e.preventDefault();
-                          openUrl(contributor.douyin);
-                        }}
-                      >
-                        <RiTiktokFill />
-                      </Box>
-                    </Tooltip>
-                  )}
-                </Flex>
-              </VStack>
-            </Flex>
-          </LiquidGlassCard>
-        ))}
-        </Box>
-      )}
-    </Box>
-  );
-}
-
 interface SponsorItem {
   name: string;
   amount: string;
@@ -2939,7 +2629,6 @@ function SponsorSettings() {
   const cardBorder = useColorModeValue("gray.200", "#333333");
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
-  const [totalAmount, setTotalAmount] = useState<string>("");
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
   const [sponsorsError, setSponsorsError] = useState(false);
 
@@ -2950,12 +2639,11 @@ function SponsorSettings() {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    invoke<{ update_time: string; total_amount: string; list: SponsorItem[] }>(
+    invoke<{ update_time: string; list: SponsorItem[] }>(
       "get_sponsors",
     )
       .then((data) => {
         if (cancelled) return;
-        setTotalAmount(data.total_amount ?? "");
         const list = data.list ?? [];
         setSponsors(list.slice(0, SPONSOR_CHUNK_SIZE));
         setSponsorsLoading(false);
@@ -3065,25 +2753,6 @@ function SponsorSettings() {
         <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
           {t("settings.sponsorSettings.sponsorList.title")}
         </Text>
-        {totalAmount && (
-          <HStack spacing={2} justify="center" mb={4}>
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.sponsorSettings.sponsorList.totalAmount")}
-            </Text>
-            <Box
-              display="inline-block"
-              px={3}
-              py={1}
-              borderRadius="lg"
-              bg={getActiveColor()}
-              color={getContrastTextColor()}
-              fontSize="sm"
-              fontWeight="bold"
-            >
-              ¥ {totalAmount}
-            </Box>
-          </HStack>
-        )}
         {sponsorsLoading ? (
           <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
             {t("settings.sponsorSettings.sponsorList.loading")}
@@ -3133,6 +2802,56 @@ function SponsorSettings() {
   );
 }
 
+interface ThanksItem {
+  name: string;
+  url: string;
+  logo: string;
+}
+
+/** 特别鸣谢单项卡片：logo + 名称 + 箭头，点击打开对应网站 */
+function ThanksItemCard({ item, onOpen }: { item: ThanksItem; onOpen: (url: string) => void }) {
+  const labelColor = useColorModeValue("gray.700", "#ffffff");
+  const arrowColor = useColorModeValue("gray.400", "#6b7280");
+  const { src } = useQQIcon(item.logo);
+
+  return (
+    <LiquidGlassCard
+      className="no-bounce"
+      p={3}
+      w="200px"
+      cursor="pointer"
+      onClick={() => onOpen(item.url)}
+    >
+      <HStack spacing={3}>
+        <Box
+          w="34px"
+          h="34px"
+          borderRadius="lg"
+          display="flex"
+          alignItems="center"
+          justifyContent="center"
+          flexShrink={0}
+          overflow="hidden"
+        >
+          {src ? (
+            <img
+              src={src}
+              alt={item.name}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            />
+          ) : null}
+        </Box>
+        <Text fontSize="sm" fontWeight="bold" color={labelColor} noOfLines={1} flex={1}>
+          {item.name}
+        </Text>
+        <Box color={arrowColor}>
+          <Text fontSize="lg" lineHeight="1">›</Text>
+        </Box>
+      </HStack>
+    </LiquidGlassCard>
+  );
+}
+
 function AboutSettings() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("settings");
@@ -3140,18 +2859,39 @@ function AboutSettings() {
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
-  const appNameColor = useColorModeValue("gray.400", "#ffffff");
   const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
   const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
   const changelogScrollColor = getActiveColor();
+  // 卡片图标底色（浅色/深色适配）
+  const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "9.5.3";
+  const currentVersion = "9.7.2";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
-  // 官方 QQ 群（从 gitee 配置获取，含内置兜底）
-  const { groups: qqGroups, loading: loadingQQ } = useQQGroups();
+  // 特别鸣谢（后端从 gitee thanks.json 实时获取，含内置兜底）
+  const [thanksItems, setThanksItems] = useState<ThanksItem[]>([]);
+  const [thanksLoading, setThanksLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    invoke<ThanksItem[]>("get_thanks")
+      .then((data) => {
+        if (!cancelled && Array.isArray(data)) setThanksItems(data);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setThanksLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // QQ 群弹窗：卡片点击弹出完整群列表（与主页一致）
+  const { isOpen: isQqModalOpen, onOpen: onQqModalOpen, onClose: onQqModalClose } = useDisclosure();
+  // 官方 QQ 群（卡片副标题展示第一个群，弹窗内部自行拉取全量）
+  const { groups: qqGroups } = useQQGroups();
 
   // LOGO 连续点击 5 次跳转原神官网的彩蛋
   // 用 useRef 同步计数，避免 React 异步 setState 在快速连点 5 次内计数不生效的问题
@@ -3243,24 +2983,11 @@ function AboutSettings() {
     }
   };
 
-  // 加入/复制 QQ 群：有加群链接则打开，否则复制群号
-  const onJoinGroup = (group: QqGroup) => {
-    if (group.link) {
-      handleOpenLink(group.link);
-      return;
-    }
-    navigator.clipboard
-      .writeText(group.number)
-      .then(() =>
-        toast({
-          title: group.number,
-          description: group.name,
-          status: "success",
-          duration: 1500,
-          isClosable: false,
-        })
-      )
-      .catch(() => {});
+  // 版本卡片点击：有更新时打开更新弹窗，无更新时重新检查；下载中/待安装交给卡片底部按钮
+  const handleVersionClick = () => {
+    if (isDownloading || isDownloadComplete) return;
+    if (hasUpdate) openModal();
+    else handleCheckUpdate();
   };
 
   return (
@@ -3269,12 +2996,12 @@ function AboutSettings() {
         {t("settings.aboutSettings.title")}
       </Text>
 
-      <LiquidGlassCard p={6} boxShadow="sm" mb={6}>
+      {/* Logo（点击 5 次触发彩蛋） */}
+      <LiquidGlassCard p={5} boxShadow="sm" mb={4}>
         <HStack
           spacing={4}
           justify="center"
           align="center"
-          mb={4}
           cursor="pointer"
           userSelect="none"
           onClick={handleLogoClicks}
@@ -3291,18 +3018,64 @@ function AboutSettings() {
             style={{ height: "40px", width: "auto", objectFit: "contain", pointerEvents: "none" }}
           />
         </HStack>
+      </LiquidGlassCard>
 
-        <Divider my={4} borderColor={dividerColor} />
-
-        <Box>
-          <HStack justify="space-between" mb={3}>
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.version")}
-            </Text>
-            <HStack spacing={2}>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                v{currentVersion}
+      {/* 第一行：版本状态 + 版本号 + 问题反馈 */}
+      <HStack spacing={4} align="stretch" flexWrap="wrap" mb={4}>
+        {/* 版本状态 */}
+        <LiquidGlassCard
+          className="no-bounce"
+          role="group"
+          p={5}
+          flex="1"
+          minW="200px"
+          cursor={isDownloading || isDownloadComplete ? "default" : "pointer"}
+          onClick={handleVersionClick}
+          tabIndex={0}
+          transition="border-color 0.2s"
+          _hover={{ borderColor: getActiveColor() }}
+          _focusVisible={{
+            boxShadow: `0 0 0 2px ${getActiveColor()}`,
+            outline: "none",
+          }}
+        >
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              bg={iconBg}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              {isChecking ? (
+                <LuRefreshCw className="animate-spin" size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+              ) : hasUpdate ? (
+                <LuDownload size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+              ) : (
+                <LuRefreshCw size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+              )}
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
+                {isChecking
+                  ? `${t("settings.aboutSettings.check")}...`
+                  : hasUpdate
+                    ? t("settings.aboutSettings.newVersion")
+                    : t("settings.aboutSettings.noUpdate")}
               </Text>
+              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
+                {t("settings.aboutSettings.version")}
+              </Text>
+            </VStack>
+            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+              <Text fontSize="xl" lineHeight="1">›</Text>
+            </Box>
+          </HStack>
+          {(isDownloading && !isDownloadComplete) || isDownloadComplete ? (
+            <Box mt={3}>
               {isDownloading && !isDownloadComplete ? (
                 <LiquidGlassButton
                   size="xs"
@@ -3310,59 +3083,160 @@ function AboutSettings() {
                   borderRadius="lg"
                   colorScheme="teal"
                   fontVariantNumeric="tabular-nums"
-                  onClick={openModal}
+                  w="full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openModal();
+                  }}
                   leftIcon={<LuDownload size={12} />}
                 >
                   {t("settings.aboutSettings.downloadingWithProgress", {
                     progress: Math.round(downloadProgress),
                   })}
                 </LiquidGlassButton>
-              ) : isDownloadComplete ? (
-                <LiquidGlassButton
-                  size="xs"
-                  variant="solid"
-                  borderRadius="lg"
-                  colorScheme="green"
-                  onClick={openModal}
-                  leftIcon={<LuRefreshCw size={12} />}
-                >
-                  {t("settings.aboutSettings.pendingInstall")}
-                </LiquidGlassButton>
-              ) : hasUpdate ? (
-                <LiquidGlassButton
-                  size="xs"
-                  variant="solid"
-                  borderRadius="lg"
-                  colorScheme="orange"
-                  onClick={openModal}
-                  leftIcon={<LuDownload size={12} />}
-                >
-                  {t("settings.aboutSettings.newVersion")}
-                </LiquidGlassButton>
               ) : (
                 <LiquidGlassButton
                   size="xs"
                   variant="solid"
                   borderRadius="lg"
-                  colorScheme="teal"
-                  onClick={handleCheckUpdate}
-                  isDisabled={isChecking}
-                  leftIcon={isChecking ? <LuRefreshCw className="animate-spin" size={12} /> : undefined}
+                  colorScheme="green"
+                  w="full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openModal();
+                  }}
+                  leftIcon={<LuRefreshCw size={12} />}
                 >
-                  {isChecking ? t("settings.aboutSettings.check") + "..." : t("settings.aboutSettings.check")}
+                  {t("settings.aboutSettings.pendingInstall")}
                 </LiquidGlassButton>
               )}
-            </HStack>
+            </Box>
+          ) : null}
+        </LiquidGlassCard>
+
+        {/* 版本号 */}
+        <LiquidGlassCard
+          className="no-bounce"
+          role="group"
+          p={5}
+          flex="1"
+          minW="200px"
+          cursor="pointer"
+          onClick={handleVersionClick}
+          tabIndex={0}
+          transition="border-color 0.2s"
+          _hover={{ borderColor: getActiveColor() }}
+          _focusVisible={{
+            boxShadow: `0 0 0 2px ${getActiveColor()}`,
+            outline: "none",
+          }}
+        >
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              bg={iconBg}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <LuInfo size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
+                v{currentVersion}
+              </Text>
+              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
+                {t("settings.aboutSettings.version")}
+              </Text>
+            </VStack>
+            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+              <Text fontSize="xl" lineHeight="1">›</Text>
+            </Box>
           </HStack>
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.author")}
-            </Text>
-            <HStack spacing={2}>
+        </LiquidGlassCard>
+
+        {/* 问题反馈 */}
+        <LiquidGlassCard
+          className="no-bounce"
+          role="group"
+          p={5}
+          flex="1"
+          minW="200px"
+          cursor="pointer"
+          onClick={() => handleOpenLink("https://nexbox.top/feedback")}
+          tabIndex={0}
+          transition="border-color 0.2s"
+          _hover={{ borderColor: getActiveColor() }}
+          _focusVisible={{
+            boxShadow: `0 0 0 2px ${getActiveColor()}`,
+            outline: "none",
+          }}
+        >
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              bg={iconBg}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <LuBug size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
+                {t("settings.aboutSettings.feedbackTitle")}
+              </Text>
+              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
+                nexbox.top/feedback
+              </Text>
+            </VStack>
+            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+              <Text fontSize="xl" lineHeight="1">›</Text>
+            </Box>
+          </HStack>
+        </LiquidGlassCard>
+      </HStack>
+
+      {/* 第二行：作者（木流）+ 官方QQ群 */}
+      <HStack spacing={4} align="stretch" flexWrap="wrap" mb={4}>
+        {/* 作者 木流 */}
+        <LiquidGlassCard className="no-bounce" role="group" p={5} flex="1" minW="200px">
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              overflow="hidden"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <img
+                src="/logo/MuLiuSaMa.webp"
+                alt="木流"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor}>
+                木流
+              </Text>
+              <Text fontSize="sm" color={subLabelColor}>
+                {t("settings.aboutSettings.author")}
+              </Text>
+            </VStack>
+            <Flex align="center" gap={2}>
               <Tooltip label="Bilibili">
                 <Box
-                  w="24px"
-                  h="24px"
+                  w="30px"
+                  h="30px"
                   borderRadius="md"
                   display="flex"
                   alignItems="center"
@@ -3373,13 +3247,13 @@ function AboutSettings() {
                   _hover={{ bg: "rgba(0, 161, 214, 0.1)", transform: "scale(1.1)" }}
                   onClick={() => handleOpenLink("https://space.bilibili.com/1614951812")}
                 >
-                  <RiBilibiliFill size={18} />
+                  <RiBilibiliFill size={20} />
                 </Box>
               </Tooltip>
               <Tooltip label="抖音">
                 <Box
-                  w="24px"
-                  h="24px"
+                  w="30px"
+                  h="30px"
                   borderRadius="md"
                   display="flex"
                   alignItems="center"
@@ -3390,107 +3264,60 @@ function AboutSettings() {
                   _hover={{ bg: "rgba(0, 0, 0, 0.1)", transform: "scale(1.1)" }}
                   onClick={() => handleOpenLink("https://www.douyin.com/user/MS4wLjABAAAAytD1zP6zVeXgPQuG-PWHq4AhsZz9zNXPcJap2JVaoG88Ani9tmBj0FtH7DLrQWsH")}
                 >
-                  <RiTiktokFill size={16} />
+                  <RiTiktokFill size={18} />
                 </Box>
               </Tooltip>
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                木流
+            </Flex>
+          </HStack>
+        </LiquidGlassCard>
+
+        {/* 官方QQ群：点击打开完整群列表弹窗（与主页一致） */}
+        <LiquidGlassCard
+          className="no-bounce"
+          role="group"
+          p={5}
+          flex="1"
+          minW="200px"
+          cursor="pointer"
+          onClick={onQqModalOpen}
+          tabIndex={0}
+          transition="border-color 0.2s"
+          _hover={{ borderColor: getActiveColor() }}
+          _focusVisible={{
+            boxShadow: `0 0 0 2px ${getActiveColor()}`,
+            outline: "none",
+          }}
+        >
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              bg={iconBg}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+              overflow="hidden"
+            >
+              <QqGroupIcon url={qqGroups[0]?.icon} size={42} />
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
+                {t("settings.aboutSettings.qqGroup")}
               </Text>
-            </HStack>
-          </HStack>
-          <Divider my={3} borderColor={dividerColor} />
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.feedbackTitle")}
-            </Text>
-            <HStack spacing={2}>
-              <Tooltip label={t("settings.aboutSettings.feedbackTitle")}>
-                <Box
-                  w="24px"
-                  h="24px"
-                  borderRadius="md"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  color={getActiveColor()}
-                  cursor="pointer"
-                  transition="all 0.2s"
-                  _hover={{ transform: "scale(1.1)", bg: `${getActiveColor()}1a` }}
-                  onClick={() => handleOpenLink("https://nexbox.top/feedback")}
-                >
-                  <LuBug size={16} />
-                </Box>
-              </Tooltip>
-            </HStack>
-          </HStack>
-          <Divider my={3} borderColor={dividerColor} />
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.qqGroup")}
-            </Text>
-            <VStack spacing={1.5} align="flex-end">
-              {loadingQQ && qqGroups.length === 0 ? (
-                <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                  ...
-                </Text>
-              ) : (
-                qqGroups.map((g) => (
-                  <HStack spacing={2} key={g.number}>
-                    {g.icon ? <QqGroupIcon url={g.icon} size={16} /> : null}
-                    <Text fontSize="xs" color={subLabelColor}>
-                      {g.name}
-                    </Text>
-                    <Text fontSize="sm" color={labelColor} fontWeight="medium" userSelect="all">
-                      {g.number}
-                    </Text>
-                    <Tooltip label={`${t("settings.aboutSettings.joinQqGroup")} ${g.name}`}>
-                      <Box
-                        w="20px"
-                        h="20px"
-                        borderRadius="md"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        color={getActiveColor()}
-                        cursor="pointer"
-                        transition="all 0.2s"
-                        _hover={{ transform: "scale(1.15)", bg: `${getActiveColor()}1a` }}
-                        onClick={() => onJoinGroup(g)}
-                      >
-                        <LuExternalLink size={14} />
-                      </Box>
-                    </Tooltip>
-                  </HStack>
-                ))
-              )}
+              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
+                {t("settings.aboutSettings.qqGroupSubtitle")}
+              </Text>
             </VStack>
+            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+              <Text fontSize="xl" lineHeight="1">›</Text>
+            </Box>
           </HStack>
-          <Divider my={3} borderColor={dividerColor} />
-          <HStack justify="space-between">
-            <Text fontSize="sm" color={subLabelColor}>
-              {t("settings.aboutSettings.joinUs")}
-            </Text>
-            <HStack spacing={2}>
-              <Tooltip label={t("settings.aboutSettings.joinUs")}>
-                <Box
-                  w="24px"
-                  h="24px"
-                  borderRadius="md"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  cursor="pointer"
-                  transition="all 0.2s"
-                  _hover={{ transform: "scale(1.1)", bg: "rgba(99, 102, 241, 0.1)" }}
-                  onClick={() => handleOpenLink("https://team.nexbox.top")}
-                >
-                  <LuExternalLink size={16} />
-                </Box>
-              </Tooltip>
-            </HStack>
-          </HStack>
-        </Box>
-      </LiquidGlassCard>
+        </LiquidGlassCard>
+      </HStack>
+
+      <QqGroupModal isOpen={isQqModalOpen} onClose={onQqModalClose} />
 
       <LiquidGlassCard p={6} boxShadow="sm" mb={6}>
         <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
@@ -3525,6 +3352,24 @@ function AboutSettings() {
           </Box>
         )}
       </LiquidGlassCard>
+
+      {/* 特别鸣谢（远程 gitee thanks.json 实时获取，含内置兜底） */}
+      <Box mt={6}>
+        <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
+          {t("settings.aboutSettings.specialThanks.title")}
+        </Text>
+        {thanksLoading ? (
+          <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+            {t("settings.sponsorSettings.sponsorList.loading")}
+          </Text>
+        ) : (
+          <Flex flexWrap="wrap" gap={4} justify="center">
+            {thanksItems.map((item, index) => (
+              <ThanksItemCard key={index} item={item} onOpen={handleOpenLink} />
+            ))}
+          </Flex>
+        )}
+      </Box>
     </Box>
   );
 }
@@ -3938,7 +3783,6 @@ export default function SettingsPage() {
           {activeItem === "advanced" && <AdvancedPage />}
           {activeItem === "hotkeys" && <HotkeySettings />}
           {activeItem === "network" && <NetworkSettings />}
-          {activeItem === "contributor" && <ContributorSettings />}
           {activeItem === "sponsor" && <SponsorSettings />}
           {activeItem === "about" && <AboutSettings />}
         </div>

@@ -36,7 +36,7 @@ export function LiquidGlassToolCard({
   const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const padding = size === "sm" ? 3 : size === "md" ? 4 : 5;
   const borderRadius = size === "sm" ? "lg" : "xl";

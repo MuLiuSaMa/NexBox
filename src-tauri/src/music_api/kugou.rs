@@ -1908,6 +1908,7 @@ pub async fn song_url(
             reason: Some("MISSING_HASH".into()),
             message: Some("缺少酷狗歌曲 hash".into()),
             fee: None,
+            ..Default::default()
         });
     }
 
@@ -2021,6 +2022,7 @@ pub async fn song_url(
         reason: Some(restriction.category),
         message: Some(restriction.message),
         fee: None,
+        ..Default::default()
     })
 }
 

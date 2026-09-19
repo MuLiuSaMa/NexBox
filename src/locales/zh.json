@@ -66,7 +66,9 @@
     "contextMenu": "右键菜单管理",
     "downloadAccelerator": "下载器",
     "nvidiaRecording": "N卡录制管理",
-    "vacRepair": "CS:GO VAC 修复"
+    "vacRepair": "CS:GO VAC 修复",
+    "appManager": "应用管理",
+    "timeSync": "时间校准"
   },
   "customPage": {
     "title": "自定义页面",
@@ -81,7 +83,6 @@
     "exitEdit": "退出编辑"
   },
   "steam": {
-    "loading": "正在加载 Steam 数据...",
     "notInstalled": "未检测到 Steam 安装，请先安装 Steam 客户端",
     "running": "运行中",
     "notRunning": "未运行",
@@ -139,7 +140,8 @@
     "notInstalledBadge": "未安装",
     "loadMore": "加载更多",
     "install": "安装",
-    "installSent": "安装请求已发送到 Steam"
+    "installSent": "安装请求已发送到 Steam",
+    "loading": "正在加载 Steam 数据..."
   },
   "powerAdvanced": {
     "title": "处理器高级设置",
@@ -783,6 +785,8 @@
     "pnpDeviceId": "PNP ID",
     "resolution": "分辨率",
     "refreshRate": "刷新率",
+    "screenSize": "尺寸",
+    "primaryDisplay": "主屏",
     "status": "状态",
     "diskType": "类型",
     "interfaceType": "接口",
@@ -824,6 +828,13 @@
     "thirdpartyTools": "第三方工具",
     "officialTools": "官方推荐",
     "recommended": "推荐",
+    "peripheralDrivers": "外设驱动",
+    "peripheralDriversDesc": "各品牌外设驱动的官方入口：优先直达网页在线驱动，无在线驱动的品牌跳转官方驱动下载页，均通过系统浏览器打开",
+    "peripheralDriversLoading": "正在加载外设驱动列表...",
+    "driverKind": {
+      "online": "在线驱动",
+      "download": "官方下载"
+    },
     "tools": {
       "assistantCrosshair": "辅助准心",
       "memreduct": "Memreduct",
@@ -992,6 +1003,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "操作已被更新的操作取代，未执行",
+    "iccToolsTitle": "滤镜工具未安装",
+    "iccToolsDesc": "商店版未内置滤镜工具，点击下载后即可正常使用滤镜功能。",
+    "iccToolsDownloadBtn": "下载滤镜工具包",
+    "iccToolsDownloading": "下载中",
+    "iccToolsSuccess": "滤镜工具包已安装",
+    "iccToolsFailed": "滤镜工具包下载失败",
     "title": "显示器滤镜",
     "enable": "启用滤镜",
     "presets": "预设模式",
@@ -1140,7 +1157,20 @@
     "holdDelay": "输入延迟",
     "holdDelayDesc": "按住热键后延迟该时长才显示准星，松开立即关闭（0 = 立即显示）",
     "holdDelaySaved": "延迟已保存",
-    "hotkeySaved": "快捷键已保存"
+    "hotkeySaved": "快捷键已保存",
+    "presets": "准心预设",
+    "saveAsPreset": "保存为预设",
+    "savePresetTitle": "保存当前设置为预设",
+    "presetNamePlaceholder": "输入预设名称",
+    "presetDefaultName": "预设",
+    "saveSuccess": "预设已保存",
+    "saveFailed": "预设保存失败",
+    "nameRequired": "请输入预设名称",
+    "emptyPresets": "暂无预设，调整参数后可保存",
+    "applySuccess": "已应用预设",
+    "applyFailed": "预设应用失败",
+    "deletePreset": "删除预设",
+    "deleteConfirm": "确定删除该预设吗？"
   },
   "hardwareReport": {
     "export": "导出报告",
@@ -1210,7 +1240,6 @@
     "mapToolDesc": "物资点、出生点、撤离点及首领坐标",
     "dlssPreset": "DLSS预设",
     "dlssPresetDesc": "选择DLSS神经网络模型预设，不同预设适用于不同场景",
-    "loading": "加载中...",
     "noPassword": "暂无密码数据",
     "copy": "复制",
     "copied": "已复制",
@@ -1282,29 +1311,6 @@
     "officialWallpaper": "官方壁纸",
     "officialWallpaperTitle": "三角洲行动 - 官方壁纸",
     "wallpaperDesc": "官方高清壁纸下载",
-    "voiceStrobe": {
-      "title": "喊话爆闪",
-      "desc": "喊话自动触发游戏爆闪",
-      "modalTitle": "喊话爆闪",
-      "modalDesc": "游戏内麦克风音量超过阈值时，自动按一次爆闪键",
-      "enabled": "启用喊话爆闪",
-      "enabledDesc": "仅三角洲行动运行时生效",
-      "volumeMeter": "麦克风音量",
-      "volumeHint": "大声喊话观察音量条，将阈值线调到合适位置",
-      "device": "麦克风设备",
-      "deviceDefault": "系统默认麦克风",
-      "threshold": "触发阈值",
-      "key": "爆闪键",
-      "keyHint": "支持键盘任意键（含 Ctrl/Shift 等修饰键）与鼠标侧键",
-      "recording": "按下任意键或鼠标按键，Esc 取消",
-      "keyNone": "未设置",
-      "cooldown": "触发冷却",
-      "cooldownHint": "两次触发之间的最小间隔，0 为无冷却",
-      "cooldownUnit": "秒",
-      "statusListening": "监听中",
-      "statusWaitingGame": "等待游戏",
-      "statusOff": "已关闭"
-    },
     "allCategories": "全部",
     "searchPlaceholder": "搜索武器...",
     "allWeapons": "全部武器",
@@ -1374,7 +1380,8 @@
       "armor": "护甲",
       "specialTask": "特殊任务",
       "ammoGrade": "弹药等级"
-    }
+    },
+    "loading": "加载中..."
   },
   "dlssPreset": {
     "title": "三角洲DLSS设置",
@@ -1486,6 +1493,7 @@
     "vtxVirtualizationDesc": "关闭/恢复内存完整性与 Hyper-V，修复虚拟化弹窗",
     "hiddenFeaturesDesc": "查询/启用/禁用 Windows 隐藏的 A/B 实验功能开关",
     "contextMenuDesc": "管理系统右键菜单与「此电脑」中的多余盘符/网盘",
+    "appManagerDesc": "查看并卸载本机已安装的应用软件",
     "resolutionManagement": "显示器分辨率管理",
     "selectDisplay": "选择显示器",
     "selectResolution": "选择分辨率",
@@ -1493,7 +1501,8 @@
     "resolutionApplied": "分辨率已应用",
     "downloadAcceleratorDesc": "多线程动态分段下载，充分跑满带宽",
     "nvidiaRecordingDesc": "自动扫描 N卡录制视频，按时间管理、预览与清理",
-    "vacRepairDesc": "修复 CS:GO / CS2 的 VAC 屏蔽问题，恢复 Steam 服务与系统设置"
+    "vacRepairDesc": "修复 CS:GO / CS2 的 VAC 屏蔽问题，恢复 Steam 服务与系统设置",
+    "timeSyncDesc": "校准系统时间，检测时间服务器延迟与偏差"
   },
   "contextMenu": {
     "title": "右键菜单 & 此电脑",
@@ -1506,7 +1515,6 @@
     "totalPc": "共 {{count}} 个「此电脑」项",
     "drives": "盘符",
     "driveRestartHint": "已写入注册表，重启资源管理器或注销后生效",
-    "scanning": "正在扫描...",
     "noMenu": "未发现右键菜单项",
     "noPc": "未发现「此电脑」中的可管理项",
     "colName": "名称",
@@ -1523,13 +1531,13 @@
     "scanError": "扫描失败",
     "errorDenied": "权限不足：此条目位于系统注册表（HKLM/HKCR），需要管理员权限。请以管理员身份运行本程序后再试。",
     "tipTitle": "💡 提示",
-    "tipDescription": "隐藏操作会将条目移入备份位置（可随时恢复），不会删除注册表数据。勾选多余网盘、OneDrive 等可让「此电脑」更清爽。系统级项在非管理员权限下操作可能弹出 UAC，失败时请以管理员身份运行。"
+    "tipDescription": "隐藏操作会将条目移入备份位置（可随时恢复），不会删除注册表数据。勾选多余网盘、OneDrive 等可让「此电脑」更清爽。系统级项在非管理员权限下操作可能弹出 UAC，失败时请以管理员身份运行。",
+    "scanning": "正在扫描..."
   },
   "vtxVirtualization": {
     "title": "VT-X 虚拟化修复",
     "subtitle": "关闭或恢复内存完整性、VBS 与 Hyper-V 自动启动，解决游戏/软件虚拟化弹窗",
     "refresh": "重新检测",
-    "checking": "正在检测当前虚拟化状态...",
     "checkFailed": "虚拟化状态检测失败",
     "currentStatus": "当前虚拟化状态",
     "memoryIntegrity": "内存完整性（内核隔离）",
@@ -1554,13 +1562,13 @@
     "notAdmin": "非管理员",
     "adminHint": "非管理员运行时操作会弹出 UAC 授权窗口，请点击允许",
     "fullyFixed": "检测到虚拟化相关设置已全部关闭，当前处于修复状态。",
-    "fullyRestored": "检测到虚拟化相关设置已全部恢复，当前处于默认状态。"
+    "fullyRestored": "检测到虚拟化相关设置已全部恢复，当前处于默认状态。",
+    "checking": "正在检测当前虚拟化状态..."
   },
   "vacRepair": {
     "title": "CS:GO VAC 修复",
     "subtitle": "修复 CS:GO / CS2 的 VAC 屏蔽问题：恢复 Steam 启动器服务、防火墙与 DEP 等系统设置",
     "refresh": "重新检测",
-    "checking": "正在检测 Steam 环境...",
     "checkFailed": "状态检测失败",
     "notInstalled": "未检测到 Steam 安装，请先安装并运行一次 Steam 客户端",
     "serviceMissingHint": "未找到 steamservice.exe，Steam 安装可能不完整，建议在 Steam 设置中修复库文件夹后再试",
@@ -1587,13 +1595,13 @@
     "consoleEmpty": "输出将在此显示，点击「开始 VAC 修复」执行...",
     "doneLine": "修复流程结束",
     "firewallHint": "修复过程中若提示 \"Add firewall exception failed\"，请在 Windows 防火墙中关闭「阻止所有传入连接」（不允许例外）后重新修复",
-    "closeSteamHint": "修复会自动关闭并重启 Steam，请先退出游戏保存进度；非管理员运行时会弹出 UAC 授权窗口，请点击允许"
+    "closeSteamHint": "修复会自动关闭并重启 Steam，请先退出游戏保存进度；非管理员运行时会弹出 UAC 授权窗口，请点击允许",
+    "checking": "正在检测 Steam 环境..."
   },
   "hiddenFeatures": {
     "title": "Windows 隐藏功能",
     "subtitle": "查询与切换 Windows A/B 实验功能开关（基于 ViVe 实现）",
     "refresh": "刷新",
-    "loading": "正在加载功能配置...",
     "loadFailed": "加载失败",
     "warningTitle": "风险提示",
     "warningBody": "这些功能开关用于微软的 A/B 实验，启用/禁用隐藏功能可能导致系统不稳定。如出现异常，请重置对应功能恢复默认。修改 Boot 存储需重启后生效。",
@@ -1640,7 +1648,8 @@
     "loadMore": "加载更多",
     "namedOnly": "只显示有名称的功能",
     "namedOnlyHint": "无名称条目是 Windows 内部 servicing 配置，字典无法识别，通常无需修改；关闭后显示全部条目",
-    "numbersExplain": "带名称的条目来自社区功能字典；显示为纯数字的功能没有公开名称，其含义 Microsoft 未公开。可切换上方开关查看全部，或用名称搜索 17000+ 个已知功能。"
+    "numbersExplain": "带名称的条目来自社区功能字典；显示为纯数字的功能没有公开名称，其含义 Microsoft 未公开。可切换上方开关查看全部，或用名称搜索 17000+ 个已知功能。",
+    "loading": "正在加载功能配置..."
   },
   "gameProcessOptimize": {
     "title": "游戏进程优化",
@@ -1720,6 +1729,29 @@
     "server": "测速服务器",
     "serverNote": "下载：所选节点失败自动切国内CDN备用源；上传/延迟统一走南航节点"
   },
+  "timeSync": {
+    "title": "时间校准",
+    "systemTime": "当前系统时间",
+    "serverTime": "服务器时间",
+    "offset": "时间偏差",
+    "latency": "网络延迟",
+    "server": "时间服务器",
+    "query": "检测",
+    "querying": "检测中...",
+    "redetect": "重新检测全部",
+    "apply": "校准系统时间",
+    "applying": "校准中...",
+    "applyHint": "将系统时间校准到所选服务器的时间",
+    "adminRequired": "需要管理员权限才能修改系统时间",
+    "adminOk": "管理员",
+    "adminNo": "非管理员",
+    "synced": "时间校准完成，已重新检测",
+    "queryFailed": "检测失败",
+    "notQueried": "未检测",
+    "normal": "正常",
+    "offsetNote": "偏差 = 服务器时间 − 本机时间，正数表示本机时间偏慢",
+    "lastUpdate": "上次检测"
+  },
   "autoclicker": {
     "title": "连点器",
     "running": "运行中",
@@ -1746,7 +1778,6 @@
   },
   "gpuRename": {
     "title": "显卡改写",
-    "loading": "加载中...",
     "loadError": "加载失败",
     "currentGpu": "当前显卡",
     "integrated": "核显",
@@ -1770,7 +1801,8 @@
     "success": "操作成功",
     "restored": "已恢复",
     "error": "操作失败",
-    "note": "⚠️ 重要提示：\n1. 需要管理员权限才能修改注册表\n2. 修改后需要重启游戏或电脑才能生效\n3. 此功能仅支持 Windows 系统和 NVIDIA 显卡\n4. 如果无法应用，请尝试以管理员身份运行应用"
+    "note": "⚠️ 重要提示：\n1. 需要管理员权限才能修改注册表\n2. 修改后需要重启游戏或电脑才能生效\n3. 此功能仅支持 Windows 系统和 NVIDIA 显卡\n4. 如果无法应用，请尝试以管理员身份运行应用",
+    "loading": "加载中..."
   },
   "settings": {
     "general": "通用",
@@ -1825,37 +1857,11 @@
       "gameRemoved": "已删除",
       "save": "保存",
       "cancel": "取消",
-      "error": "操作失败",
-      "popnull": {
-        "title": "NexBoxPopNull 弹窗拦截",
-        "desc": "按黑白名单自动拦截广告弹窗：命中黑名单即关闭窗口并结束进程，白名单优先放行，系统进程不受影响",
-        "blocking": "弹窗拦截中",
-        "disabled": "未启用",
-        "listBlack": "黑名单",
-        "listWhite": "白名单",
-        "fieldExe": "进程",
-        "fieldPath": "路径",
-        "fieldTitle": "标题",
-        "fieldClass": "类名",
-        "modeContains": "包含",
-        "modeExact": "精确",
-        "modeWildcard": "通配符",
-        "addRule": "添加",
-        "pickWindow": "选取窗口",
-        "patternPlaceholder": "如 flashcenter.exe 或 *pop*",
-        "noRules": "暂无规则，添加第一条规则开始拦截",
-        "delete": "删除",
-        "duplicate": "规则已存在",
-        "ruleAdded": "已添加规则",
-        "pickerTitle": "选取窗口",
-        "pickerSearch": "搜索窗口",
-        "pickerEmpty": "未找到窗口"
-      }
+      "error": "操作失败"
     },
     "hotkeys": "热键",
     "network": "网络",
     "sponsor": "赞助",
-    "contributor": "贡献者",
     "navigation": "导航栏",
     "about": "关于",
     "generalSettings": {
@@ -1951,12 +1957,7 @@
       "sidebarShowLabelNoText": "无字",
       "sidebarShowLabelWithText": "有字",
       "navButtonVisibility": "导航栏按钮显示",
-      "navButtonVisibilityDesc": "控制导航栏中每个按钮的显示和隐藏，设置项始终可见",
-      "pageTransitionLabel": "页面切换动画",
-      "pageTransitionDesc": "关闭后页面切换将不再有过渡动画",
-      "pageTransitionSlide": "滑动",
-      "pageTransitionFade": "淡化",
-      "pageTransitionOff": "关闭"
+      "navButtonVisibilityDesc": "控制导航栏中每个按钮的显示和隐藏，设置项始终可见"
     },
     "appearanceSettings": {
       "title": "外观设置",
@@ -2065,18 +2066,11 @@
       "alipay": "支付宝",
       "thankYou": "感谢您的支持！",
       "placeholder": "请添加收款码图片",
-      "contributors": {
-        "title": "贡献者名单",
-        "loading": "加载中...",
-        "error": "加载失败",
-        "empty": "暂无贡献者"
-      },
       "sponsorList": {
         "title": "赞助者名单",
         "loading": "加载中...",
         "error": "加载失败",
-        "empty": "暂无赞助者",
-        "totalAmount": "累计赞助总额："
+        "empty": "暂无赞助者"
       }
     },
     "aboutSettings": {
@@ -2092,7 +2086,10 @@
       "acknowledgments": "致谢",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "感谢上海交通大学Minecraft社开源项目",
-      "joinUs": "加入我们",
+      "specialThanks": {
+        "title": "特别鸣谢"
+      },
+      "qqGroupSubtitle": "加入获取最新动态以及高效解决问题",
       "feedbackTitle": "问题反馈",
       "qqGroup": "QQ 交流群",
       "joinQqGroup": "加入",
@@ -2158,7 +2155,6 @@
     "noticeTitle": "温馨提示",
     "noticeContent": "该页面优化内容仅涉及系统层修改，请仔细查看每一项功能后使用，不要无脑全部优化，根据自己的设备选择合适的优化。\n\n不懂就不要优化！不懂就不要优化！不懂就不要优化！\n\n如出现优化后帧率降低，概不负责。",
     "noticeAgree": "我知道了，开始使用",
-    "loading": "加载中...",
     "scanStatus": "扫描状态",
     "scanning": "扫描中...",
     "scanComplete": "扫描完成",
@@ -2455,7 +2451,8 @@
     "optimized": "已优化",
     "reverted": "已恢复",
     "optimizing": "执行中...",
-    "operationError": "操作执行失败"
+    "operationError": "操作执行失败",
+    "loading": "加载中..."
   },
   "windowsUpdate": {
     "pageTitle": "Windows 更新与 Defender",
@@ -2478,7 +2475,6 @@
     "enableSuccess": "Windows 更新已成功恢复",
     "disableError": "关闭失败",
     "enableError": "恢复失败",
-    "checking": "正在检查状态...",
     "warningTitle": "⚠️ 请注意",
     "warningDesc": "关闭 Windows 更新后将不再接收安全补丁和功能更新。建议定期手动检查更新，或在需要时再开启。",
     "pauseCard": {
@@ -2510,7 +2506,8 @@
       "restoreError": "恢复 Windows Defender 失败",
       "manualHintTitle": "⚠️ 请注意",
       "manualHint": "关闭后系统将不再提供病毒与威胁防护。若「篡改防护」处于开启状态，Windows 可能会自动重置这些策略，需先在 Defender 设置中关闭「篡改防护」才能生效。"
-    }
+    },
+    "checking": "正在检查状态..."
   },
   "gpuDriverRestart": {
     "pageTitle": "重启显卡驱动",
@@ -2527,7 +2524,6 @@
     "pageTitle": "网络优化",
     "pageDesc": "优化网络参数，配置 DNS 提升解析速度",
     "loadFailed": "加载状态失败",
-    "scanning": "扫描中...",
     "publicIp": {
       "title": "公网 IP",
       "label": "当前网络公网 IPv4 地址",
@@ -2611,7 +2607,8 @@
     "operationError": "操作执行失败",
     "rescan": "重新扫描",
     "rescanComplete": "扫描完成",
-    "scanError": "扫描失败"
+    "scanError": "扫描失败",
+    "scanning": "扫描中..."
   },
   "peripheralOptimize": {
     "pageTitle": "外设优化",
@@ -2688,7 +2685,6 @@
     "selectAll": "全选",
     "deselectAll": "取消全选",
     "emptyRecycleBin": "清空回收站",
-    "scanning": "扫描中...",
     "cleanButton": "开始清理",
     "cleaning": "清理中...",
     "scanButton": "重新扫描",
@@ -2709,7 +2705,6 @@
     "risk4": "较高风险",
     "risk5": "高危",
     "junkFileTotal": "垃圾文件数",
-    "junkScanning": "正在深度扫描...",
     "junkCleanButton": "清理选中",
     "junkCleaning": "清理中...",
     "junkNoSelection": "请先选择要清理的分类",
@@ -2815,17 +2810,19 @@
       "description": "存储清理功能可以安全删除系统临时文件和缓存，释放磁盘空间。",
       "note1": "• 需要管理员权限的项目会在清理时自动请求权限",
       "note2": "• 被占用的文件会自动跳过，不会影响系统运行"
-    }
+    },
+    "scanning": "扫描中...",
+    "junkScanning": "正在深度扫描..."
   },
   "epic": {
     "title": "Epic 喜加一",
-    "loading": "正在加载免费游戏...",
     "errorFetch": "获取数据失败",
     "errorNetwork": "网络请求失败，请检查网络连接",
     "deadline": "截止 {{date}}",
     "claimNow": "立即领取",
     "noGames": "暂无免费游戏，请稍后再来查看",
-    "reload": "重新加载"
+    "reload": "重新加载",
+    "loading": "正在加载免费游戏..."
   },
   "search": {
     "placeholder": "搜索功能...",
@@ -2964,7 +2961,6 @@
   },
   "audioEq": {
     "title": "EQ 调音",
-    "loading": "加载中...",
     "virtualSoundCard": "虚拟声卡",
     "virtualSoundCardDesc": "安装 FxSound 虚拟音频驱动以启用系统级 EQ",
     "installed": "已安装",
@@ -3011,7 +3007,8 @@
     "deleteSuccess": "已删除",
     "deleteFailed": "删除失败",
     "deleteConfirm": "确定要删除预设「{name}」吗？",
-    "noImported": "暂无导入的预设"
+    "noImported": "暂无导入的预设",
+    "loading": "加载中..."
   },
   "nvidiaDriverDownload": {
     "title": "NVIDIA 显卡驱动下载",
@@ -3021,7 +3018,6 @@
     "driverList": "驱动列表",
     "searchPlaceholder": "搜索版本号...",
     "openDetail": "打开详情页",
-    "loading": "正在查询驱动列表...",
     "noDrivers": "未找到任何驱动版本",
     "noSearchResults": "未找到匹配的驱动版本",
     "totalDrivers": "共 {{count}} 个驱动版本",
@@ -3035,7 +3031,8 @@
     "currentDriver": "当前驱动",
     "unknown": "未知",
     "openFailed": "打开链接失败",
-    "latest": "最新"
+    "latest": "最新",
+    "loading": "正在查询驱动列表..."
   },
   "downloadAccel": {
     "urlLabel": "下载链接",
@@ -3072,7 +3069,6 @@
   "nvidiaRecording": {
     "title": "N卡录制管理",
     "scan": "刷新扫描",
-    "scanning": "正在扫描录制视频...",
     "scanError": "扫描失败",
     "addFolder": "添加文件夹",
     "addFolderError": "添加文件夹失败",
@@ -3115,7 +3111,8 @@
     "copyError": "复制失败",
     "deleteSuccessMulti": "已删除 {{n}} 个视频",
     "deleteBodyMulti": "删除后不可恢复，确定要永久删除选中的 {{n}} 个视频吗？",
-    "andMore": "等 {{n}} 个"
+    "andMore": "等 {{n}} 个",
+    "scanning": "正在扫描录制视频..."
   },
   "filterDisabledDegraded": "滤镜已关闭（降级清除：未能恢复原有校色）"
 }

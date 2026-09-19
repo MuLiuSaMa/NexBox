@@ -1,5 +1,6 @@
 mod advanced;
 mod announcement;
+mod app_manager;
 mod audio_engine;
 mod audio_eq;
 mod auto_start;
@@ -30,7 +31,6 @@ mod game_ping;
 mod gpu_rename;
 mod hardware;
 mod hardware_report;
-mod voice_strobe;
 
 mod feature_flags;
 mod hotkey;
@@ -47,7 +47,6 @@ mod runtime_repair;
 mod optimization;
 mod overlay_panel;
 mod power_settings;
-mod popup_blocker;
 mod vertical_overlay;
 mod vac_repair;
 mod vtx_virtualization;
@@ -58,6 +57,8 @@ mod shader_cache;
 mod pawnio_driver;
 mod smart;
 mod sponsor;
+mod time_sync;
+mod thanks;
 mod contributor;
 mod qq_group;
 mod ads;
@@ -106,7 +107,7 @@ pub fn ensure_vertical_overlay<R: tauri::Runtime>(
         .title("NexBox Vertical Overlay")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
         .inner_size(220.0, 400.0)
         .resizable(false)
         .decorations(false)
@@ -142,7 +143,7 @@ pub fn ensure_mood_window<R: tauri::Runtime>(
         .title("心境")
         // 与其它窗口保持一致的 WebView2 参数：禁用 Chromium 自动媒体会话，
         // 避免与 smtc.rs 注册的「新境盒」媒体会话重复（参数必须全窗口一致，否则 WebView2 环境冲突导致窗口创建失败）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required")
+        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync")
         .inner_size(1000.0, 700.0)
         .resizable(true)
         .center()
@@ -230,6 +231,10 @@ pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visibl
     if MAIN_WINDOW_VISIBLE.swap(visible, Ordering::SeqCst) != visible {
         let _ = app.emit("window-visibility-changed", visible);
 
+        // 隐藏/最小化时让主窗口 WebView 内存目标切到 Low（允许丢弃缓存、换页到磁盘），
+        // 恢复可见时切回 Normal。仅主窗口（占用最大），切换频率低，无感知。
+        set_main_webview_memory_level(app, !visible);
+
         #[cfg(windows)]
         {
             if visible {
@@ -244,6 +249,42 @@ pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visibl
                 });
             }
         }
+    }
+}
+
+/// 设置主窗口 WebView 的内存目标级别（Windows，微软官方 API）。
+/// Low：允许 Chromium 丢弃缓存数据、将内存页换出到 pagefile（隐藏/最小化时）；
+/// Normal：恢复完整性能。对应 MemoryUsageTargetLevel 的 1 / 0。
+fn set_main_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, low: bool) {
+    use tauri::Manager;
+    #[cfg(windows)]
+    {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+            ICoreWebView2_19,
+        };
+        use windows_core::Interface;
+
+        if let Some(win) = app.get_webview_window("main") {
+            let _ = win.with_webview(move |webview| unsafe {
+                let controller = webview.controller();
+                if let Some(core) = controller.CoreWebView2().ok() {
+                    if let Ok(c19) = core.cast::<ICoreWebView2_19>() {
+                        let level = if low {
+                            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                        } else {
+                            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+                        };
+                        let _ = c19.SetMemoryUsageTargetLevel(level);
+                    }
+                }
+            });
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, low);
     }
 }
 
@@ -393,12 +434,6 @@ pub fn run() {
             let app_handle_for_game_win_key = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let _ = game_win_key::init(app_handle_for_game_win_key).await;
-            });
-
-            // 初始化喊话爆闪（读取持久化配置，开关开启则启动麦克风监听线程）
-            let app_handle_for_voice_strobe = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let _ = voice_strobe::init(app_handle_for_voice_strobe).await;
             });
 
             // 初始化游戏进程优化（恢复持久化配置，首次预置三角洲；启动自动优化线程）
@@ -558,9 +593,6 @@ pub fn run() {
             // 键盘物理媒体键统一捕获（前台聚焦时 WebView2 会抢键，必须用低层钩子在 WebView2 之前接管）
             media_keys::start(app.handle().clone());
 
-            // NexBoxPopNull 弹窗拦截（读取持久化配置并启动 WinEvent 钩子线程）
-            popup_blocker::init(app.handle().clone());
-
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -604,10 +636,6 @@ pub fn run() {
         smtc::smtc_update_state,
         smtc::smtc_clear,
         media_keys::set_media_keys_enabled,
-        popup_blocker::popnull_get_state,
-        popup_blocker::popnull_set_enabled,
-        popup_blocker::popnull_set_rules,
-        popup_blocker::popnull_list_windows,
         music_api::music_lyric,
         music_api::music_song_comments,
         music_api::music_send_comment,
@@ -837,10 +865,17 @@ pub fn run() {
         display_filter::export_preset_as_icc,
         display_filter::apply_filter_stack,
         display_filter::restore_filter_state,
+        display_filter::check_icc_tools,
+        display_filter::download_icc_tools,
         game_filter::get_game_filter_status,
         game_filter::set_game_filter_enabled,
         game_filter::add_custom_game,
         game_filter::remove_custom_game,
+        // === 应用管理 ===
+        app_manager::list_installed_apps,
+        app_manager::get_app_icons,
+        app_manager::open_app,
+        app_manager::uninstall_app,
         // === 高级设置 ===
         advanced::get_storage_sizes,
         advanced::clear_cache,
@@ -867,11 +902,6 @@ pub fn run() {
         game_mode::game_mode_get_status,
         game_win_key::get_game_win_key_status,
         game_win_key::set_game_win_key_enabled,
-        // === 喊话爆闪命令 ===
-        voice_strobe::voice_strobe_set_enabled,
-        voice_strobe::voice_strobe_get_status,
-        voice_strobe::voice_strobe_update_config,
-        voice_strobe::voice_strobe_list_devices,
         // === EQ 调音命令 ===
         audio_eq::check_virtual_audio_driver,
         audio_eq::install_virtual_audio_driver,
@@ -1045,6 +1075,7 @@ pub fn run() {
         gpu_rename::restore_gpu_name,
         video_bg::pick_video_file,
             sponsor::get_sponsors,
+            thanks::get_thanks,
             contributor::get_contributors,
         qq_group::get_qq_groups,
         qq_group::get_qq_group_icon,
@@ -1117,9 +1148,9 @@ pub fn run() {
             utils::cursor::clamp_lyrics_window_position,
             utils::cursor::center_lyrics_window,
             system_fonts::get_system_fonts,
-            utils::lyrics_btn::show_lyrics_unlock_btn,
-            utils::lyrics_btn::hide_lyrics_unlock_btn,
-                        utils::lyrics_btn::unlock_lyrics,
+            utils::lyrics_btn::enable_lyrics_unlock_hook,
+            utils::lyrics_btn::disable_lyrics_unlock_hook,
+            utils::lyrics_btn::set_lyrics_unlock_hook_armed,
 
         // === CPU 核心调度 ===
         cpu_scheduler::get_cpu_topology,
@@ -1166,6 +1197,11 @@ pub fn run() {
         speedtest::is_speedtest_running,
         speedtest::get_speedtest_servers,
 
+        // === 时间校准 ===
+        time_sync::get_ntp_servers,
+        time_sync::ntp_query,
+        time_sync::apply_time_offset,
+
         // === UAPI 随机图片 ===
         uapi::get_random_image,
         uapi::save_random_image_bytes,
@@ -1194,7 +1230,7 @@ pub fn run() {
                     }
                 }
                 // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
-                for label in &["main", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+                for label in &["main", "tray-menu", "desktop-lyrics", "vertical-overlay"] {
                     if let Some(w) = app_handle.get_webview_window(label) {
                         let _ = w.hide();
                     }
@@ -1202,6 +1238,7 @@ pub fn run() {
             }
             tauri::RunEvent::Exit => {
                 // 退出前兜底保存主窗口位置（与竖排悬浮窗 cleanup 对齐）
+                utils::lyrics_btn::cleanup(); // 卸载歌词解锁鼠标钩子，结束钩子线程
                 main_window::save_current_position(app_handle);
                 sensor::stop_sensor_process(app_handle);
                 hardware::cleanup_hardware_cache();
@@ -1217,7 +1254,6 @@ pub fn run() {
                 crosshair::cleanup();
                 crosshair_hold::cleanup();
                 autoclicker::cleanup();
-                voice_strobe::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);

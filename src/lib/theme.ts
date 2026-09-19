@@ -3,14 +3,22 @@ import { extendTheme, type ThemeConfig } from "@chakra-ui/react";
 export const LS_THEME_MODE = "nexbox-theme-mode";
 export type ThemeMode = "light" | "dark" | "system";
 
+/** 判断任意值是否为合法的主题模式 */
+export function isThemeMode(v: unknown): v is ThemeMode {
+  return v === "light" || v === "dark" || v === "system";
+}
+
 /** 同步读取持久化的主题模式：light/dark/system，无记录时默认跟随系统 */
 export function readInitialThemeMode(): ThemeMode {
   try {
     const m = localStorage.getItem(LS_THEME_MODE);
-    if (m === "light" || m === "dark" || m === "system") return m;
-    // 迁移：老版本只有 chakra-ui-color-mode，尊重既有显式选择
-    const legacy = localStorage.getItem("chakra-ui-color-mode");
-    if (legacy === "light" || legacy === "dark") return legacy;
+    if (isThemeMode(m)) return m;
+
+    // 迁移：老版本只有 chakra-ui-color-mode，尊重既有显式选择。
+    // 注意：新版本每次应用主题都会写 chakra-ui-color-mode（托盘菜单跨窗口同步依赖该键），
+    // 因此仅凭该键无法区分"用户选了浅色"与"跟随系统时系统恰好是浅色"。
+    // 若直接迁移会把 system 误判成 light/dark 并固化，故此后不再据此推断；
+    // 真实模式由 ThemeModeProvider 从 settings.json 恢复。
   } catch {
     // localStorage 不可用时返回默认跟随系统
   }
@@ -26,12 +34,16 @@ export function systemPrefersDark(): boolean {
   }
 }
 
+/** 把主题模式解析为具体的浅/深方案 */
+export function resolveScheme(mode: ThemeMode): "light" | "dark" {
+  if (mode === "light") return "light";
+  if (mode === "dark") return "dark";
+  return systemPrefersDark() ? "dark" : "light";
+}
+
 /** 根据持久化主题模式的解析浅/深，用作首帧初始 colorMode、避免闪烁 */
 function readInitialScheme(): "light" | "dark" {
-  const m = readInitialThemeMode();
-  if (m === "light") return "light";
-  if (m === "dark") return "dark";
-  return systemPrefersDark() ? "dark" : "light";
+  return resolveScheme(readInitialThemeMode());
 }
 
 const config: ThemeConfig = {

@@ -56,7 +56,9 @@
     "runtimeRepair": "執行庫修復",
     "hiddenFeatures": "Windows 隱藏功能",
     "downloadAccelerator": "下載器",
-    "nvidiaRecording": "N卡錄製管理"
+    "nvidiaRecording": "N卡錄製管理",
+    "appManager": "應用程式管理",
+    "timeSync": "時間校正"
   },
   "customPage": {
     "title": "自訂頁面",
@@ -831,6 +833,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "操作已被更新的操作取代，未執行",
+    "iccToolsTitle": "濾鏡工具未安裝",
+    "iccToolsDesc": "商店版未內建濾鏡工具，點擊下載後即可正常使用濾鏡功能。",
+    "iccToolsDownloadBtn": "下載濾鏡工具包",
+    "iccToolsDownloading": "下載中",
+    "iccToolsSuccess": "濾鏡工具包已安裝",
+    "iccToolsFailed": "濾鏡工具包下載失敗",
     "title": "顯示器濾鏡",
     "enable": "啟用濾鏡",
     "presets": "預設模式",
@@ -962,7 +970,20 @@
     "holdDelay": "輸入延遲",
     "holdDelayDesc": "按住熱鍵後延遲該時長才顯示準星，鬆開立即關閉（0 = 立即顯示）",
     "holdDelaySaved": "延遲已儲存",
-    "hotkeySaved": "快捷鍵已儲存"
+    "hotkeySaved": "快捷鍵已儲存",
+    "presets": "準心預設",
+    "saveAsPreset": "儲存為預設",
+    "savePresetTitle": "將目前設定儲存為預設",
+    "presetNamePlaceholder": "輸入預設名稱",
+    "presetDefaultName": "預設",
+    "saveSuccess": "預設已儲存",
+    "saveFailed": "預設儲存失敗",
+    "nameRequired": "請輸入預設名稱",
+    "emptyPresets": "尚無預設，調整參數後可儲存",
+    "applySuccess": "已套用預設",
+    "applyFailed": "預設套用失敗",
+    "deletePreset": "刪除預設",
+    "deleteConfirm": "確定刪除該預設嗎？"
   },
   "hardwareReport": {
     "export": "匯出報告",
@@ -1013,7 +1034,6 @@
     "mapToolDesc": "物資點、出生點、撤離點及首領座標",
     "dlssPreset": "DLSS預設",
     "dlssPresetDesc": "選擇DLSS類神經網路模型預設，不同預設適用於不同場景",
-    "loading": "載入中...",
     "noPassword": "暫無密碼資料",
     "copy": "複製",
     "copied": "已複製",
@@ -1138,7 +1158,8 @@
         "name": "小濤查",
         "description": "小濤查改槍碼平台"
       }
-    }
+    },
+    "loading": "載入中..."
   },
   "dlssPreset": {
     "title": "三角洲DLSS設定",
@@ -1218,7 +1239,32 @@
     "audioEqDesc": "系統級音訊等化器調音",
     "runtimeRepairDesc": "偵測並修復缺失的 VC++ / .NET / DirectX 執行庫",
     "downloadAcceleratorDesc": "多執行緒動態分段下載，充分跑滿頻寬",
-    "nvidiaRecordingDesc": "自動掃描 N卡錄製影片，按時間管理、預覽與清理"
+    "nvidiaRecordingDesc": "自動掃描 N卡錄製影片，按時間管理、預覽與清理",
+    "appManagerDesc": "檢視並移除本機已安裝的應用程式",
+    "timeSyncDesc": "校正系統時間，偵測時間伺服器延遲與偏差"
+  },
+  "timeSync": {
+    "title": "時間校正",
+    "systemTime": "目前系統時間",
+    "serverTime": "伺服器時間",
+    "offset": "時間偏差",
+    "latency": "網路延遲",
+    "server": "時間伺服器",
+    "query": "偵測",
+    "querying": "偵測中...",
+    "redetect": "重新偵測全部",
+    "apply": "校正系統時間",
+    "applying": "校正中...",
+    "applyHint": "將系統時間校正至所選伺服器的時間",
+    "adminRequired": "需要管理員權限才能修改系統時間",
+    "adminOk": "管理員",
+    "adminNo": "非管理員",
+    "synced": "時間校正完成，已重新偵測",
+    "queryFailed": "偵測失敗",
+    "notQueried": "未偵測",
+    "normal": "正常",
+    "offsetNote": "偏差 = 伺服器時間 − 本機時間，正數表示本機時間偏慢",
+    "lastUpdate": "上次偵測"
   },
   "gameProcessOptimize": {
     "title": "遊戲進程最佳化",
@@ -1283,7 +1329,6 @@
   },
   "gpuRename": {
     "title": "顯卡改寫",
-    "loading": "載入中...",
     "loadError": "載入失敗",
     "currentGpu": "目前顯卡",
     "integrated": "內顯",
@@ -1307,7 +1352,8 @@
     "success": "操作成功",
     "restored": "已還原",
     "error": "操作失敗",
-    "note": "⚠️ 重要提示：\n1. 需要管理員權限才能修改登錄檔\n2. 修改後需要重新啟動遊戲或電腦才能生效\n3. 此功能僅支援 Windows 系統和 NVIDIA 顯卡\n4. 如果無法套用，請嘗試以管理員身分執行應用"
+    "note": "⚠️ 重要提示：\n1. 需要管理員權限才能修改登錄檔\n2. 修改後需要重新啟動遊戲或電腦才能生效\n3. 此功能僅支援 Windows 系統和 NVIDIA 顯卡\n4. 如果無法套用，請嘗試以管理員身分執行應用",
+    "loading": "載入中..."
   },
   "resolutionConverter": {
     "title": "解析度換算",
@@ -1379,9 +1425,6 @@
     "navigation": "導航欄",
     "about": "關於",
     "advanced": {
-      "popnull": {
-        "title": "NexBoxPopNull 彈窗攔截"
-      }
     },
     "generalSettings": {
       "title": "一般設定",
@@ -1464,12 +1507,7 @@
       "sidebarShowLabelNoText": "無字",
       "sidebarShowLabelWithText": "有字",
       "navButtonVisibility": "導航欄按鈕顯示",
-      "navButtonVisibilityDesc": "控制導航欄中每個按鈕的顯示和隱藏，設定項始終可見",
-      "pageTransitionLabel": "頁面切換動畫",
-      "pageTransitionDesc": "關閉後頁面切換將不再有過渡動畫",
-      "pageTransitionSlide": "滑動",
-      "pageTransitionFade": "淡化",
-      "pageTransitionOff": "關閉"
+      "navButtonVisibilityDesc": "控制導航欄中每個按鈕的顯示和隱藏，設定項始終可見"
     },
     "appearanceSettings": {
       "title": "外觀設定",
@@ -1553,8 +1591,7 @@
         "title": "贊助者名單",
         "loading": "載入中...",
         "error": "載入失敗",
-        "empty": "暫無贊助者",
-        "totalAmount": "累計贊助總額："
+        "empty": "暫無贊助者"
       }
     },
     "aboutSettings": {
@@ -1570,6 +1607,10 @@
       "acknowledgments": "致謝",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "感謝上海交通大學Minecraft社開源專案",
+      "specialThanks": {
+        "title": "特別感謝"
+      },
+      "qqGroupSubtitle": "加入獲取最新動態以及高效解決問題",
       "changelog": "更新日誌",
       "changelogTitle": "當前版本更新內容",
       "noChangelog": "暫無更新日誌",
@@ -1617,13 +1658,13 @@
   },
   "epic": {
     "title": "Epic 喜加一",
-    "loading": "正在載入免費遊戲...",
     "errorFetch": "取得資料失敗",
     "errorNetwork": "網路請求失敗，請檢查網路連線",
     "deadline": "截止 {{date}}",
     "claimNow": "立即領取",
     "noGames": "暫無免費遊戲，請稍後再來查看",
-    "reload": "重新載入"
+    "reload": "重新載入",
+    "loading": "正在載入免費遊戲..."
   },
   "search": {
     "placeholder": "搜尋功能...",
@@ -1770,7 +1811,6 @@
   },
   "audioEq": {
     "title": "EQ 調音",
-    "loading": "載入中...",
     "virtualSoundCard": "虛擬音效卡",
     "virtualSoundCardDesc": "安裝 FxSound 虛擬音訊驅動以啟用系統級 EQ",
     "installed": "已安裝",
@@ -1805,13 +1845,13 @@
     "step1": "點擊「安裝音效卡」按鈕安裝 FxSound 虛擬音訊驅動（需要管理員權限）",
     "step2": "安裝成功後，點擊「啟動引擎」按鈕啟動 EQ 音訊處理引擎",
     "step3": "選擇預設或拖動頻段滑桿調整 EQ 參數，頻率響應曲線將即時更新",
-    "step4": "使用完畢後，點擊「停止引擎」關閉音訊處理，可隨時解除安裝音效卡驅動"
+    "step4": "使用完畢後，點擊「停止引擎」關閉音訊處理，可隨時解除安裝音效卡驅動",
+    "loading": "載入中..."
   },
   "hiddenFeatures": {
     "title": "Windows 隱藏功能",
     "subtitle": "查詢與切換 Windows A/B 實驗功能開關（基於 ViVe 實作）",
     "refresh": "重新整理",
-    "loading": "正在載入功能設定...",
     "loadFailed": "載入失敗",
     "warningTitle": "風險提示",
     "warningBody": "這些功能開關用於微軟的 A/B 實驗，啟用/停用隱藏功能可能導致系統不穩定。如出現異常，請重設對應功能以恢復預設。修改 Boot 儲存需重新開機後生效。",
@@ -1858,7 +1898,8 @@
     "loadMore": "載入更多",
     "namedOnly": "只顯示有名稱的功能",
     "namedOnlyHint": "無名稱條目是 Windows 內部 servicing 設定，字典無法識別，通常無需修改；關閉後顯示全部條目",
-    "numbersExplain": "帶名稱的條目來自社群功能字典；顯示為純數字的功能沒有公開名稱，其含義 Microsoft 未公開。可切換上方開關檢視全部，或用名稱搜尋 17000+ 個已知功能。"
+    "numbersExplain": "帶名稱的條目來自社群功能字典；顯示為純數字的功能沒有公開名稱，其含義 Microsoft 未公開。可切換上方開關檢視全部，或用名稱搜尋 17000+ 個已知功能。",
+    "loading": "正在載入功能設定..."
   },
   "downloadAccel": {
     "urlLabel": "下載連結",
@@ -1895,7 +1936,6 @@
   "nvidiaRecording": {
     "title": "N卡錄製管理",
     "scan": "重新掃描",
-    "scanning": "正在掃描錄製影片...",
     "scanError": "掃描失敗",
     "addFolder": "新增資料夾",
     "addFolderError": "新增資料夾失敗",
@@ -1938,7 +1978,8 @@
     "copyError": "複製失敗",
     "deleteSuccessMulti": "已刪除 {{n}} 個影片",
     "deleteBodyMulti": "刪除後不可復原，確定要永久刪除選中的 {{n}} 個影片嗎？",
-    "andMore": "等 {{n}} 個"
+    "andMore": "等 {{n}} 個",
+    "scanning": "正在掃描錄製影片..."
   },
   "filterDisabledDegraded": "濾鏡已關閉（降級清除：未能恢復原有色彩校正）"
 }

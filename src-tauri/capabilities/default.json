@@ -7,6 +7,9 @@
     "widget",
     "tray-menu",
     "netease-login",
+    "kugou-login",
+    "qqmusic-login",
+    "migu-login",
     "desktop-lyrics",
     "vertical-overlay"
   ],

@@ -1,6 +1,6 @@
 {
   "name": "nexbox",
-  "version": "9.5.3",
+  "version": "9.7.2",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
@@ -57,6 +57,7 @@
     "eslint-config-next": "^15.2.4",
     "husky": "^9.1.7",
     "prettier": "^3.5.3",
+    "sharp": "^0.35.4",
     "typescript": "^5.8.2",
     "vite": "^6.0.11"
   }

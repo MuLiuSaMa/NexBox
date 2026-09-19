@@ -42,8 +42,8 @@ import {
   LineChart,
   ShieldCheck,
   FlaskConical,
-  Ban,
   Swords,
+  Clock,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -351,6 +351,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["CS:GO", "CSGO", "CS2", "VAC", "反作弊", "steamservice", "Steam服务", "Steam 服务", "启动器", "修复", "vac修复", "vac 修复", "被封", "屏蔽"],
   },
   {
+    id: "app-manager",
+    nameKey: "sidebar.appManager",
+    path: "/app-manager",
+    icon: Boxes,
+    category: "builtin-tool",
+    keywords: ["应用", "应用管理", "卸载", "已安装", "软件", "管理", "app", "uninstall", "installed", "打开"],
+  },
+  {
     id: "hidden-features",
     nameKey: "sidebar.hiddenFeatures",
     path: "/hidden-features",
@@ -391,24 +399,20 @@ export const searchIndex: SearchItem[] = [
     keywords: ["CPU", "核心", "调度", "P核", "E核", "亲和性", "affinity", "core", "scheduler", "逻辑处理器", "进程分配"],
   },
   {
+    id: "time-sync",
+    nameKey: "sidebar.timeSync",
+    path: "/time-sync",
+    icon: Clock,
+    category: "builtin-tool",
+    keywords: ["时间校准", "校时", "时间", "校准", "系统时间", "ntp", "时间服务器", "同步", "时钟", "clock", "time", "sync", "校表", "对时"],
+  },
+  {
     id: "download-accelerator",
     nameKey: "sidebar.downloadAccelerator",
     path: "/download-accelerator",
     icon: Download,
     category: "builtin-tool",
     keywords: ["下载加速", "多线程下载", "下载器", "分段下载", "满速", "下载", "download", "accelerator", "idm", "多线程"],
-  },
-  {
-    id: "nexbox-popnull",
-    nameKey: "settings.advanced.popnull.title",
-    path: "/settings?section=advanced",
-    icon: Ban,
-    category: "page",
-    keywords: [
-      "弹窗", "拦截", "广告", "弹窗拦截", "拒弹窗", "popup", "popnull",
-      "黑名单", "白名单", "blacklist", "whitelist", "拦广告",
-      "flashcenter", "minipage", "热点", "NexBoxPopNull",
-    ],
   },
 ];
 

@@ -26,8 +26,6 @@ import {
   Image,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { motion } from "framer-motion";
-import { useTransitionMode, getVariants, getTransitionConfig } from "@/components/ui/animated-page";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useTranslation } from "react-i18next";
@@ -394,7 +392,6 @@ export default function ContextMenuManagerPage() {
     );
   }, [pcRows, pcQuery]);
 
-  const transitionMode = useTransitionMode();
 
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
@@ -782,17 +779,5 @@ export default function ContextMenuManagerPage() {
     </VStack>
   );
 
-  return transitionMode !== "off" ? (
-    <motion.div
-      initial="initial"
-      animate="enter"
-      exit="exit"
-      variants={getVariants(transitionMode)}
-      transition={getTransitionConfig(transitionMode)}
-    >
-      {content}
-    </motion.div>
-  ) : (
-    <div>{content}</div>
-  );
+  return content;
 }

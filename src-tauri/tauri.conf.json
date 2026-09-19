@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "9.5.3",
+  "version": "9.7.2",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -22,7 +22,7 @@
         "decorations": false,
         "devtools": true,
         "visible": false,
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync"
       },
       {
         "title": "NexBox Tray Menu",
@@ -37,7 +37,7 @@
         "shadow": false,
         "label": "tray-menu",
         "url": "/tray-menu",
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync"
       },
       {
         "title": "NexBox Desktop Lyrics",
@@ -53,23 +53,7 @@
         "shadow": false,
         "label": "desktop-lyrics",
         "url": "/desktop-lyrics",
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required"
-      },
-      {
-        "title": "Lyrics Unlock",
-        "width": 48,
-        "height": 48,
-        "resizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "visible": false,
-        "maximizable": false,
-        "skipTaskbar": true,
-        "shadow": false,
-        "label": "lyrics-unlock-btn",
-        "url": "/lyrics-unlock-btn",
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync"
       }
     ],
     "security": {

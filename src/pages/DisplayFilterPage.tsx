@@ -30,13 +30,18 @@ import {
   ModalFooter,
   ModalBody,
   ModalCloseButton,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  Progress,
+  Portal,
 } from "@chakra-ui/react";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { ThemeSwitch } from "@/components/special/theme-switch";
-import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -44,7 +49,7 @@ import {
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
   Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
   Upload, Trash2, FileImage, Download, Bookmark,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Check, ChevronDown
 } from "lucide-react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -127,6 +132,17 @@ interface GameFilterStatus {
   enabled: boolean;
   games: GameEntry[];
 }
+
+// ── 页面数据模块级缓存：再次进入页面首帧即可渲染缓存，后台静默刷新 ──
+let cachedDisplays: DisplayInfo[] | null = null;
+let cachedPresets: FilterPreset[] | null = null;
+let cachedIccPresets: IccPresetInfo[] | null = null;
+let cachedUserPresets: UserFilterPresetInfo[] | null = null;
+let cachedGameFilterStatus: GameFilterStatus | null = null;
+
+// 提取显示器型号（去掉名称末尾的 "(分辨率)" 后缀，仅按钮显示用）
+const stripResolution = (name?: string) =>
+  name ? name.replace(/\s*\(\d+\s*[xX]\s*\d+\)\s*$/, "") : "";
 
 // Reverse mapping: builtin ICC id → filter preset id (for startup highlight)
 const ICC_TO_PRESET: Record<string, string> = {
@@ -240,6 +256,10 @@ export default function DisplayFilterPage() {
   const [presets, setPresets] = useState<FilterPreset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
+  // 滤镜工具包(icc-tools)状态:商店版不打包,缺失时引导下载
+  const [iccToolsInstalled, setIccToolsInstalled] = useState(true);
+  const [iccToolsBusy, setIccToolsBusy] = useState(false);
+  const [iccToolsProgress, setIccToolsProgress] = useState<{ phase: string; progress: number; detail: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -250,6 +270,25 @@ export default function DisplayFilterPage() {
         setAutoApplyOnStartup(localStorage.getItem("nexbox_auto_apply") === "true");
       }
     })();
+  }, []);
+
+  // 检测滤镜工具包(icc-tools)是否存在,并监听下载进度
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void (async () => {
+      try {
+        const status: { installed: boolean; path: string | null } = await invoke("check_icc_tools");
+        setIccToolsInstalled(status.installed);
+      } catch {
+        setIccToolsInstalled(false);
+      }
+      const handler = await listen<{ phase: string; progress: number; detail: string }>(
+        "icc-tools-download-progress",
+        (event) => setIccToolsProgress(event.payload),
+      ).catch(() => undefined);
+      unlisten = handler;
+    })();
+    return () => unlisten?.();
   }, []);
 
   // 恢复「使用多个滤镜」开关状态
@@ -290,6 +329,8 @@ export default function DisplayFilterPage() {
   const cancelDeleteRef = useRef<HTMLButtonElement>(null);
   const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [activeDisplayIndex, setActiveDisplayIndex] = useState<number>(0);
+  // 是否选中"主显示器"入口（与列表中的主屏型号项互斥，对应准心菜单的 -1 语义）
+  const [usePrimaryDisplay, setUsePrimaryDisplay] = useState(true);
   const activeDisplayIndexRef = useRef(0);
   // 游戏启动时自动应用滤镜
   const [gameFilterEnabled, setGameFilterEnabled] = useState(false);
@@ -339,8 +380,10 @@ export default function DisplayFilterPage() {
   const miniGlassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
   const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
+  const hoverBg = useColorModeValue("gray.100", "#252525");
+  const menuListBg = useColorModeValue("white", "#1a1a1a");
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const loadSettings = useCallback(async () => {
@@ -376,8 +419,10 @@ export default function DisplayFilterPage() {
   }, []);
 
   const loadPresets = useCallback(async () => {
+    if (cachedPresets) setPresets(cachedPresets);
     try {
       const result: FilterPreset[] = await invoke("get_filter_presets");
+      cachedPresets = result;
       setPresets(result);
     } catch (error) {
       console.error("Failed to load presets:", error);
@@ -414,8 +459,10 @@ export default function DisplayFilterPage() {
   }, []);
 
   const loadIccPresets = useCallback(async () => {
+    if (cachedIccPresets) setIccPresets(cachedIccPresets);
     try {
       const result: IccPresetInfo[] = await invoke("get_icc_presets");
+      cachedIccPresets = result;
       setIccPresets(result);
     } catch (error) {
       console.error("Failed to load ICC presets:", error);
@@ -423,8 +470,10 @@ export default function DisplayFilterPage() {
   }, []);
 
   const loadUserFilterPresets = useCallback(async () => {
+    if (cachedUserPresets) setUserPresets(cachedUserPresets);
     try {
       const result: UserFilterPresetInfo[] = await invoke("get_user_filter_presets");
+      cachedUserPresets = result;
       setUserPresets(result);
     } catch (error) {
       console.error("Failed to load user filter presets:", error);
@@ -432,26 +481,41 @@ export default function DisplayFilterPage() {
   }, []);
 
   const loadDisplays = useCallback(async () => {
+    // 先用缓存立即上屏（若有），再后台刷新
+    if (cachedDisplays && cachedDisplays.length > 0) {
+      setDisplays(cachedDisplays);
+      const cachedIdx = cachedDisplays.find((d) => d.is_primary)?.index ?? cachedDisplays[0].index;
+      setActiveDisplayIndex(cachedIdx);
+      activeDisplayIndexRef.current = cachedIdx;
+    }
     try {
       const result: DisplayInfo[] = await invoke("get_displays");
       if (result.length > 0) {
+        cachedDisplays = result;
         setDisplays(result);
-        const idx = result[0].index;
+        const idx = result.find((d) => d.is_primary)?.index ?? result[0].index;
         setActiveDisplayIndex(idx);
         activeDisplayIndexRef.current = idx;
         await invoke("set_active_display", { displayIndex: idx });
       } else {
-        setDisplays([{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }]);
+        cachedDisplays = [{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }];
+        setDisplays(cachedDisplays);
       }
     } catch (error) {
       console.error("Failed to load displays:", error);
-      setDisplays([{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }]);
+      cachedDisplays = [{ index: 0, name: "DISPLAY1", device_name: "DISPLAY1", is_primary: true, width: 0, height: 0 }];
+      setDisplays(cachedDisplays);
     }
   }, []);
 
   const loadGameFilterStatus = useCallback(async () => {
+    if (cachedGameFilterStatus) {
+      setGameFilterEnabled(cachedGameFilterStatus.enabled);
+      setGameFilterGames(cachedGameFilterStatus.games);
+    }
     try {
       const result: GameFilterStatus = await invoke("get_game_filter_status");
+      cachedGameFilterStatus = result;
       setGameFilterEnabled(result.enabled);
       setGameFilterGames(result.games);
     } catch (error) {
@@ -560,14 +624,18 @@ export default function DisplayFilterPage() {
   }, [activeDisplayIndex]);
 
   useEffect(() => {
-    // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
-    const timer = setTimeout(() => loadDisplays(), 200);
+    // 有缓存时先同步应用，首帧即可显示已加载的数据；随后后台刷新
+    if (cachedDisplays && cachedDisplays.length > 0) {
+      const cachedIdx = cachedDisplays.find((d) => d.is_primary)?.index ?? cachedDisplays[0].index;
+      activeDisplayIndexRef.current = cachedIdx;
+    }
     loadSettings();
     loadPresets();
     loadCustomSettings();
     loadIccPresets();
     loadUserFilterPresets();
     loadGameFilterStatus();
+    const timer = setTimeout(() => loadDisplays(), 0);
     return () => clearTimeout(timer);
   }, [loadDisplays, loadSettings, loadPresets, loadCustomSettings, loadIccPresets, loadUserFilterPresets, loadGameFilterStatus]);
 
@@ -620,6 +688,32 @@ export default function DisplayFilterPage() {
 
     setActivePresetId((prev) => (prev === nextId ? prev : nextId));
   }, [presets, settings, savedCustom, activePresetId, manualPresetChange]);
+
+  const downloadIccTools = async () => {
+    if (iccToolsBusy) return;
+    setIccToolsBusy(true);
+    setIccToolsProgress(null);
+    try {
+      await invoke("download_icc_tools");
+      toast({
+        title: t("displayFilter.iccToolsSuccess"),
+        status: "success",
+        duration: 3000,
+      });
+      const status: { installed: boolean; path: string | null } = await invoke("check_icc_tools");
+      setIccToolsInstalled(status.installed);
+    } catch (error) {
+      toast({
+        title: t("displayFilter.iccToolsFailed"),
+        description: String(error),
+        status: "error",
+        duration: 7000,
+      });
+    } finally {
+      setIccToolsBusy(false);
+      setIccToolsProgress(null);
+    }
+  };
 
   const toggleFilter = async () => {
     setIsLoading(true);
@@ -1512,6 +1606,12 @@ export default function DisplayFilterPage() {
     loadCustomSettings();
   };
 
+  // 主显示器的实际 index（"主显示器"入口与列表中的主屏型号项共用该值）
+  const primaryDisplayIndex = useMemo(
+    () => displays.find((d) => d.is_primary)?.index ?? displays[0]?.index ?? 0,
+    [displays]
+  );
+
   const gammaChannelColors: Record<string, string> = {
     r_gamma: "#FF4444",
     g_gamma: "#44CC44",
@@ -1920,91 +2020,204 @@ export default function DisplayFilterPage() {
               </HStack>
             </HStack>
           </HStack>
-          <HStack spacing={2} flexWrap="wrap" justify="flex-end">
-            <HStack
-              bg={multiFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
-              px={4}
-              py={2}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={multiFilterEnabled ? primaryColor : "transparent"}
-            >
-              <Text color={textColor} fontSize="xs" fontWeight="500">
-                {t("displayFilter.multiFilterTitle")}
-              </Text>
-              <ThemeSwitch
-                isChecked={multiFilterEnabled}
-                onChange={(e) => handleToggleMultiFilter(e.target.checked)}
-                isDisabled={isLoading}
-              />
-            </HStack>
-            <HStack
-              bg={gameFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
-              px={4}
-              py={2}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={gameFilterEnabled ? primaryColor : "transparent"}
-            >
-              <Text color={textColor} fontSize="xs" fontWeight="500">
-                {t("displayFilter.gameFilterTitle")}
-              </Text>
-              <Text
-                color={primaryColor}
-                fontSize="xs"
-                fontWeight="600"
-                cursor="pointer"
-                onClick={() => setIsGameFilterListOpen(true)}
-                _hover={{ textDecoration: "underline" }}
-              >
-                {t("displayFilter.gameFilterSupportedTitle")} ({gameFilterGames.length})
-              </Text>
-              <ThemeSwitch
-                isChecked={gameFilterEnabled}
-                onChange={(e) => handleToggleGameFilter(e.target.checked)}
-                isDisabled={isGameFilterBusy}
-              />
-            </HStack>
-            <HStack
-              bg={autoApplyOnStartup ? hexToRgba(primaryColor, 0.15) : sliderBg}
-              px={4}
-              py={2}
-              borderRadius="xl"
-              border="1px solid"
-              borderColor={autoApplyOnStartup ? primaryColor : "transparent"}
-            >
-              <Text color={textColor} fontSize="xs" fontWeight="500">
-                启动新境盒时自动启用选中滤镜
-              </Text>
-              <ThemeSwitch
-                isChecked={autoApplyOnStartup}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setAutoApplyOnStartup(val);
-                  localStorage.setItem("nexbox_auto_apply", val ? "true" : "false");
-                  store.set("nexbox_auto_apply", val).then(() => store.save());
-                }}
-                isDisabled={isLoading}
-              />
-            </HStack>
-          </HStack>
-        </VStack>
+          </VStack>
       </Flex>
 
-      {displays.length > 0 && (
-        <HStack w="full" spacing={3}>
-          <Monitor size={18} color={textColor} />
-          <CustomSelect
-            value={activeDisplayIndex.toString()}
-            onChange={handleDisplayChange}
-            options={displays.map((d) => ({
-              value: d.index.toString(),
-              label: `${d.name}${d.is_primary ? ` (${t("displayFilter.primary")})` : ""}`,
-            }))}
-            width="360px"
+      {!iccToolsInstalled && (
+        <LiquidGlassCard px={5} py={4} w="full">
+          <HStack spacing={4} align="center" w="full" flexWrap="wrap">
+            <Flex
+              flexShrink={0}
+              w="40px"
+              h="40px"
+              borderRadius="lg"
+              align="center"
+              justify="center"
+              bg={hexToRgba(primaryColor, 0.14)}
+            >
+              <Download size={20} color={primaryColor} />
+            </Flex>
+            <VStack align="stretch" spacing={1} flex={1} minW={0}>
+              <Text fontSize="md" fontWeight="700" color={headingColor}>
+                {t("displayFilter.iccToolsTitle")}
+              </Text>
+              <Text fontSize="sm" color={subTextColor}>
+                {t("displayFilter.iccToolsDesc")}
+              </Text>
+              {iccToolsBusy && iccToolsProgress && (
+                <Box pt={1}>
+                  <HStack justify="space-between" mb={1}>
+                    <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+                      {iccToolsProgress.detail}
+                    </Text>
+                    <Text color={primaryColor} fontSize="xs" fontWeight="600" flexShrink={0}>
+                      {iccToolsProgress.progress}%
+                    </Text>
+                  </HStack>
+                  <Progress
+                    value={iccToolsProgress.progress}
+                    h="5px"
+                    borderRadius="sm"
+                    bg={hexToRgba(primaryColor, 0.14)}
+                    sx={{ "& > div": { background: primaryColor } }}
+                  />
+                </Box>
+              )}
+            </VStack>
+            <Button
+                    flexShrink={0}
+                    size="sm"
+                    leftIcon={<Download size={14} />}
+                    onClick={() => void downloadIccTools()}
+                    isLoading={iccToolsBusy}
+                    loadingText={t("displayFilter.iccToolsDownloading")}
+                    isDisabled={iccToolsBusy}
+                    bg={primaryColor}
+                    color={contrastText}
+                    _hover={{ bg: getHoverColor() }}
+                  >
+                    {t("displayFilter.iccToolsDownloadBtn")}
+                  </Button>
+          </HStack>
+        </LiquidGlassCard>
+      )}
+
+      <HStack spacing={2} justify="flex-start" w="full" flexWrap="nowrap">
+        <Box mr="auto">
+          <Menu>
+          <MenuButton
+            as={Box}
+            bg="transparent"
+            p={0}
+            border="none"
+            cursor="pointer"
+          >
+            <LiquidGlassCard px={3} py={1.5} w="220px" flexShrink={1}>
+              <HStack justify="space-between" spacing={6}>
+                <HStack spacing={2}>
+                  <Monitor size={14} />
+                  <Text fontSize="sm" color={textColor}>
+                    {usePrimaryDisplay
+                      ? t("crosshair.primaryMonitor")
+                      : stripResolution(displays.find((d) => d.index === activeDisplayIndex)?.name) || t("crosshair.primaryMonitor")}
+                  </Text>
+                </HStack>
+                <ChevronDown size={16} />
+              </HStack>
+            </LiquidGlassCard>
+          </MenuButton>
+          <Portal>
+            <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
+              <MenuItem
+                onClick={() => {
+                  setUsePrimaryDisplay(true);
+                  handleDisplayChange(String(primaryDisplayIndex));
+                }}
+                bg={usePrimaryDisplay && activeDisplayIndex === primaryDisplayIndex ? hoverBg : "transparent"}
+                _hover={{ bg: hoverBg }}
+              >
+                <HStack spacing={2} w="full" justify="space-between">
+                  <Text fontSize="sm">{t("crosshair.primaryMonitor")}</Text>
+                  {usePrimaryDisplay && activeDisplayIndex === primaryDisplayIndex && <Check size={14} color={primaryColor} />}
+                </HStack>
+              </MenuItem>
+              {displays.map((d) => {
+                const isPrimaryItem = d.index === primaryDisplayIndex;
+                return (
+                  <MenuItem
+                    key={d.index}
+                    onClick={() => {
+                      setUsePrimaryDisplay(false);
+                      handleDisplayChange(String(d.index));
+                    }}
+                    bg={activeDisplayIndex === d.index && !(isPrimaryItem && usePrimaryDisplay) ? hoverBg : "transparent"}
+                    _hover={{ bg: hoverBg }}
+                  >
+                    <HStack spacing={2} w="full" justify="space-between">
+                      <Text fontSize="sm">{d.name}</Text>
+                      {activeDisplayIndex === d.index && !(isPrimaryItem && usePrimaryDisplay) && <Check size={14} color={primaryColor} />}
+                    </HStack>
+                  </MenuItem>
+                );
+              })}
+            </MenuList>
+          </Portal>
+        </Menu>
+        </Box>
+        <HStack
+          bg={multiFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
+          px={4}
+          py={2}
+          borderRadius="xl"
+          border="1px solid"
+          borderColor={multiFilterEnabled ? primaryColor : "transparent"}
+          flexShrink={1}
+          minW={0}
+        >
+          <Text color={textColor} fontSize="xs" fontWeight="500" noOfLines={1}>
+            {t("displayFilter.multiFilterTitle")}
+          </Text>
+          <ThemeSwitch
+            isChecked={multiFilterEnabled}
+            onChange={(e) => handleToggleMultiFilter(e.target.checked)}
+            isDisabled={isLoading}
           />
         </HStack>
-      )}
+        <HStack
+          bg={gameFilterEnabled ? hexToRgba(primaryColor, 0.15) : sliderBg}
+          px={4}
+          py={2}
+          borderRadius="xl"
+          border="1px solid"
+          borderColor={gameFilterEnabled ? primaryColor : "transparent"}
+          flexShrink={1}
+          minW={0}
+        >
+          <Text color={textColor} fontSize="xs" fontWeight="500" noOfLines={1}>
+            {t("displayFilter.gameFilterTitle")}
+          </Text>
+          <Text
+            color={primaryColor}
+            fontSize="xs"
+            fontWeight="600"
+            cursor="pointer"
+            onClick={() => setIsGameFilterListOpen(true)}
+            _hover={{ textDecoration: "underline" }}
+            noOfLines={1}
+          >
+            {t("displayFilter.gameFilterSupportedTitle")} ({gameFilterGames.length})
+          </Text>
+          <ThemeSwitch
+            isChecked={gameFilterEnabled}
+            onChange={(e) => handleToggleGameFilter(e.target.checked)}
+            isDisabled={isGameFilterBusy}
+          />
+        </HStack>
+        <HStack
+          bg={autoApplyOnStartup ? hexToRgba(primaryColor, 0.15) : sliderBg}
+          px={4}
+          py={2}
+          borderRadius="xl"
+          border="1px solid"
+          borderColor={autoApplyOnStartup ? primaryColor : "transparent"}
+          flexShrink={1}
+          minW={0}
+        >
+          <Text color={textColor} fontSize="xs" fontWeight="500" noOfLines={1}>
+            启动新境盒时自动启用选中滤镜
+          </Text>
+          <ThemeSwitch
+            isChecked={autoApplyOnStartup}
+            onChange={(e) => {
+              const val = e.target.checked;
+              setAutoApplyOnStartup(val);
+              localStorage.setItem("nexbox_auto_apply", val ? "true" : "false");
+              store.set("nexbox_auto_apply", val).then(() => store.save());
+            }}
+            isDisabled={isLoading}
+          />
+        </HStack>
+      </HStack>
 
       <VStack align="start" spacing={4} w="full">
         <Text color={textColor} fontSize="md" fontWeight="600">

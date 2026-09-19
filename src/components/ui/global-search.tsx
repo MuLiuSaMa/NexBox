@@ -72,7 +72,7 @@ export function GlobalSearch() {
   const activeBg = getActiveColor();
   const activeIconColor = getContrastTextColor();
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const inputBg = useColorModeValue(
@@ -235,7 +235,17 @@ export function GlobalSearch() {
 
   return (
     <Box id="global-search" position="relative" ref={containerRef}>
-      <InputGroup size="sm" w="180px">
+      <InputGroup
+        size="sm"
+        w="180px"
+        onMouseDown={(e) => {
+          // 只有鼠标真实按下搜索框才展开下拉。
+          // 不能用 onFocus：Chakra Modal 关闭时会焦点恢复（把焦点还给弹窗打开前的元素），
+          // 若此前焦点恰好在搜索框，恢复聚焦会误触发 withTrusted 事件导致搜索框自己弹出来。
+          e.stopPropagation();
+          setIsOpen(true);
+        }}
+      >
         <InputLeftElement pointerEvents="none">
           <Icon as={Search} boxSize={4} color={placeholderColor} />
         </InputLeftElement>
@@ -244,7 +254,6 @@ export function GlobalSearch() {
           placeholder={t("search.placeholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           bg={inputBg}
           borderColor={inputBorderColor}

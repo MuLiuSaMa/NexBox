@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
+import { usePeripheralDrivers, usePeripheralDriverIcon, openDriverLink, type PeripheralDriver } from "@/hooks/use-peripheral-drivers";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
 import { LiquidGlassMenuItem } from "@/components/special/liquid-glass-menu-item";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -1593,6 +1594,111 @@ function ThirdPartyToolSection({
   );
 }
 
+/* ============ 外设驱动：左侧独立栏目，点击品牌卡片用系统浏览器打开驱动页 ============ */
+
+/** 品牌首字母兜底图标的色板（按 id 稳定取色） */
+const DRIVER_COLOR_PALETTE = [
+  "#4F6EF2",
+  "#7C5CFC",
+  "#0EA5E9",
+  "#10B981",
+  "#F59E0B",
+  "#EF4444",
+  "#EC4899",
+  "#14B8A6",
+];
+
+function brandInitialColor(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return DRIVER_COLOR_PALETTE[h % DRIVER_COLOR_PALETTE.length];
+}
+
+function PeripheralDriverCard({ driver }: { driver: PeripheralDriver }) {
+  const { t } = useTranslation();
+  const { src } = usePeripheralDriverIcon(driver.icon);
+  const iconBoxBg = useColorModeValue("gray.100", "#222222");
+  const nameColor = useColorModeValue("gray.800", "#ffffff");
+  const descColor = useColorModeValue("gray.500", "#999999");
+  const kind = driver.kind === "download" ? "download" : "online";
+  const fallbackBg = brandInitialColor(driver.id);
+
+  return (
+    <LiquidGlassToolCard size="md" onClick={() => openDriverLink(driver)}>
+      <VStack align="start" spacing={3} h="full">
+        <Flex h={12} w={12} align="center" justify="center" borderRadius="lg" bg={iconBoxBg} overflow="hidden">
+          {src ? (
+            <img src={src} alt={driver.name} style={{ width: 28, height: 28, objectFit: "contain" }} />
+          ) : (
+            <Box
+              w={7}
+              h={7}
+              borderRadius="md"
+              bg={fallbackBg}
+              color="white"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              fontSize="sm"
+              fontWeight="bold"
+            >
+              {driver.name.slice(0, 1)}
+            </Box>
+          )}
+        </Flex>
+        <Text fontWeight="bold" fontSize="sm" color={nameColor} noOfLines={1}>
+          {driver.name}
+        </Text>
+        <Flex justify="space-between" align="center" w="full">
+          <Badge fontSize="xs" colorScheme={kind === "online" ? "green" : "blue"}>
+            {t(`tools.driverKind.${kind}`)}
+          </Badge>
+          <Icon as={ExternalLink} boxSize={3.5} color={descColor} />
+        </Flex>
+      </VStack>
+    </LiquidGlassToolCard>
+  );
+}
+
+function PeripheralDriverSection() {
+  const { t } = useTranslation();
+  const { drivers, loading } = usePeripheralDrivers();
+  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
+  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = useColorModeValue("gray.500", "#999999");
+
+  return (
+    <Box>
+      <HStack mb={2} spacing={3}>
+        <Text fontSize="lg" fontWeight="bold" color={sectionTitleColor}>
+          {t("tools.peripheralDrivers")}
+        </Text>
+        {drivers.length > 0 && (
+          <Badge fontSize="xs" colorScheme="gray">
+            {drivers.length}
+          </Badge>
+        )}
+      </HStack>
+      <Text fontSize="sm" color={subTextColor} mb={4}>
+        {t("tools.peripheralDriversDesc")}
+      </Text>
+      <Divider borderColor={dividerColor} mb={4} />
+
+      {loading && drivers.length === 0 ? (
+        <Text fontSize="sm" color={subTextColor}>
+          {t("tools.peripheralDriversLoading")}
+        </Text>
+      ) : (
+        <Grid templateColumns="repeat(auto-fill, minmax(240px, 1fr))" gap={4} alignItems="stretch">
+          {drivers.map((driver) => (
+            <PeripheralDriverCard key={driver.id} driver={driver} />
+          ))}
+        </Grid>
+      )}
+    </Box>
+  );
+}
+
 export default function ToolsPage() {
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -1604,12 +1710,13 @@ export default function ToolsPage() {
 
   const builtinTools = tools.filter((tool) => tool.type === "builtin");
 
-  const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty">("official");
+  const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty" | "peripherals">("official");
 
   const menuItems = [
     { key: "official" as const, label: t("tools.officialTools"), icon: Rocket },
     { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
     { key: "thirdparty" as const, label: t("tools.thirdpartyTools"), icon: Wrench },
+    { key: "peripherals" as const, label: t("tools.peripheralDrivers"), icon: MousePointer },
   ];
 
   return (
@@ -1656,17 +1763,26 @@ export default function ToolsPage() {
           {t("tools.title")}
         </Heading>
 
-        {activeSection === "official" && <OfficialToolSection activeCategory="all" />}
+        {/* 三个栏目常驻挂载，切换标签只隐藏不卸载，避免每次进入时工具列表/图标/社区数据重新加载 */}
+        <Box display={activeSection === "official" ? "block" : "none"}>
+          <OfficialToolSection activeCategory="all" />
+        </Box>
 
-        {activeSection === "community" && <CommunityToolSection />}
+        <Box display={activeSection === "community" ? "block" : "none"}>
+          <CommunityToolSection />
+        </Box>
 
-        {activeSection === "thirdparty" && (
+        <Box display={activeSection === "thirdparty" ? "block" : "none"}>
           <ThirdPartyToolSection
             title={t("tools.thirdpartyTools")}
             activeCategory="all"
             categoryLabels={categoryLabels}
           />
-        )}
+        </Box>
+
+        <Box display={activeSection === "peripherals" ? "block" : "none"}>
+          <PeripheralDriverSection />
+        </Box>
 
         {/* 内置工具（目前为空数据，渲染为隐藏占位） */}
         <ToolSection

@@ -56,7 +56,9 @@
     "runtimeRepair": "Laufzeitbibliotheken reparieren",
     "hiddenFeatures": "Versteckte Windows-Funktionen",
     "downloadAccelerator": "Downloader",
-    "nvidiaRecording": "NVIDIA-Aufnahmeverwaltung"
+    "nvidiaRecording": "NVIDIA-Aufnahme-Verwaltung",
+    "appManager": "App-Verwaltung",
+    "timeSync": "Zeitsynchronisierung"
   },
   "customPage": {
     "title": "Benutzerdefinierte Seite",
@@ -846,6 +848,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "Vorgang wurde durch eine neuere Aktion ersetzt und nicht ausgeführt",
+    "iccToolsTitle": "Filter-Tools nicht installiert",
+    "iccToolsDesc": "Diese Edition enthält die Filter-Tools nicht. Laden Sie sie herunter, um den Anzeigefilter zu nutzen.",
+    "iccToolsDownloadBtn": "Filter-Tools herunterladen",
+    "iccToolsDownloading": "Wird heruntergeladen",
+    "iccToolsSuccess": "Filter-Tools installiert",
+    "iccToolsFailed": "Fehler beim Herunterladen der Filter-Tools",
     "title": "Anzeigefilter",
     "enable": "Filter aktivieren",
     "presets": "Voreinstellungen",
@@ -977,7 +985,20 @@
     "holdDelay": "Eingabeverzögerung",
     "holdDelayDesc": "Zeigt das Fadenkreuz erst nach dieser Haltezeit an; beim Loslassen sofort ausblenden (0 = sofort)",
     "holdDelaySaved": "Verzögerung gespeichert",
-    "hotkeySaved": "Tastenkürzel gespeichert"
+    "hotkeySaved": "Tastenkürzel gespeichert",
+    "presets": "Fadenkreuz-Voreinstellungen",
+    "saveAsPreset": "Als Voreinstellung speichern",
+    "savePresetTitle": "Aktuelle Einstellungen als Voreinstellung speichern",
+    "presetNamePlaceholder": "Namen der Voreinstellung eingeben",
+    "presetDefaultName": "Voreinstellung",
+    "saveSuccess": "Voreinstellung gespeichert",
+    "saveFailed": "Speichern fehlgeschlagen",
+    "nameRequired": "Bitte Namen der Voreinstellung eingeben",
+    "emptyPresets": "Noch keine Voreinstellungen. Parameter anpassen und speichern.",
+    "applySuccess": "Voreinstellung angewendet",
+    "applyFailed": "Anwenden fehlgeschlagen",
+    "deletePreset": "Voreinstellung löschen",
+    "deleteConfirm": "Diese Voreinstellung löschen?"
   },
   "hardwareReport": {
     "export": "Bericht exportieren",
@@ -1028,7 +1049,6 @@
     "mapToolDesc": "Beute-Punkte, Spawn-Punkte, Extraktionspunkte und Boss-Koordinaten",
     "dlssPreset": "DLSS-Voreinstellung",
     "dlssPresetDesc": "Wählen Sie eine DLSS-Neuronales Netzmodell-Voreinstellung aus. Verschiedene Voreinstellungen für verschiedene Szenarien.",
-    "loading": "Lade...",
     "noPassword": "Keine Passwortdaten verfügbar",
     "copy": "Kopieren",
     "copied": "Kopiert",
@@ -1153,7 +1173,8 @@
         "name": "XiaoTao",
         "description": "XiaoTao Waffencode-Plattform"
       }
-    }
+    },
+    "loading": "Lade..."
   },
   "dlssPreset": {
     "title": "Delta Force DLSS-Einstellungen",
@@ -1233,7 +1254,32 @@
     "audioEqDesc": "Systemweite Audio-Equalizer-Anpassung",
     "runtimeRepairDesc": "Fehlende VC++ / .NET / DirectX-Laufzeitbibliotheken erkennen und reparieren",
     "downloadAcceleratorDesc": "Mehrthreadige segmentierte Downloads für volle Bandbreite",
-    "nvidiaRecordingDesc": "NVIDIA-Aufnahmen automatisch scannen, nach Zeit sortiert verwalten, Vorschau und Bereinigung"
+    "nvidiaRecordingDesc": "NVIDIA-Aufnahmen automatisch scannen, nach Zeit sortiert verwalten, Vorschau und Bereinigung",
+    "appManagerDesc": "Installierte Apps anzeigen und deinstallieren",
+    "timeSyncDesc": "Systemzeit kalibrieren, Zeitverzögerung und Abweichung des Zeitservers prüfen"
+  },
+  "timeSync": {
+    "title": "Zeitsynchronisierung",
+    "systemTime": "Aktuelle Systemzeit",
+    "serverTime": "Serverzeit",
+    "offset": "Zeitabweichung",
+    "latency": "Netzwerklatenz",
+    "server": "Zeitserver",
+    "query": "Prüfen",
+    "querying": "Prüfe...",
+    "redetect": "Alle erneut prüfen",
+    "apply": "Systemzeit synchronisieren",
+    "applying": "Synchronisiere...",
+    "applyHint": "Systemzeit auf die Zeit des ausgewählten Servers setzen",
+    "adminRequired": "Administratorrechte erforderlich, um die Systemzeit zu ändern",
+    "adminOk": "Administrator",
+    "adminNo": "Kein Administrator",
+    "synced": "Zeit synchronisiert, erneut geprüft",
+    "queryFailed": "Prüfung fehlgeschlagen",
+    "notQueried": "Nicht geprüft",
+    "normal": "Normal",
+    "offsetNote": "Abweichung = Serverzeit − lokale Zeit; positiv bedeutet, die lokale Zeit hinkt nach",
+    "lastUpdate": "Letzte Prüfung"
   },
   "gameProcessOptimize": {
     "title": "Spielprozess-Optimierung",
@@ -1298,7 +1344,6 @@
   },
   "gpuRename": {
     "title": "GPU-Umbenennung",
-    "loading": "Laden...",
     "loadError": "Laden fehlgeschlagen",
     "currentGpu": "Aktuelle GPU",
     "integrated": "Integriert",
@@ -1322,7 +1367,8 @@
     "success": "Erfolgreich",
     "restored": "Wiederhergestellt",
     "error": "Fehler",
-    "note": "⚠️ Wichtige Hinweise：\n1. Administratorrechte erforderlich, um die Registrierung zu bearbeiten\n2. Neustart von Spiel oder Computer nach Änderung erforderlich\n3. Diese Funktion unterstützt nur Windows-Systeme und NVIDIA-Grafikkarten\n4. Wenn Änderungen nicht angewendet werden können, versuchen Sie, die Anwendung als Administrator auszuführen"
+    "note": "⚠️ Wichtige Hinweise：\n1. Administratorrechte erforderlich, um die Registrierung zu bearbeiten\n2. Neustart von Spiel oder Computer nach Änderung erforderlich\n3. Diese Funktion unterstützt nur Windows-Systeme und NVIDIA-Grafikkarten\n4. Wenn Änderungen nicht angewendet werden können, versuchen Sie, die Anwendung als Administrator auszuführen",
+    "loading": "Laden..."
   },
   "resolutionConverter": {
     "title": "Auflösungskonverter",
@@ -1394,9 +1440,6 @@
     "navigation": "Navigation",
     "about": "Über",
     "advanced": {
-      "popnull": {
-        "title": "NexBoxPopNull Popup-Blocker"
-      }
     },
     "generalSettings": {
       "title": "Allgemeine Einstellungen",
@@ -1479,12 +1522,7 @@
       "sidebarShowLabelNoText": "Nur Symbole",
       "sidebarShowLabelWithText": "Symbole & Text",
       "navButtonVisibility": "Nav-Button Sichtbarkeit",
-      "navButtonVisibilityDesc": "Ein- oder Ausblenden einzelner Navigationsschaltflächen. Einstellungen ist immer sichtbar.",
-      "pageTransitionLabel": "Seitenübergangsanimation",
-      "pageTransitionDesc": "Deaktivieren, um Seitenübergangsanimationen auszuschalten",
-      "pageTransitionSlide": "Schieben",
-      "pageTransitionFade": "Einblenden",
-      "pageTransitionOff": "Aus"
+      "navButtonVisibilityDesc": "Ein- oder Ausblenden einzelner Navigationsschaltflächen. Einstellungen ist immer sichtbar."
     },
     "appearanceSettings": {
       "title": "Darstellungseinstellungen",
@@ -1568,8 +1606,7 @@
         "title": "Sponsorenliste",
         "loading": "Laden...",
         "error": "Laden fehlgeschlagen",
-        "empty": "Noch keine Sponsoren",
-        "totalAmount": "Gesamtspenden:"
+        "empty": "Noch keine Sponsoren"
       }
     },
     "aboutSettings": {
@@ -1585,6 +1622,10 @@
       "acknowledgments": "Danksagungen",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "Danke an das Open-Source-Projekt der Shanghai Jiao Tong University Minecraft Club",
+      "specialThanks": {
+        "title": "Besonderer Dank"
+      },
+      "qqGroupSubtitle": "Für aktuelle Updates und schnelle Lösungen beitreten",
       "changelog": "Änderungsprotokoll",
       "changelogTitle": "Aktuelle Versionsaktualisierungen",
       "noChangelog": "Kein Änderungsprotokoll verfügbar",
@@ -1632,13 +1673,13 @@
   },
   "epic": {
     "title": "Epic Gratis-Spiele",
-    "loading": "Gratis-Spiele werden geladen...",
     "errorFetch": "Daten konnten nicht abgerufen werden",
     "errorNetwork": "Netzwerkanfrage fehlgeschlagen, bitte Verbindung prüfen",
     "deadline": "Bis {{date}}",
     "claimNow": "Jetzt holen",
     "noGames": "Keine gratis Spiele verfügbar, schauen Sie später vorbei",
-    "reload": "Neu laden"
+    "reload": "Neu laden",
+    "loading": "Gratis-Spiele werden geladen..."
   },
   "search": {
     "placeholder": "Funktionen suchen...",
@@ -1785,7 +1826,6 @@
   },
   "audioEq": {
     "title": "EQ-Tuner",
-    "loading": "Laden...",
     "virtualSoundCard": "Virtuelle Soundkarte",
     "virtualSoundCardDesc": "FxSound virtuellen Audiotreiber installieren, um systemweites EQ zu aktivieren",
     "installed": "Installiert",
@@ -1820,13 +1860,13 @@
     "step1": "Klicken Sie auf „Treiber installieren“, um den FxSound virtuellen Audiotreiber zu installieren (Administratorrechte erforderlich)",
     "step2": "Klicken Sie nach der Installation auf „Engine starten“, um die EQ-Audio-Verarbeitungs-Engine zu starten",
     "step3": "Wählen Sie eine Voreinstellung oder ziehen Sie die Band-Schieberegler, um EQ-Parameter anzupassen. Die Frequenzgangkurve wird in Echtzeit aktualisiert.",
-    "step4": "Klicken Sie nach Abschluss auf „Engine stoppen“, um die Audioverarbeitung zu beenden. Sie können den Treiber jederzeit deinstallieren."
+    "step4": "Klicken Sie nach Abschluss auf „Engine stoppen“, um die Audioverarbeitung zu beenden. Sie können den Treiber jederzeit deinstallieren.",
+    "loading": "Laden..."
   },
   "hiddenFeatures": {
     "title": "Versteckte Windows-Funktionen",
     "subtitle": "A/B-Experimentelle Feature-Flags von Windows abfragen und umschalten (basierend auf ViVe)",
     "refresh": "Aktualisieren",
-    "loading": "Feature-Konfigurationen werden geladen...",
     "loadFailed": "Laden fehlgeschlagen",
     "warningTitle": "Risikohinweis",
     "warningBody": "Diese Schalter steuern Microsofts A/B-Experimente. Das Aktivieren oder Deaktivieren versteckter Funktionen kann das System destabilisieren. Bei Problemen setzen Sie die betreffende Funktion zurück. Änderungen am Boot-Speicher werden nach einem Neustart wirksam.",
@@ -1873,7 +1913,8 @@
     "loadMore": "Mehr laden",
     "namedOnly": "Nur benannte Funktionen",
     "namedOnlyHint": "Unbenannte Einträge sind interne Windows-Wartungskonfigurationen ohne Wörterbucheintrag; eine Änderung ist meist unnötig. Ausschalten, um alle anzuzeigen",
-    "numbersExplain": "Benannte Einträge stammen aus dem Community-Wörterbuch. Als reine Zahlen angezeigte Funktionen haben keinen öffentlichen Namen — Microsoft hat ihn nie veröffentlicht. Schalten Sie oben um, um alle anzuzeigen, oder suchen Sie namentlich unter über 17.000 bekannten Funktionen."
+    "numbersExplain": "Benannte Einträge stammen aus dem Community-Wörterbuch. Als reine Zahlen angezeigte Funktionen haben keinen öffentlichen Namen — Microsoft hat ihn nie veröffentlicht. Schalten Sie oben um, um alle anzuzeigen, oder suchen Sie namentlich unter über 17.000 bekannten Funktionen.",
+    "loading": "Feature-Konfigurationen werden geladen..."
   },
   "downloadAccel": {
     "urlLabel": "Download-URL",
@@ -1910,7 +1951,6 @@
   "nvidiaRecording": {
     "title": "NVIDIA-Aufnahmeverwaltung",
     "scan": "Erneut scannen",
-    "scanning": "Aufnahmen werden gescannt...",
     "scanError": "Scan fehlgeschlagen",
     "addFolder": "Ordner hinzufügen",
     "addFolderError": "Hinzufügen fehlgeschlagen",
@@ -1953,7 +1993,8 @@
     "copyError": "Kopieren fehlgeschlagen",
     "deleteSuccessMulti": "{{n}} Videos gelöscht",
     "deleteBodyMulti": "Dies kann nicht rückgängig gemacht werden. {{n}} ausgewählte Videos endgültig löschen?",
-    "andMore": "und {{n}} weitere"
+    "andMore": "und {{n}} weitere",
+    "scanning": "Aufnahmen werden gescannt..."
   },
   "filterDisabledDegraded": "Filter deaktiviert (abgestuftes Zurücksetzen: ursprüngliche Kalibrierung ggf. nicht wiederhergestellt)"
 }

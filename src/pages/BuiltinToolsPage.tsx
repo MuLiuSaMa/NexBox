@@ -23,6 +23,8 @@ import {
   FlaskConical,
   DownloadCloud,
   Video,
+  Boxes,
+  Clock,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import csLogoImg from "@/assets/cs-logo.png";
@@ -202,6 +204,22 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.vacRepair",
     descriptionKey: "builtinTools.vacRepairDesc",
     color: "#66C0F4",
+  },
+  {
+    id: "app-manager",
+    path: "/app-manager",
+    icon: Boxes,
+    titleKey: "sidebar.appManager",
+    descriptionKey: "builtinTools.appManagerDesc",
+    color: "#4A90E2",
+  },
+  {
+    id: "time-sync",
+    path: "/time-sync",
+    icon: Clock,
+    titleKey: "sidebar.timeSync",
+    descriptionKey: "builtinTools.timeSyncDesc",
+    color: "#00B4D8",
   },
 ];
 

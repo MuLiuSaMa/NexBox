@@ -290,7 +290,7 @@ pub fn set_dont_ask_again(value: bool) {
 #[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     // 先隐藏所有窗口，避免退出时 WebView2 销毁后短暂露出原生标题栏
-    for label in &["main", "tray-menu", "desktop-lyrics", "lyrics-unlock-btn", "vertical-overlay"] {
+    for label in &["main", "tray-menu", "desktop-lyrics", "vertical-overlay"] {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.hide();
         }

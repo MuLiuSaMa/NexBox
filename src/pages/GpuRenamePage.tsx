@@ -24,7 +24,6 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
-import { AnimatedPage } from "@/components/ui/animated-page";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Monitor } from "lucide-react";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -440,34 +439,32 @@ export default function GpuRenamePage() {
   );
 
   return (
-    <AnimatedPage>
-      <Box pt={8}>
-        {liquidGlassEnabled ? (
-          <LiquidGlassCard
-            w="full"
-            boxShadow="2xl"
-            overflow="hidden"
-            position="relative"
-            p={6}
-          >
+    <Box pt={8}>
+      {liquidGlassEnabled ? (
+        <LiquidGlassCard
+          w="full"
+          boxShadow="2xl"
+          overflow="hidden"
+          position="relative"
+          p={6}
+        >
+          {content}
+        </LiquidGlassCard>
+      ) : (
+        <Card
+          bg={cardBg}
+          borderColor={cardBorder}
+          borderWidth="1px"
+          w="full"
+          boxShadow="2xl"
+          overflow="hidden"
+          position="relative"
+        >
+          <CardBody p={6}>
             {content}
-          </LiquidGlassCard>
-        ) : (
-          <Card
-            bg={cardBg}
-            borderColor={cardBorder}
-            borderWidth="1px"
-            w="full"
-            boxShadow="2xl"
-            overflow="hidden"
-            position="relative"
-          >
-            <CardBody p={6}>
-              {content}
-            </CardBody>
-          </Card>
-        )}
-      </Box>
-    </AnimatedPage>
+          </CardBody>
+        </Card>
+      )}
+    </Box>
   );
 }

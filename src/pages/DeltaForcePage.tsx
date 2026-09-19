@@ -46,7 +46,6 @@ import {
   Image,
   Dices,
   BarChart3,
-  Zap,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -667,7 +666,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const toast = useDynamicIsland("target");
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const primaryColor = getActiveColor();
@@ -1303,67 +1302,6 @@ function StatsAnalysisCard() {
   );
 }
 
-// ── VoiceStrobeCard ──
-function VoiceStrobeCard() {
-  const { t } = useTranslation();
-  const { getActiveColor } = useThemeColor();
-  const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const textColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const { liquidGlassEnabled } = useBackground();
-
-  const content = (
-    <VStack align="center" spacing={3} py={2} justify="center" h="100%">
-      <Zap size={28} color={primaryColor} />
-      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
-        {t("deltaForce.voiceStrobe.title")}
-      </Text>
-      <Text color={subTextColor} fontSize="xs" textAlign="center">
-        {t("deltaForce.voiceStrobe.desc")}
-      </Text>
-    </VStack>
-  );
-
-  if (liquidGlassEnabled) {
-    return (
-      <Box
-        flex={1}
-        minW="150px"
-        as={Link}
-        to="/delta-force/voice-strobe"
-        style={{ textDecoration: "none" }}
-      >
-        <LiquidGlassCard p={4} h="100%" cursor="pointer">
-          {content}
-        </LiquidGlassCard>
-      </Box>
-    );
-  }
-
-  return (
-    <Box
-      flex={1}
-      minW="150px"
-      bg={cardBg}
-      borderRadius="xl"
-      p={4}
-      border="1px solid"
-      borderColor={borderColor}
-      cursor="pointer"
-      _hover={{ bg: cardHoverBg }}
-      transition="background-color 0.2s"
-      as={Link}
-      to="/delta-force/voice-strobe"
-      style={{ textDecoration: "none" }}
-    >
-      {content}
-    </Box>
-  );
-}
-
 // ── Main Page ──
 export default function DeltaForcePage() {
   const { t } = useTranslation();
@@ -1381,11 +1319,10 @@ export default function DeltaForcePage() {
         <PasswordCard />
       </Box>
 
-      {/* 随机装备 / 战绩分析 / 喊话爆闪 / 更多改枪码 / 官方地图 / 官方壁纸 */}
+      {/* 随机装备 / 战绩分析 / 更多改枪码 / 官方地图 / 官方壁纸 */}
       <HStack align="stretch" spacing={6} mb={6} wrap="wrap">
         <RouletteCard />
         <StatsAnalysisCard />
-        <VoiceStrobeCard />
         <MoreGunCodesCard />
         <OfficialMapCard />
         <OfficialWallpaperCard />

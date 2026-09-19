@@ -56,7 +56,9 @@
     "runtimeRepair": "Réparation des bibliothèques",
     "hiddenFeatures": "Fonctionnalités masquées",
     "downloadAccelerator": "Téléchargeur",
-    "nvidiaRecording": "Gestion des enregistrements NVIDIA"
+    "nvidiaRecording": "Gestion des enregistrements NVIDIA",
+    "appManager": "Gestion des applications",
+    "timeSync": "Synchronisation de l'heure"
   },
   "customPage": {
     "title": "Page Personnalisée",
@@ -846,6 +848,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "Opération remplacée par une action plus récente ; non exécutée",
+    "iccToolsTitle": "Outils de filtre non installés",
+    "iccToolsDesc": "Cette édition ne contient pas les outils de filtre. Téléchargez-les pour utiliser le filtre d'affichage.",
+    "iccToolsDownloadBtn": "Télécharger les outils de filtre",
+    "iccToolsDownloading": "Téléchargement",
+    "iccToolsSuccess": "Outils de filtre installés",
+    "iccToolsFailed": "Échec du téléchargement des outils de filtre",
     "title": "Filtre d'affichage",
     "enable": "Activer le filtre",
     "presets": "Préréglages",
@@ -977,7 +985,20 @@
     "holdDelay": "Délai d'entrée",
     "holdDelayDesc": "Affiche le réticule après ce délai de maintien ; masquage instantané au relâchement (0 = immédiat)",
     "holdDelaySaved": "Délai enregistré",
-    "hotkeySaved": "Raccourci enregistré"
+    "hotkeySaved": "Raccourci enregistré",
+    "presets": "Préréglages du réticule",
+    "saveAsPreset": "Enregistrer comme préréglage",
+    "savePresetTitle": "Enregistrer les réglages actuels comme préréglage",
+    "presetNamePlaceholder": "Nom du préréglage",
+    "presetDefaultName": "Préréglage",
+    "saveSuccess": "Préréglage enregistré",
+    "saveFailed": "Échec de l'enregistrement",
+    "nameRequired": "Veuillez saisir un nom de préréglage",
+    "emptyPresets": "Aucun préréglage. Ajustez les paramètres puis enregistrez.",
+    "applySuccess": "Préréglage appliqué",
+    "applyFailed": "Échec de l'application",
+    "deletePreset": "Supprimer le préréglage",
+    "deleteConfirm": "Supprimer ce préréglage ?"
   },
   "hardwareReport": {
     "export": "Exporter le rapport",
@@ -1028,7 +1049,6 @@
     "mapToolDesc": "Points de butin, points d'apparition, points d'extraction et coordonnées des boss",
     "dlssPreset": "Préréglage DLSS",
     "dlssPresetDesc": "Sélectionnez un préréglage de modèle de réseau neuronal DLSS, différents préréglages pour différents scénarios",
-    "loading": "Chargement...",
     "noPassword": "Aucune donnée de mot de passe disponible",
     "copy": "Copier",
     "copied": "Copié",
@@ -1153,7 +1173,8 @@
         "name": "XiaoTao",
         "description": "Plateforme de codes XiaoTao"
       }
-    }
+    },
+    "loading": "Chargement..."
   },
   "dlssPreset": {
     "title": "Paramètres DLSS Delta Force",
@@ -1233,7 +1254,32 @@
     "audioEqDesc": "Réglage d'égaliseur audio au niveau système",
     "runtimeRepairDesc": "Détecter et réparer les bibliothèques d'exécution VC++ / .NET / DirectX manquantes",
     "downloadAcceleratorDesc": "Téléchargements segmentés multithreads pour saturer votre bande passante",
-    "nvidiaRecordingDesc": "Analyse automatique des enregistrements NVIDIA, gestion, aperçu et nettoyage par date"
+    "nvidiaRecordingDesc": "Analyse automatique des enregistrements NVIDIA, gestion, aperçu et suppression par date",
+    "appManagerDesc": "Afficher et désinstaller les applications installées",
+    "timeSyncDesc": "Calibrer l'heure système, vérifier la latence et le décalage du serveur de temps"
+  },
+  "timeSync": {
+    "title": "Synchronisation de l'heure",
+    "systemTime": "Heure système actuelle",
+    "serverTime": "Heure du serveur",
+    "offset": "Décalage horaire",
+    "latency": "Latence réseau",
+    "server": "Serveur de temps",
+    "query": "Vérifier",
+    "querying": "Vérification...",
+    "redetect": "Revérifier tout",
+    "apply": "Synchroniser l'heure système",
+    "applying": "Synchronisation...",
+    "applyHint": "Définir l'heure système sur celle du serveur sélectionné",
+    "adminRequired": "Des privilèges administrateur sont requis pour modifier l'heure système",
+    "adminOk": "Administrateur",
+    "adminNo": "Non administrateur",
+    "synced": "Heure synchronisée, revérifiée",
+    "queryFailed": "Échec de la vérification",
+    "notQueried": "Non vérifié",
+    "normal": "Normal",
+    "offsetNote": "Décalage = heure du serveur − heure locale ; positif signifie que l'heure locale est en retard",
+    "lastUpdate": "Dernière vérification"
   },
   "gameProcessOptimize": {
     "title": "Optimisation des processus de jeu",
@@ -1298,7 +1344,6 @@
   },
   "gpuRename": {
     "title": "Renommage GPU",
-    "loading": "Chargement...",
     "loadError": "Échec du chargement",
     "currentGpu": "GPU actuel",
     "integrated": "Intégré",
@@ -1322,7 +1367,8 @@
     "success": "Succès",
     "restored": "Restauré",
     "error": "Erreur",
-    "note": "⚠️ Remarques importantes :\n1. Privilèges d'administrateur nécessaires pour modifier le registre\n2. Redémarrage du jeu ou de l'ordinateur nécessaire après modification\n3. Cette fonction ne prend en charge que Windows et les cartes graphiques NVIDIA\n4. Si vous ne pouvez pas appliquer les modifications, essayez d'exécuter l'application en administrateur"
+    "note": "⚠️ Remarques importantes :\n1. Privilèges d'administrateur nécessaires pour modifier le registre\n2. Redémarrage du jeu ou de l'ordinateur nécessaire après modification\n3. Cette fonction ne prend en charge que Windows et les cartes graphiques NVIDIA\n4. Si vous ne pouvez pas appliquer les modifications, essayez d'exécuter l'application en administrateur",
+    "loading": "Chargement..."
   },
   "resolutionConverter": {
     "title": "Convertisseur de résolution",
@@ -1394,9 +1440,6 @@
     "navigation": "Navigation",
     "about": "À propos",
     "advanced": {
-      "popnull": {
-        "title": "NexBoxPopNull Bloqueur de popups"
-      }
     },
     "generalSettings": {
       "title": "Paramètres généraux",
@@ -1479,12 +1522,7 @@
       "sidebarShowLabelNoText": "Icônes uniquement",
       "sidebarShowLabelWithText": "Icônes et texte",
       "navButtonVisibility": "Visibilité des boutons",
-      "navButtonVisibilityDesc": "Afficher ou masquer les boutons de navigation individuels. Paramètres toujours visible.",
-      "pageTransitionLabel": "Animation de transition de page",
-      "pageTransitionDesc": "Désactiver pour supprimer les animations de transition",
-      "pageTransitionSlide": "Glissement",
-      "pageTransitionFade": "Fondu",
-      "pageTransitionOff": "Désactivé"
+      "navButtonVisibilityDesc": "Afficher ou masquer les boutons de navigation individuels. Paramètres toujours visible."
     },
     "appearanceSettings": {
       "title": "Paramètres d'apparence",
@@ -1568,8 +1606,7 @@
         "title": "Liste des sponsors",
         "loading": "Chargement...",
         "error": "Échec du chargement",
-        "empty": "Aucun sponsor pour l'instant",
-        "totalAmount": "Montant total :"
+        "empty": "Aucun sponsor pour l'instant"
       }
     },
     "aboutSettings": {
@@ -1585,6 +1622,10 @@
       "acknowledgments": "Remerciements",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "Merci au projet open source du SJTU Minecraft Club",
+      "specialThanks": {
+        "title": "Remerciements"
+      },
+      "qqGroupSubtitle": "Rejoignez pour les dernières nouveautés et des solutions efficaces",
       "changelog": "Journal des modifications",
       "changelogTitle": "Mises à jour de la version actuelle",
       "noChangelog": "Aucun journal des modifications disponible",
@@ -1632,13 +1673,13 @@
   },
   "epic": {
     "title": "Jeux gratuits Epic",
-    "loading": "Chargement des jeux gratuits...",
     "errorFetch": "Échec de la récupération des données",
     "errorNetwork": "Échec de la requête réseau, veuillez vérifier votre connexion",
     "deadline": "Jusqu'au {{date}}",
     "claimNow": "Récupérer maintenant",
     "noGames": "Aucun jeu gratuit disponible, revenez plus tard",
-    "reload": "Recharger"
+    "reload": "Recharger",
+    "loading": "Chargement des jeux gratuits..."
   },
   "search": {
     "placeholder": "Rechercher...",
@@ -1785,7 +1826,6 @@
   },
   "audioEq": {
     "title": "Égaliseur EQ",
-    "loading": "Chargement...",
     "virtualSoundCard": "Carte son virtuelle",
     "virtualSoundCardDesc": "Installer le pilote audio virtuel FxSound pour activer l'EQ système",
     "installed": "Installé",
@@ -1820,13 +1860,13 @@
     "step1": "Cliquez sur « Installer le pilote » pour installer le pilote audio virtuel FxSound (nécessite des privilèges d'administrateur)",
     "step2": "Après l'installation, cliquez sur « Démarrer le moteur » pour lancer le moteur de traitement audio EQ",
     "step3": "Sélectionnez un préréglage ou faites glisser les curseurs de bande pour ajuster les paramètres EQ. La courbe de réponse en fréquence se met à jour en temps réel.",
-    "step4": "Lorsque vous avez terminé, cliquez sur « Arrêter le moteur » pour arrêter le traitement audio. Vous pouvez désinstaller le pilote à tout moment."
+    "step4": "Lorsque vous avez terminé, cliquez sur « Arrêter le moteur » pour arrêter le traitement audio. Vous pouvez désinstaller le pilote à tout moment.",
+    "loading": "Chargement..."
   },
   "hiddenFeatures": {
     "title": "Fonctionnalités masquées de Windows",
     "subtitle": "Consulter et basculer les indicateurs de fonctionnalités expérimentales A/B de Windows (basé sur ViVe)",
     "refresh": "Actualiser",
-    "loading": "Chargement des configurations de fonctionnalités...",
     "loadFailed": "Échec du chargement",
     "warningTitle": "Avertissement",
     "warningBody": "Ces commutateurs contrôlent les expériences A/B de Microsoft. Activer ou désactiver des fonctionnalités masquées peut rendre le système instable. En cas de problème, réinitialisez la fonctionnalité concernée. Les modifications du magasin Boot prennent effet après un redémarrage.",
@@ -1873,7 +1913,8 @@
     "loadMore": "Charger plus",
     "namedOnly": "Fonctions nommées uniquement",
     "namedOnlyHint": "Les entrées sans nom sont des configurations de maintenance internes de Windows absentes du dictionnaire ; inutile de les modifier. Désactivez pour tout afficher",
-    "numbersExplain": "Les entrées nommées proviennent du dictionnaire communautaire. Les fonctions affichées en chiffres n'ont aucun nom public — Microsoft ne les a jamais publiés. Utilisez l'interrupteur pour tout afficher, ou recherchez par nom parmi plus de 17 000 fonctions connues."
+    "numbersExplain": "Les entrées nommées proviennent du dictionnaire communautaire. Les fonctions affichées en chiffres n'ont aucun nom public — Microsoft ne les a jamais publiés. Utilisez l'interrupteur pour tout afficher, ou recherchez par nom parmi plus de 17 000 fonctions connues.",
+    "loading": "Chargement des configurations de fonctionnalités..."
   },
   "downloadAccel": {
     "urlLabel": "Lien de téléchargement",
@@ -1910,7 +1951,6 @@
   "nvidiaRecording": {
     "title": "Gestion des enregistrements NVIDIA",
     "scan": "Analyser à nouveau",
-    "scanning": "Analyse des enregistrements...",
     "scanError": "Échec de l'analyse",
     "addFolder": "Ajouter un dossier",
     "addFolderError": "Échec de l'ajout du dossier",
@@ -1953,7 +1993,8 @@
     "copyError": "Échec de la copie",
     "deleteSuccessMulti": "{{n}} vidéos supprimées",
     "deleteBodyMulti": "Action irréversible. Supprimer définitivement les {{n}} vidéos sélectionnées ?",
-    "andMore": "et {{n}} autres"
+    "andMore": "et {{n}} autres",
+    "scanning": "Analyse des enregistrements..."
   },
   "filterDisabledDegraded": "Filtre désactivé (nettoyage dégradé : la calibration d'origine peut ne pas être restaurée)"
 }

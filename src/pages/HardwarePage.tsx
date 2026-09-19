@@ -41,6 +41,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { BrandLogo } from "@/components/hardware-brand-logo";
 
 interface DisplayInfo {
   name: string;
@@ -285,6 +286,7 @@ function DetailCard({
   subTextColor,
   liquidGlassEnabled,
   onClick,
+  brandText,
 }: {
   title: string;
   icon: React.ElementType;
@@ -295,6 +297,7 @@ function DetailCard({
   subTextColor: string;
   liquidGlassEnabled: boolean;
   onClick?: () => void;
+  brandText?: string;
 }) {
   const iconColor =
     type === "cpu"
@@ -314,11 +317,12 @@ function DetailCard({
   const cardContent = (
     <Box position="relative" overflow="hidden" p={5} minH="140px">
       <VStack align="start" spacing={3} position="relative" zIndex={2}>
-        <HStack spacing={2}>
+        <HStack spacing={2} width="full">
           <IconComponent size={18} color={iconColor} />
-          <Text fontSize="md" fontWeight="bold" color={textColor}>
+          <Text fontSize="md" fontWeight="bold" color={textColor} flex={1}>
             {title}
           </Text>
+          <BrandLogo text={brandText} />
         </HStack>
 
         <VStack align="start" spacing={1.5} width="full">
@@ -344,8 +348,6 @@ function DetailCard({
         borderColor="white"
         cursor={onClick ? "pointer" : undefined}
         onClick={onClick}
-        _hover={onClick ? { opacity: 0.9 } : undefined}
-        transition="opacity 0.15s"
       >
         {cardContent}
       </LiquidGlassCard>
@@ -362,8 +364,6 @@ function DetailCard({
       position="relative"
       cursor={onClick ? "pointer" : undefined}
       onClick={onClick}
-      _hover={onClick ? { opacity: 0.9 } : undefined}
-      transition="opacity 0.15s"
     >
       {cardContent}
     </Box>
@@ -580,9 +580,11 @@ export default function HardwarePage() {
   ]) : [];
 
   const monitorDisplayInfos: DisplayInfo[][] = hardwareInfo ? (hardwareInfo.monitor || []).map((m) => [
-    { name: t("hardware.model"), value: m.name },
+    { name: t("hardware.model"), value: m.is_primary ? `${m.name}（${t("hardware.primaryDisplay") || "主屏"}）` : m.name },
+    { name: t("hardware.manufacturer"), value: m.manufacturer || "--" },
     { name: t("hardware.resolution") || "分辨率", value: m.screen_width && m.screen_height ? `${m.screen_width} x ${m.screen_height}` : "--" },
     { name: t("hardware.refreshRate") || "刷新率", value: m.refresh_rate ? `${m.refresh_rate} Hz` : "--" },
+    { name: t("hardware.screenSize") || "尺寸", value: m.diagonal_inches ? `${m.diagonal_inches.toFixed(1)}″` : "--" },
   ]) : [];
 
   // ─── Detail specs builders (for modal) ───
@@ -719,10 +721,11 @@ export default function HardwarePage() {
     monitors.forEach((mon, i) => {
       const prefix = monitors.length > 1 ? `[${i + 1}] ` : "";
       specs.push(
-        { label: `${prefix}${t("hardware.name") || "名称"}`, value: mon.name },
+        { label: `${prefix}${t("hardware.name") || "名称"}`, value: mon.is_primary ? `${mon.name}（${t("hardware.primaryDisplay") || "主屏"}）` : mon.name },
         { label: `${prefix}${t("hardware.manufacturer")}`, value: mon.manufacturer || "--" },
         { label: `${prefix}${t("hardware.resolution") || "分辨率"}`, value: mon.screen_width && mon.screen_height ? `${mon.screen_width} x ${mon.screen_height}` : "--" },
         { label: `${prefix}${t("hardware.refreshRate") || "刷新率"}`, value: mon.refresh_rate ? `${mon.refresh_rate} Hz` : "--" },
+        { label: `${prefix}${t("hardware.screenSize") || "尺寸"}`, value: mon.diagonal_inches ? `${mon.diagonal_inches.toFixed(1)}″` : "--" },
         { label: `${prefix}${t("hardware.pnpDeviceId") || "PNP ID"}`, value: mon.pnp_device_id || "--" },
         { label: `${prefix}${t("hardware.status")}`, value: mon.status || "--" },
       );
@@ -984,6 +987,7 @@ export default function HardwarePage() {
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
+            brandText={hardwareInfo ? `${hardwareInfo.cpu.name} ${hardwareInfo.cpu.manufacturer}` : undefined}
             onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.processor"), Cpu, "cpu", buildCpuSpecs(hardwareInfo.cpu)) : undefined}
           />
           {gpuDisplayInfos.map((gpuInfo, i) => (
@@ -997,6 +1001,7 @@ export default function HardwarePage() {
               textColor={textColor}
               subTextColor={subTextColor}
               liquidGlassEnabled={liquidGlassEnabled}
+              brandText={hardwareInfo && hardwareInfo.gpu[i] ? `${hardwareInfo.gpu[i].name} ${hardwareInfo.gpu[i].vendor}` : undefined}
               onClick={hardwareInfo && hardwareInfo.gpu[i] ? () => handleOpenDetail(t("hardware.gpu"), Monitor, "gpu", buildGpuSpecs(hardwareInfo.gpu[i], i)) : undefined}
             />
           ))}
@@ -1020,6 +1025,7 @@ export default function HardwarePage() {
             textColor={textColor}
             subTextColor={subTextColor}
             liquidGlassEnabled={liquidGlassEnabled}
+            brandText={hardwareInfo ? `${hardwareInfo.motherboard.manufacturer} ${hardwareInfo.motherboard.product}` : undefined}
             onClick={hardwareInfo ? () => handleOpenDetail(t("hardware.motherboard"), CircuitBoard, "motherboard", buildMotherboardSpecs(hardwareInfo.motherboard)) : undefined}
           />
           {storageDisplayInfo.length > 0 && (

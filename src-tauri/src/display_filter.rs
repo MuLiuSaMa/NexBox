@@ -3,9 +3,9 @@ use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicU64, AtomicUsize, Ordering}
 use std::sync::{Arc, Mutex};
 use std::path::{Path, PathBuf};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::process::Command;
-use tauri::Emitter;
+use tauri::{Emitter, Window};
 
 // ─── Display enumeration (复用现有 CCD/GDI 枚举逻辑) ───
 
@@ -251,6 +251,43 @@ fn is_generic_monitor_name(name: &str) -> bool {
         || lower.contains("analog display")
 }
 
+/// 以 GDI 的 MONITORINFOF_PRIMARY 标志为准获取主屏设备名集合。
+/// CCD 基于坐标（pos==(0,0)）的主屏判定在部分显示器布局下不可靠，
+/// 会导致主屏被误标为非主屏、在主显示器入口之外重复列出。
+#[cfg(target_os = "windows")]
+fn get_primary_monitor_device_names() -> std::collections::HashSet<String> {
+    use std::collections::HashSet;
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFOEXW};
+
+    struct MonitorData { primaries: HashSet<String> }
+
+    unsafe extern "system" fn monitor_enum_proc(
+        hmonitor: HMONITOR,
+        _hdc: HDC,
+        _rect: *mut windows_sys::Win32::Foundation::RECT,
+        lparam: isize,
+    ) -> i32 {
+        let data = &mut *(lparam as *mut MonitorData);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0
+            && (info.monitorInfo.dwFlags & 1) != 0
+        {
+            let name = String::from_utf16_lossy(
+                &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+            );
+            data.primaries.insert(name);
+        }
+        1
+    }
+
+    let mut data = MonitorData { primaries: HashSet::new() };
+    unsafe {
+        EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), Some(monitor_enum_proc), &mut data as *mut _ as isize);
+    }
+    data.primaries
+}
+
 #[cfg(target_os = "windows")]
 fn get_monitor_model_name(device_name: &str) -> String {
     use windows_sys::Win32::Graphics::Gdi::{EnumDisplayDevicesW, DISPLAY_DEVICEW};
@@ -300,6 +337,36 @@ fn enumerate_displays_inner() -> Vec<DisplayInfo> {
         displays.push(DisplayInfo { index: 0, name: "DISPLAY1 (Primary)".to_string(), device_name: "DISPLAY1".to_string(), is_primary: true, width: 0, height: 0 });
         if let Ok(mut lock) = DISPLAY_DEVICES.lock() { *lock = Some(vec!["DISPLAY1".to_string()]); }
     }
+
+    // 以 GDI 主屏标志重判 is_primary（CCD 坐标判定在部分布局下不可靠）
+    let primaries = get_primary_monitor_device_names();
+    if !primaries.is_empty() {
+        for d in displays.iter_mut() {
+            d.is_primary = primaries.contains(&d.device_name);
+        }
+    }
+
+    // EDID 回退：CCD/GDI 拿不到型号（空、通用名或 DISPLAYn 设备名）时，
+    // 用 PNP ID 精确匹配注册表 EDID 中的真实型号，与准心页面的表现保持一致。
+    let is_fallback = |n: &str| n.starts_with('\\') || {
+        let prefix = n.split(" (").next().unwrap_or(n);
+        is_generic_monitor_name(prefix) || prefix.starts_with("DISPLAY")
+    };
+    if displays.iter().any(|d| is_fallback(&d.name)) {
+        let edid_by_pnp = crate::display_cache::get_edid_monitor_names_by_pnpid();
+        if !edid_by_pnp.is_empty() {
+            for d in displays.iter_mut() {
+                if is_fallback(&d.name) {
+                    if let Some(edid_name) = crate::display_cache::get_pnp_id_for_device(&d.device_name)
+                        .and_then(|pnp_id| edid_by_pnp.get(&pnp_id).cloned())
+                    {
+                        d.name = format!("{} ({}x{})", edid_name, d.width, d.height);
+                    }
+                }
+            }
+        }
+    }
+
     displays
 }
 
@@ -1335,6 +1402,61 @@ fn resolve_display_index(display_index: Option<usize>) -> usize {
 
 // ─── Tool invocation layer (xcalib + icc_gen, via std::process::Command) ───
 
+/// Gitee 托管的滤镜工具包(icc-tools)下载地址。
+/// 商店版(MSIX)因商店预处理 5001 无法打包这些工具,运行时检测到缺失时按需下载。
+const ICC_TOOLS_DOWNLOAD_URL: &str = "https://gitee.com/muliuawa/nexbox/raw/master/icc-tools.zip";
+const ICC_TOOLS_DIR: &str = "icc-tools";
+
+/// 滤镜工具包解压根目录(binaries 根,不含 icc-tools 子目录)。
+/// 与 `get_tool_path` 的搜索优先级保持一致:
+/// dev(`src-tauri/resources/binaries` / `resources/binaries`)→ exe 旁边 → RESOURCE_DIR。
+fn get_binaries_root_dir() -> Result<PathBuf, String> {
+    let candidates = [
+        PathBuf::from("src-tauri/resources/binaries"),
+        PathBuf::from("resources/binaries"),
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.join("resources/binaries")))
+            .unwrap_or_default(),
+    ];
+    for dir in candidates.iter().filter(|d| !d.as_os_str().is_empty()) {
+        if dir.exists() {
+            return Ok(dir.clone());
+        }
+    }
+    if let Ok(resource_dir) = std::env::var("RESOURCE_DIR") {
+        return Ok(PathBuf::from(resource_dir).join("binaries"));
+    }
+    // 都不存在:以 exe 旁边目录为默认(调用方负责创建)
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.join("resources/binaries")))
+        .ok_or_else(|| "无法定位 resources/binaries 目录".to_string())
+}
+
+/// 商店版(MSIX)安装目录只读时,滤镜工具包回退到本地应用数据目录。
+fn get_writable_binaries_dir() -> Result<PathBuf, String> {
+    let path = dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("NexBox")
+        .join("resources")
+        .join("binaries");
+    fs::create_dir_all(&path).map_err(|e| format!("无法创建滤镜工具目录: {}", e))?;
+    Ok(path)
+}
+
+/// 探测目录是否可写(通过创建/删除探针文件)。
+fn test_writable(dir: &Path) -> bool {
+    let probe = dir.join(format!(".write_test_{}", uuid::Uuid::new_v4()));
+    match fs::write(&probe, b"probe") {
+        Ok(_) => {
+            let _ = fs::remove_file(&probe);
+            true
+        }
+        Err(_) => false,
+    }
+}
+
 /// Get the path to a bundled tool in the resources directory.
 fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     // In development: src-tauri/resources/binaries/icc-tools/
@@ -1360,6 +1482,14 @@ fn get_tool_path(tool_name: &str) -> Result<PathBuf, String> {
     // Fallback: try Tauri resource dir via env
     if let Ok(resource_dir) = std::env::var("RESOURCE_DIR") {
         let path = PathBuf::from(resource_dir).join("binaries/icc-tools").join(tool_name);
+        if path.exists() {
+            return Ok(path);
+        }
+    }
+
+    // Fallback: 商店版兜底目录(MSIX 安装目录只读,工具包下载到本地应用数据)
+    if let Ok(writable_dir) = get_writable_binaries_dir() {
+        let path = writable_dir.join(ICC_TOOLS_DIR).join(tool_name);
         if path.exists() {
             return Ok(path);
         }
@@ -2423,6 +2553,157 @@ pub async fn check_gamma_support(display_index: Option<usize>) -> Result<GammaSu
         display_index: idx, supported, caps_value: 0, ramp_readable: xcalib_available,
         hdr_enabled, reason,
     })
+}
+
+/// 滤镜工具包(icc-tools)安装状态。
+#[derive(serde::Serialize)]
+pub struct IccToolsStatus {
+    pub installed: bool,
+    pub path: Option<String>,
+}
+
+/// 检测滤镜工具包(icc-tools)是否可用。
+/// 商店版(MSIX)不打包这些工具,缺失时由前端引导用户通过 `download_icc_tools` 补装。
+#[tauri::command]
+pub async fn check_icc_tools() -> Result<IccToolsStatus, String> {
+    match get_tool_path("xcalib.exe") {
+        Ok(path) => Ok(IccToolsStatus {
+            installed: true,
+            path: Some(path.to_string_lossy().into_owned()),
+        }),
+        Err(_) => Ok(IccToolsStatus { installed: false, path: None }),
+    }
+}
+
+const ICC_TOOLS_PROGRESS_EVENT: &str = "icc-tools-download-progress";
+
+#[derive(Clone, serde::Serialize)]
+struct IccToolsProgress {
+    phase: String,
+    progress: u8,
+    detail: String,
+}
+
+fn emit_icc_tools_progress(window: &Window, phase: &str, progress: u8, detail: String) {
+    let _ = window.emit(ICC_TOOLS_PROGRESS_EVENT, IccToolsProgress {
+        phase: phase.to_string(),
+        progress,
+        detail,
+    });
+}
+
+/// 下载并解压滤镜工具包(icc-tools)到 resources/binaries。
+/// 优先写 exe 旁边目录(常规安装版);写入失败自动回退到本地应用数据目录(商店版 MSIX 只读)。
+#[tauri::command]
+pub async fn download_icc_tools(window: Window) -> Result<String, String> {
+    // 已安装则直接返回(前端重复点击或并发调用时的幂等保护)
+    if let Ok(path) = get_tool_path("xcalib.exe") {
+        return Ok(format!("滤镜工具已就绪: {}", path.display()));
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("NexBox ICC Tools Downloader")
+        .build()
+        .map_err(|e| format!("无法创建下载客户端: {}", e))?;
+
+    // 1) 流式下载到系统临时文件
+    let response = client
+        .get(ICC_TOOLS_DOWNLOAD_URL)
+        .send()
+        .await
+        .map_err(|e| format!("下载滤镜工具包失败: {}", e))?
+        .error_for_status()
+        .map_err(|e| format!("下载滤镜工具包失败: {}", e))?;
+    let total = response.content_length().unwrap_or(0);
+
+    let tmp_zip = std::env::temp_dir().join(format!("nexbox_icc_tools_{}.zip", uuid::Uuid::new_v4()));
+    let _ = fs::remove_file(&tmp_zip);
+    let mut file = fs::File::create(&tmp_zip).map_err(|e| format!("创建临时文件失败: {}", e))?;
+    {
+        use futures_util::StreamExt;
+        let mut stream = response.bytes_stream();
+        let mut downloaded = 0u64;
+        let mut last_percent = 0u8;
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| format!("下载滤镜工具包失败: {}", e))?;
+            file.write_all(&chunk).map_err(|e| format!("写入临时文件失败: {}", e))?;
+            downloaded += chunk.len() as u64;
+            let percent = if total == 0 { 0 } else { ((downloaded * 100) / total) as u8 };
+            if percent != last_percent {
+                last_percent = percent;
+                emit_icc_tools_progress(&window, "downloading", percent, format!("下载中 {}%", percent));
+            }
+        }
+    }
+    file.flush().map_err(|e| format!("写入临时文件失败: {}", e))?;
+    drop(file);
+
+    // 2) 解压(阻塞线程,避免卡 UI;临时文件与窗口句柄克隆进闭包满足 'static)
+    let zip_path = tmp_zip.clone();
+    let extract_window = window.clone();
+    tauri::async_runtime::spawn_blocking(move || extract_icc_tools_zip(&zip_path, &extract_window))
+        .await
+        .map_err(|e| format!("解压任务失败: {}", e))??;
+
+    let _ = fs::remove_file(&tmp_zip);
+
+    // 3) 校验工具可被定位
+    let tool = get_tool_path("xcalib.exe")?;
+    emit_icc_tools_progress(&window, "done", 100, "滤镜工具包安装完成".to_string());
+    Ok(format!("滤镜工具包已安装到 {}", tool.display()))
+}
+
+/// 解压滤镜工具包 zip(顶层为 `icc-tools/` 文件夹)到 binaries 根目录。
+/// 目标目录探测不可写时自动回退到本地应用数据目录。
+fn extract_icc_tools_zip(zip_path: &Path, window: &Window) -> Result<PathBuf, String> {
+    use std::path::Component;
+
+    let file = fs::File::open(zip_path).map_err(|e| format!("无法打开下载的压缩包: {}", e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("压缩包解析失败: {}", e))?;
+
+    let binaries_root = get_binaries_root_dir()?;
+    let target_base = if test_writable(&binaries_root) {
+        binaries_root
+    } else {
+        get_writable_binaries_dir()?
+    };
+
+    let entry_count = archive.len();
+    let tools_prefix = format!("{}/", ICC_TOOLS_DIR);
+    for i in 0..entry_count {
+        let mut entry = archive.by_index(i).map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+        // 兼容两种打包方式:zip 顶层是 icc-tools/ 文件夹(打包整个文件夹),或顶层直接是文件夹内的文件(打包时选了内部)。
+        // 两者统一落到 <root>/icc-tools/ 下,与 get_tool_path 的查找路径一致。
+        let normalized = entry.name().replace('\\', "/");
+        let rel = normalized.strip_prefix(&tools_prefix).unwrap_or(&normalized);
+        if rel.is_empty() {
+            continue;
+        }
+        let rel_path = Path::new(rel);
+        // 防路径穿越:跳过绝对路径 / 上级目录引用
+        if rel_path.is_absolute() || rel_path.components().any(|c| matches!(c, Component::ParentDir)) {
+            continue;
+        }
+        let out_path = target_base.join(ICC_TOOLS_DIR).join(rel_path);
+        if entry.is_dir() {
+            fs::create_dir_all(&out_path).map_err(|e| format!("创建目录失败: {}", e))?;
+        } else {
+            if let Some(parent) = out_path.parent() {
+                fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {}", e))?;
+            }
+            let mut buffer = Vec::with_capacity(entry.size() as usize);
+            Read::read_to_end(&mut entry, &mut buffer).map_err(|e| format!("读取压缩包条目失败: {}", e))?;
+            fs::write(&out_path, &buffer).map_err(|e| format!("解压文件失败 {}: {}", out_path.display(), e))?;
+            emit_icc_tools_progress(
+                window,
+                "extracting",
+                (i as u64 * 100 / entry_count.max(1) as u64) as u8,
+                format!("正在解压 {}/{}", i + 1, entry_count),
+            );
+        }
+    }
+
+    Ok(target_base)
 }
 
 #[tauri::command]

@@ -6,11 +6,13 @@
  * - 单行/双行模式
  * - 悬浮控制栏（上一句/播放/下一句/随机/锁定）
  * - 未锁定：可拖动 + 悬浮显示背景轮廓 + 完整控制
- * - 锁定：鼠标穿透 + 悬浮仅显示解锁按钮
+ * - 锁定：鼠标穿透 + 内嵌解锁按钮（点击由 Rust 鼠标钩子拦截）
  * - 窗口位置记忆
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { Tooltip } from "@chakra-ui/react";
+import { Unlock } from "lucide-react";
 import { useDesktopLyricsSync } from "@/hooks/useDesktopLyricsSync";
 import type { ControlAction } from "@/hooks/useDesktopLyricsSync";
 import { LyricsCanvas } from "@/components/desktop-lyrics/LyricsCanvas";
@@ -20,11 +22,53 @@ import {
   setIgnoreCursorEvents,
   saveWindowPosition,
   restoreWindowPosition,
-  showUnlockBtn,
-  hideUnlockBtn,
+  enableUnlockHook,
+  disableUnlockHook,
+  setUnlockHookArmed,
   onUnlockBtnClicked,
   isCursorInWindow,
+  isCursorInUnlockArea,
 } from "@/lib/desktop-lyrics-window";
+
+/**
+ * 锁定状态下的内嵌解锁按钮
+ *
+ * 锁定时歌词窗口整窗鼠标穿透,按钮无法接收鼠标事件:
+ * - 显隐由轮询驱动(btnVisible),悬停态由轮询判断光标是否落在按钮区域(btnHover)
+ * - 实际点击由 Rust 端 WH_MOUSE_LL 钩子拦截并触发解锁事件
+ */
+function LockedUnlockBtn({ hover }: { hover: boolean }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: "8px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        zIndex: 10,
+      }}
+    >
+      <Tooltip label="解锁歌词">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            cursor: "pointer",
+            opacity: hover ? 1 : 0.35,
+            transition: "opacity 0.2s ease, background 0.15s ease",
+            background: hover ? "rgba(0,0,0,0.35)" : "transparent",
+          }}
+        >
+          <Unlock size={20} color="rgba(255,255,255,0.95)" />
+        </div>
+      </Tooltip>
+    </div>
+  );
+}
 
 export default function DesktopLyricsPage() {
   const {
@@ -43,6 +87,8 @@ export default function DesktopLyricsPage() {
   } = useDesktopLyricsSync();
 
   const [isHovered, setIsHovered] = useState(false);
+  const [btnVisible, setBtnVisible] = useState(false);
+  const [btnHover, setBtnHover] = useState(false);
   const isLockedRef = useRef(isLocked);
   isLockedRef.current = isLocked;
   const hideUnlockBtnRef = useRef(settings.hideUnlockBtn);
@@ -77,43 +123,39 @@ export default function DesktopLyricsPage() {
   }, []);
 
   // 锁定/解锁状态处理
-  // 锁定：开启歌词窗口穿透，轮询光标位置决定解锁按钮显隐
-  // 解锁：关闭穿透，隐藏解锁按钮
+  // 锁定：开启歌词窗口穿透，启用 Rust 鼠标钩子拦截解锁按钮区域的点击；
+  //       轮询光标位置驱动内嵌解锁按钮的显隐与悬停态
+  // 解锁：关闭穿透，停用钩子，隐藏解锁按钮
   useEffect(() => {
     if (!isLocked) {
       setIgnoreCursorEvents(false);
-      hideUnlockBtn();
+      setBtnVisible(false);
+      setBtnHover(false);
+      setUnlockHookArmed(false);
+      disableUnlockHook();
       return;
     }
 
-    // 锁定状态：开启穿透
+    // 锁定状态：开启穿透 + 启用解锁点击钩子
     setIgnoreCursorEvents(true);
-    setIsHovered(false);
+    setBtnVisible(false);
+    setBtnHover(false);
+    enableUnlockHook();
 
     let active = true;
-    let btnShown = false;
     let intervalId: ReturnType<typeof setInterval>;
 
-    // 每 200ms 轮询：光标在窗口内 → 显示按钮，否则 → 隐藏
+    // 每 200ms 轮询：光标在窗口内且未隐藏按钮 → 显示内嵌按钮并激活钩子拦截，
+    // 否则隐藏；悬停态由光标是否落在按钮区域内决定
     intervalId = setInterval(async () => {
       if (!active || !isLockedRef.current) return;
       try {
         // 隐藏解锁按钮开关开启时，强制隐藏，鼠标移入也不自动显示
-        if (hideUnlockBtnRef.current) {
-          if (btnShown) {
-            btnShown = false;
-            hideUnlockBtn();
-          }
-          return;
-        }
         const inside = await isCursorInWindow();
-        if (inside && !btnShown) {
-          btnShown = true;
-          showUnlockBtn();
-        } else if (!inside && btnShown) {
-          btnShown = false;
-          hideUnlockBtn();
-        }
+        const armed = !hideUnlockBtnRef.current && inside;
+        setBtnVisible(armed);
+        setBtnHover(armed && (await isCursorInUnlockArea()));
+        await setUnlockHookArmed(armed);
       } catch {
         // ignore
       }
@@ -122,19 +164,22 @@ export default function DesktopLyricsPage() {
     return () => {
       active = false;
       clearInterval(intervalId);
-      hideUnlockBtn();
+      setBtnVisible(false);
+      setBtnHover(false);
+      setUnlockHookArmed(false);
+      disableUnlockHook();
     };
   }, [isLocked]);
 
-  // 解锁时，解锁按钮窗口消失但光标已在桌面歌词窗口内，
-  // mouseenter 不会触发（光标没有跨窗口边界），需要手动显示控制栏
+  // 解锁后，解锁按钮消失但光标已在桌面歌词窗口内（未锁定态窗口不再穿透），
+  // 需要手动显示控制栏
   useEffect(() => {
     if (!isLocked) {
       setIsHovered(true);
     }
   }, [isLocked]);
 
-  // 监听独立解锁按钮窗口的点击事件
+  // 监听 Rust 鼠标钩子发出的解锁事件（命中内嵌解锁按钮区域时触发）
   useEffect(() => {
     const setup = async () => {
       const unlisten = await onUnlockBtnClicked(() => {
@@ -239,7 +284,7 @@ export default function DesktopLyricsPage() {
         >
           ♪ NexBox 桌面歌词 ♪
         </span>
-        {/* 控制栏仅未锁定时显示，锁定时的解锁按钮由独立小窗口提供 */}
+        {/* 控制栏仅未锁定时显示；锁定态的解锁按钮内嵌于同窗口，由钩子响应点击 */}
         {isHovered && !isLocked && (
           <LyricsControlBar
             isPlaying={isPlaying}
@@ -248,6 +293,7 @@ export default function DesktopLyricsPage() {
             onControl={handleControl}
           />
         )}
+        {isLocked && btnVisible && <LockedUnlockBtn hover={btnHover} />}
       </div>
     );
   }
@@ -282,7 +328,7 @@ export default function DesktopLyricsPage() {
         />
       </div>
 
-      {/* 控制栏仅未锁定时悬浮显示，锁定时的解锁按钮由独立小窗口提供 */}
+      {/* 控制栏仅未锁定时悬浮显示；锁定态的解锁按钮内嵌于同窗口，由钩子响应点击 */}
       {isHovered && !isLocked && (
         <LyricsControlBar
           isPlaying={isPlaying}
@@ -291,6 +337,7 @@ export default function DesktopLyricsPage() {
           onControl={handleControl}
         />
       )}
+      {isLocked && btnVisible && <LockedUnlockBtn hover={btnHover} />}
     </div>
   );
 }

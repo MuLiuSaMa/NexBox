@@ -74,6 +74,46 @@ const SYMBOL_KEYS: Record<string, string> = {
   ")": "0",
 };
 
+/// 后端 KeyCode token → 界面显示用的友好符号
+/// 与 SYMBOL_KEYS 互为逆映射（后者把界面按键映射为后端 token）
+const TOKEN_DISPLAY: Record<string, string> = {
+  Minus: "-",
+  Equal: "=",
+  Backslash: "\\",
+  Semicolon: ";",
+  Quote: "'",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Backquote: "`",
+  Space: "空格",
+  Escape: "Esc",
+  Backspace: "退格",
+  Delete: "Del",
+  PageUp: "PgUp",
+  PageDown: "PgDn",
+  ScrollLock: "ScrLk",
+  PrintScreen: "PrtSc",
+  CapsLock: "Caps",
+  NumLock: "NumLk",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  ArrowLeft: "←",
+  ArrowRight: "→",
+};
+
+/// 把后端热键 token 格式化为用户可读的显示文本
+/// - 组合键（Ctrl+Shift+A）逐段转换后用 + 连接
+/// - 单键（Minus / Escape / F1）转换为符号或中文名
+/// - 未收录的 token 原样返回
+export function formatHotkeyDisplay(value: string): string {
+  if (!value) return "";
+  return value
+    .split("+")
+    .map((part) => TOKEN_DISPLAY[part] ?? part)
+    .join("+");
+}
+
 function buildComboFromEvent(e: React.KeyboardEvent): string[] {
   const parts: string[] = [];
   if (e.ctrlKey) parts.push("Ctrl");
@@ -191,11 +231,11 @@ export function HotkeyRecorder({
     >
       {isRecording ? (
         <Text color={recordBorder} fontSize="sm" fontWeight="medium">
-          {displayText || "按下快捷键..."}
+          {displayText ? formatHotkeyDisplay(displayText) : "按下快捷键..."}
         </Text>
       ) : (
         <Text color={textColor} fontSize="sm" fontWeight="medium">
-          {value || "无"}
+          {value ? formatHotkeyDisplay(value) : "无"}
         </Text>
       )}
     </Box>

@@ -48,18 +48,17 @@ import {
   Coins,
   CheckCircle2,
   AlertCircle,
-  MessageCircle,
-  MessagesSquare,
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import qqPlatformLogo from "@/assets/df-qq.png";
+import wechatPlatformLogo from "@/assets/df-wechat.png";
 
 // ═══ 类型 ═══
 interface DfLoginState {
@@ -226,14 +225,13 @@ function QrCorners({ color }: { color: string }) {
 }
 
 function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const { getActiveColor, getBorderColor, getHoverColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const contrastText = getContrastTextColor();
+  const borderColor = getBorderColor();
+  const hoverBg = getHoverColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const segBg = useColorModeValue("blackAlpha.50", "whiteAlpha.100");
-  const segHover = useColorModeValue("blackAlpha.100", "whiteAlpha.200");
 
   const [method, setMethod] = useState<"qq" | "wx">("qq");
   const [phase, setPhase] = useState<LoginPhase>("idle");
@@ -246,36 +244,42 @@ function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
   const uuidRef = useRef("");
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expiredCountRef = useRef(0);
+  const genSeqRef = useRef(0);
   const onLoginRef = useRef(onLogin);
   onLoginRef.current = onLogin;
 
-  // 生成二维码（同时作为「过期后刷新」入口）
+  // 生成二维码（同时作为「过期后刷新」「切换平台」入口）
   const generate = useCallback(async (m: "qq" | "wx") => {
+    const seq = ++genSeqRef.current;
     setGenerating(true);
     setError("");
     expiredCountRef.current = 0;
     try {
       if (m === "qq") {
         const r = await invoke<{ qr_base64: string; qrsig: string }>("df_stats_qr_gen");
+        if (seq !== genSeqRef.current) return;
         qrsigRef.current = r.qrsig;
         uuidRef.current = "";
         setQrImgType("image/png");
         setQr(r.qr_base64);
       } else {
         const r = await invoke<{ qr_base64: string; uuid: string; img_type?: string }>("df_stats_qr_wx_gen");
+        if (seq !== genSeqRef.current) return;
         uuidRef.current = r.uuid;
         qrsigRef.current = "";
         setQrImgType(r.img_type || "image/jpeg");
         setQr(r.qr_base64);
       }
+      if (seq !== genSeqRef.current) return;
       setPhase("waiting");
     } catch (e) {
-      setError(String(e));
+      if (seq === genSeqRef.current) setError(String(e));
     } finally {
-      setGenerating(false);
+      if (seq === genSeqRef.current) setGenerating(false);
     }
   }, []);
 
+  // 切换登录平台：清除旧状态并立即生成所选平台二维码（选哪个就更新哪个）
   const switchMethod = (m: "qq" | "wx") => {
     if (m === method) return;
     setMethod(m);
@@ -283,13 +287,7 @@ function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
     setQr("");
     setError("");
     expiredCountRef.current = 0;
-  };
-
-  const backToIdle = () => {
-    setPhase("idle");
-    setQr("");
-    setError("");
-    expiredCountRef.current = 0;
+    void generate(m);
   };
 
   // 扫码状态轮询：单飞递归 setTimeout（上一轮完成后才调度下一轮，永不并发叠加，
@@ -362,7 +360,12 @@ function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
     };
   }, [phase, method]);
 
-  const scanning = phase === "waiting" || phase === "scanned" || phase === "success";
+  // 首次进入直接生成默认平台（QQ）二维码，右侧直接展示
+  useEffect(() => {
+    void generate("qq");
+    return () => { genSeqRef.current += 1; };
+  }, [generate]);
+
   const statusText =
     phase === "waiting" ? (method === "qq" ? "请打开 QQ 扫一扫" : "请打开微信扫一扫")
     : phase === "scanned" ? "已扫码，请在手机上确认"
@@ -370,136 +373,167 @@ function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
     : "二维码已失效";
   const statusOk = phase === "scanned" || phase === "success";
 
+  const platforms = [
+    { id: "qq", name: "QQ 登录", desc: "使用 QQ 扫一扫授权", logo: qqPlatformLogo, logoBg: "#ffffff", imgSize: 28 },
+    { id: "wx", name: "微信登录", desc: "使用微信扫一扫授权", logo: wechatPlatformLogo, logoBg: "transparent", imgSize: 38 },
+  ] as const;
+
   return (
-    <VStack spacing={8} py={14} justify="center" minH="60vh">
-      <LiquidGlassCard p={9} maxW="440px" w="100%">
-        <VStack spacing={5}>
-          <Box bg={`${primaryColor}1a`} borderRadius="lg" p={3.5} border="1px solid" borderColor={`${primaryColor}44`}>
-            <QrCode size={32} color={primaryColor} />
-          </Box>
-          <VStack spacing={1.5}>
-            <Heading size="md" color={textColor}>登录获取数据源</Heading>
-            <Text color={subTextColor} fontSize="sm" textAlign="center" lineHeight="1.8">
-              扫码登录 WeGame 账号，自动同步战绩与藏品数据，
-              <br />
-              登录凭证仅保存在本机。
-            </Text>
+    <VStack spacing={4} py={8} justify="center" minH="62vh">
+      {/* 大包裹：左侧平台选择 + 右侧二维码 */}
+      <LiquidGlassCard p={8} w="100%" maxW="980px" mx="auto">
+        <HStack spacing={10} align="stretch" flexDir={{ base: "column", md: "row" }}>
+          {/* 左侧：标题 + 登录平台（QQ / 微信 竖排） */}
+          <VStack w={{ base: "100%", md: "280px" }} flexShrink={0} spacing={7} align={{ base: "center", md: "flex-start" }} justify="center">
+            <VStack spacing={4} align={{ base: "center", md: "flex-start" }}>
+              <Box bg={`${primaryColor}1a`} borderRadius="lg" p={3.5} border="1px solid" borderColor={`${primaryColor}44`}>
+                <QrCode size={30} color={primaryColor} />
+              </Box>
+              <VStack spacing={1.5} align={{ base: "center", md: "flex-start" }}>
+                <Heading size="md" color={textColor}>登录获取数据源</Heading>
+                <Text color={subTextColor} fontSize="sm" textAlign={{ base: "center", md: "left" }} lineHeight="1.7">
+                  扫码登录 WeGame 账号，自动同步战绩与藏品数据，登录凭证仅保存在本机。
+                </Text>
+              </VStack>
+            </VStack>
+
+            <VStack spacing={3} w="100%" align="stretch">
+              {platforms.map((p) => {
+                const active = method === p.id;
+                return (
+                  <Button
+                    key={p.id}
+                    variant="ghost"
+                    h="66px"
+                    px={3.5}
+                    borderRadius="lg"
+                    bg={active ? `${primaryColor}16` : "transparent"}
+                    border="1px solid"
+                    borderColor={active ? `${primaryColor}55` : borderColor}
+                    _hover={{ bg: active ? `${primaryColor}24` : hoverBg }}
+                    transition="all 0.18s"
+                    onClick={() => switchMethod(p.id)}
+                  >
+                    <HStack spacing={3} w="100%">
+                      <Box
+                        w="38px"
+                        h="38px"
+                        borderRadius="md"
+                        overflow="hidden"
+                        bg={p.logoBg}
+                        display="flex"
+                        alignItems="center"
+                        justifyContent="center"
+                        flexShrink={0}
+                      >
+                        <img src={p.logo} alt={p.name} style={{ width: p.imgSize, height: p.imgSize, objectFit: "contain" }} />
+                      </Box>
+                      <VStack align="flex-start" spacing={0.5} flex={1}>
+                        <Text fontSize="sm" fontWeight="700" color={active ? primaryColor : textColor}>{p.name}</Text>
+                        <Text fontSize="xs" color={subTextColor}>{p.desc}</Text>
+                      </VStack>
+                      {active && <CheckCircle2 size={16} color={primaryColor} />}
+                    </HStack>
+                  </Button>
+                );
+              })}
+            </VStack>
           </VStack>
 
-          {/* 登录方式选择 */}
-          <HStack p={1} borderRadius="lg" bg={segBg} spacing={1} w="100%">
-            {([
-              ["qq", "QQ 登录", MessageCircle],
-              ["wx", "微信登录", MessagesSquare],
-            ] as const).map(([m, label, Icon]) => {
-              const active = method === m;
-              return (
-                <Button
-                  key={m}
-                  size="sm"
-                  flex={1}
-                  borderRadius="md"
-                  leftIcon={<Icon size={14} />}
-                  bg={active ? primaryColor : "transparent"}
-                  color={active ? contrastText : subTextColor}
-                  fontWeight={active ? 700 : 500}
-                  _hover={{ bg: active ? primaryColor : segHover }}
-                  isDisabled={scanning || generating}
-                  onClick={() => switchMethod(m)}
-                >
-                  {label}
-                </Button>
-              );
-            })}
-          </HStack>
+          {/* 分隔线 */}
+          <Box w="1px" bg={borderColor} alignSelf="stretch" display={{ base: "none", md: "block" }} />
 
-          {error && <Text color="red.400" fontSize="sm" textAlign="center">{error}</Text>}
-
-          {qr ? (
-            <VStack spacing={3} w="100%">
-              {/* 二维码卡片：主题色四角装饰 + 过期遮罩刷新 + 成功角标 */}
-              <Box position="relative" p={3} borderRadius="lg" bg="white" border="1px solid" borderColor={cardBorder} boxShadow="sm">
-                <QrCorners color={primaryColor} />
+          {/* 右侧：二维码（直接展示，随所选平台立即更新） */}
+          <VStack flex={1} spacing={4} justify="center" minW={0}>
+            <Box position="relative" p={3} borderRadius="lg" bg="white" border="1px solid" borderColor={cardBorder} boxShadow="sm">
+              <QrCorners color={primaryColor} />
+              {qr ? (
                 <img
                   src={`data:${qrImgType};base64,${qr}`}
                   alt="登录二维码"
                   style={{
-                    width: 216,
-                    height: 216,
+                    width: 236,
+                    height: 236,
                     objectFit: "contain",
                     display: "block",
                     opacity: phase === "expired" ? 0.18 : 1,
                     transition: "opacity 0.3s",
                   }}
                 />
-                {phase === "expired" && (
-                  <Box
-                    position="absolute"
-                    top={0}
-                    left={0}
-                    right={0}
-                    bottom={0}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    borderRadius="lg"
-                    cursor="pointer"
-                    bg="rgba(255,255,255,0.85)"
-                    _hover={{ bg: "rgba(255,255,255,0.95)" }}
-                    transition="background 0.2s"
-                    onClick={() => void generate(method)}
-                  >
-                    <VStack spacing={1.5}>
-                      <RefreshCw size={26} color={primaryColor} />
-                      <Text fontSize="xs" fontWeight="700" color="gray.600">二维码已失效，点击刷新</Text>
-                    </VStack>
-                  </Box>
-                )}
-                {phase === "success" && (
-                  <Box position="absolute" top={-2} right={-2} bg="green.400" borderRadius="full" p={1} boxShadow="md">
-                    <CheckCircle2 size={16} color="white" />
-                  </Box>
-                )}
-              </Box>
-
-              {/* 状态提示 */}
-              <HStack spacing={2} minH="20px">
-                {phase === "scanned" ? (
-                  <CheckCircle2 size={15} color="#48bb78" />
-                ) : phase === "success" ? (
-                  <>
-                    <CheckCircle2 size={15} color="#48bb78" />
-                    <Spinner size="xs" color={primaryColor} />
-                  </>
-                ) : phase === "waiting" ? (
-                  <Spinner size="xs" color={primaryColor} />
-                ) : (
-                  <AlertCircle size={15} color="#ed8936" />
-                )}
-                <Text fontSize="sm" fontWeight="600" color={statusOk ? "green.400" : phase === "expired" ? "orange.400" : subTextColor}>
-                  {statusText}
-                </Text>
-              </HStack>
-
-              {phase !== "success" && (
-                <Button size="xs" variant="ghost" color={subTextColor} onClick={backToIdle}>
-                  返回重新选择
-                </Button>
+              ) : (
+                <Box
+                  w="236px"
+                  h="236px"
+                  display="flex"
+                  flexDir="column"
+                  alignItems="center"
+                  justifyContent="center"
+                  gap={2}
+                  cursor={generating ? "default" : "pointer"}
+                  onClick={() => { if (!generating) void generate(method); }}
+                >
+                  {generating ? (
+                    <Spinner size="md" color={primaryColor} />
+                  ) : (
+                    <>
+                      <AlertCircle size={22} color="#ed8936" />
+                      <Text fontSize="xs" fontWeight="600" color="#666666">生成失败，点击重试</Text>
+                    </>
+                  )}
+                </Box>
               )}
-            </VStack>
-          ) : (
-            <LiquidGlassButton
-              size="md"
-              w="100%"
-              leftIcon={<QrCode size={18} />}
-              onClick={() => void generate(method)}
-              isLoading={generating}
-              loadingText="正在生成二维码…"
-            >
-              生成登录二维码
-            </LiquidGlassButton>
-          )}
-        </VStack>
+              {phase === "expired" && (
+                <Box
+                  position="absolute"
+                  top={0}
+                  left={0}
+                  right={0}
+                  bottom={0}
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  borderRadius="lg"
+                  cursor="pointer"
+                  bg="rgba(255,255,255,0.85)"
+                  _hover={{ bg: "rgba(255,255,255,0.95)" }}
+                  transition="background 0.2s"
+                  onClick={() => void generate(method)}
+                >
+                  <VStack spacing={1.5}>
+                    <RefreshCw size={26} color={primaryColor} />
+                    <Text fontSize="xs" fontWeight="700" color="gray.600">二维码已失效，点击刷新</Text>
+                  </VStack>
+                </Box>
+              )}
+              {phase === "success" && (
+                <Box position="absolute" top={-2} right={-2} bg="green.400" borderRadius="full" p={1} boxShadow="md">
+                  <CheckCircle2 size={16} color="white" />
+                </Box>
+              )}
+            </Box>
+
+            {/* 状态提示 */}
+            <HStack spacing={2} minH="20px">
+              {phase === "scanned" ? (
+                <CheckCircle2 size={15} color="#48bb78" />
+              ) : phase === "success" ? (
+                <>
+                  <CheckCircle2 size={15} color="#48bb78" />
+                  <Spinner size="xs" color={primaryColor} />
+                </>
+              ) : phase === "waiting" ? (
+                <Spinner size="xs" color={primaryColor} />
+              ) : (
+                <AlertCircle size={15} color="#ed8936" />
+              )}
+              <Text fontSize="sm" fontWeight="600" color={statusOk ? "green.400" : phase === "expired" ? "orange.400" : subTextColor}>
+                {statusText}
+              </Text>
+            </HStack>
+
+            {error && <Text color="red.400" fontSize="sm" textAlign="center">{error}</Text>}
+          </VStack>
+        </HStack>
       </LiquidGlassCard>
     </VStack>
   );

@@ -49,8 +49,8 @@ mod imp {
         "cloudmusic", "netease", "orpheus", "music.163", "163music",
         // QQ 音乐
         "qqmusic", "tencentmusic",
-        // 酷狗 / 酷我
-        "kugou", "kuwo",
+        // 酷狗
+        "kugou",
         // Spotify / Apple Music / Zune(Groove)Music
         "spotify", "applemusic", "zunemusic", "groovemusic", "musicui",
         // 汽水音乐（抖音音乐）

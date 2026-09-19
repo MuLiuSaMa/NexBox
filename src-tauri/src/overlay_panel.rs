@@ -109,9 +109,7 @@ fn is_virtual_iface(row: &windows_sys::Win32::NetworkManagement::IpHelper::MIB_I
 fn read_if_octets() -> Option<(u64, u64)> {
     #[cfg(target_os = "windows")]
     unsafe {
-        use windows_sys::Win32::NetworkManagement::IpHelper::{
-            FreeMibTable, GetIfTable2, MIB_IF_ROW2, MIB_IF_TABLE2,
-        };
+        use windows_sys::Win32::NetworkManagement::IpHelper::{FreeMibTable, GetIfTable2, MIB_IF_TABLE2};
 
         // 必须用 GetIfTable2（MIB_IF_ROW2）：旧版 GetIfTable 的
         // dwInOctets/dwOutOctets 计数器在较新 Windows 上不更新，会恒为 0
@@ -1372,6 +1370,26 @@ mod win32 {
         )
     }
 
+    /// 创建清晰文字用的 GDI+ 原生字体。
+    ///
+    /// 与 [`create_compatible_font`] 的区别（也是字体模糊的根因所在）：
+    /// - 字号用 **f32 浮点像素值**直接传给 GDI+，不经 `round()` 量化，
+    ///   125%/150% 缩放下字号不会被取整；
+    /// - 字体族由 GDI+ 直接解析，不经过 GDI `HFONT` → `GdipCreateFontFromDC` 转换，
+    ///   因此字形度量不受 GDI 整数网格约束。
+    ///
+    /// 配合 `TextRenderingHintAntiAlias`（不做网格吸附）即可得到清晰无毛边的文字。
+    unsafe fn create_crisp_font(
+        dpi_scale: f32,
+        font_name: &str,
+        font_size: u32,
+    ) -> Option<crate::utils::crisp_text::CrispFont> {
+        let size_px = font_size as f32 * dpi_scale;
+        crate::utils::crisp_text::CrispFont::new(font_name, size_px)
+            .or_else(|| crate::utils::crisp_text::CrispFont::new("Microsoft YaHei UI", size_px))
+            .or_else(|| crate::utils::crisp_text::CrispFont::new("Microsoft YaHei", size_px))
+    }
+
     unsafe fn measure_text_width(hdc: HDC, hfont: HFONT, text: &str) -> i32 {
         let old_font = SelectObject(hdc, hfont as _);
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
@@ -1857,9 +1875,11 @@ mod win32 {
         let item_gap = (16.0 * dpi_scale) as i32;
         let text_gap = (10.0 * dpi_scale) as i32;
 
-        // 用 GDI+ 测量文字宽度（与绘制 GdipDrawString 同一文字引擎），
-        // 避免测宽与绘制度量不一致导致文字被裁剪/换行。字体句柄复用给绘制。
-        let mut font_handle: *mut GpFont = ptr::null_mut();
+        // 用 GDI+ 原生字体测量文字宽度（与绘制 GdipDrawString 同一字体句柄），
+        // 保证测宽与绘制完全一致，避免文字被裁剪/换行。
+        // 关键：改用 create_crisp_font，字体族由 GDI+ 直接解析、字号为 f32 浮点值，
+        // 不再经由 GDI HFONT → GdipCreateFontFromDC 转换（那会使字形度量带上 GDI 整数网格约束）。
+        let crisp_font = create_crisp_font(dpi_scale, &settings.font, settings.font_size);
         let (dib_width, dib_height, layout_items);
         {
             let temp_dc = GetDC(ptr::null_mut());
@@ -1869,11 +1889,12 @@ mod win32 {
             let mut mg: *mut GpGraphics = ptr::null_mut();
             let gdiplus_ok = !temp_dc.is_null()
                 && GdipCreateFromHDC(temp_dc, &mut mg) == 0 && !mg.is_null()
-                && GdipCreateFontFromDC(temp_dc, &mut font_handle) == 0 && !font_handle.is_null();
+                && crisp_font.is_some();
 
             let sep_count = if layout_items_tmp.len() > 1 { layout_items_tmp.len() as i32 - 1 } else { 0 };
             let mut content_width: i32 = -1;
             if gdiplus_ok {
+                let font_handle = crisp_font.as_ref().unwrap().handle();
                 let mut fmt: *mut GpStringFormat = ptr::null_mut();
                 if GdipCreateStringFormat(StringFormatFlagsNoWrap as i32, 0, &mut fmt) == 0 && !fmt.is_null() {
                     let mut c = 0i32;
@@ -2008,15 +2029,21 @@ mod win32 {
         }
 
         // --- 文字使用 GDI+ 绘制（自带正确 alpha，可支持纯黑文字，不再依赖 rgb 哨兵）---
-        // 字体复用当前 DC 中已选中的兼容字体，保证字号/字体与旧实现一致。
+        // 复用测量阶段创建的清晰字体句柄，保证测宽与绘制完全一致。
         let old_font = SelectObject(mem_dc, hfont as _);
-        // font_handle 已在测量阶段创建，复用同一句柄保证绘制度量一致
-        if !font_handle.is_null() {
+        if let Some(crisp_font) = crisp_font.as_ref() {
+            let font_handle = crisp_font.handle();
             let mut string_format: *mut GpStringFormat = ptr::null_mut();
             // StringFormatFlagsNoWrap：禁止自动换行，文字始终单行显示（对齐旧 GDI DT_SINGLELINE 行为）
-            if GdipCreateStringFormat(StringFormatFlagsNoWrap as i32, 0, &mut string_format) == 0 && !string_format.is_null() {
-                // 灰度反锯齿：避免 ClearType 彩色边缘在透明分层窗口产生色边
-                GdipSetTextRenderingHint(graphics, TextRenderingHintAntiAliasGridFit);
+            // StringFormatFlagsNoClip：网格对齐关闭后字形宽度会有零点几像素溢出，不 NoClip 容易被切边
+            let fmt_flags = StringFormatFlagsNoWrap | StringFormatFlagsNoClip;
+            if GdipCreateStringFormat(fmt_flags, 0, &mut string_format) == 0 && !string_format.is_null() {
+                // 灰度反锯齿，**不做网格吸附**。
+                // 之前用 AntiAliasGridFit 会把字形轮廓吸附到整数像素网格，在 125%/150% 等
+                // 非整数倍缩放下导致笔画落在半像素上、边缘发灰发虚。AntiAlias 是纯灰度反锯齿，
+                // 不做网格吸附，边缘平滑且无毛边。
+                // 也不能用 ClearTypeGridFit —— 彩色次像素在透明分层窗口上会产生明显彩边。
+                crate::utils::crisp_text::set_crisp_text_hint(graphics);
                 GdipSetStringFormatLineAlign(string_format, StringAlignmentCenter);
 
                 let gap = text_gap;
@@ -2117,9 +2144,7 @@ mod win32 {
         SelectObject(mem_dc, old_font);
 
         GdipDeleteGraphics(graphics);
-        if !font_handle.is_null() {
-            GdipDeleteFont(font_handle);
-        }
+        // crisp_font 离开作用域时由其 Drop 自动释放 GpFont / GpFontFamily
 
         // 对半透明像素做 alpha 逆预乘：GDI+ 按预乘 alpha 写入，
         // 而 UpdateLayeredWindow(AC_SRC_ALPHA) 需要直线 alpha，否则半透明边缘会偏暗、发黑。

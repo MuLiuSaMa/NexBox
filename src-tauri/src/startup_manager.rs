@@ -24,7 +24,7 @@ pub struct StartupItem {
     pub is_disabled: bool,
 }
 
-fn expand_env_vars(s: &str) -> String {
+pub(crate) fn expand_env_vars(s: &str) -> String {
     let mut result = String::new();
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
@@ -358,11 +358,17 @@ fn draw_hicon_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>> {
 /// 优先用 SHDefExtractIconW 按 256px 提取高清图标（在 32px 框内缩小显示更清晰），
 /// 失败时回退到 SHGetFileInfoW 的默认图标。
 pub fn extract_icon_data_uri(file_path: &str) -> Option<String> {
-    extract_icon_data_uri_at_size(file_path, 256)
+    extract_icon_data_uri_with_index(file_path, 0)
+}
+
+/// 从 exe/ico 文件提取指定资源索引的图标（DisplayIcon 形如 `xxx.exe,1` 时使用），
+/// 编码为 PNG data URI；索引无效时默认取第一个图标资源。
+pub fn extract_icon_data_uri_with_index(file_path: &str, icon_index: i32) -> Option<String> {
+    extract_icon_data_uri_at_size(file_path, 256, icon_index)
 }
 
 /// 按指定尺寸提取图标 data URI（批量进程图标等场景使用小尺寸以提升效率）
-fn extract_icon_data_uri_at_size(file_path: &str, size: i32) -> Option<String> {
+fn extract_icon_data_uri_at_size(file_path: &str, size: i32, icon_index: i32) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         use windows_sys::Win32::UI::Shell::SHDefExtractIconW;
@@ -384,7 +390,7 @@ fn extract_icon_data_uri_at_size(file_path: &str, size: i32) -> Option<String> {
             let mut bytes: Option<Vec<u8>> = None;
             let hr = SHDefExtractIconW(
                 wide.as_ptr(),
-                0,
+                icon_index,
                 0,
                 &mut hicon,
                 std::ptr::null_mut(),
@@ -431,7 +437,7 @@ fn extract_icon_data_uri_at_size(file_path: &str, size: i32) -> Option<String> {
 pub async fn get_process_icons(exe_paths: Vec<String>) -> Vec<String> {
     exe_paths
         .iter()
-        .map(|p| extract_icon_data_uri_at_size(p, 64).unwrap_or_default())
+        .map(|p| extract_icon_data_uri_at_size(p, 64, 0).unwrap_or_default())
         .collect()
 }
 

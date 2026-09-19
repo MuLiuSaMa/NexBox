@@ -22,14 +22,22 @@ import {
   MenuList,
   MenuItem,
   Portal,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalCloseButton,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus, Save, Trash2 } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -41,8 +49,9 @@ import { ThemeSwitch } from "@/components/special/theme-switch";
 import { hexToRgba } from "@/lib/color-utils";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import CrosshairPreview from "@/components/crosshair-preview";
 
-interface CrosshairSettings {
+export interface CrosshairSettings {
   enabled: boolean;
   style: string;
   size: number;
@@ -85,6 +94,14 @@ const PRESET_IMAGE_STYLES = [
 ];
 
 const CROSSHAIR_STORE_KEY = "crosshair-settings";
+const CROSSHAIR_PRESETS_KEY = "crosshair-presets";
+
+interface CrosshairPreset {
+  id: string;
+  name: string;
+  settings: Omit<CrosshairSettings, "enabled">;
+  createdAt: number;
+}
 
 const DEFAULT_SETTINGS: CrosshairSettings = {
   enabled: false,
@@ -131,9 +148,11 @@ const COLOR_PRESETS = [
 
 function SettingCard({
   title,
+  action,
   children,
 }: {
   title: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { liquidGlassEnabled } = useBackground();
@@ -146,7 +165,10 @@ function SettingCard({
     return (
       <LiquidGlassCard p={5}>
         <VStack align="stretch" spacing={4}>
-          <Text fontWeight="medium" color={headerColor}>{title}</Text>
+          <HStack justify="space-between" align="center" w="full">
+            <Text fontWeight="medium" color={headerColor}>{title}</Text>
+            {action}
+          </HStack>
           {children}
         </VStack>
       </LiquidGlassCard>
@@ -156,7 +178,10 @@ function SettingCard({
   return (
     <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
-        <Text fontWeight="medium" color={headerColor}>{title}</Text>
+        <HStack justify="space-between" align="center" w="full">
+          <Text fontWeight="medium" color={headerColor}>{title}</Text>
+          {action}
+        </HStack>
         {children}
       </VStack>
     </Box>
@@ -193,6 +218,22 @@ export default function CrosshairPage() {
   const [editValue, setEditValue] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
   const lastProceduralStyle = useRef<string>("Cross");
+  const [presets, setPresets] = useState<CrosshairPreset[]>([]);
+  // 当前通过点击预设应用到的预设 id（用于样式格子的选中高亮；手动改参数后清空）
+  const [appliedPresetId, setAppliedPresetId] = useState<string | null>(null);
+  const [presetName, setPresetName] = useState("");
+  const {
+    isOpen: saveModalOpen,
+    onOpen: onSaveModalOpen,
+    onClose: onSaveModalClose,
+  } = useDisclosure();
+  // Chakra Modal 关闭时会把焦点恢复到触发按钮或 finalFocusRef。
+  // 这里指向页面滚动容器，保证保存/取消后焦点落在中性元素上——
+  // 用户再按回车不会激活「保存为预设」按钮，焦点也不会落入顶部搜索框
+  const saveModalFocusRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    saveModalFocusRef.current = document.getElementById("app-main-scroll");
+  }, [saveModalOpen]);
 
   const headingColor = useColorModeValue("black", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
@@ -211,6 +252,7 @@ export default function CrosshairPage() {
   useEffect(() => {
     loadSettings();
     loadHoldSettings();
+    loadPresets();
     // 延迟加载显示器列表，避免进入页面时阻塞渲染导致卡顿
     const timer = setTimeout(() => loadDisplays(), 200);
     return () => clearTimeout(timer);
@@ -391,6 +433,8 @@ export default function CrosshairPage() {
 
   const updateSettings = async (newSettings: CrosshairSettings) => {
     setSettings(newSettings);
+    // 手动修改参数时清除「已应用预设」高亮
+    setAppliedPresetId(null);
     setIsLoading(true);
     try {
       await invoke("update_crosshair_settings", { settings: newSettings });
@@ -458,6 +502,112 @@ export default function CrosshairPage() {
     setEditingAxis(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingAxis, editValue, maxOffsetX, maxOffsetY]);
+
+  const loadPresets = async () => {
+    try {
+      const list = await store.get<CrosshairPreset[]>(CROSSHAIR_PRESETS_KEY);
+      setPresets(list ?? []);
+    } catch (error) {
+      console.error("Failed to load crosshair presets:", error);
+    }
+  };
+
+  const persistPresets = async (next: CrosshairPreset[]) => {
+    setPresets(next);
+    await store.set(CROSSHAIR_PRESETS_KEY, next);
+    await store.save();
+  };
+
+  const savePreset = async () => {
+    const name = presetName.trim();
+    if (!name) {
+      toast({
+        title: t("crosshair.saveFailed") || "预设保存失败",
+        description: t("crosshair.nameRequired") || "请输入预设名称",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+      return;
+    }
+    try {
+      const { enabled: _enabled, ...visualSettings } = settings;
+      const preset: CrosshairPreset = {
+        id: `preset_${Date.now()}`,
+        name,
+        settings: visualSettings,
+        createdAt: Date.now(),
+      };
+      await persistPresets([...presets, preset]);
+      setPresetName("");
+      // 焦点归还由 Modal 的 finalFocusRef 统一处理（指向页面滚动容器）
+      onSaveModalClose();
+      toast({
+        title: t("crosshair.saveSuccess") || "预设已保存",
+        description: name,
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to save crosshair preset:", error);
+      toast({
+        title: t("crosshair.saveFailed") || "预设保存失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const applyPreset = async (preset: CrosshairPreset) => {
+    // 应用预设期间可能因焦点/布局变化导致滚动复位，先记录滚动位置待应用后恢复
+    const scroller = document.getElementById("app-main-scroll");
+    const savedScroll = scroller?.scrollTop;
+    try {
+      // 预设只含外观/位置设置，应用时沿用当前启停状态
+      await updateSettings({ ...preset.settings, enabled: settings.enabled });
+      setAppliedPresetId(preset.id);
+      if (typeof savedScroll === "number") {
+        requestAnimationFrame(() => {
+          const el = document.getElementById("app-main-scroll");
+          if (el) el.scrollTop = savedScroll;
+        });
+      }
+      toast({
+        title: t("crosshair.applySuccess") || "已应用预设",
+        description: preset.name,
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to apply crosshair preset:", error);
+      toast({
+        title: t("crosshair.applyFailed") || "预设应用失败",
+        status: "error",
+        duration: 2000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const deletePreset = async (preset: CrosshairPreset) => {
+    if (!window.confirm(t("crosshair.deleteConfirm") || "确定删除该预设吗？")) return;
+    try {
+      await persistPresets(presets.filter((p) => p.id !== preset.id));
+      if (appliedPresetId === preset.id) setAppliedPresetId(null);
+      toast({
+        title: t("crosshair.deletePreset") || "删除预设",
+        description: preset.name,
+        status: "info",
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error("Failed to delete crosshair preset:", error);
+    }
+  };
 
   return (
     <Box pt={8} pb={8}>
@@ -668,71 +818,12 @@ export default function CrosshairPage() {
             </HStack>
           </SettingCard>
 
-          <SettingCard title={t("crosshair.monitor")}>
-            <Menu matchWidth>
-              <MenuButton
-                as={Box}
-                bg="transparent"
-                p={0}
-                border="none"
-                w="full"
-                cursor="pointer"
-              >
-                <LiquidGlassCard px={3} py={1.5}>
-                  <HStack justify="space-between">
-                    <HStack spacing={2}>
-                      <Monitor size={14} />
-                      <Text fontSize="sm" color={textColor}>
-                        {settings.monitor_index === -1
-                          ? t("crosshair.primaryMonitor")
-                          : displays.find(d => d.index === settings.monitor_index)?.name || t("crosshair.primaryMonitor")}
-                      </Text>
-                    </HStack>
-                    <ChevronDown size={16} />
-                  </HStack>
-                </LiquidGlassCard>
-              </MenuButton>
-              <Portal>
-                <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
-                  <MenuItem
-                    onClick={() => {
-                      const newSettings = { ...settings, monitor_index: -1, monitor_device_name: null };
-                      updateSettings(newSettings);
-                    }}
-                    bg={settings.monitor_index === -1 ? hoverBg : "transparent"}
-                    _hover={{ bg: hoverBg }}
-                  >
-                    <HStack spacing={2} w="full" justify="space-between">
-                      <Text fontSize="sm">{t("crosshair.primaryMonitor")}</Text>
-                      {settings.monitor_index === -1 && <Check size={14} color={getActiveColor()} />}
-                    </HStack>
-                  </MenuItem>
-                  {displays.map((d) => (
-                    <MenuItem
-                      key={d.index}
-                      onClick={() => {
-                        const newSettings = { ...settings, monitor_index: d.index, monitor_device_name: d.device_name };
-                        updateSettings(newSettings);
-                      }}
-                      bg={settings.monitor_index === d.index ? hoverBg : "transparent"}
-                      _hover={{ bg: hoverBg }}
-                    >
-                      <HStack spacing={2} w="full" justify="space-between">
-                        <Text fontSize="sm">{d.name}</Text>
-                        {settings.monitor_index === d.index && <Check size={14} color={getActiveColor()} />}
-                      </HStack>
-                    </MenuItem>
-                  ))}
-                </MenuList>
-              </Portal>
-            </Menu>
-          </SettingCard>
-
           {!settings.use_custom_image && (
             <SettingCard title={t("crosshair.style")}>
               <SimpleGrid columns={5} spacing={2}>
                 {STYLE_OPTIONS.map((option) => {
-                  const isActive = settings.style === option.id;
+                  // 应用了预设且未手动改参数时，不点亮任意内置样式
+                  const isActive = !appliedPresetId && settings.style === option.id;
                   return (
                     <LiquidGlassCard
                       key={option.id}
@@ -745,6 +836,67 @@ export default function CrosshairPage() {
                       <Text fontSize="xs" fontWeight="medium" color={isActive ? getActiveColor() : textColor}>
                         {t(option.labelKey)}
                       </Text>
+                    </LiquidGlassCard>
+                  );
+                })}
+
+                {/* 已保存的预设：直接作为样式格子排在末尾 */}
+                {presets.map((preset) => {
+                  const isActive = appliedPresetId === preset.id;
+                  return (
+                    <LiquidGlassCard
+                      key={preset.id}
+                      py={2}
+                      textAlign="center"
+                      cursor="pointer"
+                      role="group"
+                      position="relative"
+                      border={isActive ? `1px solid ${getActiveColor()}` : "1px solid transparent"}
+                      onClick={() => applyPreset(preset)}
+                    >
+                      <Box
+                        w="full"
+                        h="34px"
+                        mb={1}
+                        borderRadius="md"
+                        overflow="hidden"
+                      >
+                        <CrosshairPreview
+                          settings={{ ...preset.settings, enabled: false }}
+                          transparent
+                          padding={14}
+                        />
+                      </Box>
+                      <Text
+                        fontSize="xs"
+                        fontWeight="medium"
+                        color={isActive ? getActiveColor() : textColor}
+                        noOfLines={1}
+                        px={1}
+                      >
+                        {preset.name}
+                      </Text>
+                      <IconButton
+                        aria-label={t("crosshair.deletePreset") || "删除预设"}
+                        icon={<Trash2 size={12} />}
+                        size="xs"
+                        variant="ghost"
+                        position="absolute"
+                        top={1}
+                        right={1}
+                        minW={6}
+                        w={6}
+                        h={6}
+                        color={subTextColor}
+                        opacity={0}
+                        _groupHover={{ opacity: 1 }}
+                        _hover={{ color: "red.400", bg: hexToRgba("#ef4444", 0.15) }}
+                        zIndex={1}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deletePreset(preset);
+                        }}
+                      />
                     </LiquidGlassCard>
                   );
                 })}
@@ -874,7 +1026,88 @@ export default function CrosshairPage() {
         </VStack>
 
         <VStack align="stretch" spacing={5}>
-          <SettingCard title={t("crosshair.parameters")}>
+          <SettingCard title={t("crosshair.monitor")}>
+            <Menu matchWidth>
+              <MenuButton
+                as={Box}
+                bg="transparent"
+                p={0}
+                border="none"
+                w="full"
+                cursor="pointer"
+              >
+                <LiquidGlassCard px={3} py={1.5}>
+                  <HStack justify="space-between">
+                    <HStack spacing={2}>
+                      <Monitor size={14} />
+                      <Text fontSize="sm" color={textColor}>
+                        {settings.monitor_index === -1
+                          ? t("crosshair.primaryMonitor")
+                          : displays.find(d => d.index === settings.monitor_index)?.name || t("crosshair.primaryMonitor")}
+                      </Text>
+                    </HStack>
+                    <ChevronDown size={16} />
+                  </HStack>
+                </LiquidGlassCard>
+              </MenuButton>
+              <Portal>
+                <MenuList bg={menuListBg} borderColor={cardBorder} maxH="300px" overflowY="auto" zIndex={9999}>
+                  <MenuItem
+                    onClick={() => {
+                      const newSettings = { ...settings, monitor_index: -1, monitor_device_name: null };
+                      updateSettings(newSettings);
+                    }}
+                    bg={settings.monitor_index === -1 ? hoverBg : "transparent"}
+                    _hover={{ bg: hoverBg }}
+                  >
+                    <HStack spacing={2} w="full" justify="space-between">
+                      <Text fontSize="sm">{t("crosshair.primaryMonitor")}</Text>
+                      {settings.monitor_index === -1 && <Check size={14} color={getActiveColor()} />}
+                    </HStack>
+                  </MenuItem>
+                  {displays.map((d) => (
+                    <MenuItem
+                      key={d.index}
+                      onClick={() => {
+                        const newSettings = { ...settings, monitor_index: d.index, monitor_device_name: d.device_name };
+                        updateSettings(newSettings);
+                      }}
+                      bg={settings.monitor_index === d.index ? hoverBg : "transparent"}
+                      _hover={{ bg: hoverBg }}
+                    >
+                      <HStack spacing={2} w="full" justify="space-between">
+                        <Text fontSize="sm">{d.name}</Text>
+                        {settings.monitor_index === d.index && <Check size={14} color={getActiveColor()} />}
+                      </HStack>
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </Portal>
+            </Menu>
+          </SettingCard>
+
+          <SettingCard
+            title={t("crosshair.parameters")}
+            action={
+              <Button
+                leftIcon={<Save size={14} />}
+                colorScheme="gray"
+                variant="outline"
+                size="sm"
+                borderColor={getActiveColor()}
+                color={getActiveColor()}
+                _hover={{ bg: hexToRgba(getActiveColor(), 0.1) }}
+                onClick={() => {
+                  setPresetName(
+                    `${t("crosshair.presetDefaultName") || "预设"} ${presets.length + 1}`
+                  );
+                  onSaveModalOpen();
+                }}
+              >
+                {t("crosshair.saveAsPreset") || "保存为预设"}
+              </Button>
+            }
+          >
             <VStack align="stretch" spacing={4}>
               {settings.use_custom_image ? (
                 <>
@@ -1115,30 +1348,13 @@ export default function CrosshairPage() {
                   <HStack justify="space-between" pt={1}>
                     <HStack spacing={2}>
                       <Box
-                        w={10} h={10}
+                        w={40}
+                        h={25}
                         borderRadius="md"
-                        bg="black"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        opacity={settings.opacity / 255}
                         overflow="hidden"
+                        flexShrink={0}
                       >
-                        {settings.style.startsWith("Preset_") ? (
-                          <img
-                            src={`/crosshair-presets/${PRESET_IMAGE_STYLES.find(p => p.id === settings.style)?.file || ""}`}
-                            alt=""
-                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                          />
-                        ) : settings.custom_image_path ? (
-                          <img
-                            src={convertFileSrc(settings.custom_image_path)}
-                            alt="preview"
-                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }}
-                          />
-                        ) : (
-                          <Image size={20} color="white" />
-                        )}
+                        <CrosshairPreview settings={settings} />
                       </Box>
                       <VStack align="flex-start" spacing={0}>
                         <Text fontSize="xs" color={subTextColor} fontWeight="medium">{t("crosshair.preview")}</Text>
@@ -1377,17 +1593,13 @@ export default function CrosshairPage() {
                   <HStack justify="space-between" pt={1}>
                     <HStack spacing={2}>
                       <Box
-                        w={10} h={10}
+                        w={40}
+                        h={25}
                         borderRadius="md"
-                        bg="black"
-                        display="flex"
-                        alignItems="center"
-                        justifyContent="center"
-                        opacity={settings.opacity / 255}
+                        overflow="hidden"
+                        flexShrink={0}
                       >
-                        <Text fontSize="lg" color={settings.color} fontWeight="bold" lineHeight={1}>
-                          {STYLE_OPTIONS.find(s => s.id === settings.style)?.icon || "+"}
-                        </Text>
+                        <CrosshairPreview settings={settings} />
                       </Box>
                       <VStack align="flex-start" spacing={0}>
                         <Text fontSize="xs" color={subTextColor} fontWeight="medium">{t("crosshair.preview")}</Text>
@@ -1410,6 +1622,52 @@ export default function CrosshairPage() {
           </SettingCard>
         </VStack>
       </SimpleGrid>
+
+      <Modal isOpen={saveModalOpen} onClose={onSaveModalClose} isCentered size="sm" finalFocusRef={saveModalFocusRef}>
+        <ModalOverlay bg="blackAlpha.600" />
+        <ModalContent
+          bg={menuListBg}
+          border="1px solid"
+          borderColor={cardBorder}
+        >
+          <ModalHeader fontSize="md" color={headingColor}>
+            {t("crosshair.saveAsPreset") || "保存为预设"}
+          </ModalHeader>
+          <ModalCloseButton color={subTextColor} />
+          <ModalBody>
+            <Input
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  savePreset();
+                }
+              }}
+              placeholder={t("crosshair.presetNamePlaceholder") || "输入预设名称"}
+              bg={inputBg}
+              color={textColor}
+              borderColor={getActiveColor()}
+              _focus={{ borderColor: getActiveColor(), boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+              autoFocus
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" variant="ghost" color={subTextColor} onClick={onSaveModalClose} mr={2}>
+              {t("common.cancel", "取消")}
+            </Button>
+            <Button
+              size="sm"
+              bg={getActiveColor()}
+              color={getContrastTextColor()}
+              _hover={{ opacity: 0.9 }}
+              onClick={savePreset}
+            >
+              {t("common.confirm", "保存")}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

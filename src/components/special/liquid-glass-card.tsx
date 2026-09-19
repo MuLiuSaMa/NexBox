@@ -41,7 +41,7 @@ export function LiquidGlassCard({
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultBorder = useColorModeValue("gray.200", "#333333");
 
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = glassOn ? effectiveGlassBlur : 0;
   const isReal = glassOn && liquidGlassMode === "real" && !isDashed;
 

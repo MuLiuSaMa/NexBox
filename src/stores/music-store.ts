@@ -193,6 +193,8 @@ interface MusicState {
   clearQueue: () => void;
   setQueuePanelOpen: (open: boolean) => void;
   togglePlay: () => void;
+  /** 关闭播放：停止音频并清空当前歌曲/队列，底部播放条随之收起 */
+  closePlayback: () => void;
   nextTrack: () => void;
   prevTrack: () => void;
   seekTo: (time: number) => void;
@@ -1754,6 +1756,41 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     }
   },
 
+  closePlayback: () => {
+    const state = get();
+    // 取消进行中的音量渐变，防止残留定时器在清空后拉低音量
+    cancelVolumeFade();
+    if (state.audioRef) {
+      state.audioRef.pause();
+      state.audioRef.src = "";
+      state.audioRef.currentTime = 0;
+      // 清空后恢复音量，避免下次播放时音量被渐变置 0
+      state.audioRef.volume = state.volume;
+    }
+    lastPlayedSong = null;
+    set({
+      currentSong: null,
+      isPlaying: false,
+      currentTime: 0,
+      duration: 0,
+      playQueue: [],
+      currentIndex: -1,
+      playHistory: [],
+      heartbeatQueue: [],
+      heartbeatPlayedIds: new Set(),
+      currentLyrics: null,
+      currentLyricsSongId: null,
+      loadingLyrics: false,
+    });
+    // 无歌后 SMTC 会话自动清除，灵动岛不再显示音乐卡片
+    pushSmtc(true);
+    // 桌面歌词同步清空（若可见）
+    if (state.desktopLyricsVisible) {
+      get().emitDesktopLyricsData();
+      emit("desktop-lyrics:state", { isPlaying: false, playMode: get().playMode, volume: get().volume });
+    }
+  },
+
   nextTrack: () => {
     const { playQueue, currentIndex, playMode, audioRef, heartbeatQueue } = get();
     if (playQueue.length === 0) return;
@@ -2078,11 +2115,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
             showTranslation: get().desktopLyricsShowTranslation,
             hideUnlockBtn: get().desktopLyricsHideUnlockBtn,
           });
-          try {
-            await invoke("hide_lyrics_unlock_btn");
-          } catch {
-            // ignore
-          }
         }
       }
     } catch (e) {

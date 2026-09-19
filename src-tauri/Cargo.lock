@@ -3390,7 +3390,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nexbox"
-version = "9.5.3"
+version = "9.7.2"
 dependencies = [
  "aes",
  "async-stream",
@@ -3406,6 +3406,7 @@ dependencies = [
  "encoding_rs",
  "env_logger",
  "filetime",
+ "flate2",
  "futures-util",
  "glob",
  "hex",
@@ -3455,8 +3456,10 @@ dependencies = [
  "urlencoding",
  "uuid",
  "walkdir",
+ "webview2-com",
  "winapi",
  "windows 0.58.0",
+ "windows-core 0.61.2",
  "windows-sys 0.59.0",
  "winreg 0.52.0",
  "wmi",

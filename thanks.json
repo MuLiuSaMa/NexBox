@@ -1,0 +1,45 @@
+{
+  "update_time": "2026-09-19",
+  "items": [
+    {
+      "name": "AtomGit",
+      "url": "https://atomgit.com",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/gitcode.webp"
+    },
+    {
+      "name": "SJMC Launcher",
+      "url": "https://mc.sjtu.cn/sjmcl",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/SJMCL.webp"
+    },
+    {
+      "name": "图吧工具箱CE",
+      "url": "https://tubawinui3.cn/",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/tuba.webp"
+    },
+    {
+      "name": "Pyisland",
+      "url": "https://www.pyisland.com/",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/Pyisland.webp"
+    },
+    {
+      "name": "Watt Toolkit",
+      "url": "https://steampp.net/",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/watt-toolkit.webp"
+    },
+    {
+      "name": "MCTier",
+      "url": "https://mctier.pmhs.top/",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/MCTier.webp"
+    },
+    {
+      "name": "MineRadio",
+      "url": "https://mineradio.cn/",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/MR.webp"
+    },
+    {
+      "name": "小哆啦工具箱",
+      "url": "https://gitee.com/doralite/doras-little-toolbox",
+      "logo": "https://raw.giteeusercontent.com/muliuawa/nexbox/raw/master/web/duola.webp"
+    }
+  ]
+}

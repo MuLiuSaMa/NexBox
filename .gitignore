@@ -72,6 +72,7 @@ src-tauri/src-tauri.zip
 
 # WorkBuddy
 .workbuddy/
+.workbuddy-ai/
 
 # Uploads
 .uploads/

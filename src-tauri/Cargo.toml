@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "9.5.3"
+version = "9.7.2"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -30,6 +30,9 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "devtools", "unstable"] }
+# WebView2 COM 接口（MemoryUsageTargetLevel 等 Win32 级控制，与 wry 同版本）
+webview2-com = "0.38"
+windows-core = "0.61"
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
@@ -58,6 +61,7 @@ tauri-plugin-dialog = "2"
 urlencoding = "2.1"
 url = "2"
 base64 = "0.22"
+flate2 = "1"
 bytes = "1"
 dashmap = "6"
 parking_lot = "0.12"
@@ -106,6 +110,7 @@ windows-sys = { version = "0.59", features = [
     "Win32_Graphics_GdiPlus",
     "Win32_UI_Accessibility",
     "Win32_UI_ColorSystem",
+    "Win32_UI_HiDpi",
     "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",

@@ -57,7 +57,9 @@
     "vtxVirtualization": "VT-X 仮想化修復",
     "hiddenFeatures": "Windows 隠し機能",
     "downloadAccelerator": "ダウンロード",
-    "nvidiaRecording": "NVIDIA録画管理"
+    "nvidiaRecording": "NVIDIA録画管理",
+    "appManager": "アプリ管理",
+    "timeSync": "時刻校正"
   },
   "customPage": {
     "title": "カスタムページ",
@@ -744,6 +746,8 @@
     "pnpDeviceId": "PNP ID",
     "resolution": "解像度",
     "refreshRate": "リフレッシュレート",
+    "screenSize": "サイズ",
+    "primaryDisplay": "メイン",
     "status": "ステータス",
     "diskType": "タイプ",
     "interfaceType": "インターフェース",
@@ -890,6 +894,12 @@
   },
   "displayFilter": {
     "operationSuperseded": "操作は新しい操作に置き換えられたため、実行されませんでした",
+    "iccToolsTitle": "フィルターツールがインストールされていません",
+    "iccToolsDesc": "ストア版にはフィルターツールが同梱されていません。ダウンロードするとフィルター機能を利用できます。",
+    "iccToolsDownloadBtn": "フィルターツールをダウンロード",
+    "iccToolsDownloading": "ダウンロード中",
+    "iccToolsSuccess": "フィルターツールをインストールしました",
+    "iccToolsFailed": "フィルターツールのダウンロードに失敗しました",
     "title": "ディスプレイフィルター",
     "enable": "フィルターを有効化",
     "presets": "プリセット",
@@ -1021,7 +1031,20 @@
     "holdDelay": "入力遅延",
     "holdDelayDesc": "ホットキーを押してからこの時間だけ待って照準を表示し、離すとすぐに非表示になります（0 = 即時）",
     "holdDelaySaved": "遅延を保存しました",
-    "hotkeySaved": "ショートカットを保存しました"
+    "hotkeySaved": "ショートカットを保存しました",
+    "presets": "照準プリセット",
+    "saveAsPreset": "プリセットとして保存",
+    "savePresetTitle": "現在の設定をプリセットとして保存",
+    "presetNamePlaceholder": "プリセット名を入力",
+    "presetDefaultName": "プリセット",
+    "saveSuccess": "プリセットを保存しました",
+    "saveFailed": "プリセットの保存に失敗しました",
+    "nameRequired": "プリセット名を入力してください",
+    "emptyPresets": "プリセットはまだありません。パラメータを調整して保存できます",
+    "applySuccess": "プリセットを適用しました",
+    "applyFailed": "プリセットの適用に失敗しました",
+    "deletePreset": "プリセットを削除",
+    "deleteConfirm": "このプリセットを削除しますか？"
   },
   "hardwareReport": {
     "export": "レポートをエクスポート",
@@ -1072,7 +1095,6 @@
     "mapToolDesc": "戦利品ポイント、スポーンポイント、抽出ポイント、ボス座標",
     "dlssPreset": "DLSSプリセット",
     "dlssPresetDesc": "DLSSニューラルネットワークモデルプリセットを選択してください。異なるシナリオに異なるプリセットを使用できます",
-    "loading": "読み込み中...",
     "noPassword": "パスワードデータがありません",
     "copy": "コピー",
     "copied": "コピー済み",
@@ -1197,7 +1219,8 @@
         "name": "XiaoTao",
         "description": "XiaoTao 改槍コードプラットフォーム"
       }
-    }
+    },
+    "loading": "読み込み中..."
   },
   "dlssPreset": {
     "title": "デルタフォースDLSS設定",
@@ -1278,13 +1301,37 @@
     "vtxVirtualizationDesc": "メモリ整合性とHyper-Vを無効/復元して仮想化ポップアップを修正",
     "hiddenFeaturesDesc": "Windows の隠し A/B 実験機能フラグの確認・有効化・無効化",
     "downloadAcceleratorDesc": "マルチスレッド分割ダウンロードで帯域を最大限に活用",
-    "nvidiaRecordingDesc": "NVIDIA 録画を自動スキャンし、日付ごとに管理・プレビュー・削除"
+    "nvidiaRecordingDesc": "NVIDIA 録画を自動スキャンし、日付ごとに管理・プレビュー・削除",
+    "appManagerDesc": "インストール済みアプリの表示とアンインストール",
+    "timeSyncDesc": "システム時刻を校正し、時刻サーバーの遅延と偏差を確認"
+  },
+  "timeSync": {
+    "title": "時刻校正",
+    "systemTime": "現在のシステム時刻",
+    "serverTime": "サーバー時刻",
+    "offset": "時刻偏差",
+    "latency": "ネットワーク遅延",
+    "server": "時刻サーバー",
+    "query": "確認",
+    "querying": "確認中...",
+    "redetect": "再確認",
+    "apply": "システム時刻を校正",
+    "applying": "校正中...",
+    "applyHint": "選択したサーバーの時刻にシステム時刻を合わせます",
+    "adminRequired": "システム時刻の変更には管理者権限が必要です",
+    "adminOk": "管理者",
+    "adminNo": "非管理者",
+    "synced": "時刻校正が完了し、再確認しました",
+    "queryFailed": "確認に失敗しました",
+    "notQueried": "未確認",
+    "normal": "正常",
+    "offsetNote": "偏差 = サーバー時刻 − ローカル時刻。正の値はローカル時刻が遅れていることを示します",
+    "lastUpdate": "最終確認"
   },
   "vtxVirtualization": {
     "title": "VT-X 仮想化修復",
     "subtitle": "メモリ整合性・VBS・Hyper-V自動起動を無効化または復元し、ゲーム/ソフトの仮想化ポップアップを解決",
     "refresh": "再検出",
-    "checking": "現在の仮想化状態を確認中...",
     "checkFailed": "仮想化状態の確認に失敗しました",
     "currentStatus": "現在の仮想化状態",
     "memoryIntegrity": "メモリ整合性（コア分離）",
@@ -1309,13 +1356,13 @@
     "notAdmin": "管理者権限なし",
     "adminHint": "管理者権限でない場合、UAC確認ウィンドウが表示されます。[許可]をクリックしてください",
     "fullyFixed": "仮想化関連の設定はすべて無効化されており、修復状態です。",
-    "fullyRestored": "仮想化関連の設定はすべて復元されており、デフォルト状態です。"
+    "fullyRestored": "仮想化関連の設定はすべて復元されており、デフォルト状態です。",
+    "checking": "現在の仮想化状態を確認中..."
   },
   "hiddenFeatures": {
     "title": "Windows 隠し機能",
     "subtitle": "Windows の A/B 実験機能フラグの確認と切り替え（ViVe ベース）",
     "refresh": "更新",
-    "loading": "機能構成を読み込み中...",
     "loadFailed": "読み込みに失敗しました",
     "warningTitle": "リスクの警告",
     "warningBody": "これらのスイッチは Microsoft の A/B 実験に使用されます。隠し機能の有効化/無効化はシステムを不安定にする可能性があります。異常が発生した場合は、該当機能をリセットして既定に戻してください。Boot ストアの変更は再起動後に有効になります。",
@@ -1362,7 +1409,8 @@
     "loadMore": "さらに読み込む",
     "namedOnly": "名称付き機能のみ表示",
     "namedOnlyHint": "名称のないエントリは Windows 内部の servicing 構成で、辞書に登録されておらず、通常は変更不要です。オフにするとすべて表示されます",
-    "numbersExplain": "名称付きのエントリはコミュニティの機能辞書由来です。数字のみで表示される機能には公開名称がなく、Microsoft はその意味を公開していません。上のスイッチで全表示に切り替えるか、名称で 17,000 以上の既知機能を検索できます。"
+    "numbersExplain": "名称付きのエントリはコミュニティの機能辞書由来です。数字のみで表示される機能には公開名称がなく、Microsoft はその意味を公開していません。上のスイッチで全表示に切り替えるか、名称で 17,000 以上の既知機能を検索できます。",
+    "loading": "機能構成を読み込み中..."
   },
   "gameProcessOptimize": {
     "title": "ゲームプロセス最適化",
@@ -1427,7 +1475,6 @@
   },
   "gpuRename": {
     "title": "GPU名前変更",
-    "loading": "読み込み中...",
     "loadError": "読み込みに失敗しました",
     "currentGpu": "現在のGPU",
     "integrated": "内蔵GPU",
@@ -1451,7 +1498,8 @@
     "success": "成功",
     "restored": "復元されました",
     "error": "エラー",
-    "note": "⚠️ 重要な注意事項：\n1. レジストリを変更するには管理者権限が必要です\n2. 変更後はゲームまたはコンピュータを再起動する必要があります\n3. この機能はWindowsシステムとNVIDIAグラフィックカードのみをサポートしています\n4. 変更を適用できない場合は、管理者としてアプリケーションを実行してみてください"
+    "note": "⚠️ 重要な注意事項：\n1. レジストリを変更するには管理者権限が必要です\n2. 変更後はゲームまたはコンピュータを再起動する必要があります\n3. この機能はWindowsシステムとNVIDIAグラフィックカードのみをサポートしています\n4. 変更を適用できない場合は、管理者としてアプリケーションを実行してみてください",
+    "loading": "読み込み中..."
   },
   "resolutionConverter": {
     "title": "解像度変換",
@@ -1483,7 +1531,6 @@
   "systemOptimizer": {
     "pageTitle": "システム最適化",
     "pageDesc": "システム最適化をワンクリックで切り替え、パフォーマンスとプライバシーを向上",
-    "loading": "読み込み中...",
     "scanStatus": "状態をスキャン",
     "scanning": "スキャン中...",
     "scanComplete": "スキャン完了",
@@ -1780,7 +1827,8 @@
     "optimized": "最適化済み",
     "reverted": "復元済み",
     "optimizing": "実行中...",
-    "operationError": "操作に失敗しました"
+    "operationError": "操作に失敗しました",
+    "loading": "読み込み中..."
   },
   "shaderCache": {
     "title": "シェーダーキャッシュクリーンアップ",
@@ -1825,9 +1873,6 @@
     "navigation": "ナビゲーション",
     "about": "について",
     "advanced": {
-      "popnull": {
-        "title": "NexBoxPopNull ポップアップブロッカー"
-      }
     },
     "generalSettings": {
       "title": "一般設定",
@@ -1910,12 +1955,7 @@
       "sidebarShowLabelNoText": "アイコンのみ",
       "sidebarShowLabelWithText": "アイコン＆テキスト",
       "navButtonVisibility": "ナビボタン表示",
-      "navButtonVisibilityDesc": "各ナビゲーションボタンの表示/非表示を切り替えます。設定は常に表示されます。",
-      "pageTransitionLabel": "ページ遷移アニメーション",
-      "pageTransitionDesc": "無効にするとページ遷移アニメーションがオフになります",
-      "pageTransitionSlide": "スライド",
-      "pageTransitionFade": "フェード",
-      "pageTransitionOff": "オフ"
+      "navButtonVisibilityDesc": "各ナビゲーションボタンの表示/非表示を切り替えます。設定は常に表示されます。"
     },
     "appearanceSettings": {
       "title": "外観設定",
@@ -1999,8 +2039,7 @@
         "title": "スポンサー一覧",
         "loading": "読み込み中...",
         "error": "読み込み失敗",
-        "empty": "スポンサーはいません",
-        "totalAmount": "累計スポンサー総額："
+        "empty": "スポンサーはいません"
       }
     },
     "aboutSettings": {
@@ -2016,6 +2055,10 @@
       "acknowledgments": "謝辞",
       "sjmcLauncher": "SJMC Launcher",
       "sjmcLauncherDesc": "上海交通大学Minecraftクラブのオープンソースプロジェクトに感謝します",
+      "specialThanks": {
+        "title": "スペシャルサンクス"
+      },
+      "qqGroupSubtitle": "最新情報と効率的な問題解決のために参加",
       "changelog": "変更履歴",
       "changelogTitle": "現在のバージョンの更新内容",
       "noChangelog": "変更履歴はありません",
@@ -2063,13 +2106,13 @@
   },
   "epic": {
     "title": "Epic 無料ゲーム",
-    "loading": "無料ゲームを読み込み中...",
     "errorFetch": "データの取得に失敗しました",
     "errorNetwork": "ネットワークリクエストに失敗しました。接続を確認してください",
     "deadline": "{{date}} まで",
     "claimNow": "今すぐ入手",
     "noGames": "現在無料ゲームはありません。後でもう一度確認してください",
-    "reload": "再読み込み"
+    "reload": "再読み込み",
+    "loading": "無料ゲームを読み込み中..."
   },
   "search": {
     "placeholder": "機能を検索...",
@@ -2216,7 +2259,6 @@
   },
   "audioEq": {
     "title": "EQチューニング",
-    "loading": "読み込み中...",
     "virtualSoundCard": "仮想サウンドカード",
     "virtualSoundCardDesc": "FxSound 仮想オーディオドライバーをインストールしてシステムレベルの EQ を有効化",
     "installed": "インストール済み",
@@ -2251,7 +2293,8 @@
     "step1": "「ドライバーをインストール」をクリックして FxSound 仮想オーディオドライバーをインストールします（管理者権限が必要）",
     "step2": "インストール後、「エンジン起動」をクリックして EQ オーディオ処理エンジンを起動します",
     "step3": "プリセットを選択するか、バンドスライダーをドラッグして EQ パラメーターを調整します。周波数応答曲線がリアルタイムで更新されます。",
-    "step4": "完了したら、「エンジン停止」をクリックしてオーディオ処理を停止します。ドライバーはいつでもアンインストールできます。"
+    "step4": "完了したら、「エンジン停止」をクリックしてオーディオ処理を停止します。ドライバーはいつでもアンインストールできます。",
+    "loading": "読み込み中..."
   },
   "storageClean": {
     "title": "ストレージクリーンアップ",
@@ -2262,7 +2305,6 @@
     "selectAll": "すべて選択",
     "deselectAll": "すべて解除",
     "emptyRecycleBin": "ごみ箱を空にする",
-    "scanning": "スキャン中...",
     "cleanButton": "クリーンアップ開始",
     "cleaning": "クリーンアップ中...",
     "scanButton": "再スキャン",
@@ -2283,7 +2325,6 @@
     "risk4": "高リスク",
     "risk5": "危険",
     "junkFileTotal": "不要ファイル数",
-    "junkScanning": "不要ファイルをスキャン中...",
     "junkCleanButton": "選択項目を削除",
     "junkCleaning": "削除中...",
     "junkNoSelection": "削除するカテゴリを選択してください",
@@ -2389,7 +2430,9 @@
       "description": "ストレージクリーンアップでシステムの一時ファイルとキャッシュを安全に削除し、ディスク容量を解放できます。",
       "note1": "• 管理者権限が必要な項目はクリーンアップ時に自動的に権限を要求します",
       "note2": "• 使用中のファイルは自動的にスキップされ、システムに影響しません"
-    }
+    },
+    "scanning": "スキャン中...",
+    "junkScanning": "不要ファイルをスキャン中..."
   },
   "downloadAccel": {
     "urlLabel": "ダウンロードURL",
@@ -2426,7 +2469,6 @@
   "nvidiaRecording": {
     "title": "NVIDIA録画管理",
     "scan": "再スキャン",
-    "scanning": "録画をスキャン中...",
     "scanError": "スキャンに失敗しました",
     "addFolder": "フォルダを追加",
     "addFolderError": "フォルダの追加に失敗しました",
@@ -2469,7 +2511,8 @@
     "copyError": "コピーに失敗しました",
     "deleteSuccessMulti": "{{n}} 件の動画を削除しました",
     "deleteBodyMulti": "元に戻せません。選択した {{n}} 件の動画を完全に削除しますか？",
-    "andMore": "他 {{n}} 件"
+    "andMore": "他 {{n}} 件",
+    "scanning": "録画をスキャン中..."
   },
   "filterDisabledDegraded": "フィルター無効化（劣化クリア：元の色調整は復元されない可能性があります）"
 }

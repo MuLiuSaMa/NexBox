@@ -851,7 +851,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const dynamicEnabled = useMusicStore((s) => s.dynamicEnabled);
   const coverFilmEffect = useMusicStore((s) => s.coverFilmEffect);
   const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
-
+  const queuePanelOpen = useMusicStore((s) => s.queuePanelOpen);
   const [isClosing, setIsClosing] = useState(false);
   // 关闭动画定时器，防止组件卸载后定时器仍触发
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2022,7 +2022,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 }}
               />
             </Tooltip>
-            <Tooltip label="播放队列">
+            <Tooltip label="播放队列" isDisabled={queuePanelOpen}>
               <IconButton
                 aria-label="Queue"
                 icon={<ListMusic size={20} />}
@@ -2198,6 +2198,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
+  const queuePanelOpen = useMusicStore((s) => s.queuePanelOpen);
   const [dlSettingsOpen, setDlSettingsOpen] = useState(false);
 
   const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
@@ -2426,13 +2427,24 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
             </Tooltip>
           </HStack>
 
-          <Tooltip label="播放队列">
+          <Tooltip label="播放队列" isDisabled={queuePanelOpen}>
             <IconButton
               aria-label="Queue"
               icon={<ListMusic size={18} />}
               size="sm"
               variant="ghost"
               onClick={() => useMusicStore.getState().setQueuePanelOpen(true)}
+            />
+          </Tooltip>
+
+          <Tooltip label="关闭播放">
+            <IconButton
+              aria-label="Close playback"
+              icon={<X size={18} />}
+              size="sm"
+              variant="ghost"
+              sx={{ color: subTextColor, _hover: { bg: hoverBg, color: textColor } }}
+              onClick={() => useMusicStore.getState().closePlayback()}
             />
           </Tooltip>
         </HStack>
@@ -3027,7 +3039,7 @@ function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvi
 
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  // 模糊立即生效：页面切换动画期间的 backdrop-filter 关闭由 .page-animating 类统一处理
+  // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const glassTransition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
   // 未开启液态玻璃：不透明背景（hover 用不透明色，不透明不透视）
@@ -3828,6 +3840,18 @@ export default function MusicPage() {
     setExpandedPlayer(false);
   }, []);
 
+  // 关闭播放（底部播放条 × 按钮）后清空歌曲：同步收起展开播放器与 MV 播放器，避免残留空壳
+  useEffect(() => {
+    if (!currentSong) {
+      if (expandedPlayer) setExpandedPlayer(false);
+      if (playingMv) {
+        setPlayingMv(null);
+        setMvUrl("");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong]);
+
   // 灵动岛「打开播放器」按钮：携带 expandPlayer 标记跳转到此页，自动展开全屏播放器
   const location = useLocation();
   useEffect(() => {
@@ -4100,7 +4124,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   }, []);
 
   // ── 渲染歌曲行 ──
-  const renderSongRow = useCallback((song: Song, index: number) => (
+  // queue 可选：传入时点击该行会把整个列表作为播放队列（整体进队，而不是只播单曲）；
+  // 不传则走默认单曲播放（onPlay）
+  const renderSongRow = useCallback((song: Song, index: number, queue?: Song[]) => (
     <SongRow
       key={`${song.provider}-${song.id}-${index}`}
       song={song}
@@ -4117,7 +4143,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
       textColor={textColor}
       subTextColor={subTextColor}
       liquidGlassEnabled={liquidGlassEnabled}
-      onPlay={onPlay}
+      onPlay={queue ? (s) => { void useMusicStore.getState().playSong(s, queue); } : onPlay}
       onAddToQueue={onAddToQueue}
       onTogglePlay={onTogglePlay}
       onToggleLike={onToggleLike}
@@ -4126,17 +4152,14 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   ), [currentSong, isPlaying, likedSongIds, loginInfo, proxyPort, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, onPlay, onAddToQueue, onTogglePlay, onToggleLike, handleArtistClick]);
 
   // VirtualList renderItem 回调（useCallback 稳定引用，避免 VirtualList memo 失效）
+  // 点某一首时把整张列表作为播放队列
   const renderArtistSongItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
+    (song: Song, i: number) => renderSongRow(song, i, artistSongs),
+    [renderSongRow, artistSongs]
   );
   const renderAlbumSongItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
-  );
-  const renderLeftTrackItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
+    (song: Song, i: number) => renderSongRow(song, i, albumDetailSongs),
+    [renderSongRow, albumDetailSongs]
   );
 
   // 左侧「我的歌单」曲目：歌单内搜索。输入关键词时先把歌单全部曲目拉齐，再按歌名/歌手筛选（忽略大小写）
@@ -4162,18 +4185,23 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   }, [storeActions]);
 
   const renderFilteredLeftTrackItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
+    (song: Song, i: number) => renderSongRow(song, i, displayedLeftTracks),
+    [renderSongRow, displayedLeftTracks]
   );
 
   const searchingPlaylist = playlistKeyword.trim() !== "";
+  // 左侧歌单点击单曲：把当前歌单（含筛选结果）整体作为播放队列
+  const renderLeftTrackItem = useCallback(
+    (song: Song, i: number) => renderSongRow(song, i, displayedLeftTracks),
+    [renderSongRow, displayedLeftTracks]
+  );
   const renderRightTrackItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
+    (song: Song, i: number) => renderSongRow(song, i, rightPlaylistTracks),
+    [renderSongRow, rightPlaylistTracks]
   );
   const renderDailyTrackItem = useCallback(
-    (song: Song, i: number) => renderSongRow(song, i),
-    [renderSongRow]
+    (song: Song, i: number) => renderSongRow(song, i, recommendSongs),
+    [renderSongRow, recommendSongs]
   );
 
   // 本地导入歌曲行渲染
@@ -4963,7 +4991,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
             ) : searchExpandedTracks.length > 0 ? (
               <Box flex={1} overflowY="scroll" sx={memoScrollbarSx}>
                 <VStack spacing={1} align="stretch">
-                  {searchExpandedTracks.map((song, i) => renderSongRow(song, i))}
+                  {searchExpandedTracks.map((song, i) => renderSongRow(song, i, searchExpandedTracks))}
                 </VStack>
               </Box>
             ) : (

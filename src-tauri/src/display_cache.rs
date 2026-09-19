@@ -16,9 +16,27 @@ const CACHE_TTL: Duration = Duration::from_secs(60);
 
 struct EdidCache {
     fetched_at: Option<Instant>,
-    /// (PNP ID, 显示器型号名称) 列表。PNP ID 用于按设备 ID 精确匹配，
+    /// (PNP ID, 完整 EDID 信息) 列表。PNP ID 用于按设备 ID 精确匹配，
     /// 避免不同 API 的枚举顺序不一致导致型号张冠李戴。
-    entries: Vec<(String, String)>,
+    entries: Vec<(String, EdidMonitorInfo)>,
+}
+
+/// 注册表 EDID 解析出的完整显示器信息。
+///
+/// 与 WMI WmiMonitorID / WmiMonitorBasicDisplayParams 同源（都来自 EDID），
+/// 但无需 COM/WMI，纯注册表读取，速度更快且不受 WMI 服务异常影响。
+#[derive(Debug, Clone, Default)]
+pub struct EdidMonitorInfo {
+    /// EDID 名称描述符（Tag 0xFC），如 "Mi Monitor"、"U24PF14"
+    pub name: String,
+    /// EDID 厂商码（bytes 8-9 解出，如 "XMI"、"SKY"）
+    pub manufacturer_code: String,
+    /// 序列号文本（描述符 0xFF 或数值序列号的十进制形式，与 WmiMonitorID 一致）
+    pub serial: String,
+    /// 最大水平图像尺寸（厘米），对应 WmiMonitorBasicDisplayParams.MaxHorizontalImageSize
+    pub max_h_cm: u32,
+    /// 最大垂直图像尺寸（厘米），对应 WmiMonitorBasicDisplayParams.MaxVerticalImageSize
+    pub max_v_cm: u32,
 }
 
 static EDID_CACHE: Mutex<EdidCache> = Mutex::new(EdidCache {
@@ -26,14 +44,17 @@ static EDID_CACHE: Mutex<EdidCache> = Mutex::new(EdidCache {
     entries: Vec::new(),
 });
 
-/// 从原始 (PNP ID, 名称) 条目构建型号名称列表（按名称去重，保留首次出现），
+/// 从原始 (PNP ID, EDID 信息) 条目构建型号名称列表（按名称去重，保留首次出现），
 /// 与历史 `get_edid_monitor_names` 行为一致。
-fn build_names(entries: &[(String, String)]) -> Vec<String> {
+fn build_names(entries: &[(String, EdidMonitorInfo)]) -> Vec<String> {
     let mut seen = std::collections::HashSet::new();
     let mut names = Vec::new();
-    for (_, name) in entries {
-        if seen.insert(name.clone()) {
-            names.push(name.clone());
+    for (_, info) in entries {
+        if info.name.is_empty() {
+            continue;
+        }
+        if seen.insert(info.name.clone()) {
+            names.push(info.name.clone());
         }
     }
     names
@@ -70,6 +91,33 @@ pub fn get_edid_monitor_names() -> Vec<String> {
 /// 用于按显示器的 PNP 设备 ID 精确匹配型号，避免 WMI 顺序与注册表 EDID
 /// 顺序不一致时把 A 显示器的型号错配到 B 显示器（型号颠倒）的问题。
 pub fn get_edid_monitor_names_by_pnpid() -> HashMap<String, String> {
+    {
+        let lock = EDID_CACHE.lock().unwrap();
+        if let Some(t) = lock.fetched_at {
+            if t.elapsed() < CACHE_TTL {
+                return lock
+                    .entries
+                    .iter()
+                    .filter(|(_, info)| !info.name.is_empty())
+                    .map(|(pnp, info)| (pnp.clone(), info.name.clone()))
+                    .collect();
+            }
+        }
+    }
+    // 触发一次查询（同时填充缓存）
+    get_edid_monitor_names();
+    let lock = EDID_CACHE.lock().unwrap();
+    lock.entries
+        .iter()
+        .filter(|(_, info)| !info.name.is_empty())
+        .map(|(pnp, info)| (pnp.clone(), info.name.clone()))
+        .collect()
+}
+
+/// 获取 PNP ID -> 完整 EDID 显示器信息 的映射（带 TTL 缓存）。
+///
+/// 供硬件信息页等使用：包含名称、厂商码、序列号、物理尺寸。
+pub fn get_edid_monitor_infos_by_pnpid() -> HashMap<String, EdidMonitorInfo> {
     {
         let lock = EDID_CACHE.lock().unwrap();
         if let Some(t) = lock.fetched_at {
@@ -139,12 +187,12 @@ pub fn invalidate() {
     lock.entries.clear();
 }
 
-/// 通过注册表枚举所有显示器的 EDID，解析出 Monitor Name。
+/// 通过注册表枚举所有显示器的 EDID，解析出完整信息（名称/厂商码/序列号/尺寸）。
 ///
-/// 返回 (PNP ID, 显示器型号名称) 列表。
+/// 返回 (PNP ID, EDID 信息) 列表。
 /// 路径: HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\<PNPID>\<InstanceID>\Device Parameters\EDID
 #[cfg(target_os = "windows")]
-fn query_edid_via_registry() -> Vec<(String, String)> {
+fn query_edid_via_registry() -> Vec<(String, EdidMonitorInfo)> {
     use winreg::enums::*;
     use winreg::RegKey;
 
@@ -193,8 +241,8 @@ fn query_edid_via_registry() -> Vec<(String, String)> {
                 Err(_) => continue,
             };
 
-            if let Some(name) = parse_edid_monitor_name(&edid_bytes) {
-                entries.push((pnp_id.clone(), name));
+            if let Some(info) = parse_edid_monitor_info(&edid_bytes) {
+                entries.push((pnp_id.clone(), info));
             }
         }
     }
@@ -204,17 +252,18 @@ fn query_edid_via_registry() -> Vec<(String, String)> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn query_edid_via_registry() -> Vec<(String, String)> {
+fn query_edid_via_registry() -> Vec<(String, EdidMonitorInfo)> {
     Vec::new()
 }
 
-/// 从 EDID 原始二进制数据中解析 Monitor Name。
+/// 从 EDID 原始二进制数据中解析完整显示器信息。
 ///
-/// EDID 128 字节块中包含 4 个描述符块（每个 18 字节），
-/// 起始偏移分别为 0x36, 0x48, 0x5A, 0x6C。
-/// 描述符 Tag 0xFC 表示 Monitor Name。
-/// 名称最多 13 个 ASCII 字符，以换行符 (0x0A) 或空格填充结尾。
-fn parse_edid_monitor_name(edid: &[u8]) -> Option<String> {
+/// EDID 128 字节块布局：
+/// - bytes 8-9：厂商码（5+6+5 位大端打包，如 0x0AF3 → "SKY"）
+/// - bytes 12-15：数值序列号（小端 u32）
+/// - bytes 21/22：最大水平/垂直图像尺寸（厘米），对应 WmiMonitorBasicDisplayParams
+/// - 4 个描述符块（0x36 起，每个 18 字节）：Tag 0xFC = Monitor Name，0xFF = Serial Number
+fn parse_edid_monitor_info(edid: &[u8]) -> Option<EdidMonitorInfo> {
     if edid.len() < 128 {
         return None;
     }
@@ -227,46 +276,66 @@ fn parse_edid_monitor_name(edid: &[u8]) -> Option<String> {
         return None;
     }
 
-    // 4 个描述符块，每个 18 字节
+    let mut info = EdidMonitorInfo::default();
+
+    // 厂商码：bytes 8-9 大端 16 位，3 个 5 位字母（1-26 → 'A'-'Z'）
+    let word = ((edid[8] as u16) << 8) | edid[9] as u16;
+    let mfr_code: String = [(word >> 10) & 0x1F, (word >> 5) & 0x1F, word & 0x1F]
+        .iter()
+        .filter_map(|&v| {
+            if (1..=26).contains(&v) {
+                Some(char::from(b'A' + (v - 1) as u8))
+            } else {
+                None
+            }
+        })
+        .collect();
+    info.manufacturer_code = mfr_code;
+
+    // 数值序列号（小端 u32），WmiMonitorID.SerialNumberID 的十进制形式即来源于此
+    let numeric_serial = u32::from_le_bytes([edid[12], edid[13], edid[14], edid[15]]);
+
+    // 4 个描述符块，每个 18 字节：[0..2]=0x0000 标志, [3]=tag, [5..18]=文本
     for block_idx in 0..4 {
         let offset = 0x36 + block_idx * 18;
         if offset + 18 > edid.len() {
             break;
         }
-
-        // 描述符前 2 个字节通常为 0x00, 0x00
-        // 第 3 字节是 Tag
-        let tag = edid[offset + 3];
-
-        // Tag 0xFC = Monitor Name
-        if tag != 0xFC {
+        if edid[offset] != 0x00 || edid[offset + 1] != 0x00 {
             continue;
         }
-
-        // 第 5 字节开始是名称数据（最多 13 字节）
-        let name_start = offset + 5;
-        let name_end = (name_start + 13).min(edid.len());
-
-        let name_bytes = &edid[name_start..name_end];
-
-        // 提取名称：遇到 0x0A（换行符）或 0x20（空格填充）截断
-        let name: String = name_bytes
+        let tag = edid[offset + 3];
+        let text: String = edid[offset + 5..offset + 18]
             .iter()
             .take_while(|&&b| b != 0x0A && b != 0x00)
             .map(|&b| b as char)
             .collect();
-
-        let trimmed = name.trim().to_string();
-        if !trimmed.is_empty() {
-            log::info!(
-                "display_cache: EDID 解析到 Monitor Name: '{}' (block={})",
-                trimmed, block_idx
-            );
-            return Some(trimmed);
+        let text = text.trim().to_string();
+        match tag {
+            0xFC if info.name.is_empty() => {
+                if !text.is_empty() {
+                    log::info!(
+                        "display_cache: EDID 解析到 Monitor Name: '{}' (block={})",
+                        text, block_idx
+                    );
+                }
+                info.name = text;
+            }
+            0xFF if info.serial.is_empty() => info.serial = text,
+            _ => {}
         }
     }
 
-    None
+    // 无文本序列号描述符时，用数值序列号的十进制形式（与 WmiMonitorID 输出一致）
+    if info.serial.is_empty() && numeric_serial != 0 {
+        info.serial = numeric_serial.to_string();
+    }
+
+    // 物理尺寸（厘米）
+    info.max_h_cm = edid[21] as u32;
+    info.max_v_cm = edid[22] as u32;
+
+    Some(info)
 }
 
 #[cfg(test)]
@@ -279,6 +348,15 @@ mod tests {
         let mut edid = vec![0u8; 128];
         // EDID 头
         edid[0..8].copy_from_slice(&[0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00]);
+        // 厂商码：SKY → S=19, K=11, Y=25
+        let word: u16 = ((19 - 1) << 10) | ((11 - 1) << 5) | (25 - 1);
+        edid[8] = (word >> 8) as u8;
+        edid[9] = (word & 0xFF) as u8;
+        // 数值序列号 16843009 = 0x01010101
+        edid[12..16].copy_from_slice(&16843009u32.to_le_bytes());
+        // 物理尺寸 53 x 30 cm
+        edid[21] = 53;
+        edid[22] = 30;
         // 第一个描述符块 (offset 0x36): Monitor Name (tag 0xFC)
         // 18 字节描述符布局: [0..2]=0x0000 标志, [2]=保留, [3]=tag, [4]=保留,
         // [5..18]=13 字节名称。名称必须从 offset+5 开始，写进 [3] 会覆盖 tag。
@@ -287,8 +365,12 @@ mod tests {
         let name_len = name_bytes.len().min(13);
         edid[0x36 + 5..0x36 + 5 + name_len].copy_from_slice(&name_bytes[..name_len]);
 
-        let result = parse_edid_monitor_name(&edid);
-        assert_eq!(result, Some("DELL S2721QS".to_string()));
+        let result = parse_edid_monitor_info(&edid).expect("应解析成功");
+        assert_eq!(result.name, "DELL S2721QS");
+        assert_eq!(result.manufacturer_code, "SKY");
+        assert_eq!(result.serial, "16843009");
+        assert_eq!(result.max_h_cm, 53);
+        assert_eq!(result.max_v_cm, 30);
     }
 
     #[test]
@@ -301,7 +383,7 @@ mod tests {
         edid[0x5A + 3] = 0xFC; // Monitor name but empty
         edid[0x6C + 3] = 0x10;
 
-        let result = parse_edid_monitor_name(&edid);
-        assert_eq!(result, None);
+        let result = parse_edid_monitor_info(&edid).expect("头合法应返回 Some");
+        assert_eq!(result.name, "");
     }
 }

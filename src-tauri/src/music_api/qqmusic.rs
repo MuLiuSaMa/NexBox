@@ -1237,6 +1237,7 @@ pub async fn song_url(mid: &str, media_mid: &str, quality: &str, cookie: &str) -
         reason: Some("QQ_URL_UNAVAILABLE".into()),
         message: Some(restriction_msg.into()),
         fee: None,
+        ..Default::default()
     })
 }
 

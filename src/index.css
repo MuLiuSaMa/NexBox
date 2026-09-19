@@ -89,17 +89,6 @@ body {
   backface-visibility: hidden;
 }
 
-/* 页面切换动画期间（framer-motion 会把页面提升为独立合成层），
-   层内 backdrop-filter 无法采样层外真实背景，会导致液态玻璃（含边缘折射条）
-   先透明、动画结束瞬间突变模糊/闪烁。
-   动画期间统一关闭所有 backdrop-filter，动画结束、合成层合并后
-   再配合各组件的 backdrop-filter transition 平滑浮现。 */
-.page-animating,
-.page-animating * {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
 .chakra-ui-backdrop {
   transform: translateZ(0);
   backface-visibility: hidden;

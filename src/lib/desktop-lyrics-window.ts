@@ -105,27 +105,36 @@ export async function centerLyricsWindow() {
   }
 }
 
-/** 显示解锁按钮独立窗口，定位到歌词窗口顶部中央 */
-export async function showUnlockBtn() {
+/** 启用 Rust 端解锁点击钩子(锁定进入时调用,幂等) */
+export async function enableUnlockHook() {
   try {
-    await invoke("show_lyrics_unlock_btn");
+    await invoke("enable_lyrics_unlock_hook");
   } catch (e) {
-    console.error("[DesktopLyrics] showUnlockBtn failed:", e);
+    console.error("[DesktopLyrics] enableUnlockHook failed:", e);
   }
 }
 
-/** 隐藏解锁按钮独立窗口 */
-export async function hideUnlockBtn() {
+/** 停用 Rust 端解锁点击钩子(解锁/关闭时调用,幂等) */
+export async function disableUnlockHook() {
   try {
-    await invoke("hide_lyrics_unlock_btn");
+    await invoke("disable_lyrics_unlock_hook");
   } catch (e) {
-    console.error("[DesktopLyrics] hideUnlockBtn failed:", e);
+    console.error("[DesktopLyrics] disableUnlockHook failed:", e);
+  }
+}
+
+/** 激活/停用钩子拦截:仅当内嵌解锁按钮可见时置 true,钩子才拦截点击 */
+export async function setUnlockHookArmed(armed: boolean) {
+  try {
+    await invoke("set_lyrics_unlock_hook_armed", { armed });
+  } catch (e) {
+    console.error("[DesktopLyrics] setUnlockHookArmed failed:", e);
   }
 }
 
 /**
- * 监听解锁按钮窗口发出的解锁事件（由 Rust unlock_lyrics 命令发射）
- * 在 DesktopLyricsPage 中调用，收到事件后执行解锁
+ * 监听解锁事件(由 Rust 端鼠标钩子命中解锁区域时发射)
+ * 在 DesktopLyricsPage 中调用,收到事件后执行解锁
  */
 export async function onUnlockBtnClicked(callback: () => void) {
   const { listen } = await import("@tauri-apps/api/event");
