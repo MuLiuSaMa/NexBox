@@ -3310,17 +3310,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mslnk"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86c97310150b7f496a93f31690da7822b99d95ff68ca9d30fb09d3ad54375c76"
-dependencies = [
- "bitflags 1.3.2",
- "byteorder",
- "log",
-]
-
-[[package]]
 name = "muda"
 version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3390,7 +3379,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nexbox"
-version = "9.7.3"
+version = "9.9.3"
 dependencies = [
  "aes",
  "async-stream",
@@ -3417,7 +3406,6 @@ dependencies = [
  "lofty",
  "log",
  "md-5",
- "mslnk",
  "num-bigint",
  "num-traits",
  "nvml-wrapper",

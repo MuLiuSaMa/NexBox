@@ -3,6 +3,7 @@
     "appName": "NexBox",
     "appFullName": "新境盒",
     "description": "跨平台性能監控（Tauri + Next.js + 傳感器服務）",
+    "close": "關閉",
     "success": "操作成功"
   },
   "view": {
@@ -58,7 +59,8 @@
     "downloadAccelerator": "下載器",
     "nvidiaRecording": "N卡錄製管理",
     "appManager": "應用程式管理",
-    "timeSync": "時間校正"
+    "timeSync": "時間校正",
+    "bsodLog": "藍螢幕日誌"
   },
   "customPage": {
     "title": "自訂頁面",
@@ -994,6 +996,15 @@
     "recorderNotStarted": "記錄器未啟動，請稍後重試"
   },
   "overlayPanel": {
+    "remoteMonitor": {
+      "title": "手機遠端監控",
+      "description": "開啟後可用手機瀏覽器在同一 WiFi 下即時檢視硬體監控資料",
+      "scanHint": "手機掃碼或輸入以下網址",
+      "copy": "複製網址",
+      "pin": "存取碼",
+      "firewallHint": "手機無法連線？請在 Windows 防火牆中放行新境盒，或暫時關閉防火牆測試",
+      "noIp": "未偵測到區域網路 IP，請確認電腦已連線 WiFi / 網路線"
+    },
     "title": "懸浮框",
     "enableOverlay": "啟用懸浮框",
     "statusEnabled": "已啟用",
@@ -1241,7 +1252,8 @@
     "downloadAcceleratorDesc": "多執行緒動態分段下載，充分跑滿頻寬",
     "nvidiaRecordingDesc": "自動掃描 N卡錄製影片，按時間管理、預覽與清理",
     "appManagerDesc": "檢視並移除本機已安裝的應用程式",
-    "timeSyncDesc": "校正系統時間，偵測時間伺服器延遲與偏差"
+    "timeSyncDesc": "校正系統時間，偵測時間伺服器延遲與偏差",
+    "bsodLogDesc": "分析藍螢幕當機事件與轉儲檔案，定位問題驅動程式與硬體"
   },
   "timeSync": {
     "title": "時間校正",
@@ -1596,11 +1608,15 @@
     },
     "aboutSettings": {
       "title": "關於",
+      "repo": "開源倉庫",
+      "repoSubtitle": "檢視原始碼",
       "version": "版本",
       "author": "作者",
       "newVersion": "發現新版本",
       "check": "檢查",
       "noUpdate": "已是最新版本",
+      "storeVersion": "由微軟商店更新",
+      "storeVersionDesc": "新版本透過 Microsoft Store 自動推送",
       "checkFailed": "檢查更新失敗",
       "downloadFailed": "下載失敗",
       "installFailed": "安裝失敗",

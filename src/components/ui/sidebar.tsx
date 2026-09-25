@@ -7,12 +7,30 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
 import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import { store } from "@/lib/store";
-import deltaForceIconLight from "@/assets/deltaforce-light.png";
-import deltaForceIconDark from "@/assets/deltaforce-dark.png";
-import epicGamesIcon from "@/assets/epic-games.png";
-import steamIconLight from "@/assets/tools/Steam-light.png";
-import steamIconDark from "@/assets/tools/Steam-dark.png";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
+import deltaForceIconLight from "@/assets/deltaforce-light.webp";
+import deltaForceIconDark from "@/assets/deltaforce-dark.webp";
+import epicGamesIcon from "@/assets/epic-games.webp";
+import steamIconLight from "@/assets/tools/Steam-light.webp";
+import steamIconDark from "@/assets/tools/Steam-dark.webp";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
+
+const HIDEABLE_NAV_PATHS = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
+
+// 同步从 localStorage 预填充导航可见性：store 的读取是异步的，若首帧用空对象初始化，
+// 过滤条件 `navVisibility[path] !== false` 会把全部按钮（含默认隐藏的“自定义页面”）先渲染出来，
+// 异步加载完成后再隐藏被关掉的项，导致启动时闪一下。切换可见性时会同时写入 localStorage 与 store，
+// 二者保持一致，故这里以 localStorage 作为首帧种子即可消除闪烁（存储逻辑与下方 store 加载分支一致）。
+function readInitialNavVisibility(): Record<string, boolean> {
+  const initial: Record<string, boolean> = {};
+  for (const path of HIDEABLE_NAV_PATHS) {
+    const raw = localStorage.getItem(getNavStorageKey(path));
+    // /custom 默认隐藏（仅显式 "true" 才显示），其余默认显示（仅显式 "false" 才隐藏）
+    initial[path] = path === "/custom" ? raw === "true" : raw !== "false";
+  }
+  return initial;
+}
 
 interface NavItem {
   path: string;
@@ -252,16 +270,13 @@ export function Sidebar() {
 
   const isTop = navPosition === "top";
   
-  const hideableNavPaths = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
-  const getNavStorageKey = (path: string) => `nexbox_nav_visible_${path.replace(/\//g, "").replace(/-/g, "_")}`;
-
-  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
+  const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>(readInitialNavVisibility);
   const [navOrder, setNavOrder] = useState<string[] | null>(null);
 
   useEffect(() => {
     (async () => {
       const initial: Record<string, boolean> = {};
-      for (const path of hideableNavPaths) {
+      for (const path of HIDEABLE_NAV_PATHS) {
         const key = getNavStorageKey(path);
         let vis = await store.get<boolean>(key);
         if (vis === null || vis === undefined) {
@@ -379,7 +394,8 @@ export function Sidebar() {
   const navItems: NavItem[] = [
     { path: "/", icon: Home, ariaLabel: t("sidebar.home") },
     { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
-    { path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") },
+    // 商店版不显示工具箱入口（其全部栏目均为第三方软件获取入口，见 ToolsPage）
+    ...(IS_STORE_BUILD ? [] : [{ path: "/tools", icon: Wrench, ariaLabel: t("sidebar.tools") }]),
     { path: "/builtin-tools", icon: Package, ariaLabel: t("sidebar.builtinTools") },
     { path: "/optimization", icon: TrendingUp, ariaLabel: t("sidebar.optimization") },
     { path: "/music", icon: Music, ariaLabel: t("sidebar.music") },

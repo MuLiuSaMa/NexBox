@@ -46,6 +46,7 @@
   "btn_back": "Back",
   "btn_install": "Install",
   "btn_cancel": "Cancel",
+  "launch_now": "Launch Now",
 
   "error_admin": "Administrator privileges required",
   "error_space": "Insufficient disk space",

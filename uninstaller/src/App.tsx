@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { AnimatePresence } from "framer-motion";
 import TitleBar from "./components/TitleBar";
 import UninstallerLayout from "./components/UninstallerLayout";
 import ConfirmPage from "./pages/ConfirmPage";
@@ -26,24 +25,15 @@ export default function App() {
   return (
     <>
       <TitleBar />
-      <UninstallerLayout
-        showFooter={step === 1}
-        onPrimary={step === 1 ? handleStartUninstall : undefined}
-        primaryLabel={step === 1 ? "开始卸载" : undefined}
-      >
-        <AnimatePresence mode="wait">
-          {step === 1 && (
-            <ConfirmPage key="confirm" onStart={handleStartUninstall} />
-          )}
-          {step === 2 && (
-            <UninstallingPage
-              key="uninstall"
-              onComplete={handleUninstallComplete}
-              onError={handleUninstallError}
-            />
-          )}
-          {step === 3 && <CompletePage key="complete" />}
-        </AnimatePresence>
+      <UninstallerLayout>
+        {step === 1 && <ConfirmPage onStart={handleStartUninstall} />}
+        {step === 2 && (
+          <UninstallingPage
+            onComplete={handleUninstallComplete}
+            onError={handleUninstallError}
+          />
+        )}
+        {step === 3 && <CompletePage />}
       </UninstallerLayout>
     </>
   );

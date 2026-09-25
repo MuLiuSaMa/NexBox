@@ -57,6 +57,9 @@ fn referer_for(url: &str) -> &'static str {
         "https://www.kugou.com/"
     } else if url.contains("migu.cn") || url.contains("miguvideo.com") {
         "https://music.migu.cn/"
+    } else if url.contains("qishui.com") || url.contains("douyin.com") || url.contains("zjcdn") {
+        // 汽水（SEO 直链回退路径）：CDN 校验来源，与后端取地址时用同一个 Referer
+        "https://www.douyin.com/"
     } else {
         "https://music.163.com/"
     }

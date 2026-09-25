@@ -150,8 +150,8 @@ RyTuneX-main/
 # Third-party reference project (SteamTools source, not part of repo)
 SteamTools-develop/
 
-# Third-party reference project (downloaded tubatools source, not part of repo)
-tubatools-master/
+# Third-party reference project (downloaded tubatool source, not part of repo)
+tubatool-master/
 
 # Third-party reference project (downloaded Steam520 source, not part of repo)
 Steam520-main/
@@ -181,3 +181,15 @@ msix/*
 
 # NexBox 源码快照副本（下载参考用，不随主程序提交）
 NexBox-main/
+
+# 字节专有二进制（bdms.node / metasecml.dll）与汽水签名用 Node 运行时：
+# 禁止公开分发，仅本地打包进安装包，勿提交
+src-tauri/resources/qishui-auth/bdms.node
+src-tauri/resources/qishui-auth/metasecml.dll
+src-tauri/resources/qishui-auth/node.exe
+
+# 汽水专有二进制下载目录（bdms.node / metasecml.dll），禁止公开分发，勿提交
+汽水文件/
+
+# NexBox/doralite 源码快照副本（本地备份与交接文档，不随主程序提交）
+doralite_lite-main/

@@ -3,6 +3,7 @@
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "クロスプラットフォームパフォーマンスモニタリング (Tauri + Next.js + センサーサービス)",
+    "close": "閉じる",
     "success": "成功"
   },
   "view": {
@@ -59,7 +60,8 @@
     "downloadAccelerator": "ダウンロード",
     "nvidiaRecording": "NVIDIA録画管理",
     "appManager": "アプリ管理",
-    "timeSync": "時刻校正"
+    "timeSync": "時刻校正",
+    "bsodLog": "ブルスクリーンログ"
   },
   "customPage": {
     "title": "カスタムページ",
@@ -1055,6 +1057,17 @@
     "recorderNotStarted": "レコーダーが起動していません。後でもう一度お試しください"
   },
   "overlayPanel": {
+    "remoteMonitor": {
+      "title": "スマホ遠隔モニター",
+      "description": "有効にすると、同一Wi-Fi上のスマホブラウザでハードウェア情報をリアルタイム表示できます",
+      "scanHint": "スマホでスキャン、または下記のアドレスを入力",
+      "copy": "アドレスをコピー",
+      "pin": "アクセスコード",
+      "enable": "リモート監視を有効化",
+      "style": "スマホのレイアウト",
+      "firewallHint": "スマホで開けない場合、Windows ファイアウォールで NexBox を許可するか、一時的に無効化して確認してください",
+      "noIp": "LAN IP を検出できません。PC が WiFi / LAN ケーブルに接続されているか確認してください"
+    },
     "title": "オーバーレイパネル",
     "enableOverlay": "オーバーレイパネルを有効化",
     "statusEnabled": "有効化",
@@ -1303,7 +1316,8 @@
     "downloadAcceleratorDesc": "マルチスレッド分割ダウンロードで帯域を最大限に活用",
     "nvidiaRecordingDesc": "NVIDIA 録画を自動スキャンし、日付ごとに管理・プレビュー・削除",
     "appManagerDesc": "インストール済みアプリの表示とアンインストール",
-    "timeSyncDesc": "システム時刻を校正し、時刻サーバーの遅延と偏差を確認"
+    "timeSyncDesc": "システム時刻を校正し、時刻サーバーの遅延と偏差を確認",
+    "bsodLogDesc": "ブルスクリーンのクラッシュイベントとダンプを解析し、問題のドライバとハードウェアを特定"
   },
   "timeSync": {
     "title": "時刻校正",
@@ -2044,11 +2058,15 @@
     },
     "aboutSettings": {
       "title": "について",
+      "repo": "オープンソースリポジトリ",
+      "repoSubtitle": "ソースコード",
       "version": "バージョン",
       "author": "作者",
       "newVersion": "新しいバージョンが利用可能",
       "check": "チェック",
       "noUpdate": "最新です",
+      "storeVersion": "Microsoft Store で更新",
+      "storeVersionDesc": "新しいバージョンは Microsoft Store から配信されます",
       "checkFailed": "更新チェックに失敗しました",
       "downloadFailed": "ダウンロードに失敗しました",
       "installFailed": "インストールに失敗しました",
@@ -2334,6 +2352,8 @@
     "junkFiles": "{{count}} 個のファイル",
     "junkViewFiles": "ファイルを表示",
     "junkHideFiles": "閉じる",
+    "sortSizeDesc": "サイズ順・大→小",
+    "sortSizeAsc": "サイズ順・小→大",
     "junkEmpty": "削除可能な不要ファイルが見つかりません。「スキャン」をクリックして開始してください",
     "junkScanButton": "スキャン",
     "junkLoadMore": "さらに読み込む ({{count}})",

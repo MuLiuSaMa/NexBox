@@ -19,8 +19,10 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Spinner,
   useColorModeValue,
 } from "@chakra-ui/react";
+import { QRCodeSVG } from "qrcode.react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import {
   ExternalLink,
@@ -52,21 +54,21 @@ const PROVIDERS: ProviderOption[] = [
     name: "网易云音乐",
     desc: "海量曲库 · 歌单 · 云村社区",
     color: "#C20C0C",
-    logo: "/music-providers/wyy.png",
+    logo: "/music-providers/wyy.webp",
   },
   {
     id: "kugou",
     name: "酷狗音乐",
     desc: "千万曲库 · 高品质音效",
     color: "#00A0E9",
-    logo: "/music-providers/kugou.png",
+    logo: "/music-providers/kugou.webp",
   },
   {
     id: "qqmusic",
     name: "QQ 音乐",
     desc: "海量曲库 · Hi-Res · 精准推荐",
     color: "#FEC135",
-    logo: "/music-providers/qqmusic.png",
+    logo: "/music-providers/qqmusic.webp",
   },
   {
     id: "migu",
@@ -74,6 +76,13 @@ const PROVIDERS: ProviderOption[] = [
     desc: "华语曲库 · 臻品音质",
     color: "#FF69B4",
     logo: "/music-providers/migu.webp",
+  },
+  {
+    id: "qishui",
+    name: "汽水音乐",
+    desc: "字节曲库 · 视频热门 BGM",
+    color: "#22C55E",
+    logo: "/music-providers/qishui.webp",
   },
 ];
 
@@ -101,6 +110,43 @@ function ProviderLogo({ src, size = 40, rounded = "lg" }: { src: string; size?: 
   );
 }
 
+/** 会员徽章（各平台统一样式）：VIP 与 SVIP 同款金底，只有文字不同；非会员显示「普通用户」 */
+export function VipBadge({
+  isVip,
+  isSvip,
+  fallbackColor,
+}: {
+  isVip?: boolean;
+  isSvip?: boolean;
+  fallbackColor: string;
+}) {
+  if (!isSvip && !isVip) {
+    return (
+      <Text color={fallbackColor} fontSize="xs">
+        普通用户
+      </Text>
+    );
+  }
+  return (
+    <Box
+      as="span"
+      display="inline-flex"
+      alignItems="center"
+      gap={1}
+      px={1.5}
+      py={0.5}
+      borderRadius="sm"
+      fontSize="10px"
+      fontWeight="bold"
+      bg="linear-gradient(135deg, #f6d365 0%, #fda085 50%, #f6d365 100%)"
+      color="#5a3000"
+    >
+      <Crown size={10} strokeWidth={2.5} />
+      {isSvip ? "SVIP" : "VIP"}
+    </Box>
+  );
+}
+
 export function MusicLoginSection() {
   const {
     loginInfo,
@@ -110,6 +156,12 @@ export function MusicLoginSection() {
     logout,
     openLoginWindow,
     switchPlaybackSource,
+    qishuiQrOpen,
+    qishuiQrUrl,
+    qishuiQrLoading,
+    qishuiQrStatus,
+    openQishuiQr,
+    closeQishuiQr,
   } = useMusicStore(
     useShallow((s) => ({
       loginInfo: s.loginInfo,
@@ -119,6 +171,12 @@ export function MusicLoginSection() {
       logout: s.logout,
       openLoginWindow: s.openLoginWindow,
       switchPlaybackSource: s.switchPlaybackSource,
+      qishuiQrOpen: s.qishuiQrOpen,
+      qishuiQrUrl: s.qishuiQrUrl,
+      qishuiQrLoading: s.qishuiQrLoading,
+      qishuiQrStatus: s.qishuiQrStatus,
+      openQishuiQr: s.openQishuiQr,
+      closeQishuiQr: s.closeQishuiQr,
     }))
   );
   const { getActiveColor, getContrastTextColor } = useThemeColor();
@@ -234,6 +292,53 @@ export function MusicLoginSection() {
     </Modal>
   );
 
+  // 汽水音乐扫码弹窗（官方 Passport Web 扫码，需汽水音乐 / 抖音 App 扫码确认）
+  const qishuiQrModal = (
+    <Modal isOpen={qishuiQrOpen} onClose={() => closeQishuiQr()} isCentered>
+      <ModalOverlay />
+      <ModalContent bg={modalBg} border="1px solid" borderColor={modalBorder} maxW="360px" mx={4}>
+        <ModalHeader fontSize="md" pb={2}>
+          汽水音乐扫码登录
+        </ModalHeader>
+        <ModalCloseButton />
+        <ModalBody pb={5}>
+          <VStack spacing={3}>
+            <Text fontSize="xs" color={subTextColor}>
+              请用 <b>汽水音乐 App</b> 扫码并确认登录
+            </Text>
+            <Box
+              p={3}
+              borderRadius="lg"
+              bg="white"
+              border="1px solid"
+              borderColor={modalBorder}
+              w="100%"
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+            >
+              {qishuiQrLoading ? (
+                <Spinner color={activeColor} />
+              ) : qishuiQrUrl ? (
+                <QRCodeSVG value={qishuiQrUrl} size={220} />
+              ) : (
+                <Text color={subTextColor} fontSize="sm">二维码加载中...</Text>
+              )}
+            </Box>
+            <Text fontSize="sm" color={qishuiQrStatus.includes("成功") ? "green.400" : subTextColor}>
+              {qishuiQrStatus || "正在获取二维码..."}
+            </Text>
+            {qishuiQrOpen && !qishuiQrLoading && (
+              <Button size="sm" variant="ghost" color={activeColor} onClick={() => openQishuiQr()}>
+                重新获取二维码
+              </Button>
+            )}
+          </VStack>
+        </ModalBody>
+      </ModalContent>
+    </Modal>
+  );
+
   // 未登录状态：点击登录后弹出平台选择
   if (!loginInfo?.logged_in) {
     return (
@@ -252,6 +357,7 @@ export function MusicLoginSection() {
           登录
         </Button>
         {platformModal}
+        {qishuiQrModal}
       </>
     );
   }
@@ -278,28 +384,11 @@ export function MusicLoginSection() {
                       {loginInfo.nickname}
                     </Text>
                     <HStack spacing={1}>
-                      {loginInfo.is_svip ? (
-                        <Box
-                          as="span"
-                          display="inline-flex"
-                          alignItems="center"
-                          gap={1}
-                          px={1.5}
-                          py={0.5}
-                          borderRadius="sm"
-                          fontSize="10px"
-                          fontWeight="bold"
-                          bg="linear-gradient(135deg, #f6d365 0%, #fda085 50%, #f6d365 100%)"
-                          color="#5a3000"
-                        >
-                          <Crown size={10} strokeWidth={2.5} />
-                          SVIP
-                        </Box>
-                      ) : loginInfo.is_vip ? (
-                        <Text color={subTextColor} fontSize="xs">VIP</Text>
-                      ) : (
-                        <Text color={subTextColor} fontSize="xs">普通用户</Text>
-                      )}
+                      <VipBadge
+                        isVip={loginInfo.is_vip}
+                        isSvip={loginInfo.is_svip}
+                        fallbackColor={subTextColor}
+                      />
                     </HStack>
                   </VStack>
                   <ChevronDown size={14} color={subTextColor} />
@@ -377,28 +466,11 @@ export function MusicLoginSection() {
                 <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
                   {loginInfo.nickname}
                 </Text>
-                {loginInfo.is_svip ? (
-                  <Box
-                    as="span"
-                    display="inline-flex"
-                    alignItems="center"
-                    gap={1}
-                    px={1.5}
-                    py={0.5}
-                    borderRadius="sm"
-                    fontSize="10px"
-                    fontWeight="bold"
-                    bg="linear-gradient(135deg, #f6d365 0%, #fda085 50%, #f6d365 100%)"
-                    color="#5a3000"
-                  >
-                    <Crown size={10} strokeWidth={2.5} />
-                    SVIP
-                  </Box>
-                ) : loginInfo.is_vip ? (
-                  <Text color={subTextColor} fontSize="xs">VIP</Text>
-                ) : (
-                  <Text color={subTextColor} fontSize="xs">普通用户</Text>
-                )}
+                <VipBadge
+                  isVip={loginInfo.is_vip}
+                  isSvip={loginInfo.is_svip}
+                  fallbackColor={subTextColor}
+                />
               </VStack>
             </HStack>
           )}
@@ -429,6 +501,7 @@ export function MusicLoginSection() {
         </Tooltip>
       </HStack>
       {platformModal}
+      {qishuiQrModal}
     </>
   );
 }

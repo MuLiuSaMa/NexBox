@@ -5,6 +5,7 @@ pub mod kugou;
 pub mod migu;
 pub mod models;
 pub mod netease;
+pub mod qishui;
 pub mod qqmusic;
 
 use std::collections::HashMap;
@@ -607,8 +608,9 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
     let kugou_cookie = load_provider_cookie(&app, "kugou").await;
     let qq_cookie = load_provider_cookie(&app, "qqmusic").await;
     let migu_cookie = load_provider_cookie(&app, "migu").await;
+    let qishui_cookie = load_provider_cookie(&app, "qishui").await;
 
-    let (netease_result, kugou_result, qq_result, migu_result) = tokio::join!(
+    let (netease_result, kugou_result, qq_result, migu_result, qishui_result) = tokio::join!(
         async {
             if !netease_cookie.is_empty() {
                 netease::login_status(&netease_cookie).await.ok()
@@ -629,13 +631,29 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
                 migu::login_info(&migu_cookie).await.ok()
             } else { None }
         },
+        async {
+            if !qishui_cookie.is_empty() && qishui::qishui_cookie_has_login(&qishui_cookie) {
+                match qishui::qishui_fetch_profile(&qishui_cookie).await {
+                    Some(info) => Some(info),
+                    // 网络未就绪导致取不到：优先用上次缓存的信息（含 VIP），避免开机后会员标识丢失
+                    None => cached_profile("qishui")
+                        .or_else(|| Some(qishui::qishui_status_info(&qishui_cookie))),
+                }
+            } else { None }
+        },
     );
+
+    // 缓存成功拉到的个人信息，供下次冷启动网络未就绪时兜底
+    for info in [&netease_result, &kugou_result, &qq_result, &migu_result].into_iter().flatten() {
+        remember_profile(info);
+    }
 
     let mut result = HashMap::new();
     if let Some(info) = netease_result { result.insert("netease".into(), info); }
     if let Some(info) = kugou_result { result.insert("kugou".into(), info); }
     if let Some(info) = qq_result { result.insert("qqmusic".into(), info); }
     if let Some(info) = migu_result { result.insert("migu".into(), info); }
+    if let Some(info) = qishui_result { result.insert("qishui".into(), info); }
     Ok(result)
 }
 
@@ -643,7 +661,7 @@ pub async fn music_get_login_statuses(app: AppHandle) -> Result<HashMap<String, 
 #[tauri::command]
 pub async fn music_switch_provider(app: AppHandle, provider: String) -> Result<(), String> {
     match provider.as_str() {
-        "netease" | "kugou" | "qqmusic" | "migu" => {}
+        "netease" | "kugou" | "qqmusic" | "migu" | "qishui" => {}
         _ => return Err(format!("Unknown provider: {}", provider)),
     }
     let store = app.store("music-cookies.json").map_err(|e| e.to_string())?;
@@ -1346,6 +1364,7 @@ static APP_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(
 static KUGOU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 static QQ_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 static MIGU_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
+static QISHUI_COOKIE: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 /// 咪咕 uid (listen 接口请求头需要)
 static MIGU_UID: tokio::sync::RwLock<String> = tokio::sync::RwLock::const_new(String::new());
 
@@ -1382,6 +1401,7 @@ async fn get_provider_cookie(provider: &str) -> String {
         "kugou" => KUGOU_COOKIE.read().await.clone(),
         "qqmusic" => QQ_COOKIE.read().await.clone(),
         "migu" => MIGU_COOKIE.read().await.clone(),
+        "qishui" => QISHUI_COOKIE.read().await.clone(),
         _ => String::new(),
     }
 }
@@ -1403,6 +1423,10 @@ async fn set_provider_cookie(provider: &str, cookie: String) {
         }
         "migu" => {
             let mut guard = MIGU_COOKIE.write().await;
+            *guard = cookie;
+        }
+        "qishui" => {
+            let mut guard = QISHUI_COOKIE.write().await;
             *guard = cookie;
         }
         _ => {}
@@ -1469,9 +1493,53 @@ pub async fn init_cookie_cache(app: &AppHandle) {
     if let Ok(c) = cookie::load_cookie(app, "migu") {
         set_provider_cookie("migu", c).await;
     }
+    if let Ok(c) = cookie::load_cookie(app, "qishui") {
+        set_provider_cookie("qishui", c).await;
+    }
     if let Ok(uid) = cookie::load_user_id(app, "migu") {
         set_migu_uid(uid).await;
     }
+}
+
+// ============================================================
+//  个人信息磁盘缓存
+//  刚开机时网络/DNS 往往还没就绪，/me 之类的接口会失败；这里缓存上一次
+//  成功拉到的个人信息（含 VIP 标识），避免重启后会员标识丢失。
+// ============================================================
+
+fn profile_cache_path() -> std::path::PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("NexBox")
+        .join("music_profiles.json")
+}
+
+fn load_profile_cache() -> HashMap<String, LoginInfo> {
+    std::fs::read_to_string(profile_cache_path())
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default()
+}
+
+/// 记录一次成功的个人信息
+pub(crate) fn remember_profile(info: &LoginInfo) {
+    if !info.logged_in || info.nickname.is_empty() {
+        return;
+    }
+    let mut map = load_profile_cache();
+    map.insert(info.provider.clone(), info.clone());
+    let path = profile_cache_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(text) = serde_json::to_string(&map) {
+        let _ = std::fs::write(&path, text);
+    }
+}
+
+/// 读取缓存的个人信息
+pub(crate) fn cached_profile(provider: &str) -> Option<LoginInfo> {
+    load_profile_cache().remove(provider)
 }
 
 #[cfg(test)]

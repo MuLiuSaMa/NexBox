@@ -61,7 +61,7 @@ import {
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import steamIcon from "@/assets/tools/Steam.png";
+import steamIcon from "@/assets/tools/Steam.webp";
 
 // ======================== 类型定义 ========================
 

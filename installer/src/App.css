@@ -9,10 +9,8 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   user-select: none;
-}
-
-#root {
-  background: url("/logo/preset.png") center / cover no-repeat;
+  background: #0a0a0a;
+  color: #ffffff;
 }
 
 /* ── Title Bar ── */
@@ -45,25 +43,25 @@ html, body, #root {
   width: 36px;
   height: 36px;
   border: none;
-  background: rgba(255, 255, 255, 0.8);
-  color: #64748b;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: none;
 }
 
 .titlebar-btn:hover {
-  background: #f1f5f9;
-  color: #334155;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .titlebar-btn-close:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: rgba(255, 255, 255, 0.28);
+  color: #0a0a0a;
 }
 
-/* ── App Layout ── */
+/* ── App Layout (fixed logo shell) ── */
 .installer-app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 44px);
@@ -71,163 +69,171 @@ html, body, #root {
   overflow: hidden;
 }
 
-.installer-body {
+/* 左上角品牌标（图标 + 中文标准字）：fixed 钉在窗口真正左上角，不受标题栏拖拽区影响 */
+.brand-corner {
+  position: fixed;
+  top: 12px;
+  left: 16px;
   display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
+  align-items: center;
+  gap: 5px;
+  z-index: 1001;
+}
+
+.brand-corner .corner-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.brand-corner .corner-word {
+  height: 30px;
+  object-fit: contain;
+}
+
+/* 居中标语图（原大 Logo 位置，中间略偏上） */
+.tagline {
+  flex-shrink: 0;
+  height: 124px;
+  margin-top: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 40px;
+}
+
+.tagline img {
+  max-width: 100%;
+  max-height: 64px;
+  height: auto;
+  object-fit: contain;
 }
 
 .installer-content {
   flex: 1;
-  padding: 24px 28px;
   display: flex;
   flex-direction: column;
+  padding: 0 48px 48px;
   overflow-y: auto;
   background: transparent;
   position: relative;
   min-height: 0;
 }
 
-.installer-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 14px 24px;
-  gap: 12px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  background: transparent;
-  min-height: 52px;
-}
-
 /* ── Typography ── */
 .page-title {
-  font-size: 22px;
+  font-size: 23px;
   font-weight: 700;
-  margin-bottom: 8px;
-  color: #1a202c;
+  margin-bottom: 6px;
+  color: #ffffff;
 }
 
 .page-subtitle {
   font-size: 14px;
-  color: #64748b;
-  margin-bottom: 24px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 18px;
 }
 
-/* ── Cards ── */
-/* 液态玻璃卡片：半透明背景 + 背景模糊 + 多层 inset 高光/深度阴影。
-   页面切换动画（framer-motion，0.3s）期间，framer 会把页面提升为独立合成层，
-   层内 backdrop-filter 无法采样背景，会导致先透明、动画结束瞬间变模糊。
-   因此用 CSS animation 延迟 0.3s（与页面动画时长一致）再平滑浮现玻璃模糊：
-   delay 期间（backwards 填充）卡片保持不透明白色，动画结束后无缝过渡到液态玻璃。 */
+/* ── Monochrome panel ── */
 .glass-card {
-  position: relative;
-  isolation: isolate;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.65);
-  border-radius: 16px;
-  padding: 20px;
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  animation: glass-reveal 0.45s ease 0.3s backwards;
-  box-shadow:
-    inset 0 0 2px 1px rgba(255, 255, 255, 0.35),
-    inset 0 0 10px 4px rgba(255, 255, 255, 0.12),
-    inset 0 4px 16px rgba(0, 0, 0, 0.04),
-    0 4px 16px rgba(0, 0, 0, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.04);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 16px;
 }
 
-@keyframes glass-reveal {
-  from {
-    background: rgba(255, 255, 255, 0.92);
-    border-color: rgba(255, 255, 255, 0.75);
-    backdrop-filter: blur(0px) saturate(1);
-  }
-  to {
-    background: rgba(255, 255, 255, 0.55);
-    border-color: rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(16px) saturate(1.4);
-  }
-}
-
-.glass-card:hover {
-  box-shadow:
-    inset 0 0 2px 1px rgba(255, 255, 255, 0.4),
-    inset 0 0 10px 4px rgba(255, 255, 255, 0.16),
-    inset 0 4px 16px rgba(0, 0, 0, 0.04),
-    0 6px 20px rgba(0, 0, 0, 0.1),
-    0 10px 30px rgba(0, 0, 0, 0.06);
-}
-
-/* ── Progress ── */
+/* ── Progress (thin white) ── */
 .progress-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 20px;
+  gap: 16px;
+}
+
+/* 进度条上方小字行：左状态、右百分比 */
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.progress-meta .progress-label {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.progress-meta .progress-value {
+  color: #ffffff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
   width: 100%;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
-  border-radius: 4px;
-  transition: width 0.4s ease;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: none;
+}
+
+/* Logo 正下方的安装进度块 */
+.install-progress {
+  width: 100%;
+  max-width: 520px;
 }
 
 /* ── Buttons ── */
 .btn-primary {
-  background: #1a1a1a;
-  color: white;
+  background: #ffffff;
+  color: #0a0a0a;
   border: none;
-  padding: 10px 24px;
-  border-radius: 8px;
+  padding: 8px 20px;
+  border-radius: 6px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: none;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .btn-primary:hover {
-  background: #333;
+  background: #e5e5e5;
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  padding: 10px 24px;
-  border-radius: 8px;
-  font-size: 14px;
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: none;
   flex-shrink: 0;
   white-space: nowrap;
 }
 
 .btn-secondary:hover {
-  background: #f1f5f9;
-  color: #1a202c;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
 .btn-secondary:disabled {
@@ -240,11 +246,11 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   padding: 0 12px;
-  height: 44px;
+  height: 42px;
 }
 
 .dir-selector input {
@@ -252,24 +258,29 @@ html, body, #root {
   background: transparent;
   border: none;
   outline: none;
-  color: #1a202c;
-  font-size: 13px;
+  color: #ffffff;
+  font-size: 14px;
   height: 100%;
 }
 
+.dir-selector input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .dir-selector button {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: #ffffff;
+  color: #0a0a0a;
   border: none;
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 5px;
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .dir-selector button:hover {
-  background: #dbeafe;
+  background: #e5e5e5;
 }
 
 /* ── License Scroll ── */
@@ -278,11 +289,11 @@ html, body, #root {
   overflow-y: auto;
   font-size: 13px;
   line-height: 1.7;
-  color: #475569;
+  color: rgba(255, 255, 255, 0.8);
   padding: 16px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   min-height: 200px;
 }
 
@@ -295,7 +306,7 @@ html, body, #root {
 }
 
 .license-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 3px;
 }
 
@@ -304,7 +315,7 @@ html, body, #root {
   max-height: 120px;
   overflow-y: auto;
   font-size: 12px;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.55);
   margin-top: 12px;
 }
 
@@ -313,7 +324,7 @@ html, body, #root {
 }
 
 .file-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 2px;
 }
 
@@ -322,8 +333,8 @@ html, body, #root {
   display: inline-block;
   width: 18px;
   height: 18px;
-  border: 2px solid #e2e8f0;
-  border-top-color: #3b82f6;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
   vertical-align: middle;
@@ -338,8 +349,8 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: #475569;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   user-select: none;
 }
@@ -351,30 +362,30 @@ html, body, #root {
 .checkbox-mark {
   width: 18px;
   height: 18px;
-  border: 2px solid #cbd5e1;
+  border: 2px solid rgba(255, 255, 255, 0.45);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.2s;
-  background: #ffffff;
+  transition: none;
+  background: transparent;
 }
 
 .checkbox-label input:checked + .checkbox-mark {
-  background: #3b82f6;
-  border-color: #3b82f6;
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .checkbox-mark::after {
   content: "";
   width: 5px;
   height: 9px;
-  border: solid white;
+  border: solid #0a0a0a;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) translateY(-1px);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: none;
 }
 
 .checkbox-label input:checked + .checkbox-mark::after {
@@ -384,9 +395,9 @@ html, body, #root {
 /* ── Mode Select Buttons ── */
 .mode-buttons {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  max-width: 340px;
+  max-width: 420px;
 }
 
 .mode-btn {
@@ -394,19 +405,13 @@ html, body, #root {
   height: 42px;
   font-size: 14px;
   font-weight: 600;
-  border-radius: 8px;
-  background: #1a1a1a;
-  color: #ffffff;
+  border-radius: 6px;
   text-align: center;
   white-space: nowrap;
 }
 
-.mode-btn:hover:not(.disabled) {
-  background: #333;
-}
-
 .mode-btn.disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -415,18 +420,20 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .agree-link {
-  color: #3b82f6;
+  color: #ffffff;
   cursor: pointer;
   text-decoration: underline;
-  text-underline-offset: 4px;
+  text-underline-offset: 3px;
   margin-left: 2px;
 }
 
 .agree-link:hover {
-  color: #2563eb;
+  color: #e5e5e5;
 }
 
 /* ── License Modal ── */
@@ -438,9 +445,9 @@ html, body, #root {
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .modal-box {
@@ -448,20 +455,20 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 660px;
-  height: 75%;
-  padding: 24px;
+  max-width: 640px;
+  height: 78%;
+  padding: 20px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 16px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  background: #0a0a0a;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
 }
 
 .modal-close {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 12px;
+  right: 12px;
   z-index: 10;
   display: flex;
   align-items: center;
@@ -470,52 +477,12 @@ html, body, #root {
   height: 32px;
   border: none;
   border-radius: 8px;
-  background: #f1f5f9;
-  color: #64748b;
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: none;
 }
 
 .modal-close:hover {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-/* ── Install Carousel ── */
-.install-carousel {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  width: 100%;
-  /* 底部预留空间，避免与贴底的进度条重叠 */
-  padding: 12px 0 72px;
-}
-
-.install-carousel img {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-/* 进度条固定在安装页最底部（相对 .installer-content 定位） */
-.install-progress {
-  position: absolute;
-  left: 28px;
-  right: 28px;
-  bottom: 0;
-  max-width: 480px;
-  margin: 0 auto;
-  padding-bottom: 14px;
-}
-
-.install-progress-text {
-  text-align: center;
-  margin-top: 8px;
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a202c;
+  background: rgba(255, 255, 255, 0.22);
 }

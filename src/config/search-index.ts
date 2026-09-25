@@ -44,8 +44,11 @@ import {
   FlaskConical,
   Swords,
   Clock,
+  ScanLine,
+  ScrollText,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 
 export type SearchCategory = "page" | "builtin-tool" | "optimization" | "thirdparty-tool";
 
@@ -78,14 +81,19 @@ export const searchIndex: SearchItem[] = [
     category: "page",
     keywords: ["硬件", "信息", "hardware", "cpu", "gpu", "显卡", "处理器"],
   },
-  {
-    id: "tools",
-    nameKey: "sidebar.tools",
-    path: "/tools",
-    icon: Wrench,
-    category: "page",
-    keywords: ["工具", "tools", "工具箱"],
-  },
+  // 商店版不索引工具箱（其全部栏目均为第三方软件获取入口）
+  ...(IS_STORE_BUILD
+    ? []
+    : [
+        {
+          id: "tools",
+          nameKey: "sidebar.tools",
+          path: "/tools",
+          icon: Wrench,
+          category: "page" as const,
+          keywords: ["工具", "tools", "工具箱"],
+        },
+      ]),
   {
     id: "builtin-tools",
     nameKey: "sidebar.builtinTools",
@@ -132,7 +140,7 @@ export const searchIndex: SearchItem[] = [
     path: "/music",
     icon: Music,
     category: "page",
-    keywords: ["音乐", "播放器", "music", "player", "网易云", "netease", "咪咕", "migu", "酷狗", "kugou", "QQ音乐"],
+    keywords: ["音乐", "播放器", "music", "player", "网易云", "netease", "咪咕", "migu", "酷狗", "kugou", "QQ音乐", "汽水", "qishui"],
   },
   {
     id: "sponsor",
@@ -413,6 +421,22 @@ export const searchIndex: SearchItem[] = [
     icon: Download,
     category: "builtin-tool",
     keywords: ["下载加速", "多线程下载", "下载器", "分段下载", "满速", "下载", "download", "accelerator", "idm", "多线程"],
+  },
+  {
+    id: "screen-test",
+    nameKey: "sidebar.screenTest",
+    path: "/screen-test",
+    icon: ScanLine,
+    category: "builtin-tool",
+    keywords: ["屏幕检测", "显示器", "坏点", "亮点", "响应时间", "刷新率", "拖影", "漏光", "均匀性", "色带", "screen test", "dead pixel", "refresh rate", "ghosting", "monitor"],
+  },
+  {
+    id: "bsod-log",
+    nameKey: "sidebar.bsodLog",
+    path: "/bsod-log",
+    icon: ScrollText,
+    category: "builtin-tool",
+    keywords: ["蓝屏", "蓝屏日志", "蓝屏代码", "bsod", "崩溃", "死机", "宕机", "bugcheck", "minidump", "转储", "dmp", "whea", "kernel power", "意外关机", "系统错误", "crash"],
   },
 ];
 

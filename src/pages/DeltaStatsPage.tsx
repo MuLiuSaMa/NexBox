@@ -57,8 +57,8 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
-import qqPlatformLogo from "@/assets/df-qq.png";
-import wechatPlatformLogo from "@/assets/df-wechat.png";
+import qqPlatformLogo from "@/assets/df-qq.webp";
+import wechatPlatformLogo from "@/assets/df-wechat.webp";
 
 // ═══ 类型 ═══
 interface DfLoginState {

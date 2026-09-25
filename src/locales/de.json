@@ -3,6 +3,7 @@
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "Plattformübergreifende Leistungsüberwachung (Tauri + Next.js + Sensordienst)",
+    "close": "Schließen",
     "success": "Erfolg"
   },
   "view": {
@@ -58,7 +59,8 @@
     "downloadAccelerator": "Downloader",
     "nvidiaRecording": "NVIDIA-Aufnahme-Verwaltung",
     "appManager": "App-Verwaltung",
-    "timeSync": "Zeitsynchronisierung"
+    "timeSync": "Zeitsynchronisierung",
+    "bsodLog": "BSOD-Protokoll"
   },
   "customPage": {
     "title": "Benutzerdefinierte Seite",
@@ -1009,6 +1011,15 @@
     "recorderNotStarted": "Recorder nicht gestartet, bitte später erneut versuchen"
   },
   "overlayPanel": {
+    "remoteMonitor": {
+      "title": "Handy-Fernüberwachung",
+      "description": "Nach dem Aktivieren können Sie Hardwarewerte live im Handy-Browser im selben WLAN ansehen",
+      "scanHint": "Mit dem Handy scannen oder die folgende Adresse eingeben",
+      "copy": "Adresse kopieren",
+      "pin": "Zugangscode",
+      "firewallHint": "Handy kann nicht verbinden? Erlauben Sie NexBox in der Windows-Firewall oder deaktivieren Sie sie testweise",
+      "noIp": "Keine LAN-IP erkannt. Stellen Sie sicher, dass der PC mit WLAN / LAN-Kabel verbunden ist"
+    },
     "title": "Overlay-Panel",
     "enableOverlay": "Overlay-Panel aktivieren",
     "statusEnabled": "Aktiviert",
@@ -1256,7 +1267,8 @@
     "downloadAcceleratorDesc": "Mehrthreadige segmentierte Downloads für volle Bandbreite",
     "nvidiaRecordingDesc": "NVIDIA-Aufnahmen automatisch scannen, nach Zeit sortiert verwalten, Vorschau und Bereinigung",
     "appManagerDesc": "Installierte Apps anzeigen und deinstallieren",
-    "timeSyncDesc": "Systemzeit kalibrieren, Zeitverzögerung und Abweichung des Zeitservers prüfen"
+    "timeSyncDesc": "Systemzeit kalibrieren, Zeitverzögerung und Abweichung des Zeitservers prüfen",
+    "bsodLogDesc": "BSOD-Absturzereignisse und Dump-Dateien analysieren, um problematische Treiber und Hardware zu identifizieren"
   },
   "timeSync": {
     "title": "Zeitsynchronisierung",
@@ -1611,11 +1623,15 @@
     },
     "aboutSettings": {
       "title": "Über",
+      "repo": "Open-Source-Repository",
+      "repoSubtitle": "Quellcode",
       "version": "Version",
       "author": "Autor",
       "newVersion": "Neue Version verfügbar",
       "check": "Überprüfen",
       "noUpdate": "Bereits auf dem neuesten Stand",
+      "storeVersion": "Update über den Microsoft Store",
+      "storeVersionDesc": "Neue Versionen werden über den Microsoft Store bereitgestellt",
       "checkFailed": "Update-Prüfung fehlgeschlagen",
       "downloadFailed": "Download fehlgeschlagen",
       "installFailed": "Installation fehlgeschlagen",

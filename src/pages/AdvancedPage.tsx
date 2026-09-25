@@ -282,7 +282,7 @@ export default function AdvancedPage() {
         <VStack spacing={4} align="stretch">
           <HStack spacing={4} align="center">
             <img
-              src="/pawnio.png"
+              src="/pawnio.webp"
               alt={t("settings.pawnio.label", "PawnIO")}
               style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
             />

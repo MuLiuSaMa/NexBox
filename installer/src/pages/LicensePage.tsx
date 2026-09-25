@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
 export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => void }) {
@@ -10,11 +9,7 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
   }, [onAgreed]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
+    <div
       style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}
     >
       <h2 className="page-title">{t("license_title")}</h2>
@@ -22,12 +17,12 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
       <div className="license-scroll">
         <p style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>新境盒（NexBox）最终用户许可协议</p>
-        <p style={{ color: "#94a3b8", marginBottom: 6 }}>新境盒最新版本 · 最后更新日期：2026年7月</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <p style={{ color: "rgba(255, 255, 255, 0.5)", marginBottom: 6 }}>新境盒最新版本 · 最后更新日期：2026年7月</p>
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <p style={{ fontWeight: 600, marginTop: 10 }}>重要提示</p>
         <p>请仔细阅读本协议的全部条款和条件。安装或使用本软件即表示您同意受本协议的约束。如果您不同意本协议的任何条款，请不要安装或使用本软件。</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>一、软件许可</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>1.1 许可性质</p>
@@ -42,9 +37,9 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600, marginTop: 8 }}>1.3 源代码获取</p>
         <p>本软件的完整源代码可在以下地址获取：</p>
-        <p>- GitHub 仓库：<a href="#" style={{ color: "#3b82f6" }}>github.com/MuLiuSaMa/NexBox</a></p>
+        <p>- GitHub 仓库：<a href="#" style={{ color: "#ffffff" }}>github.com/MuLiuSaMa/NexBox</a></p>
         <p>如果您通过二进制形式获得本软件，您有权根据 GPL-3.0 协议第 6 条的规定，以合理的成本获取完整的对应源代码。</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>二、用户义务</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>2.1 版权声明</p>
@@ -55,7 +50,7 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
         <p>- 明确标注您对软件所做的修改</p>
         <p>- 以相同的 GPL-3.0 协议发布您的修改版本</p>
         <p>- 提供修改后版本的完整源代码</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>三、免责声明</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>3.1 无担保声明</p>
@@ -69,29 +64,29 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600, marginTop: 8 }}>3.3 使用风险</p>
         <p>使用本软件的全部风险由您自行承担。本软件涉及系统级操作（如内存清理、注册表修改、系统优化等），虽然开发者已尽最大努力确保软件的安全性和稳定性，但仍无法完全排除意外情况。建议您在使用系统优化功能前备份重要数据。</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>四、第三方组件</h3>
         <p>本软件包含以下第三方开源组件，各组件受其各自许可证条款的约束：</p>
         <table style={{ width: "100%", borderCollapse: "collapse", margin: "8px 0", fontSize: 12 }}>
           <thead>
-            <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+            <tr style={{ background: "rgba(255, 255, 255, 0.06)", borderBottom: "1px solid rgba(255, 255, 255, 0.15)" }}>
               <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>组件名称</th>
               <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>许可证</th>
               <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 600 }}>说明</th>
             </tr>
           </thead>
           <tbody>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>Tauri</td><td style={{ padding: "5px 8px" }}>MIT / Apache-2.0</td><td style={{ padding: "5px 8px" }}>桌面应用框架</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>LibreHardwareMonitorLib</td><td style={{ padding: "5px 8px" }}>MPL-2.0</td><td style={{ padding: "5px 8px" }}>硬件监控库</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>WinDivert</td><td style={{ padding: "5px 8px" }}>LGPL-3.0</td><td style={{ padding: "5px 8px" }}>网络数据包捕获</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>Wintun</td><td style={{ padding: "5px 8px" }}>GPL-2.0 / 商业</td><td style={{ padding: "5px 8px" }}>虚拟网络适配器</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>NVIDIA NVAPI</td><td style={{ padding: "5px 8px" }}>NVIDIA 专有许可</td><td style={{ padding: "5px 8px" }}>NVIDIA GPU API</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>React</td><td style={{ padding: "5px 8px" }}>MIT</td><td style={{ padding: "5px 8px" }}>前端框架</td></tr>
-            <tr style={{ borderBottom: "1px solid #f1f5f9" }}><td style={{ padding: "5px 8px" }}>Rust 标准库</td><td style={{ padding: "5px 8px" }}>MIT / Apache-2.0</td><td style={{ padding: "5px 8px" }}>Rust 编程语言</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>Tauri</td><td style={{ padding: "5px 8px" }}>MIT / Apache-2.0</td><td style={{ padding: "5px 8px" }}>桌面应用框架</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>LibreHardwareMonitorLib</td><td style={{ padding: "5px 8px" }}>MPL-2.0</td><td style={{ padding: "5px 8px" }}>硬件监控库</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>WinDivert</td><td style={{ padding: "5px 8px" }}>LGPL-3.0</td><td style={{ padding: "5px 8px" }}>网络数据包捕获</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>Wintun</td><td style={{ padding: "5px 8px" }}>GPL-2.0 / 商业</td><td style={{ padding: "5px 8px" }}>虚拟网络适配器</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>NVIDIA NVAPI</td><td style={{ padding: "5px 8px" }}>NVIDIA 专有许可</td><td style={{ padding: "5px 8px" }}>NVIDIA GPU API</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>React</td><td style={{ padding: "5px 8px" }}>MIT</td><td style={{ padding: "5px 8px" }}>前端框架</td></tr>
+            <tr style={{ borderBottom: "1px solid rgba(255, 255, 255, 0.06)" }}><td style={{ padding: "5px 8px" }}>Rust 标准库</td><td style={{ padding: "5px 8px" }}>MIT / Apache-2.0</td><td style={{ padding: "5px 8px" }}>Rust 编程语言</td></tr>
           </tbody>
         </table>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>五、隐私声明</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>5.1 数据收集</p>
@@ -102,7 +97,7 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600, marginTop: 8 }}>5.2 数据安全</p>
         <p>我们重视您的隐私。本软件不会记录您的浏览历史、文件内容或其他个人敏感信息。</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>六、协议终止</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>6.1 自动终止</p>
@@ -110,7 +105,7 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600, marginTop: 8 }}>6.2 终止后的义务</p>
         <p>协议终止后，您必须停止使用本软件，并销毁您所持有的本软件的全部副本（包括安装文件、备份等）。</p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "16px 0 8px" }}>七、其他条款</h3>
         <p style={{ fontWeight: 600, marginTop: 8 }}>7.1 协议修订</p>
@@ -124,12 +119,12 @@ export default function LicensePage({ onAgreed }: { onAgreed: (v: boolean) => vo
 
         <p style={{ fontWeight: 600, marginTop: 8 }}>7.4 联系信息</p>
         <p>如有任何问题或建议，可通过以下方式联系：</p>
-        <p>- GitHub：<a href="#" style={{ color: "#3b82f6" }}>github.com/MuLiuSaMa/NexBox</a></p>
-        <p>- 官方网站：<a href="#" style={{ color: "#3b82f6" }}>www.nexbox.top</a></p>
-        <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "12px 0" }} />
+        <p>- GitHub：<a href="#" style={{ color: "#ffffff" }}>github.com/MuLiuSaMa/NexBox</a></p>
+        <p>- 官方网站：<a href="#" style={{ color: "#ffffff" }}>www.nexbox.top</a></p>
+        <hr style={{ border: "none", borderTop: "1px solid rgba(255, 255, 255, 0.15)", margin: "12px 0" }} />
 
         <p style={{ fontWeight: 600 }}>继续安装即表示您已阅读并同意本协议的全部条款。</p>
       </div>
-    </motion.div>
+    </div>
   );
 }

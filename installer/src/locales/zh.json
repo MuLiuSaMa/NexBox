@@ -47,6 +47,7 @@
   "btn_back": "上一步",
   "btn_install": "安装",
   "btn_cancel": "取消",
+  "launch_now": "立即启动",
 
   "error_admin": "需要管理员权限才能安装",
   "error_space": "磁盘空间不足",

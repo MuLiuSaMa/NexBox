@@ -2908,6 +2908,10 @@ pub async fn unlock_laptop_power_plan() -> Result<LaptopPowerLockStatus, String>
 fn get_builtin_plan_filename(id: &str) -> String {
     match id {
         "ggOSDesktopGaming" => "ggOS Desktop Gaming.pow".to_string(),
+        // 资源文件已从中文名批量改为英文名，这里显式映射回磁盘实际文件名
+        "AMD电源计划" => "AMD_PowerPlan.pow".to_string(),
+        "Intel大核心电源计划" => "Intel_BigCore_PowerPlan.pow".to_string(),
+        "卓越性能" => "Ultimate_Performance.pow".to_string(),
         _ => format!("{}.pow", id),
     }
 }

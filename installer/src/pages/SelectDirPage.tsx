@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,6 +8,8 @@ interface SelectDirPageProps {
   onValidChange: (valid: boolean) => void;
   onShortcutChange?: (create: boolean) => void;
   createDesktopShortcut?: boolean;
+  onInstall: () => void;
+  onBack: () => void;
 }
 
 const REQUIRED_SPACE = 80_000_000;
@@ -20,7 +21,7 @@ function formatSize(bytes: number): string {
   return bytes + " B";
 }
 
-export default function SelectDirPage({ onDirChange, onValidChange, onShortcutChange, createDesktopShortcut = true }: SelectDirPageProps) {
+export default function SelectDirPage({ onDirChange, onValidChange, onShortcutChange, createDesktopShortcut = true, onInstall, onBack }: SelectDirPageProps) {
   const { t } = useTranslation();
   const [dir, setDir] = useState("");
   const [available, setAvailable] = useState<number>(-1);
@@ -77,20 +78,24 @@ export default function SelectDirPage({ onDirChange, onValidChange, onShortcutCh
   };
 
   const enoughSpace = available >= REQUIRED_SPACE;
+  const canInstall = enoughSpace && !checking;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      transition={{ duration: 0.3 }}
-      style={{ display: "flex", flexDirection: "column", flex: 1 }}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        justifyContent: "center",
+        gap: 16,
+      }}
     >
-      <h2 className="page-title">{t("dir_title")}</h2>
-      <p className="page-subtitle">{t("dir_desc")}</p>
-
-      <div className="glass-card" style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>{t("dir_title")}</div>
+      {/* 安装路径 */}
+      <div>
+        <div style={{ fontSize: 13, color: "rgba(255, 255, 255, 0.6)", marginBottom: 8 }}>
+          {t("dir_title")}
+        </div>
         <div className="dir-selector">
           <input
             type="text"
@@ -102,40 +107,50 @@ export default function SelectDirPage({ onDirChange, onValidChange, onShortcutCh
         </div>
       </div>
 
-      <div className="glass-card" style={{ display: "flex", gap: 24 }}>
-        <div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>{t("dir_space")}</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: enoughSpace ? "#22c55e" : "#ef4444" }}>
-            {checking ? (
-              <span className="space-spinner" />
-            ) : (
-              formatSize(available)
-            )}
-          </div>
+      {/* 空间信息 + 快捷方式 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 24 }}>
+        <div style={{ fontSize: 13, color: "rgba(255, 255, 255, 0.6)" }}>
+          {t("dir_space")}：
+          <span style={{ color: "#ffffff", fontWeight: 600 }}>
+            {checking ? <span className="space-spinner" /> : formatSize(available)}
+          </span>
         </div>
-        <div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 4 }}>{t("dir_required")}</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: "#64748b" }}>
-            {formatSize(REQUIRED_SPACE)}
-          </div>
-        </div>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={createDesktopShortcut}
+            onChange={(e) => onShortcutChange?.(e.target.checked)}
+          />
+          <span className="checkbox-mark" />
+          {t("创建桌面快捷方式")}
+        </label>
       </div>
 
-      <label className="checkbox-label" style={{ marginTop: 16 }}>
-        <input
-          type="checkbox"
-          checked={createDesktopShortcut}
-          onChange={(e) => onShortcutChange?.(e.target.checked)}
-        />
-        <span className="checkbox-mark" />
-        {t("创建桌面快捷方式")}
-      </label>
-
       {!enoughSpace && !checking && (
-        <div style={{ marginTop: 12, fontSize: 13, color: "#ef4444" }}>
+        <div style={{ fontSize: 13, color: "rgba(255, 255, 255, 0.75)" }}>
           {t("error_space")}
         </div>
       )}
-    </motion.div>
+
+      <div style={{ display: "flex", gap: 12, width: "100%", maxWidth: 360, alignSelf: "center" }}>
+        <button
+          type="button"
+          className="btn-secondary mode-btn"
+          onClick={onBack}
+          style={{ flex: 1 }}
+        >
+          {t("btn_back")}
+        </button>
+        <button
+          type="button"
+          className="btn-primary mode-btn"
+          disabled={!canInstall}
+          onClick={onInstall}
+          style={{ flex: 1 }}
+        >
+          {t("btn_install")}
+        </button>
+      </div>
+    </div>
   );
 }

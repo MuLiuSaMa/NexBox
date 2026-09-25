@@ -27,6 +27,7 @@ import {
   type SearchCategory,
 } from "@/config/search-index";
 import { invoke } from "@tauri-apps/api/core";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
 interface GroupedResults {
@@ -139,20 +140,23 @@ export function GlobalSearch() {
 
   const allSearchItems = useMemo(() => {
     const items: SearchItem[] = [...searchIndex];
-    
-    tools.forEach((tool) => {
-      items.push({
-        id: tool.id,
-        nameKey: `tools.tools.${tool.id}`,
-        path: "/tools",
-        icon: getThirdPartyToolIcon(tool.id),
-        category: "thirdparty-tool",
-        keywords: [tool.name, tool.description, tool.category],
-        action: "run-tool",
-        toolId: tool.id,
+
+    // 商店版不把第三方工具作为可执行搜索结果（商店政策 10.1.5 / 10.2.3）
+    if (!IS_STORE_BUILD) {
+      tools.forEach((tool) => {
+        items.push({
+          id: tool.id,
+          nameKey: `tools.tools.${tool.id}`,
+          path: "/tools",
+          icon: getThirdPartyToolIcon(tool.id),
+          category: "thirdparty-tool",
+          keywords: [tool.name, tool.description, tool.category],
+          action: "run-tool",
+          toolId: tool.id,
+        });
       });
-    });
-    
+    }
+
     return items;
   }, [tools]);
 

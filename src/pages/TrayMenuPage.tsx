@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Box, useColorMode, useColorModeValue } from "@chakra-ui/react";
 import { Monitor, MemoryStick, RefreshCw, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 
 interface MenuItemProps {
   icon: React.ReactNode;
@@ -90,19 +91,29 @@ export default function TrayMenuPage() {
     };
   }, []);
 
+  // 关闭菜单：先取消置顶再隐藏，避免隐藏窗口长期残留 topmost 标志（与后端 Rust 路径一致）
+  const closeMenu = useCallback(async () => {
+    const win = getCurrentWindow();
+    await win.setAlwaysOnTop(false).catch(() => {});
+    await win.hide().catch(() => {});
+  }, []);
+
+  // 关闭主路径是窗口失焦（点到其他位置）；菜单没抢到前台焦点时不会有失焦事件，
+  // 点任务栏/开始菜单这类不移走前台的点击也一样，这两种情况由后端 tray.rs 的
+  // 「外部点击守护」兜底收起（它靠窗口可见性自动收尾，无需此处配合）。
   useEffect(() => {
     const unlisten = getCurrentWindow().onFocusChanged((event) => {
       if (event.payload) {
         // 每次重新打开菜单时复位清理状态，避免残留上次的“清理中/已释放”文案
         setCleanLabel(null);
       } else {
-        getCurrentWindow().hide();
+        void closeMenu();
       }
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        getCurrentWindow().hide();
+        void closeMenu();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -111,12 +122,12 @@ export default function TrayMenuPage() {
       unlisten.then((fn) => fn());
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [closeMenu]);
 
   const handleShowWindow = async () => {
     // 复用后端 show_window 统一打开主窗口（恢复任务栏、若处于离屏预热则归位到屏幕内）
     await invoke("show_window");
-    await getCurrentWindow().hide();
+    await closeMenu();
   };
 
   const handleCleanMemory = async () => {
@@ -135,13 +146,13 @@ export default function TrayMenuPage() {
     }
     // 结果短暂停留后自动收起菜单
     setTimeout(() => {
-      getCurrentWindow().hide();
+      void closeMenu();
     }, 1200);
   };
 
   const handleCheckUpdate = () => {
     invoke("check_update_and_show");
-    getCurrentWindow().hide();
+    void closeMenu();
   };
 
   const handleExit = () => {
@@ -176,12 +187,17 @@ export default function TrayMenuPage() {
             label={cleanLabel ?? "清理内存"}
             onClick={handleCleanMemory}
           />
-          <Box h="1px" bg={dividerColor} mx={3} />
-          <MenuItem
-            icon={<RefreshCw size={16} strokeWidth={2} />}
-            label="检查更新"
-            onClick={handleCheckUpdate}
-          />
+          {/* 商店版无应用内更新（版本由微软商店更新） */}
+          {!IS_STORE_BUILD && (
+            <>
+              <Box h="1px" bg={dividerColor} mx={3} />
+              <MenuItem
+                icon={<RefreshCw size={16} strokeWidth={2} />}
+                label="检查更新"
+                onClick={handleCheckUpdate}
+              />
+            </>
+          )}
           <Box h="1px" bg={dividerColor} mx={3} />
           <MenuItem
             icon={<LogOut size={16} strokeWidth={2} />}

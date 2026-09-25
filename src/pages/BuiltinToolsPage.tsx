@@ -25,6 +25,8 @@ import {
   Video,
   Boxes,
   Clock,
+  ScanLine,
+  ScrollText,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import csLogoImg from "@/assets/cs-logo.png";
@@ -220,6 +222,23 @@ const defaultTools: ViewItem[] = [
     titleKey: "sidebar.timeSync",
     descriptionKey: "builtinTools.timeSyncDesc",
     color: "#00B4D8",
+  },
+  {
+    id: "screen-test",
+    path: "/screen-test",
+    icon: ScanLine,
+    titleKey: "sidebar.screenTest",
+    descriptionKey: "builtinTools.screenTestDesc",
+    color: "#38B2AC",
+  },
+  {
+    id: "bsod-log",
+    path: "/bsod-log",
+    icon: ScrollText,
+    titleKey: "sidebar.bsodLog",
+    descriptionKey: "builtinTools.bsodLogDesc",
+    color: "#EF4444",
+    beta: true,
   },
 ];
 

@@ -1,6 +1,4 @@
 import { useState, useCallback, useEffect } from "react";
-import { AnimatePresence } from "framer-motion";
-import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import TitleBar from "./components/TitleBar";
 import InstallerLayout from "./components/InstallerLayout";
@@ -10,7 +8,6 @@ import InstallingPage from "./pages/InstallingPage";
 import FinishPage from "./pages/FinishPage";
 
 export default function App() {
-  const { t } = useTranslation();
   const [step, setStep] = useState(1);
   const [targetDir, setTargetDir] = useState("");
   const [dirValid, setDirValid] = useState(false);
@@ -56,14 +53,16 @@ export default function App() {
     setStep(2);
   }, []);
 
-  const handleNext = useCallback(() => {
-    if (step === 2 && !dirValid) return;
-    if (step < 3) setStep((s) => s + 1);
-  }, [step, dirValid]);
+  // 自定义页内点击「安装」：目录合法才进入安装
+  const handleInstallFromCustom = useCallback(() => {
+    if (!dirValid) return;
+    setStep(3);
+  }, [dirValid]);
 
-  const handleBack = useCallback(() => {
-    if (step > 1) setStep((s) => s - 1);
-  }, [step]);
+  // 自定义页「返回」：回到首页模式选择
+  const handleBackToMode = useCallback(() => {
+    setStep(1);
+  }, []);
 
   const handleInstallComplete = useCallback(() => {
     setStep(4);
@@ -74,55 +73,37 @@ export default function App() {
     alert(msg);
   }, []);
 
-  const nextLabel = step === 2 ? t("btn_install") : undefined;
-
   return (
     <>
       <TitleBar />
-      <InstallerLayout
-        currentStep={step}
-        canGoBack={step === 2}
-        canGoNext={step === 2 ? dirValid : false}
-        nextLabel={nextLabel}
-        onBack={step === 2 ? handleBack : undefined}
-        onNext={step === 2 ? handleNext : undefined}
-        showCancel={false}
-      >
-        {/* 页面切换动画保留 framer-motion；玻璃卡片的背景模糊通过 CSS animation
-            延迟到页面动画结束后再平滑浮现，避免合成层内 backdrop-filter 采样失败
-            导致的「先透明、动画结束瞬间变模糊」（WebView2/Chromium 已知行为） */}
-        <AnimatePresence mode="wait">
-          {step === 1 && (
-            <ModeSelectPage
-              key="mode"
-              onQuick={handleQuick}
-              onCustom={handleCustom}
-              isUpgrade={isExisting}
-              ready={ready}
-            />
-          )}
-          {step === 2 && (
-            <SelectDirPage
-              key="dir"
-              onDirChange={setTargetDir}
-              onValidChange={setDirValid}
-              onShortcutChange={setCreateDesktopShortcut}
-              createDesktopShortcut={createDesktopShortcut}
-            />
-          )}
-          {step === 3 && (
-            <InstallingPage
-              key="install"
-              targetDir={targetDir}
-              createDesktopShortcut={createDesktopShortcut}
-              onComplete={handleInstallComplete}
-              onError={handleInstallError}
-            />
-          )}
-          {step === 4 && (
-            <FinishPage key="finish" targetDir={targetDir} />
-          )}
-        </AnimatePresence>
+      <InstallerLayout>
+        {step === 1 && (
+          <ModeSelectPage
+            onQuick={handleQuick}
+            onCustom={handleCustom}
+            isUpgrade={isExisting}
+            ready={ready}
+          />
+        )}
+        {step === 2 && (
+          <SelectDirPage
+            onDirChange={setTargetDir}
+            onValidChange={setDirValid}
+            onShortcutChange={setCreateDesktopShortcut}
+            createDesktopShortcut={createDesktopShortcut}
+            onInstall={handleInstallFromCustom}
+            onBack={handleBackToMode}
+          />
+        )}
+        {step === 3 && (
+          <InstallingPage
+            targetDir={targetDir}
+            createDesktopShortcut={createDesktopShortcut}
+            onComplete={handleInstallComplete}
+            onError={handleInstallError}
+          />
+        )}
+        {step === 4 && <FinishPage targetDir={targetDir} />}
       </InstallerLayout>
     </>
   );

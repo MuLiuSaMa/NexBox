@@ -1,18 +1,20 @@
 {
   "name": "nexbox",
-  "version": "9.7.3",
+  "version": "9.9.3",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:store": "tsc && vite build --mode store",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
+    "tauri:build:store": "tauri build --config src-tauri/tauri.store.conf.json",
     "msix": "powershell -NoProfile -ExecutionPolicy Bypass -File msix/build-msix.ps1",
     "msix:install": "powershell -NoProfile -ExecutionPolicy Bypass -File msix/install-msix.ps1",
     "prepare": "husky"

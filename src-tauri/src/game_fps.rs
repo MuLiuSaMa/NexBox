@@ -7,8 +7,9 @@
 //! 3. 完整移植参考实现的「同帧去重 + 信源优先级」逻辑：
 //!    PresentHistory(0xAB/0xD7) ＞ Win32k 合成(0xC9) ＞ 传统/MPO 事件，
 //!    每帧只计入一次，防止 MPO/Win32k 双源导致 FPS 翻倍
-//! 4. 保留原有统计管线：环形缓冲区(3000帧) + EMA(α=0.2) 平滑 + 1%/0.1% Low，
-//!    前台目标消费端过滤不变，公共 API 全兼容
+//! 4. 显示 FPS 采用 500ms 时间窗口帧计数 + 自适应 EMA 平滑（帧率骤变 1s 内收敛）
+//! 5. 1%/0.1% Low 按短滑动时间窗口（1.5s / 5s）每 300ms 重算，骤降快跟、回升缓动，
+//!    不再受 3000 帧大缓冲的数十秒拖尾影响，前台目标消费端过滤不变，公共 API 全兼容
 //!
 //! 架构说明：
 //! - etw::fps_monitor_main 线程：管理 ETW 会话生命周期，会话中断自动重连（上限 5 次）
@@ -246,25 +247,28 @@ impl FrameTimeBuffer {
         self.count = 0;
     }
 
-    /// 计算窗口内平均帧时间对应的 FPS
+    /// 抽取最近 window_ms 毫秒内的帧时间（从最新往旧累加，跨过边界的那一帧也保留）
     ///
-    /// FPS = 1000 * count / sum(frametimes)
-    /// 等价于 CapFrameX 的 GetFpsMetricValue(Average)
-    fn average_fps(&self) -> f64 {
-        if self.count == 0 {
-            return 0.0;
+    /// 旧实现直接对全部 3000 帧算分位数 → 高帧率时窗口长达 12~100 秒，
+    /// 陈旧的暂态慢帧长期驻留，1% Low 响应帧率骤变极慢。
+    fn recent_frames(&self, window_ms: f64) -> Vec<f64> {
+        if self.count == 0 || self.data.is_empty() {
+            return Vec::new();
         }
-        let sum: f64 = if self.count < self.data.len() {
-            // 缓冲区未满，有效数据在 [0..count)
-            self.data[..self.count].iter().sum()
-        } else {
-            // 缓冲区已满，整个数组都有效
-            self.data.iter().sum()
-        };
-        if sum <= 0.0 {
-            return 0.0;
+        let len = self.data.len();
+        let mut out = Vec::with_capacity(self.count.min(window_ms.ceil() as usize + 1));
+        let mut acc = 0.0f64;
+        // head 指向下一个写入槽，故最新一帧在 head-1
+        for i in 0..self.count {
+            let idx = (self.head + len - 1 - i) % len;
+            let v = self.data[idx];
+            out.push(v);
+            acc += v;
+            if acc >= window_ms {
+                break;
+            }
         }
-        1000.0 * self.count as f64 / sum
+        out
     }
 
     /// Calculate x% Low FPS (average FPS of the worst x% frames)
@@ -276,25 +280,15 @@ impl FrameTimeBuffer {
     /// 4. Average those frame times
     /// 5. FPS = 1000 / average
     ///
-    /// Parameter: low_percent — 0.01 for 1% Low, 0.001 for 0.1% Low
-    fn percentile_low_fps(&self, low_percent: f64) -> f64 {
-        if self.count == 0 {
-            return 0.0;
-        }
-
-        // Collect valid frame times
-        let samples: Vec<f64> = if self.count < self.data.len() {
-            self.data[..self.count].to_vec()
-        } else {
-            self.data.clone()
-        };
-
+    /// Parameters: samples — 参算帧时间集合（由 recent_frames 按时间窗口抽取）；
+    /// low_percent — 0.01 for 1% Low, 0.001 for 0.1% Low
+    fn percentile_low_fps_of(samples: &[f64], low_percent: f64) -> f64 {
         if samples.is_empty() {
             return 0.0;
         }
 
         // Sort ascending
-        let mut sorted = samples;
+        let mut sorted = samples.to_vec();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
 
         // Get the (1 - low_percent) quantile as threshold
@@ -391,6 +385,29 @@ mod etw {
     /// 进程去重状态 5 分钟无帧即移除（对齐参考实现的 5min 清理）
     const STALE_PROC_TICKS: i64 = 300 * 10_000_000;
 
+    // ---- 1% Low / 0.1% Low 滑动窗口 ----
+    /// 1% Low 只看最近 1.5s：与 MSI Afterburner / CapFrameX 的 rolling 1s 口径对齐，
+    /// 旧实现拿满 3000 帧（@60fps 约 50s / @30fps 约 100s）算分位数，陈旧慢帧拖尾严重
+    const LOW_1PCT_WINDOW_MS: f64 = 1500.0;
+    /// 0.1% Low 需更长窗口才能容纳千分之一的尾部样本，取 5s
+    const LOW_01PCT_WINDOW_MS: f64 = 5000.0;
+    /// 窗口内至少这么多样本才发布读数（避免刚切目标时 1~2 帧就报出极低值）
+    const LOW_MIN_SAMPLES: usize = 12;
+
+    /// Low 值平滑：骤降快速跟随(α=0.6)、回升缓动(α=0.2)。
+    /// 短窗口使读数更灵敏，但单次卡顿会让数字跳变，因而是“掉帧立即看得到、恢复缓慢上行”
+    #[inline]
+    fn smooth_low(prev: f64, raw: f64) -> f64 {
+        if raw <= 0.0 {
+            return prev;
+        }
+        if prev <= 0.0 {
+            return raw;
+        }
+        let alpha = if raw < prev { 0.6 } else { 0.2 };
+        alpha * raw + (1.0 - alpha) * prev
+    }
+
     /// ETW 线程句柄（stop 时 join，确保会话清理完成）
     static MONITOR_THREAD: Mutex<Option<std::thread::JoinHandle<()>>> = Mutex::new(None);
     /// 当前 OpenTrace 处理句柄值（stop 时强制 CloseTrace 兜底）
@@ -422,13 +439,23 @@ mod etw {
         procs: HashMap<u32, EtwProcState>,
         /// 进程名缓存（10s TTL，防 PID 复用误判）
         name_cache: HashMap<u32, (String, Instant)>,
-        /// 帧时间环形缓冲区（3000 帧 ≈ 12.5s@240fps / 50s@60fps）
+        /// 帧时间环形缓冲区（3000 帧上限），按时间窗口抽取后供 1%/0.1% Low 计算
         buffer: FrameTimeBuffer,
+        /// 显示 FPS 用的时间窗口帧计数器（每 500ms 发布一次读数后清零）
+        display_frame_count: u32,
+        /// 当前显示窗口的起始时刻
+        display_window_start: Instant,
         /// EMA 平滑状态
         smoothed_fps: f64,
         first_frame: bool,
         /// 1% Low / 0.1% Low 计算计时器
         last_low_calc: Instant,
+        /// 1% Low 平滑状态（快跌慢涨：掉帧立即跟随，回升缓动）
+        smoothed_1low: f64,
+        /// 0.1% Low 平滑状态
+        smoothed_01low: f64,
+        /// 陈旧进程状态清理计时器（保持 1s 一次，与 Low 计算解耦）
+        last_prune: Instant,
         /// 目标进程最近一次被计数的 Present tick（帧间隔基准）
         last_target_ticks: Option<i64>,
         /// 已处理的目标切换代次
@@ -441,9 +468,14 @@ mod etw {
                 procs: HashMap::new(),
                 name_cache: HashMap::new(),
                 buffer: FrameTimeBuffer::new(3000),
+                display_frame_count: 0,
+                display_window_start: Instant::now(),
                 smoothed_fps: 0.0,
                 first_frame: true,
                 last_low_calc: Instant::now(),
+                smoothed_1low: 0.0,
+                smoothed_01low: 0.0,
+                last_prune: Instant::now(),
                 last_target_ticks: None,
                 last_gen: 0,
             }
@@ -660,6 +692,10 @@ mod etw {
             rt.first_frame = true;
             rt.last_target_ticks = None;
             rt.last_gen = gen;
+            rt.display_frame_count = 0;
+            rt.display_window_start = Instant::now();
+            rt.smoothed_1low = 0.0;
+            rt.smoothed_01low = 0.0;
             ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
             ZERO_DOT_ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
         }
@@ -674,33 +710,61 @@ mod etw {
             }
             if ms < MAX_FRAME_MS {
                 rt.buffer.push(ms);
-                let raw_fps = rt.buffer.average_fps();
-                if raw_fps > 0.0 {
-                    if rt.first_frame {
-                        rt.smoothed_fps = raw_fps;
-                        rt.first_frame = false;
+                // 显示 FPS：时间窗口帧计数（与 3000 帧缓冲解耦，帧率骤变时秒级收敛）
+                rt.display_frame_count += 1;
+                let window_elapsed = rt.display_window_start.elapsed();
+                if window_elapsed >= Duration::from_millis(500) {
+                    let elapsed_ms = window_elapsed.as_millis() as f64;
+                    let raw_fps = if elapsed_ms > 0.0 && rt.display_frame_count > 0 {
+                        rt.display_frame_count as f64 * 1000.0 / elapsed_ms
                     } else {
-                        // EMA 系数 0.2：值越小越平滑，越大越灵敏
-                        rt.smoothed_fps = 0.2 * raw_fps + 0.8 * rt.smoothed_fps;
+                        0.0
+                    };
+                    if raw_fps > 0.0 {
+                        if rt.first_frame {
+                            rt.smoothed_fps = raw_fps;
+                            rt.first_frame = false;
+                        } else {
+                            // 自适应 EMA：与当前值差距 >30% 时快速追赶(α=0.6)，
+                            // 否则轻度平滑防抖动(α=0.25)
+                            let diff_ratio =
+                                (raw_fps - rt.smoothed_fps).abs() / rt.smoothed_fps.max(1.0);
+                            let alpha = if diff_ratio > 0.3 { 0.6 } else { 0.25 };
+                            rt.smoothed_fps = alpha * raw_fps + (1.0 - alpha) * rt.smoothed_fps;
+                        }
+                        SMOOTHED_FPS.store(rt.smoothed_fps.round() as u32, Ordering::Relaxed);
                     }
-                    SMOOTHED_FPS.store(rt.smoothed_fps.round() as u32, Ordering::Relaxed);
+                    rt.display_frame_count = 0;
+                    rt.display_window_start = Instant::now();
                 }
 
-                // 每 ~1 秒计算 1% Low / 0.1% Low
-                if rt.last_low_calc.elapsed() >= Duration::from_secs(1) {
-                    if rt.buffer.count >= 100 {
-                        let one_low = rt.buffer.percentile_low_fps(0.01);
-                        if one_low > 0.0 {
-                            ONE_PCT_LOW_FPS.store(one_low.round() as u32, Ordering::Relaxed);
-                        }
-                    }
-                    if rt.buffer.count >= 1000 {
-                        let z_one_low = rt.buffer.percentile_low_fps(0.001);
-                        if z_one_low > 0.0 {
-                            ZERO_DOT_ONE_PCT_LOW_FPS.store(z_one_low.round() as u32, Ordering::Relaxed);
-                        }
-                    }
+                // 每 ~300ms 从短滑动时间窗口重算 1% Low / 0.1% Low
+                if rt.last_low_calc.elapsed() >= Duration::from_millis(300) {
                     rt.last_low_calc = Instant::now();
+
+                    let s1 = rt.buffer.recent_frames(LOW_1PCT_WINDOW_MS);
+                    if s1.len() >= LOW_MIN_SAMPLES {
+                        let raw = FrameTimeBuffer::percentile_low_fps_of(&s1, 0.01);
+                        rt.smoothed_1low = smooth_low(rt.smoothed_1low, raw);
+                        if rt.smoothed_1low > 0.0 {
+                            ONE_PCT_LOW_FPS.store(rt.smoothed_1low.round() as u32, Ordering::Relaxed);
+                        }
+                    }
+
+                    let s01 = rt.buffer.recent_frames(LOW_01PCT_WINDOW_MS);
+                    if s01.len() >= LOW_MIN_SAMPLES {
+                        let raw = FrameTimeBuffer::percentile_low_fps_of(&s01, 0.001);
+                        rt.smoothed_01low = smooth_low(rt.smoothed_01low, raw);
+                        if rt.smoothed_01low > 0.0 {
+                            ZERO_DOT_ONE_PCT_LOW_FPS
+                                .store(rt.smoothed_01low.round() as u32, Ordering::Relaxed);
+                        }
+                    }
+                }
+
+                // 陈旧进程状态清理保持 1s 周期（与 Low 计算频率解耦）
+                if rt.last_prune.elapsed() >= Duration::from_secs(1) {
+                    rt.last_prune = Instant::now();
                     prune_stale(rt, ticks);
                 }
             }
@@ -1080,11 +1144,11 @@ pub fn get_cached_fps() -> Option<u32> {
     }
 }
 
-/// 获取缓存的 1% Low FPS 值（最慢 1% 帧的平均 FPS）
+/// 获取缓存的 1% Low FPS 值（最近 1.5s 窗口内最慢 1% 帧的平均 FPS）
 ///
 /// 参考 CapFrameX EMetric.OnePercentLowAverage：
 /// 取 99 分位帧时间作为阈值，筛选 >= 阈值的帧（最慢 1%），计算平均帧时间，
-/// FPS = 1000 / 平均帧时间
+/// FPS = 1000 / 平均帧时间；样本集为滑动时间窗口而非全部历史帧
 pub fn get_cached_1low_fps() -> Option<u32> {
     let fps = ONE_PCT_LOW_FPS.load(Ordering::Relaxed);
     if fps == 0 {
@@ -1094,7 +1158,7 @@ pub fn get_cached_1low_fps() -> Option<u32> {
     }
 }
 
-/// 获取缓存的 0.1% Low FPS 值（最慢 0.1% 帧的平均 FPS）
+/// 获取缓存的 0.1% Low FPS 值（最近 5s 窗口内最慢 0.1% 帧的平均 FPS）
 ///
 /// 参考 CapFrameX EMetric.ZerodotOnePercentLowAverage：
 /// 取 99.9 分位帧时间作为阈值，筛选 >= 阈值的帧（最慢 0.1%），计算平均帧时间，

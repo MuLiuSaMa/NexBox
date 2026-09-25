@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "9.7.3",
+  "version": "9.9.3",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -81,7 +81,8 @@
       "resources/binaries/PawnIO_setup.exe",
       "resources/crosshair-presets/*",
       "resources/icc-presets/*",
-      "resources/vive/*"
+      "resources/vive/*",
+      "resources/qishui-auth/*"
     ],
     "icon": [
       "icons/32x32.png",

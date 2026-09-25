@@ -41,6 +41,18 @@ fn main() {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 第二优先：MSIX 包内运行时显式设置进程 AUMID 为包 AUMID。
+    // exe 位于 WindowsApps 时窗口默认按 exe 路径生成 AUMID，Shell 对这种
+    // "有包身份但 AUMID 非包 AUMID"的窗口按 packaged 语义渲染图标，
+    // 给任务栏/跳表图标垫系统强调色底板（用户看到的红底）。
+    // 显式设为包 AUMID 后 Shell 解析 manifest 的 altform-unplated 资产，
+    // 任务栏图标恢复无底板渲染（必须在任何窗口创建前调用）。
+    // 非打包运行（exe 不在 WindowsApps）不设置，保持与手动快捷方式一致。
+    // ═══════════════════════════════════════════════════════════════════
+    #[cfg(windows)]
+    set_packaged_aumid();
+
     log::info!("[BOOT] 即将进入 nexbox_lib::run()");
     nexbox_lib::run();
 }
@@ -107,6 +119,49 @@ fn ensure_elevation() {
             );
             std::process::exit(0);
         }
+    }
+}
+
+/// 仅当 exe 位于 WindowsApps（MSIX 包内运行）时，把进程 AUMID 设为包 AUMID。
+/// 包 AUMID = PackageFamilyName!ApplicationId（如 MuLiuSaMa.NexBox_rkw8a3fpq7zcw!NexBox）。
+/// PackageFamilyName 从包安装目录名解析（格式固定：<FamilyName>_<Version>_<Arch>__<Hash>，
+/// MSIX Identity Name 不允许下划线，故取首尾段拼接即可；哈希固定 13 字符无下划线）。
+/// ApplicationId 必须与 msix/AppxManifest.xml 的 <Application Id> 完全一致。
+#[cfg(windows)]
+fn set_packaged_aumid() {
+    use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+
+    const APP_ID: &str = "NexBox"; // msix/build-msix.ps1 生成的 <Application Id="NexBox">
+
+    let exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    if !exe.to_string_lossy().to_lowercase().contains("\\windowsapps\\") {
+        return; // 非 MSIX 运行：不设置，保持默认 exe 路径 AUMID
+    }
+    let dir_name = match exe
+        .parent()
+        .and_then(|d| d.file_name())
+        .and_then(|n| n.to_str())
+    {
+        Some(n) => n,
+        None => return,
+    };
+    let segs: Vec<&str> = dir_name.split('_').filter(|s| !s.is_empty()).collect();
+    if segs.len() < 2 {
+        log::warn!("[BOOT] 包目录名不符合预期，跳过 AUMID 设置: {dir_name}");
+        return;
+    }
+    let family = format!("{}_{}", segs[0], segs[segs.len() - 1]);
+    let aumid = format!("{}!{}", family, APP_ID);
+
+    let wide: Vec<u16> = aumid.encode_utf16().chain(std::iter::once(0)).collect();
+    let hr = unsafe { SetCurrentProcessExplicitAppUserModelID(wide.as_ptr()) };
+    if hr == 0 {
+        log::info!("[BOOT] 已设置进程 AUMID = {aumid}");
+    } else {
+        log::warn!("[BOOT] 设置进程 AUMID 失败 hr=0x{:08X}", hr);
     }
 }
 

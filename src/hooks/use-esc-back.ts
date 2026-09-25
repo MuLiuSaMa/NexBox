@@ -30,8 +30,10 @@ const PAGE_PARENT: Record<string, string> = {
   "/vtx-virtualization": "/builtin-tools",
   "/hidden-features": "/builtin-tools",
   "/context-menu": "/builtin-tools",
+  "/screen-test": "/builtin-tools",
   "/download-accelerator": "/builtin-tools",
   "/nvidia-recording": "/builtin-tools",
+  "/bsod-log": "/builtin-tools",
   // NVIDIA 驱动页内打开的下载页（层级上属于驱动页子页）
   "/nvidia-driver-download": "/nvidia-driver",
   // 优化页子页

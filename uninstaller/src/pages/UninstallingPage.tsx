@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -56,38 +55,26 @@ export default function UninstallingPage({
   }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="progress-container"
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: 1,
+        minHeight: 0,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
     >
-      <div style={{ width: "100%", maxWidth: 340 }}>
-        <div className="progress-bar">
-          <div
-            className="progress-bar-fill"
-            style={{ width: `${progress}%` }}
-          />
+      {/* Logo 正下方：细白进度条 + 上方小字（左状态、右百分比） */}
+      <div className="install-progress">
+        <div className="progress-meta">
+          <span className="progress-label">{statusText}</span>
+          <span className="progress-value">{progress}%</span>
         </div>
-        <div style={{
-          textAlign: "center",
-          marginTop: 10,
-          fontSize: 22,
-          fontWeight: 700,
-          color: "#1a202c",
-        }}>
-          {progress}%
+        <div className="progress-bar">
+          <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
         </div>
       </div>
-
-      <motion.p
-        key={statusText}
-        initial={{ opacity: 0, y: 5 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={{ fontSize: 14, color: "#64748b" }}
-      >
-        {statusText}
-      </motion.p>
-    </motion.div>
+    </div>
   );
 }

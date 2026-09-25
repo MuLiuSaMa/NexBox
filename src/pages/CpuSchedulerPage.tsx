@@ -400,6 +400,8 @@ export default function CpuSchedulerPage() {
               bg: themeColorHex,
               color: contrastText,
               boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+              // 悬停已选中的胶囊时保持实心主题色，避免被下面的半透明 hover 底色冲淡成「透明」
+              _hover: { bg: themeColorHex },
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
@@ -416,6 +418,8 @@ export default function CpuSchedulerPage() {
               bg: themeColorHex,
               color: contrastText,
               boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+              // 悬停已选中的胶囊时保持实心主题色，避免被下面的半透明 hover 底色冲淡成「透明」
+              _hover: { bg: themeColorHex },
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"

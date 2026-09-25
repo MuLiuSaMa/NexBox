@@ -5,6 +5,8 @@ mod audio_engine;
 mod audio_eq;
 mod auto_start;
 mod autoclicker;
+mod bsod_bugcheck;
+mod bsod_log;
 mod music_api;
 mod cpu_scheduler;
 mod crosshair;
@@ -31,6 +33,7 @@ mod game_ping;
 mod gpu_rename;
 mod hardware;
 mod hardware_report;
+mod jedec;
 
 mod feature_flags;
 mod hotkey;
@@ -46,6 +49,7 @@ mod nvidia_recording;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
+mod remote_monitor;
 mod power_settings;
 mod vertical_overlay;
 mod vac_repair;
@@ -357,6 +361,9 @@ pub fn run() {
                 }
             });
 
+            // 手机远程监控：若上次开启则自动重开局域网 HTTP 服务
+            remote_monitor::restore_on_startup(app.handle());
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -477,7 +484,9 @@ pub fn run() {
                 });
             }
 
-            // Tray menu: hide when losing focus (click outside), reset always-on-top
+            // Tray menu: hide when losing focus (click outside), reset always-on-top.
+            // 关闭主路径；菜单未抢到前台或点击区域不移走前台时不会触发，
+            // 那两种情况由 tray.rs 里的低级鼠标钩子守护兜底。
             if let Some(tray_menu) = app.get_webview_window("tray-menu") {
                 let menu_clone = tray_menu.clone();
                 tray_menu.on_window_event(move |event| {
@@ -704,11 +713,33 @@ pub fn run() {
         music_api::migu_rank_list,
         music_api::migu_rank_songs,
         music_api::migu_recommend_playlists,
+        // === 汽水音乐 ===
+        music_api::qishui::qishui_qr_get,
+        music_api::qishui::qishui_qr_check,
+        music_api::qishui::qishui_status,
+        music_api::qishui::qishui_login_cookie,
+        music_api::qishui::qishui_logout,
+        music_api::qishui::qishui_user_playlists,
+        music_api::qishui::qishui_playlist_tracks,
+        music_api::qishui::qishui_feed,
+        music_api::qishui::qishui_feed_modes,
+        music_api::qishui::qishui_search,
+        music_api::qishui::qishui_search_playlists,
+        music_api::qishui::qishui_search_artists,
+        music_api::qishui::qishui_song_url,
+        music_api::qishui::qishui_lyric,
+        music_api::qishui::qishui_deps_status,
+        music_api::qishui::qishui_deps_download,
         // === 多平台管理 ===
         music_api::music_get_login_statuses,
         music_api::music_switch_provider,
         music_api::music_get_playback_source,
         music_api::audio_proxy::cmd_get_proxy_port,
+        // === 手机远程监控（局域网） ===
+        remote_monitor::cmd_get_remote_monitor,
+        remote_monitor::cmd_enable_remote_monitor,
+        remote_monitor::cmd_disable_remote_monitor,
+        remote_monitor::cmd_set_remote_style,
         downloader::download_file,
         downloader::open_system_browser,
         downloader::open_installer,
@@ -842,6 +873,7 @@ pub fn run() {
         context_menu::hide_drive,
         context_menu::restore_drive,
         display_filter::get_displays,
+        display_filter::get_screen_modes,
         display_filter::set_active_display,
         display_filter::check_gamma_support,
         display_filter::get_filter_settings,
@@ -1214,6 +1246,11 @@ pub fn run() {
         feature_flags::feature_flags_query,
         feature_flags::feature_flags_set,
         feature_flags::feature_flags_reset,
+
+        // === 蓝屏日志（BSOD Log） ===
+        bsod_log::bsod_collect_evidence,
+        bsod_log::bsod_open_dump_dir,
+        bsod_log::bsod_reveal_dump,
     ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -1262,6 +1299,7 @@ pub fn run() {
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();
                 hardware_report::stop_recording();
+                remote_monitor::shutdown(); // 关掉局域网 HTTP 服务并释放端口，下次启动只能手动开启
             }
             _ => {}
         }

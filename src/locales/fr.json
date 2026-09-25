@@ -3,6 +3,7 @@
     "appName": "NexBox",
     "appFullName": "New Horizon Box",
     "description": "Surveillance des performances multiplateforme (Tauri + Next.js + Service de capteur)",
+    "close": "Fermer",
     "success": "Succès"
   },
   "view": {
@@ -58,7 +59,8 @@
     "downloadAccelerator": "Téléchargeur",
     "nvidiaRecording": "Gestion des enregistrements NVIDIA",
     "appManager": "Gestion des applications",
-    "timeSync": "Synchronisation de l'heure"
+    "timeSync": "Synchronisation de l'heure",
+    "bsodLog": "Journal BSOD"
   },
   "customPage": {
     "title": "Page Personnalisée",
@@ -1256,7 +1258,8 @@
     "downloadAcceleratorDesc": "Téléchargements segmentés multithreads pour saturer votre bande passante",
     "nvidiaRecordingDesc": "Analyse automatique des enregistrements NVIDIA, gestion, aperçu et suppression par date",
     "appManagerDesc": "Afficher et désinstaller les applications installées",
-    "timeSyncDesc": "Calibrer l'heure système, vérifier la latence et le décalage du serveur de temps"
+    "timeSyncDesc": "Calibrer l'heure système, vérifier la latence et le décalage du serveur de temps",
+    "bsodLogDesc": "Analyser les événements d'arrêt BSOD et les fichiers de vidage pour identifier le pilote ou le matériel en cause"
   },
   "timeSync": {
     "title": "Synchronisation de l'heure",
@@ -1611,11 +1614,15 @@
     },
     "aboutSettings": {
       "title": "À propos",
+      "repo": "Dépôt open source",
+      "repoSubtitle": "Code source",
       "version": "Version",
       "author": "Auteur",
       "newVersion": "Nouvelle version disponible",
       "check": "Vérifier",
       "noUpdate": "Déjà à jour",
+      "storeVersion": "Mise à jour via le Microsoft Store",
+      "storeVersionDesc": "Les nouvelles versions sont fournies par le Microsoft Store",
       "checkFailed": "Échec de la vérification des mises à jour",
       "downloadFailed": "Échec du téléchargement",
       "installFailed": "Échec de l'installation",

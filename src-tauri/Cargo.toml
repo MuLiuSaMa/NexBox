@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "9.7.3"
+version = "9.9.3"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -29,7 +29,10 @@ filetime = "0.2"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "devtools", "unstable"] }
+# 不含 devtools：release 构建下 wry 会 SetAreDevToolsEnabled(false)，
+# 关闭 F12/右键「检查」（DevTools 打开会额外占 100~300MB 且可任意调用本地 IPC 命令）；
+# dev 构建由 debug_assertions 兜住，配合 tauri.conf.json 的 "devtools": true 仍可调试。
+tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "unstable"] }
 # WebView2 COM 接口（MemoryUsageTargetLevel 等 Win32 级控制，与 wry 同版本）
 webview2-com = "0.38"
 windows-core = "0.61"
@@ -102,7 +105,6 @@ glob = "0.3"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "ico"] }
 
 [target.'cfg(windows)'.dependencies]
-mslnk = "0.1"
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Globalization",

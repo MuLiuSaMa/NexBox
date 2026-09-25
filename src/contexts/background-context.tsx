@@ -13,10 +13,10 @@ interface PresetBackground {
 }
 
 const PRESET_BACKGROUNDS: PresetBackground[] = [
-  { id: 1, name: "预设1", path: "/backgrounds/preset1.jpg" },
-  { id: 2, name: "预设2", path: "/backgrounds/preset2.jpg" },
-  { id: 3, name: "预设3", path: "/backgrounds/preset3.png" },
-  { id: 4, name: "预设4", path: "/backgrounds/preset4.png" },
+  { id: 1, name: "预设1", path: "/backgrounds/preset1.webp" },
+  { id: 2, name: "预设2", path: "/backgrounds/preset2.webp" },
+  { id: 3, name: "预设3", path: "/backgrounds/preset3.webp" },
+  { id: 4, name: "预设4", path: "/backgrounds/preset4.webp" },
 ];
 
 type LiquidGlassMode = "normal" | "real";

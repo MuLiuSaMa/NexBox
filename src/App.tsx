@@ -53,6 +53,8 @@ import CustomPage from "./pages/CustomPage";
 import NvidiaRecordingPage from "./pages/NvidiaRecordingPage";
 import VacRepairPage from "./pages/VacRepairPage";
 import TimeSyncPage from "./pages/TimeSyncPage";
+import ScreenTestPage from "./pages/ScreenTestPage";
+import BsodLogPage from "./pages/BsodLogPage";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -414,6 +416,18 @@ function App() {
                     path="/time-sync"
                     element={
                       <TimeSyncPage />
+                    }
+                  />
+                  <Route
+                    path="/screen-test"
+                    element={
+                      <ScreenTestPage />
+                    }
+                  />
+                  <Route
+                    path="/bsod-log"
+                    element={
+                      <BsodLogPage />
                     }
                   />
                 </Routes>

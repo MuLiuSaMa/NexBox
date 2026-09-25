@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox安装程序",
-  "version": "9.7.3",
+  "version": "9.9.3",
   "identifier": "com.nexbox.installer",
   "build": {
     "frontendDist": "../dist",
@@ -13,12 +13,12 @@
     "windows": [
       {
         "title": "新境盒 安装程序",
-        "width": 800,
-        "height": 620,
-        "minWidth": 800,
-        "minHeight": 620,
-        "maxWidth": 800,
-        "maxHeight": 620,
+        "width": 720,
+        "height": 450,
+        "minWidth": 720,
+        "minHeight": 450,
+        "maxWidth": 720,
+        "maxHeight": 450,
         "resizable": false,
         "center": true,
         "decorations": false

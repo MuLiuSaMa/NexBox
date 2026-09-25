@@ -13,7 +13,7 @@ import { store } from "@/lib/store";
 const FEEDBACK_URL = "https://nexbox.top/feedback";
 const DOCS_URL = "https://docs.nexbox.top";
 /** 本地兜底的 QQ 群图标 */
-const LOCAL_QQ_ICON = "/icons/qq.png";
+const LOCAL_QQ_ICON = "/icons/qq.webp";
 
 /** 读取持久化开关（兼容旧 localStorage），并订阅设置页变更事件 */
 function useCardEnabled(key: string, event: string) {

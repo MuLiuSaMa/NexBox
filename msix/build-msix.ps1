@@ -3,6 +3,8 @@
 # 用途：把 payload.zip（完整应用文件集）打包成可侧载测试的 MSIX
 # 流程：解包 payload -> 生成 AppxManifest + Assets + resources.pri -> makeappx -> 自签
 # 重新发布前：先跑 installer\pack-payload.ps1 重建 payload.zip，再跑本脚本
+# 商店（Store）提交必须用商店版构建：先跑 npm run tauri:build:store（隐藏全部第三方软件获取入口），
+# 再跑 installer\pack-payload.ps1 + 本脚本；普通安装版用 npm run tauri:build。
 # ============================================================
 param(
     # 安装目录名由 Identity Name 决定：NexBox -> WindowsApps\NexBox_版本_x64_hash

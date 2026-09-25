@@ -17,7 +17,7 @@ export function TitleBar() {
   const minimizeHoverBg = useColorModeValue("gray.100", "gray.700");
   const closeHoverBg = useColorModeValue("red.50", "red.900");
   const bgColor = useColorModeValue("whiteAlpha.800", "blackAlpha.800");
-  const logoSrc = useColorModeValue("/logo/NexBoxW.png", "/logo/NexBoxB.png");
+  const logoSrc = useColorModeValue("/logo/NexBoxW.webp", "/logo/NexBoxB.webp");
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [searchBarVisible, setSearchBarVisible] = useState(true);

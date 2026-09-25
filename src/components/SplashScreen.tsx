@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { store } from "@/lib/store";
 import { useSplashWebgl } from "@/hooks/use-splash-webgl";
 
-const DEFAULT_LOGO = "/logo/Chinesew.png";
+const DEFAULT_LOGO = "/logo/Chinesew.webp";
 
 export function SplashScreen() {
   const { startupProgress } = useAppStartup();

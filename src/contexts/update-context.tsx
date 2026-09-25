@@ -19,8 +19,9 @@ import { useTranslation } from "react-i18next";
 import { store } from "@/lib/store";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 
-const CURRENT_VERSION = "v9.7.3";
+const CURRENT_VERSION = "v9.9.3";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";
@@ -243,6 +244,8 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   // manual=true 表示用户手动点击下载：始终允许，不受静默开关限制
   const startDownload = useCallback(
     async (release: ReleaseInfo, openModalOnStart: boolean, manual = false) => {
+      // 商店版无应用内更新：一律不下载（版本由微软商店更新）
+      if (IS_STORE_BUILD) return;
       if (downloadStartedRef.current) return;
       // 硬门禁：自动下载（manual=false）在静默更新关闭时拒绝；手动下载始终允许
       if (!manual && !autoUpdateEnabledRef.current) {
@@ -390,7 +393,13 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   );
 
   // 启动完成后的自动检查：开启静默 → 后台下载不弹窗；关闭 → 弹窗但不下载
+  // 仅主窗口执行：托盘菜单/桌面歌词/悬浮框等独立窗口同样挂载本 Provider，
+  // 若各自下载会争抢同一个 Downloads 目标路径（File::create 互相截断，
+  // 且校验失败的窗口会 remove_file 删掉别窗已下好的包），导致「点击重启」时文件已不存在。
   useEffect(() => {
+    // 商店版不自动检查更新（版本由微软商店更新）
+    if (IS_STORE_BUILD) return;
+    if (getCurrentWindow().label !== "main") return;
     if (!isStartupComplete) return;
     if (!autoUpdateLoaded) return;
     if (downloadStartedRef.current) return;
@@ -419,6 +428,8 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 
   // 托盘"检查更新"事件
   useEffect(() => {
+    // 商店版无应用内更新：托盘「检查更新」不生效
+    if (IS_STORE_BUILD) return;
     const unlisten = listen("check-update", async () => {
       // 仅主窗口跳转关于页；托盘菜单窗口也挂载了本 Provider，
       // 若不拦截会导致托盘菜单被导航到设置页（下次打开变成主窗口内容）。
@@ -487,6 +498,8 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
 
   // 手动检查（设置页按钮）：开启静默且有新版 → 自动下载并打开弹窗显示进度
   const handleCheckUpdate = useCallback(async () => {
+    // 商店版不检查更新（版本由微软商店更新）
+    if (IS_STORE_BUILD) return;
     if (isDownloading || isDownloadComplete) {
       setIsModalOpen(true);
       return;

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "UninstNexBox",
-  "version": "9.7.3",
+  "version": "9.9.3",
   "identifier": "com.nexbox.uninstaller",
   "build": {
     "frontendDist": "../dist",
@@ -13,12 +13,12 @@
     "windows": [
       {
         "title": "新境盒 卸载程序",
-        "width": 580,
-        "height": 460,
-        "minWidth": 580,
-        "minHeight": 460,
-        "maxWidth": 580,
-        "maxHeight": 460,
+        "width": 720,
+        "height": 450,
+        "minWidth": 720,
+        "minHeight": 450,
+        "maxWidth": 720,
+        "maxHeight": 450,
         "resizable": false,
         "center": true,
         "decorations": false

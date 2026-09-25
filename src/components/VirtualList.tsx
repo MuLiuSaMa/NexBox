@@ -160,7 +160,15 @@ function VirtualListInner<T>({
       overflowX="hidden"
       position="relative"
       onScroll={handleScroll}
-      sx={scrollbarSx}
+      sx={{
+        ...scrollbarSx,
+        // 列表外层是带 backdrop-filter 的液态玻璃卡片：不提升成独立合成层的话，
+        // 每次滚动重绘都会连带重跑背景模糊，表现为滚动掉帧。
+        // contain 把布局/绘制影响范围限制在滚动容器内，避免冒泡到玻璃层。
+        willChange: "transform",
+        contain: "layout paint",
+        WebkitOverflowScrolling: "touch",
+      }}
       {...sizeProps}
     >
       {loading ? (

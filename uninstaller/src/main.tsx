@@ -9,8 +9,8 @@ const theme = extendTheme({
   styles: {
     global: {
       body: {
-        bg: "#ffffff",
-        color: "#1a202c",
+        bg: "#0a0a0a",
+        color: "#ffffff",
       },
     },
   },
@@ -29,7 +29,7 @@ const theme = extendTheme({
     },
   },
   config: {
-    initialColorMode: "light",
+    initialColorMode: "dark",
     useSystemColorMode: false,
   },
 });

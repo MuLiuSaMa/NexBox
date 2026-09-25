@@ -31,6 +31,13 @@ export interface Song {
   _localHasLyric?: boolean;
 }
 
+/** 持久化播放历史条目：一次成功播放记一条，列表按 playedAt 倒序（最近在前） */
+export interface PlayHistoryEntry {
+  song: Song;
+  /** 播放成功时的毫秒时间戳 */
+  playedAt: number;
+}
+
 export interface Artist {
   /** 来源平台（netease/kugou/qqmusic/migu），搜索回填，供点击后按来源加载歌曲 */
   provider?: string;
@@ -163,7 +170,7 @@ export type PlayMode = "list" | "heartbeat" | "shuffle" | "one";
 export type PlaybackQuality = "jymaster" | "hires" | "lossless" | "exhigh" | "standard";
 
 /// 音乐平台类型
-export type MusicProvider = "netease" | "kugou" | "qqmusic" | "migu";
+export type MusicProvider = "netease" | "kugou" | "qqmusic" | "migu" | "qishui";
 
 /// 外部客户端播放状态（SMTC 接管，非登录平台）
 export interface ExternalTrack {

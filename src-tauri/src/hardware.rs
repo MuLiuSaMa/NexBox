@@ -1653,14 +1653,37 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
     let errors_mem = errors.clone();
     let mem_handle = thread::spawn(move || {
-        match wmi_query::wmi_query("SELECT Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail FROM Win32_PhysicalMemory") {
+        match wmi_query::wmi_query("SELECT Manufacturer, PartNumber, Capacity, Speed, BankLabel, FormFactor, MemoryType, SMBIOSMemoryType, ConfiguredClockSpeed, ConfiguredVoltage, DataWidth, TotalWidth, SerialNumber, TypeDetail FROM Win32_PhysicalMemory") {
             Ok(results) => {
                 log::info!("获取到{}个内存条信息", results.len());
                 results.into_iter().map(|row| {
                     let capacity_bytes = row.get("Capacity").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64;
+                    // 内存厂商：WMI 常返回十六进制 JEDEC 码或占位串（Unknown / To be filled by O.E.M. 等），
+                    // 统一解码为真实品牌；无法识别的真实厂商保留原文，占位/空回退“未知”。
+                    let manufacturer = crate::jedec::resolve_mem_manufacturer(
+                        row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).as_deref(),
+                    ).unwrap_or_else(|| "未知".to_string());
+                    // 型号：去除尾部填充的空格/\0，纯占位（全 0 / 全 F / 空）回退“未知”。
+                    let part_number = {
+                        let raw = row.get("PartNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let trimmed = raw.trim().trim_end_matches('\0').trim().to_string();
+                        let is_placeholder = trimmed.is_empty()
+                            || trimmed.chars().all(|c| c == '0')
+                            || trimmed.chars().all(|c| c.eq_ignore_ascii_case(&'f'));
+                        if is_placeholder { "未知".to_string() } else { trimmed }
+                    };
+                    // 内存类型：MemoryType 在部分系统（尤其 DDR5）返回 0/未知，回退 SMBIOSMemoryType。
+                    let memory_type = {
+                        let primary = memory_type_name(row.get("MemoryType").and_then(|v| wmi_query::v_u16(v)));
+                        if primary != "未知" {
+                            primary
+                        } else {
+                            memory_type_name(row.get("SMBIOSMemoryType").and_then(|v| wmi_query::v_u16(v)))
+                        }
+                    };
                     MemoryInfo {
-                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        part_number: row.get("PartNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()).trim().to_string(),
+                        manufacturer,
+                        part_number,
                         capacity_gb: capacity_bytes / (1024.0 * 1024.0 * 1024.0),
                         // Speed: 优先使用 ConfiguredClockSpeed（实际运行频率），
                         // 回退到 Speed（模块额定频率），因为 Speed 在某些系统（特别是 DDR5）上可能不准确
@@ -1671,7 +1694,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                         },
                         bank_label: row.get("BankLabel").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
                         form_factor: memory_form_factor_name(row.get("FormFactor").and_then(|v| wmi_query::v_u16(v))),
-                        memory_type: memory_type_name(row.get("MemoryType").and_then(|v| wmi_query::v_u16(v))),
+                        memory_type,
                         configured_clock_speed: row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)),
                         configured_voltage: row.get("ConfiguredVoltage").and_then(|v| wmi_query::v_u32(v)),
                         data_width: row.get("DataWidth").and_then(|v| wmi_query::v_u32(v)),

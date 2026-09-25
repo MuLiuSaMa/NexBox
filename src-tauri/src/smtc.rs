@@ -107,66 +107,12 @@ mod imp {
         let _ = APP.set(app.clone());
 
         std::thread::spawn(move || {
-            // 未打包桌面应用：系统通过「开始菜单快捷方式」把进程 AppUserModelID 解析为显示名。
-            // 不创建快捷方式时浮层会显示「未知应用」；创建指向本 exe 的「新境盒.lnk」后即可显示「新境盒」。
-            // （进程不设置显式 AUMID，保持默认 exe 路径，与快捷方式默认 AUMID 一致才能匹配。）
-            if let Err(e) = ensure_start_menu_shortcut() {
-                log::warn!("[SMTC] 创建开始菜单快捷方式失败（可能仍显示未知应用）: {e}");
-            }
             if let Err(e) = init_controls(&app) {
                 log::warn!("[SMTC] 初始化本应用媒体会话失败: {e}");
                 return;
             }
             log::info!("[SMTC] 本应用媒体会话初始化成功");
         });
-    }
-
-    /// 幂等创建开始菜单快捷方式「新境盒.lnk」（指向当前 exe），供 Windows 解析 SMTC 显示名。
-    /// 已存在且指向同一 exe 时跳过；否则覆盖重建。
-    fn ensure_start_menu_shortcut() -> Result<(), String> {
-        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER, IPersistFile};
-        use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
-
-        let exe = std::env::current_exe().map_err(|e| format!("current_exe: {e}"))?;
-        let exe_str = exe.to_string_lossy().to_string();
-
-        // 快捷方式目录：%APPDATA%\Microsoft\Windows\Start Menu\Programs\NexBox\
-        let appdata = std::env::var("APPDATA").map_err(|_| "APPDATA 环境变量缺失".to_string())?;
-        let dir = std::path::Path::new(&appdata)
-            .join("Microsoft")
-            .join("Windows")
-            .join("Start Menu")
-            .join("Programs")
-            .join("NexBox");
-        std::fs::create_dir_all(&dir).map_err(|e| format!("创建快捷方式目录失败: {e}"))?;
-        let lnk = dir.join("新境盒.lnk");
-
-        // 已存在且指向同一 exe 则跳过（避免每次启动重建）
-        if let Ok(existing) = std::fs::read_to_string(&lnk) {
-            if existing.contains(&exe_str) {
-                return Ok(());
-            }
-        }
-
-        unsafe {
-            let link: IShellLinkW =
-                CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
-                    .map_err(|e| format!("CoCreateInstance(ShellLink): {e}"))?;
-            let exe_w: Vec<u16> = exe_str.encode_utf16().chain(std::iter::once(0)).collect();
-            let desc_w: Vec<u16> = "新境盒".encode_utf16().chain(std::iter::once(0)).collect();
-            link.SetPath(windows::core::PCWSTR(exe_w.as_ptr()))
-                .map_err(|e| format!("SetPath: {e}"))?;
-            link.SetDescription(windows::core::PCWSTR(desc_w.as_ptr()))
-                .map_err(|e| format!("SetDescription: {e}"))?;
-            let persist: IPersistFile = link.cast().map_err(|e| format!("cast IPersistFile: {e}"))?;
-            let lnk_str = lnk.to_string_lossy().to_string();
-            let lnk_w: Vec<u16> = lnk_str.encode_utf16().chain(std::iter::once(0)).collect();
-            persist
-                .Save(windows::core::PCWSTR(lnk_w.as_ptr()), true)
-                .map_err(|e| format!("Save 快捷方式: {e}"))?;
-        }
-        log::info!("[SMTC] 已创建开始菜单快捷方式: {}", lnk.display());
-        Ok(())
     }
 
     /// 初始化 SMTC 会话：Interop GetForWindow 绑定主窗口 + 注册按键/进度事件

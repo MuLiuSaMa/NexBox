@@ -6,6 +6,7 @@ import { useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { TitleBar } from "./title-bar";
 import { MRBackground } from "./MRBackground";
+import { FloatingScrollbar } from "./floating-scrollbar";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -344,6 +345,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           {children}
         </Box>
       </Box>
+      <FloatingScrollbar targetId="app-main-scroll" />
     </Box>
   );
 }

@@ -20,17 +20,84 @@ pub struct UninstallProgress {
     pub done: bool,
 }
 
+/// 归一化路径：去首尾空白、去尾部分隔符、转小写，用于安全比较
+fn normalize_path(p: &str) -> String {
+    p.trim().trim_end_matches(|c| c == '\\' || c == '/').to_lowercase()
+}
+
+/// 判断目录是否为系统关键目录（盘根、Windows、Program Files、用户目录等）。
+/// 命中则禁止删除，防止安装目录解析异常时误删整个系统/程序目录。
+fn is_critical_dir(dir: &Path) -> bool {
+    if dir.parent().is_none() {
+        return true; // 文件系统根目录
+    }
+    let target = normalize_path(&dir.to_string_lossy());
+    if target.is_empty() {
+        return true;
+    }
+    let mut critical: Vec<String> = Vec::new();
+    for var in [
+        "SystemRoot",
+        "windir",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "ProgramData",
+        "USERPROFILE",
+        "SystemDrive",
+        "HomeDrive",
+    ] {
+        if let Ok(v) = std::env::var(var) {
+            critical.push(normalize_path(&v));
+        }
+    }
+    critical.iter().any(|c| !c.is_empty() && *c == target)
+}
+
+/// 权威安装目录来源：读取安装器写入注册表的 InstallLocation，
+/// 不再使用 exe 所在目录，避免卸载器被复制/放置到其他软件目录时误删该目录。
+/// require_app_exe=true 时额外要求目录内存在 nexbox.exe（删除内容前的强校验）。
+fn resolve_install_dir(require_app_exe: bool) -> Result<std::path::PathBuf, String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let reg_paths = [
+        r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NexBox",
+        r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\NexBox",
+    ];
+
+    let mut location: Option<String> = None;
+    for rp in reg_paths {
+        if let Ok(key) = hklm.open_subkey_with_flags(rp, KEY_READ) {
+            if let Ok(loc) = key.get_value::<String, _>("InstallLocation") {
+                if !loc.trim().is_empty() {
+                    location = Some(loc);
+                    break;
+                }
+            }
+        }
+    }
+
+    let loc =
+        location.ok_or("注册表中未找到 NexBox 安装目录(InstallLocation)，已中止以防误删")?;
+    let dir = Path::new(&loc).to_path_buf();
+
+    if !dir.is_dir() {
+        return Err(format!("安装目录不存在，已中止: {}", dir.display()));
+    }
+    if is_critical_dir(&dir) {
+        return Err("安装目录指向系统关键路径，已中止卸载以防误删".to_string());
+    }
+    if require_app_exe && !dir.join("nexbox.exe").is_file() {
+        return Err("安装目录内未检测到 nexbox.exe，已中止卸载以防误删".to_string());
+    }
+    Ok(dir)
+}
+
 #[tauri::command]
 pub fn get_install_info() -> Result<UninstallInfo, String> {
-    let exe_path = std::env::current_exe().map_err(|e| format!("获取路径失败: {}", e))?;
-    let install_dir = exe_path
-        .parent()
-        .ok_or("无法获取安装目录")?
-        .display()
-        .to_string();
+    // 展示真实安装目录（来自注册表），与后续删除目标保持一致
+    let install_dir = resolve_install_dir(false)?;
 
     Ok(UninstallInfo {
-        install_dir,
+        install_dir: install_dir.display().to_string(),
         app_name: "新境盒".to_string(),
     })
 }
@@ -38,10 +105,8 @@ pub fn get_install_info() -> Result<UninstallInfo, String> {
 #[tauri::command]
 pub fn start_uninstall() -> Result<UninstallProgress, String> {
     let exe_path = std::env::current_exe().map_err(|e| format!("获取路径失败: {}", e))?;
-    let install_dir = exe_path
-        .parent()
-        .ok_or("无法获取安装目录")?
-        .to_path_buf();
+    // 安装目录以注册表为准，并强制校验目录内确有 nexbox.exe，避免误删其他软件目录
+    let install_dir = resolve_install_dir(true)?;
 
     // 1. Delete all files recursively (except self)
     delete_directory_contents(&install_dir, &exe_path)?;
@@ -68,10 +133,8 @@ pub fn start_uninstall() -> Result<UninstallProgress, String> {
 #[tauri::command]
 pub fn self_delete() -> Result<(), String> {
     let exe_path = std::env::current_exe().map_err(|e| format!("获取路径失败: {}", e))?;
-    let install_dir = exe_path
-        .parent()
-        .ok_or("无法获取安装目录")?
-        .to_path_buf();
+    // 删除目标同样以注册表安装目录为准（此时 nexbox.exe 已被清除，仅做关键目录护栏）
+    let install_dir = resolve_install_dir(false)?;
 
     let temp_dir = std::env::temp_dir();
     let vbs_path = temp_dir.join("nexbox_cleanup.vbs");

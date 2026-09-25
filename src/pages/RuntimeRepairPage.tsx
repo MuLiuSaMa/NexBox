@@ -23,9 +23,9 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
-import dotnetLogo from "@/assets/dotnet-framework.png";
-import directxLogo from "@/assets/directx.png";
-import visualStudioLogo from "@/assets/visual-studio.png";
+import dotnetLogo from "@/assets/dotnet-framework.webp";
+import directxLogo from "@/assets/directx.webp";
+import visualStudioLogo from "@/assets/visual-studio.webp";
 
 type RuntimeId = "visual-cpp" | "dotnet" | "directx";
 

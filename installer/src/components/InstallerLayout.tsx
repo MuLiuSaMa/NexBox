@@ -1,64 +1,36 @@
 import type { ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 
 interface InstallerLayoutProps {
-  currentStep: number;
   children: ReactNode;
-  canGoBack?: boolean;
-  canGoNext?: boolean;
-  nextLabel?: string;
-  onBack?: () => void;
-  onNext?: () => void;
-  showCancel?: boolean;
 }
 
-export default function InstallerLayout({
-  children,
-  canGoBack = true,
-  canGoNext = true,
-  nextLabel,
-  onBack,
-  onNext,
-  showCancel = false,
-}: InstallerLayoutProps) {
-  const { t } = useTranslation();
-
-  const handleCancel = () => {
-    if (window.confirm(t("安装未完成，确定要退出吗？"))) {
-      window.close();
-    }
-  };
-
-  // 没有任何页脚按钮时不渲染 footer，避免空白占位（如安装中/完成页）
-  const hasFooterContent = showCancel || !!onBack || !!onNext;
-
+/**
+ * 持久化外壳：左上角小号品牌标（图标 + 中文标准字，绝对定位不占布局），
+ * 中间略偏上为居中标语图，下方内容区按安装步骤切换。
+ */
+export default function InstallerLayout({ children }: InstallerLayoutProps) {
   return (
     <div className="installer-app">
-      <div className="installer-body">
-        <div className="installer-content">
-          {children}
-        </div>
+      <div className="brand-corner">
+        <img
+          className="corner-icon"
+          src="/logo/NexBoxW.webp"
+          alt="NexBox"
+          draggable={false}
+        />
+        <img
+          className="corner-word"
+          src="/logo/Chinesew.webp"
+          alt=""
+          draggable={false}
+        />
       </div>
 
-      {hasFooterContent && (
-        <div className="installer-footer">
-        {showCancel && (
-          <button className="btn-secondary" onClick={handleCancel} style={{ marginRight: "auto" }}>
-            {t("btn_cancel")}
-          </button>
-        )}
-        {onBack && (
-          <button className="btn-secondary" onClick={onBack} disabled={!canGoBack}>
-            {t("btn_back")}
-          </button>
-        )}
-        {onNext && (
-          <button className="btn-primary" onClick={onNext} disabled={!canGoNext}>
-            {nextLabel || t("btn_next")}
-          </button>
-        )}
-        </div>
-      )}
+      <div className="tagline">
+        <img src="/logo/tagline.png" alt="" draggable={false} />
+      </div>
+
+      <div className="installer-content">{children}</div>
     </div>
   );
 }

@@ -42,6 +42,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 import { BrandLogo } from "@/components/hardware-brand-logo";
+import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 
 interface DisplayInfo {
   name: string;
@@ -551,11 +552,19 @@ export default function HardwarePage() {
   }) : [];
 
   const totalCapacity = hardwareInfo ? hardwareInfo.memory.reduce((sum, mem) => sum + mem.capacity_gb, 0) : 0;
-  const memoryDisplayInfo: DisplayInfo[] = hardwareInfo ? [
-    { name: t("hardware.totalCapacity"), value: `${totalCapacity.toFixed(0)} GB` },
-    { name: t("hardware.speed"), value: hardwareInfo.memory.length > 0 ? `${hardwareInfo.memory[0].speed_mhz} MHz` : "--" },
-    { name: t("hardware.count"), value: `${hardwareInfo.memory.length}` },
-  ] : [];
+  const memoryDisplayInfo: DisplayInfo[] = hardwareInfo ? (() => {
+    const mems = hardwareInfo.memory;
+    // 取首个有效品牌/型号（过滤“未知”）用于汇总卡展示
+    const brand = mems.find((m) => m.manufacturer && m.manufacturer !== "未知")?.manufacturer;
+    const model = mems.find((m) => m.part_number && m.part_number !== "未知")?.part_number;
+    const items: DisplayInfo[] = [];
+    if (brand) items.push({ name: t("hardware.manufacturer"), value: brand });
+    if (model) items.push({ name: t("hardware.model"), value: model });
+    items.push({ name: t("hardware.totalCapacity"), value: `${totalCapacity.toFixed(0)} GB` });
+    items.push({ name: t("hardware.speed"), value: mems.length > 0 ? `${mems[0].speed_mhz} MHz` : "--" });
+    items.push({ name: t("hardware.count"), value: `${mems.length}` });
+    return items;
+  })() : [];
 
   const storageDisplayInfo: DisplayInfo[] = hardwareInfo ? hardwareInfo.disk.map((disk, i) => ({
     name: `${t("hardware.storage")} ${i + 1}`,
@@ -804,6 +813,7 @@ export default function HardwarePage() {
           {t("hardware.title")}
         </Heading>
         <HStack gap={2}>
+          <RemoteMonitorDialog />
           <Button
             size="sm"
             variant="outline"

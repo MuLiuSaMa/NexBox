@@ -59,6 +59,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
 import { store } from "@/lib/store";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { CommunityToolSection } from "@/components/community-tools/community-tool-section";
 const CUSTOM_TOOLS_KEY = "custom-added-tools";
 
@@ -1712,29 +1713,35 @@ export default function ToolsPage() {
 
   const [activeSection, setActiveSection] = useState<"community" | "official" | "thirdparty" | "peripherals">("official");
 
-  const menuItems = [
-    { key: "official" as const, label: t("tools.officialTools"), icon: Rocket },
-    { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
-    { key: "thirdparty" as const, label: t("tools.thirdpartyTools"), icon: Wrench },
-    { key: "peripherals" as const, label: t("tools.peripheralDrivers"), icon: MousePointer },
-  ];
+  // 商店版隐藏工具箱的全部栏目：四个栏目均为第三方软件获取入口
+  // （官方推荐外链下载站、社区工具 GitCode 下载、第三方工具安装包、外设驱动跳转）
+  const menuItems = IS_STORE_BUILD
+    ? []
+    : [
+        { key: "official" as const, label: t("tools.officialTools"), icon: Rocket },
+        { key: "community" as const, label: t("tools.community.title"), icon: Boxes },
+        { key: "thirdparty" as const, label: t("tools.thirdpartyTools"), icon: Wrench },
+        { key: "peripherals" as const, label: t("tools.peripheralDrivers"), icon: MousePointer },
+      ];
 
   return (
     <Flex gap={6} pt={8}>
-      <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
-        <VStack spacing={0.5} align="stretch">
-          {menuItems.map((item) => (
-            <LiquidGlassMenuItem
-              key={item.key}
-              isActive={activeSection === item.key}
-              onClick={() => setActiveSection(item.key)}
-              icon={item.icon}
-            >
-              {item.label}
-            </LiquidGlassMenuItem>
-          ))}
-        </VStack>
-      </Box>
+      {!IS_STORE_BUILD && (
+        <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
+          <VStack spacing={0.5} align="stretch">
+            {menuItems.map((item) => (
+              <LiquidGlassMenuItem
+                key={item.key}
+                isActive={activeSection === item.key}
+                onClick={() => setActiveSection(item.key)}
+                icon={item.icon}
+              >
+                {item.label}
+              </LiquidGlassMenuItem>
+            ))}
+          </VStack>
+        </Box>
+      )}
       <Box
         flex={1}
         overflowY="auto"
@@ -1764,25 +1771,29 @@ export default function ToolsPage() {
         </Heading>
 
         {/* 三个栏目常驻挂载，切换标签只隐藏不卸载，避免每次进入时工具列表/图标/社区数据重新加载 */}
-        <Box display={activeSection === "official" ? "block" : "none"}>
-          <OfficialToolSection activeCategory="all" />
-        </Box>
+        {!IS_STORE_BUILD && (
+          <>
+            <Box display={activeSection === "official" ? "block" : "none"}>
+              <OfficialToolSection activeCategory="all" />
+            </Box>
 
-        <Box display={activeSection === "community" ? "block" : "none"}>
-          <CommunityToolSection />
-        </Box>
+            <Box display={activeSection === "community" ? "block" : "none"}>
+              <CommunityToolSection />
+            </Box>
 
-        <Box display={activeSection === "thirdparty" ? "block" : "none"}>
-          <ThirdPartyToolSection
-            title={t("tools.thirdpartyTools")}
-            activeCategory="all"
-            categoryLabels={categoryLabels}
-          />
-        </Box>
+            <Box display={activeSection === "thirdparty" ? "block" : "none"}>
+              <ThirdPartyToolSection
+                title={t("tools.thirdpartyTools")}
+                activeCategory="all"
+                categoryLabels={categoryLabels}
+              />
+            </Box>
 
-        <Box display={activeSection === "peripherals" ? "block" : "none"}>
-          <PeripheralDriverSection />
-        </Box>
+            <Box display={activeSection === "peripherals" ? "block" : "none"}>
+              <PeripheralDriverSection />
+            </Box>
+          </>
+        )}
 
         {/* 内置工具（目前为空数据，渲染为隐藏占位） */}
         <ToolSection

@@ -2,37 +2,35 @@ import type { ReactNode } from "react";
 
 interface UninstallerLayoutProps {
   children: ReactNode;
-  showFooter?: boolean;
-  onPrimary?: () => void;
-  primaryLabel?: string;
-  primaryDisabled?: boolean;
 }
 
-export default function UninstallerLayout({
-  children,
-  showFooter = true,
-  onPrimary,
-  primaryLabel,
-  primaryDisabled = false,
-}: UninstallerLayoutProps) {
+/**
+ * 持久化外壳：左上角小号品牌标（图标 + 中文标准字，绝对定位不占布局），
+ * 中间略偏上为居中标语图，下方内容区按卸载步骤切换。与安装器同款布局。
+ */
+export default function UninstallerLayout({ children }: UninstallerLayoutProps) {
   return (
     <div className="installer-app">
-      <div className="installer-body">
-        <div className="installer-content">
-          {children}
-        </div>
+      <div className="brand-corner">
+        <img
+          className="corner-icon"
+          src="/logo/NexBoxW.webp"
+          alt="NexBox"
+          draggable={false}
+        />
+        <img
+          className="corner-word"
+          src="/logo/Chinesew.webp"
+          alt=""
+          draggable={false}
+        />
       </div>
 
-      {showFooter && (
-        <div className="installer-footer">
-          <div style={{ flex: 1 }} />
-          {onPrimary && (
-            <button className="btn-primary" onClick={onPrimary} disabled={primaryDisabled}>
-              {primaryLabel || "开始卸载"}
-            </button>
-          )}
-        </div>
-      )}
+      <div className="tagline">
+        <img src="/logo/tagline.png" alt="" draggable={false} />
+      </div>
+
+      <div className="installer-content">{children}</div>
     </div>
   );
 }

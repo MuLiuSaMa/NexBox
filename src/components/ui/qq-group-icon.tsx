@@ -24,7 +24,7 @@ export function QqGroupIcon({ url, size }: { url?: string; size: number }) {
 
   return (
     <img
-      src={src || "/icons/qq.png"}
+      src={src || "/icons/qq.webp"}
       alt="QQ"
       width={size}
       height={size}

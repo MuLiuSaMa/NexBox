@@ -34,6 +34,7 @@ import {
   PopoverBody,
   Switch,
   SimpleGrid,
+  Progress,
   Drawer,
   DrawerOverlay,
   DrawerContent,
@@ -80,10 +81,12 @@ import {
   AudioWaveform,
   Aperture,
   Image as ImageIcon,
+  AlertCircle,
+  History,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider } from "@/types/music";
+import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider, PlayHistoryEntry } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -138,12 +141,12 @@ const STYLE_PREVIEWS: ReadonlyArray<{
   src: string;
   label: string;
 }> = [
-  { key: "cover",     src: "/style-previews/cover.png",     label: "封面渐染" },
-  { key: "vinyl",     src: "/style-previews/vinyl.png",     label: "透明彩胶" },
-  { key: "immersive", src: "/style-previews/immersive.png", label: "沉浸" },
-  { key: "spectrum",  src: "/style-previews/spectrum.png",  label: "音域回响" },
-  { key: "modern",    src: "/style-previews/modern.png",    label: "现代" },
-  { key: "glass",     src: "/style-previews/glass.png",     label: "通透" },
+  { key: "cover",     src: "/style-previews/cover.webp",     label: "封面渐染" },
+  { key: "vinyl",     src: "/style-previews/vinyl.webp",     label: "透明彩胶" },
+  { key: "immersive", src: "/style-previews/immersive.webp", label: "沉浸" },
+  { key: "spectrum",  src: "/style-previews/spectrum.webp",  label: "音域回响" },
+  { key: "modern",    src: "/style-previews/modern.webp",    label: "现代" },
+  { key: "glass",     src: "/style-previews/glass.webp",     label: "通透" },
 ];
 
 const scrollbarSx = (color: string) => ({
@@ -2465,6 +2468,49 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   });
 
 // ═══════════════════════════════════════════════
+// 播放历史：来源平台标签
+// ═══════════════════════════════════════════════
+
+/** 平台标签元信息：logo / 中文名 / 品牌色，供播放历史行显示来源平台 */
+const PROVIDER_TAG_META: Record<string, { name: string; logo?: string; color: string }> = {
+  netease: { name: "网易云", logo: "/music-providers/wyy.webp", color: "#C20C0C" },
+  kugou: { name: "酷狗", logo: "/music-providers/kugou.webp", color: "#00A0E9" },
+  qqmusic: { name: "QQ音乐", logo: "/music-providers/qqmusic.webp", color: "#FEC135" },
+  migu: { name: "咪咕", logo: "/music-providers/migu.webp", color: "#FF69B4" },
+  qishui: { name: "汽水", logo: "/music-providers/qishui.webp", color: "#22C55E" },
+  local: { name: "本地", color: "#8B5CF6" },
+};
+
+/** 来源平台胶囊标签：小 logo + 平台名，品牌色底色随主题调不透明度 */
+const ProviderTag = memo(function ProviderTag({ provider }: { provider: string }) {
+  const meta = PROVIDER_TAG_META[provider];
+  const color = meta?.color ?? "#718096";
+  const bg = useColorModeValue(`${color}1a`, `${color}26`);
+  return (
+    <HStack spacing={1} flexShrink={0} px={1.5} py={0.5} borderRadius="full" bg={bg} lineHeight="1.4">
+      {meta?.logo ? (
+        <Box
+          as="img"
+          src={meta.logo}
+          alt=""
+          w="12px"
+          h="12px"
+          borderRadius="full"
+          objectFit="cover"
+          bg="white"
+          flexShrink={0}
+        />
+      ) : (
+        <FileMusic size={10} style={{ color }} />
+      )}
+      <Text fontSize="2xs" fontWeight="semibold" color={color} whiteSpace="nowrap">
+        {meta?.name ?? provider}
+      </Text>
+    </HStack>
+  );
+});
+
+// ═══════════════════════════════════════════════
 // SongRow — memoized，避免不必要重渲染
 // ═══════════════════════════════════════════════
 interface SongRowProps {
@@ -2525,6 +2571,7 @@ const SongRow = memo(function SongRow({
       <ChakraImage
         src={coverProxyUrl(song.cover, proxyPort)}
         alt=""
+        loading="lazy"
         w="40px"
         h="40px"
         borderRadius="md"
@@ -2581,50 +2628,50 @@ const SongRow = memo(function SongRow({
           {["", "华语", "日语", "韩语", "欧美"][song.language]}
         </Box>
       )}
-      <Tooltip label="添加到播放队列">
-        <IconButton
-          aria-label="Add to queue"
-          icon={<ListPlus size={14} />}
-          size="xs"
-          variant="ghost"
-          sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onAddToQueue(song);
-          }}
-        />
-      </Tooltip>
+      {/* 行内按钮用原生 title 而不是 Chakra Tooltip：虚拟列表滚动时行会不断挂载/卸载，
+          Tooltip 每次都要建 disclosure 状态 + hover 计时器 + 包裹 span，是滚动掉帧的主因 */}
+      <IconButton
+        aria-label="添加到播放队列"
+        title="添加到播放队列"
+        icon={<ListPlus size={14} />}
+        size="xs"
+        variant="ghost"
+        sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAddToQueue(song);
+        }}
+      />
       {isLoggedIn && (
-        <Tooltip label={isLiked ? "取消红心" : "红心"}>
-          <IconButton
-            aria-label="Like"
-            icon={<Heart size={14} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : "currentColor"} />}
-            size="xs"
-            variant="ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleLike(song.id);
-            }}
-          />
-        </Tooltip>
-      )}
-      <Tooltip label="播放">
         <IconButton
-          aria-label="Play"
-          icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
+          aria-label={isLiked ? "取消红心" : "红心"}
+          title={isLiked ? "取消红心" : "红心"}
+          icon={<Heart size={14} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : "currentColor"} />}
           size="xs"
           variant="ghost"
-          sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+          sx={{ color: subTextColor, _hover: { bg: hoverBg } }}
           onClick={(e) => {
             e.stopPropagation();
-            if (isCurrent) {
-              onTogglePlay();
-            } else {
-              onPlay(song);
-            }
+            onToggleLike(song.id);
           }}
         />
-      </Tooltip>
+      )}
+      <IconButton
+        aria-label="播放"
+        title="播放"
+        icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
+        size="xs"
+        variant="ghost"
+        sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isCurrent) {
+            onTogglePlay();
+          } else {
+            onPlay(song);
+          }
+        }}
+      />
     </HStack>
   );
 });
@@ -2764,6 +2811,125 @@ const LocalSongRow = memo(function LocalSongRow({
           }}
         />
       </Tooltip>
+    </HStack>
+  );
+});
+
+// ═══════════════════════════════════════════════
+// HistorySongRow — 播放历史行（带平台标签与播放时间）
+// ═══════════════════════════════════════════════
+interface HistorySongRowProps {
+  entry: PlayHistoryEntry;
+  isCurrent: boolean;
+  isPlaying: boolean;
+  proxyPort: number;
+  activeColor: string;
+  hoverBg: string;
+  itemHoverBg: string;
+  itemActiveBg: string;
+  textColor: string;
+  subTextColor: string;
+  liquidGlassEnabled: boolean;
+  onPlay: (song: Song) => void;
+  onAddToQueue: (song: Song) => void;
+  onTogglePlay: () => void;
+  onRemove: (provider: string, id: string) => void;
+}
+
+const HistorySongRow = memo(function HistorySongRow({
+  entry,
+  isCurrent,
+  isPlaying,
+  proxyPort,
+  activeColor,
+  hoverBg,
+  itemHoverBg,
+  itemActiveBg,
+  textColor,
+  subTextColor,
+  liquidGlassEnabled,
+  onPlay,
+  onAddToQueue,
+  onTogglePlay,
+  onRemove,
+}: HistorySongRowProps) {
+  const song = entry.song;
+  return (
+    <HStack
+      spacing={3}
+      p={2}
+      borderRadius="lg"
+      cursor="pointer"
+      _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
+      bg={isCurrent ? itemActiveBg : "transparent"}
+      onClick={() => onPlay(song)}
+      transition="background 0.15s"
+    >
+      <ChakraImage
+        src={coverProxyUrl(song.cover, proxyPort)}
+        alt=""
+        loading="lazy"
+        w="40px"
+        h="40px"
+        borderRadius="md"
+        objectFit="cover"
+        fallback={<Box w="40px" h="40px" borderRadius="md" bg="gray.700" />}
+      />
+      <VStack spacing={0} align="start" flex={1} minW={0}>
+        <Text color={textColor} fontSize="sm" noOfLines={1} fontWeight={isCurrent ? "bold" : "normal"}>
+          {song.name}
+        </Text>
+        <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+          {song.artist}
+          {song.album ? ` - ${song.album}` : ""}
+        </Text>
+      </VStack>
+      <ProviderTag provider={song.provider} />
+      {/* 固定宽：相对时间文本长短会变，不锁定宽度会让行内右侧元素左右抖动 */}
+      <Text color={subTextColor} fontSize="xs" w="62px" flexShrink={0} textAlign="right" whiteSpace="nowrap">
+        {formatCommentTime(entry.playedAt)}
+      </Text>
+      {/* 行内按钮用原生 title 而不是 Chakra Tooltip：与 SongRow 同一考虑，虚拟列表滚动时 Tooltip 是掉帧主因 */}
+      <IconButton
+        aria-label="添加到播放队列"
+        title="添加到播放队列"
+        icon={<ListPlus size={14} />}
+        size="xs"
+        variant="ghost"
+        sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAddToQueue(song);
+        }}
+      />
+      <IconButton
+        aria-label="从历史移除"
+        title="从历史移除"
+        icon={<X size={14} />}
+        size="xs"
+        variant="ghost"
+        sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(song.provider, song.id);
+        }}
+      />
+      <IconButton
+        aria-label="播放"
+        title="播放"
+        icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
+        size="xs"
+        variant="ghost"
+        sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (isCurrent) {
+            onTogglePlay();
+          } else {
+            onPlay(song);
+          }
+        }}
+      />
     </HStack>
   );
 });
@@ -3025,11 +3191,23 @@ const PlayQueueDrawer = memo(function PlayQueueDrawer({
 // 显示各平台（带登录状态圆点），点击切换搜索来源（歌曲/歌单/歌手）
 // ═══════════════════════════════════════════════
 const SEARCH_PROVIDERS: { id: MusicProvider; name: string; logo: string }[] = [
-  { id: "netease", name: "网易云", logo: "/music-providers/wyy.png" },
-  { id: "kugou", name: "酷狗", logo: "/music-providers/kugou.png" },
-  { id: "qqmusic", name: "QQ音乐", logo: "/music-providers/qqmusic.png" },
+  { id: "netease", name: "网易云", logo: "/music-providers/wyy.webp" },
+  { id: "kugou", name: "酷狗", logo: "/music-providers/kugou.webp" },
+  { id: "qqmusic", name: "QQ音乐", logo: "/music-providers/qqmusic.webp" },
   { id: "migu", name: "咪咕", logo: "/music-providers/migu.webp" },
+  { id: "qishui", name: "汽水", logo: "/music-providers/qishui.webp" },
 ];
+
+/** 汽水「听歌模式」条目，对应 Rust 端 qishui_feed_modes 的返回结构 */
+interface QishuiFeedMode {
+  name: string;
+  block: string;
+  sceneModeId: number;
+  subQueueType: string;
+}
+
+/** 听歌模式卡片图标：按顺序循环取用，官方接口不给封面样式 */
+const QISHUI_FEED_ICONS = [Sparkles, Disc3, Waves, TrendingUp, AudioWaveform, MusicIcon];
 
 function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvider) => void }) {
   const searchProvider = useMusicStore((s) => s.searchProvider);
@@ -3569,6 +3747,8 @@ export default function MusicPage() {
   const searchResults = useMusicStore((s) => s.searchResults);
   const userPlaylists = useMusicStore((s) => s.userPlaylists);
   const localSongs = useMusicStore((s) => s.localSongs);
+  // 持久化播放历史（最近在前）：左侧「播放历史」入口卡片与列表共用
+  const playHistoryList = useMusicStore((s) => s.playHistoryList);
   const importingLocal = useMusicStore((s) => s.importingLocal);
   const leftPlaylistTracks = useMusicStore((s) => s.leftPlaylistTracks);
   const leftPlaylistMeta = useMusicStore((s) => s.leftPlaylistMeta);
@@ -3587,6 +3767,7 @@ export default function MusicPage() {
       kugou: "酷狗音乐",
       qqmusic: "QQ 音乐",
       migu: "咪咕音乐",
+      qishui: "汽水音乐",
     };
     return map[playbackSource] ?? playbackSource;
   }, [playbackSource]);
@@ -3622,7 +3803,7 @@ export default function MusicPage() {
     if (musicToast) {
       toast({
         title: musicToast.message,
-        status: "warning",
+        status: musicToast.type,
         duration: 3000,
         isClosable: true,
       });
@@ -3651,7 +3832,7 @@ export default function MusicPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchTab, setSearchTab] = useState<"songs" | "playlists" | "artists">("songs");
   const previousViewRef = useRef<typeof viewMode>("main");
-  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks" | "local">("playlists");
+  const [leftPanelView, setLeftPanelView] = useState<"playlists" | "tracks" | "local" | "history">("playlists");
   const [rightPanelView, setRightPanelView] = useState<"recommendations" | "tracks" | "daily">("recommendations");
   // 左侧「我的歌单」曲目视图的歌单内搜索关键词（空 = 不筛选）
   const [playlistKeyword, setPlaylistKeyword] = useState("");
@@ -3752,6 +3933,10 @@ export default function MusicPage() {
   const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
   const dropdownBg = useColorModeValue("white", "#1a1a1a");
 
+  // 汽水引导条配色（签名依赖缺失提示）
+  const qishuiNoticeBg = useColorModeValue(`${activeColor}0d`, `${activeColor}1a`);
+  const qishuiNoticeBorder = useColorModeValue(`${activeColor}33`, `${activeColor}55`);
+
   // memoize scrollbarSx，避免每次渲染创建新对象导致子组件不必要重渲染
   const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
 
@@ -3773,18 +3958,27 @@ export default function MusicPage() {
       });
 
       let recovering = false;
+      // 同一首歌的自愈只允许一次：坏地址会 error → 重新取址 → error 死循环，
+      // 汽水杯一次就是整首下载 + Node 解密，必须掐住。
+      let recoveredSongId = "";
       audio.addEventListener("error", async () => {
         if (recovering) return;
-        recovering = true;
         const state = useMusicStore.getState();
-        if (state.currentSong && state.isPlaying) {
-          const savedTime = audio.currentTime;
-          try {
-            await state.playSong(state.currentSong);
-            audio.currentTime = savedTime;
-          } catch {}
-        }
+        if (!state.currentSong || !state.isPlaying) return;
+        const songKey = `${state.currentSong.provider}-${state.currentSong.id}`;
+        if (recoveredSongId === songKey) return;
+        recoveredSongId = songKey;
+        recovering = true;
+        const savedTime = audio.currentTime;
+        try {
+          await state.playSong(state.currentSong);
+          audio.currentTime = savedTime;
+        } catch {}
         recovering = false;
+      });
+      // 真正播起来了就放开自愈额度，避免长会话里同首歌再也拿不到重试机会
+      audio.addEventListener("playing", () => {
+        recoveredSongId = "";
       });
     }
 
@@ -3812,6 +4006,27 @@ export default function MusicPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loginInfo?.logged_in]);
+
+  // 汽水：进入汽水源后探测签名依赖（Node 包）并拉取「听歌模式」列表
+  const qishuiDeps = useMusicStore((s) => s.qishuiDeps);
+  // null = 尚未请求；数组 = 已请求（空数组说明接口失败或无模式，据此结束 loading 态）
+  const [qishuiFeedModes, setQishuiFeedModes] = useState<QishuiFeedMode[] | null>(null);
+  const loadQishuiFeedModes = useCallback(() => {
+    setQishuiFeedModes(null);
+    invoke<QishuiFeedMode[]>("qishui_feed_modes")
+      .then((modes) => setQishuiFeedModes(modes ?? []))
+      .catch((e) => {
+        console.error("qishui_feed_modes failed:", e);
+        setQishuiFeedModes([]);
+      });
+  }, []);
+  useEffect(() => {
+    if (playbackSource !== "qishui" || !loginInfo?.logged_in) return;
+    void storeActions.checkQishuiDeps(true);
+    if (qishuiFeedModes) return;
+    loadQishuiFeedModes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playbackSource, loginInfo?.logged_in]);
 
   const handleBack = useCallback(() => {
     if (viewMode === "artistDetail") {
@@ -3911,6 +4126,7 @@ export default function MusicPage() {
       const cmd =
         artistProvider === "kugou" ? "kugou_artist_search"
           : artistProvider === "qqmusic" ? "qq_artist_search"
+          : artistProvider === "qishui" ? "qishui_search_artists"
           : "music_artist_search";
       invoke<Artist[]>(cmd, { keywords: patched.name, limit: 10 }).then((results) => {
         if (!results?.length) return;
@@ -4045,6 +4261,59 @@ setPlaylistKeyword("");
     storeActions.clearLocalSongs();
   }, [storeActions]);
 
+  // ── 播放历史 ──
+  /**
+   * 视图用「进入时快照」渲染，不直接读 store：列表里点歌播放会实时重排 store（置顶 + 刷新时间），
+   * 直接订阅会让正在看的行突然跳到顶部、时间变成「刚刚」；快照保证退出再进才刷新。
+   * （store 的 playHistoryList 仍给入口卡片显示条数/最近时间，那边不在列表视图内，实时无干扰）
+   */
+  const [historyViewList, setHistoryViewList] = useState<PlayHistoryEntry[]>([]);
+
+  const openHistoryView = useCallback(() => {
+    setHistoryViewList(useMusicStore.getState().playHistoryList);
+    setLeftPanelView("history");
+  }, []);
+
+  /**
+   * 快照已按 provider+id 去重（同平台同曲只一条），这里再走一遍防御性去重，
+   * 保证旧数据下也不会把重复条目当播放队列（会让 playSong 的 findIndex 命中错位）
+   */
+  const historyQueueSongs = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Song[] = [];
+    for (const entry of historyViewList) {
+      const key = `${entry.song.provider}-${entry.song.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(entry.song);
+    }
+    return list;
+  }, [historyViewList]);
+
+  const handlePlayHistorySong = useCallback(
+    (song: Song) => {
+      void useMusicStore.getState().playSong(song, historyQueueSongs);
+    },
+    [historyQueueSongs]
+  );
+
+  const handleRemoveHistoryEntry = useCallback(
+    (provider: string, id: string) => {
+      // store 按平台+歌曲 id 删（快照下标已与 store 不一致，不能按下标删）；快照同步去掉才能立即见效果
+      storeActions.removePlayHistoryEntry(provider, id);
+      setHistoryViewList((prev) =>
+        prev.filter((e) => !(e.song.provider === provider && e.song.id === id))
+      );
+    },
+    [storeActions]
+  );
+
+  const handleClearPlayHistory = useCallback(() => {
+    void storeActions.clearPlayHistoryList();
+    setHistoryViewList([]);
+    toast({ title: "播放历史已清空", status: "info", duration: 1500 });
+  }, [storeActions, toast]);
+
 // ── 推荐歌单点击：在右侧面板切换到曲目视图 ──
 const handleRecPlaylistClick = useCallback((pl: Playlist) => {
 storeActions.loadRightPlaylistTracks(pl.id);
@@ -4088,6 +4357,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
       const cmd = pl.provider === "kugou" ? "kugou_playlist_tracks"
         : pl.provider === "qqmusic" ? "qq_playlist_tracks"
         : pl.provider === "migu" ? "migu_playlist_tracks"
+        : pl.provider === "qishui" ? "qishui_playlist_tracks"
         : "music_playlist_tracks";
       const result = await invoke<[Playlist, Song[]]>(cmd, { id: pl.id });
       setSearchExpandedTracks(result[1]);
@@ -4228,6 +4498,30 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     [currentSong, isPlaying, proxyPort, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, handleLocalPlay, onAddToQueue, onTogglePlay, handleRemoveLocalSong]
   );
 
+  // 播放历史行渲染：数据是进入视图时的快照，列表内播歌不会重排/刷时间；删除按 provider+id 定位
+  const renderHistoryRow = useCallback(
+    (entry: PlayHistoryEntry) => (
+      <HistorySongRow
+        entry={entry}
+        isCurrent={currentSong?.id === entry.song.id && currentSong?.provider === entry.song.provider}
+        isPlaying={isPlaying}
+        proxyPort={proxyPort}
+        activeColor={activeColor}
+        hoverBg={hoverBg}
+        itemHoverBg={itemHoverBg}
+        itemActiveBg={itemActiveBg}
+        textColor={textColor}
+        subTextColor={subTextColor}
+        liquidGlassEnabled={liquidGlassEnabled}
+        onPlay={handlePlayHistorySong}
+        onAddToQueue={onAddToQueue}
+        onTogglePlay={onTogglePlay}
+        onRemove={handleRemoveHistoryEntry}
+      />
+    ),
+    [currentSong, isPlaying, proxyPort, activeColor, hoverBg, itemHoverBg, itemActiveBg, textColor, subTextColor, liquidGlassEnabled, handlePlayHistorySong, onAddToQueue, onTogglePlay, handleRemoveHistoryEntry]
+  );
+
   // ── 渲染歌单行（可自定义 onClick）──
   const renderPlaylistRow = (pl: Playlist, prefix?: string, onClick?: (pl: Playlist) => void) => (
     <HStack
@@ -4251,9 +4545,26 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         fallback={<Box w="44px" h="44px" borderRadius="md" bg="gray.700" />}
       />
       <VStack spacing={0} align="start" flex={1} minW={0}>
-        <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
-          {pl.name}
-        </Text>
+        <HStack spacing={1.5} maxW="100%">
+          <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+            {pl.name}
+          </Text>
+          {/* 汽水把自建与收藏合并在同一列表里，靠标记区分（网易云用红心按钮表达） */}
+          {pl.subscribed && pl.provider === "qishui" && (
+            <Box
+              flexShrink={0}
+              px={1.5}
+              py={0.5}
+              borderRadius="full"
+              fontSize="2xs"
+              lineHeight="1.4"
+              bg={`${activeColor}26`}
+              color={activeColor}
+            >
+              收藏
+            </Box>
+          )}
+        </HStack>
         <Text color={subTextColor} fontSize="xs">
           {[pl.track_count > 0 ? `${pl.track_count} 首` : "", pl.creator ? `· ${pl.creator}` : ""].filter(Boolean).join(" ")}
         </Text>
@@ -5445,7 +5756,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
 
       {/* 主内容区：左右 50/50 */}
       <HStack spacing={4} align="stretch" flex={1} w="100%" minH={0} overflow="hidden">
-        {/* ══ 左侧：本地音乐 / 我的歌单 / 歌单曲目 ══ */}
+        {/* ══ 左侧：我的音乐（本地导入 / 播放历史）/ 我的歌单 / 歌单曲目 ══ */}
         <LiquidGlassCard p={4} flex={1} display="flex" flexDirection="column" overflow="hidden" minW={0}>
           {leftPanelView === "tracks" ? (
             <>
@@ -5615,13 +5926,71 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 scrollbarSx={memoScrollbarSx}
               />
             </>
+          ) : leftPanelView === "history" ? (
+            <>
+              {/* 播放历史视图：跨平台完整播放时间线，行内带平台标签；列表内播放不重排，退出再进才刷新 */}
+              <HStack spacing={2} mb={3} flexShrink={0}>
+                <Tooltip label="返回歌单列表">
+                  <IconButton
+                    aria-label="Back"
+                    icon={<ArrowLeft size={16} />}
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleBackToPlaylists}
+                    sx={{ color: activeColor, _hover: { bg: hoverBg } }}
+                  />
+                </Tooltip>
+                <Text fontSize="sm" fontWeight="bold" color={textColor} noOfLines={1}>
+                  播放历史
+                </Text>
+                <Text color={subTextColor} fontSize="xs" flexShrink={0}>
+                  ({historyQueueSongs.length} 首 / {historyViewList.length} 条)
+                </Text>
+                <Box flex={1} />
+                <Button
+                  size="xs"
+                  leftIcon={<PlayBtn size={12} />}
+                  variant="solid"
+                  bg={activeColor}
+                  color={contrastText}
+                  isDisabled={historyQueueSongs.length === 0}
+                  _hover={{ opacity: 0.9 }}
+                  _active={{ transform: "scale(0.97)" }}
+                  onClick={() => playAll(historyQueueSongs)}
+                >
+                  播放全部
+                </Button>
+                {historyViewList.length > 0 && (
+                  <Tooltip label="清空播放历史">
+                    <IconButton
+                      aria-label="清空播放历史"
+                      icon={<Trash2 size={15} />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleClearPlayHistory}
+                      sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
+                    />
+                  </Tooltip>
+                )}
+              </HStack>
+              <VirtualList
+                items={historyViewList}
+                itemHeight={60}
+                renderItem={renderHistoryRow}
+                getKey={(entry) => `${entry.song.provider}-${entry.song.id}`}
+                loading={false}
+                emptyText="暂无播放历史，播放歌曲后自动记录"
+                resetKey="history"
+                scrollbarSx={memoScrollbarSx}
+              />
+            </>
           ) : (
             <>
-              {/* 顶部：本地音乐入口 + 导入按钮（始终显示） */}
+              {/* 顶部：我的音乐（本地导入入口 + 导入按钮，始终显示） */}
               <HStack spacing={2} mb={2} flexShrink={0}>
                 <ListMusic size={16} color={activeColor} />
                 <Text fontSize="sm" fontWeight="bold" color={textColor} flex={1} noOfLines={1}>
-                  本地音乐
+                  我的音乐
                 </Text>
                 <Text color={subTextColor} fontSize="xs" flexShrink={0}>
                   {localSongs.length} 首
@@ -5694,9 +6063,92 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 </HStack>
               </Box>
 
+              {/* 播放历史入口：不依赖登录，本地播放也会记 */}
+              <Box
+                p={2}
+                borderRadius="lg"
+                cursor="pointer"
+                mb={3}
+                _hover={{ bg: liquidGlassEnabled ? hoverBg : itemHoverBg }}
+                onClick={openHistoryView}
+                transition="background 0.15s"
+                flexShrink={0}
+              >
+                <HStack spacing={3}>
+                  <Box
+                    w="44px"
+                    h="44px"
+                    borderRadius="md"
+                    flexShrink={0}
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                    bg={useColorModeValue(`${activeColor}1a`, `${activeColor}26`)}
+                  >
+                    <History size={22} color={activeColor} />
+                  </Box>
+                  <VStack spacing={0} align="start" flex={1} minW={0}>
+                    <Text color={textColor} fontSize="sm" fontWeight="medium" noOfLines={1}>
+                      播放历史
+                    </Text>
+                    <Text color={subTextColor} fontSize="xs" noOfLines={1}>
+                      {playHistoryList.length > 0
+                        ? `${playHistoryList.length} 条 · 最近 ${formatCommentTime(playHistoryList[0].playedAt)}`
+                        : "播放歌曲后自动记录"}
+                    </Text>
+                  </VStack>
+                  <ChevronRight size={16} color={subTextColor} />
+                </HStack>
+              </Box>
+
               {/* 登录后的歌单列表 */}
               {loginInfo?.logged_in ? (
                 <>
+                  {/* 汽水签名依赖缺失引导：需下载 Node 包才能播「听歌模式」与 VIP 全曲 */}
+                  {playbackSource === "qishui" && qishuiDeps.checked && !qishuiDeps.ready && (
+                    <Box
+                      mb={3}
+                      p={3}
+                      borderRadius="lg"
+                      flexShrink={0}
+                      bg={liquidGlassEnabled ? undefined : qishuiNoticeBg}
+                      border="1px solid"
+                      borderColor={qishuiNoticeBorder}
+                    >
+                      <HStack spacing={2} mb={1}>
+                        <AlertCircle size={16} color={activeColor} />
+                        <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                          当前无法播放
+                        </Text>
+                      </HStack>
+                      <Text fontSize="xs" color={subTextColor} mb={2}>
+                        需下载 Node 包（node.exe + bdms.node + metasecml.dll）后才能播放「听歌模式」推荐流与 VIP 全曲；免费歌曲与歌单不受影响。
+                      </Text>
+                      {qishuiDeps.downloading ? (
+                        <Progress
+                          value={qishuiDeps.progress}
+                          size="xs"
+                          borderRadius="4px"
+                          sx={{ "& > div": { background: activeColor } }}
+                        />
+                      ) : (
+                        <Button
+                          size="xs"
+                          bg={activeColor}
+                          color={contrastText}
+                          _hover={{ opacity: 0.9 }}
+                          onClick={() => storeActions.downloadQishuiDeps()}
+                        >
+                          下载 Node 包
+                        </Button>
+                      )}
+                      {qishuiDeps.error && (
+                        <Text fontSize="2xs" color="red.400" mt={1} wordBreak="break-all">
+                          {qishuiDeps.error}
+                        </Text>
+                      )}
+                    </Box>
+                  )}
                   <Text fontSize="sm" fontWeight="bold" color={textColor} mb={2} flexShrink={0}>
                     我的歌单
                   </Text>
@@ -5850,6 +6302,120 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   onEndReached={() => storeActions.loadMoreRightPlaylistTracks()}
                   hasMore={(rightPlaylistMeta?.track_count ?? 0) > rightPlaylistTracks.length}
                 />
+              </>
+            ) : playbackSource === "qishui" ? (
+              <>
+                {/* 汽水无推荐歌单接口：右侧展示官方「听歌模式」，点击即起播推荐流 */}
+                <HStack justify="space-between" mb={3} flexShrink={0}>
+                  <HStack spacing={2}>
+                    <Sparkles size={16} color={activeColor} />
+                    <Text fontSize="sm" fontWeight="bold" color={textColor}>
+                      听歌模式
+                    </Text>
+                  </HStack>
+                  <Button size="xs" variant="ghost" onClick={loadQishuiFeedModes} sx={{ color: activeColor, _hover: { bg: hoverBg } }}>
+                    刷新
+                  </Button>
+                </HStack>
+                <Box flex={1} overflowY="auto" sx={memoScrollbarSx}>
+                  {!loginInfo?.logged_in ? (
+                    <VStack py={8} spacing={3}>
+                      <MusicIcon size={32} color={subTextColor} />
+                      <Text color={subTextColor} fontSize="sm" textAlign="center">登录后查看听歌模式</Text>
+                    </VStack>
+                  ) : !qishuiFeedModes || qishuiFeedModes.length === 0 ? (
+                    <VStack py={8} spacing={3}>
+                      <Sparkles size={32} color={subTextColor} />
+                      {qishuiDeps.checked && !qishuiDeps.ready ? (
+                        <>
+                          <Text color={subTextColor} fontSize="sm" textAlign="center">
+                            需下载 Node 包后可播放「听歌模式」
+                          </Text>
+                          {qishuiDeps.downloading ? (
+                            <Progress
+                              value={qishuiDeps.progress}
+                              size="xs"
+                              w="120px"
+                              borderRadius="4px"
+                              sx={{ "& > div": { background: activeColor } }}
+                            />
+                          ) : (
+                            <Button
+                              size="xs"
+                              bg={activeColor}
+                              color={contrastText}
+                              _hover={{ opacity: 0.9 }}
+                              onClick={() => storeActions.downloadQishuiDeps()}
+                            >
+                              下载 Node 包
+                            </Button>
+                          )}
+                        </>
+                      ) : qishuiFeedModes ? (
+                        <>
+                          <Text color={subTextColor} fontSize="sm" textAlign="center">
+                            听歌模式获取失败（可能需要重新登录）
+                          </Text>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            color={activeColor}
+                            onClick={loadQishuiFeedModes}
+                          >
+                            重新加载
+                          </Button>
+                        </>
+                      ) : (
+                        <Text color={subTextColor} fontSize="sm">加载听歌模式中…</Text>
+                      )}
+                    </VStack>
+                  ) : (
+                    <SimpleGrid columns={4} spacing={2}>
+                      {qishuiFeedModes.map((mode, i) => {
+                        const ModeIcon = QISHUI_FEED_ICONS[i % QISHUI_FEED_ICONS.length];
+                        return (
+                          <VStack
+                            key={`${mode.block}-${mode.name}-${mode.sceneModeId}`}
+                            spacing={1.5}
+                            px={1.5}
+                            py={3}
+                            borderRadius="lg"
+                            border="1px solid"
+                            borderColor={borderColor}
+                            bg="transparent"
+                            cursor="pointer"
+                            transition="border-color 0.15s, background-color 0.15s"
+                            _hover={{ borderColor: `${activeColor}88`, bg: `${activeColor}12` }}
+                            onClick={() => storeActions.playQishuiFeed(mode.sceneModeId, mode.subQueueType)}
+                          >
+                            {mode.name.includes("抖音") ? (
+                              <img
+                                src="/icons/douyin.webp"
+                                alt=""
+                                style={{ width: 16, height: 16, objectFit: "contain", display: "block" }}
+                                draggable={false}
+                              />
+                            ) : (
+                              <Box color={activeColor} display="flex">
+                                <ModeIcon size={16} />
+                              </Box>
+                            )}
+                            <Text
+                              color={textColor}
+                              fontSize="xs"
+                              fontWeight="medium"
+                              noOfLines={1}
+                              textAlign="center"
+                              w="100%"
+                            >
+                              {mode.name}
+                            </Text>
+                          </VStack>
+                        );
+                      })}
+                    </SimpleGrid>
+                  )}
+                </Box>
               </>
             ) : (
               <>

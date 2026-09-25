@@ -1,7 +1,7 @@
 import { Box, Text, SimpleGrid, Spinner, VStack, useColorModeValue, Image, Button, HStack } from "@chakra-ui/react";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import epicGamesIcon from "@/assets/epic-games.png";
+import epicGamesIcon from "@/assets/epic-games.webp";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface EpicGame {

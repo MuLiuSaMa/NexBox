@@ -9,6 +9,8 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   user-select: none;
+  background: #0a0a0a;
+  color: #ffffff;
 }
 
 /* ── Title Bar ── */
@@ -17,7 +19,7 @@ html, body, #root {
   align-items: center;
   height: 44px;
   padding: 0 8px;
-  background: #ffffff;
+  background: transparent;
   flex-shrink: 0;
   position: relative;
   z-index: 1000;
@@ -41,140 +43,195 @@ html, body, #root {
   width: 36px;
   height: 36px;
   border: none;
-  background: rgba(255, 255, 255, 0.8);
-  color: #64748b;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
   border-radius: 50%;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: none;
 }
 
 .titlebar-btn:hover {
-  background: #f1f5f9;
-  color: #334155;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .titlebar-btn-close:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: rgba(255, 255, 255, 0.28);
+  color: #0a0a0a;
 }
 
-/* ── App Layout ── */
+/* ── App Layout (fixed logo shell) ── */
 .installer-app {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: calc(100vh - 44px);
-  background: #ffffff;
+  background: transparent;
+  overflow: hidden;
 }
 
-.installer-body {
+/* 左上角品牌标（图标 + 中文标准字）：fixed 钉在窗口真正左上角，不受标题栏拖拽区影响 */
+.brand-corner {
+  position: fixed;
+  top: 12px;
+  left: 16px;
   display: flex;
-  flex: 1;
-  overflow: hidden;
+  align-items: center;
+  gap: 5px;
+  z-index: 1001;
+}
+
+.brand-corner .corner-icon {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+
+.brand-corner .corner-word {
+  height: 30px;
+  object-fit: contain;
+}
+
+/* 居中标语图（原大 Logo 位置，中间略偏上） */
+.tagline {
+  flex-shrink: 0;
+  height: 124px;
+  margin-top: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 40px;
+}
+
+.tagline img {
+  max-width: 100%;
+  max-height: 64px;
+  height: auto;
+  object-fit: contain;
 }
 
 .installer-content {
   flex: 1;
-  padding: 32px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  background: #ffffff;
+  padding: 0 48px 48px;
+  overflow-y: auto;
+  background: transparent;
   position: relative;
-}
-
-.installer-footer {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  padding: 14px 24px;
-  gap: 12px;
-  background: #ffffff;
+  min-height: 0;
 }
 
 /* ── Typography ── */
 .page-title {
-  font-size: 22px;
+  font-size: 23px;
   font-weight: 700;
-  margin-bottom: 8px;
-  color: #1a202c;
+  margin-bottom: 6px;
+  color: #ffffff;
 }
 
 .page-subtitle {
   font-size: 14px;
-  color: #64748b;
-  margin-bottom: 24px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 18px;
 }
 
-/* ── Cards ── */
+/* ── Monochrome panel ── */
 .glass-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  padding: 16px;
 }
 
-/* ── Progress ── */
+/* ── Progress (thin white) ── */
 .progress-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   flex: 1;
-  gap: 20px;
+  gap: 14px;
+}
+
+.progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.progress-meta .progress-label {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.progress-meta .progress-value {
+  color: #ffffff;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .progress-bar {
   width: 100%;
-  height: 8px;
-  background: #e2e8f0;
-  border-radius: 4px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
   overflow: hidden;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ef4444, #f87171);
-  border-radius: 4px;
-  transition: width 0.4s ease;
+  background: #ffffff;
+  border-radius: 2px;
+  transition: none;
+}
+
+.install-progress {
+  width: 100%;
+  max-width: 520px;
 }
 
 /* ── Buttons ── */
 .btn-primary {
-  background: #ef4444;
-  color: white;
+  background: #ffffff;
+  color: #0a0a0a;
   border: none;
-  padding: 8px 24px;
-  border-radius: 8px;
+  padding: 8px 20px;
+  border-radius: 6px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-primary:hover {
-  background: #dc2626;
+  background: #e5e5e5;
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: #ffffff;
-  color: #475569;
-  border: 1px solid #e2e8f0;
-  padding: 8px 24px;
-  border-radius: 8px;
-  font-size: 14px;
+  background: transparent;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: none;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
-  background: #f1f5f9;
-  color: #1a202c;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
 .btn-secondary:disabled {
@@ -182,13 +239,23 @@ html, body, #root {
   cursor: not-allowed;
 }
 
+/* ── Mode Button ── */
+.mode-btn {
+  height: 42px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 /* ── Checkbox ── */
 .checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
-  color: #475569;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   user-select: none;
 }
@@ -200,30 +267,30 @@ html, body, #root {
 .checkbox-mark {
   width: 18px;
   height: 18px;
-  border: 2px solid #cbd5e1;
+  border: 2px solid rgba(255, 255, 255, 0.45);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: all 0.2s;
-  background: #ffffff;
+  transition: none;
+  background: transparent;
 }
 
 .checkbox-label input:checked + .checkbox-mark {
-  background: #ef4444;
-  border-color: #ef4444;
+  background: #ffffff;
+  border-color: #ffffff;
 }
 
 .checkbox-mark::after {
   content: "";
   width: 5px;
   height: 9px;
-  border: solid white;
+  border: solid #0a0a0a;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) translateY(-1px);
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: none;
 }
 
 .checkbox-label input:checked + .checkbox-mark::after {

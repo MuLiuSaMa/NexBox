@@ -2513,6 +2513,95 @@ pub async fn get_displays() -> Result<Vec<DisplayInfo>, String> {
     { Err("此功能仅支持 Windows 系统".to_string()) }
 }
 
+/// 单个显示器的当前模式信息（含权威刷新率与物理位置），供屏幕检测按窗口所在屏匹配。
+#[derive(serde::Serialize)]
+pub struct ScreenModeInfo {
+    pub device_name: String,
+    pub model: String,
+    pub is_primary: bool,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub refresh_rate: u32,
+}
+
+/// 枚举所有活动显示器的当前刷新率（EnumDisplaySettingsW 权威值）与物理边界。
+/// 屏幕检测的 rAF 实测在混合刷新率多屏下会被 DWM 锁到主屏节奏而失准，
+/// 用此命令拿到窗口所在屏的"设置刷新率"作为对照基准。
+#[tauri::command]
+pub async fn get_screen_modes() -> Result<Vec<ScreenModeInfo>, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let list = tauri::async_runtime::spawn_blocking(enumerate_screen_modes_inner)
+            .await
+            .map_err(|e| format!("枚举显示器失败: {}", e))?;
+        Ok(list)
+    }
+    #[cfg(not(target_os = "windows"))]
+    { Err("此功能仅支持 Windows 系统".to_string()) }
+}
+
+#[cfg(target_os = "windows")]
+fn enumerate_screen_modes_inner() -> Vec<ScreenModeInfo> {
+    use windows_sys::Win32::Graphics::Gdi::{
+        EnumDisplayMonitors, EnumDisplaySettingsW, GetMonitorInfoW, DEVMODEW, HDC, HMONITOR,
+        MONITORINFOEXW, ENUM_CURRENT_SETTINGS,
+    };
+
+    struct Data {
+        items: Vec<ScreenModeInfo>,
+    }
+
+    unsafe extern "system" fn proc(
+        hmonitor: HMONITOR,
+        _hdc: HDC,
+        _rect: *mut windows_sys::Win32::Foundation::RECT,
+        lparam: isize,
+    ) -> i32 {
+        let data = &mut *(lparam as *mut Data);
+        let mut info: MONITORINFOEXW = std::mem::zeroed();
+        info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+        if GetMonitorInfoW(hmonitor, &mut info as *mut _ as *mut _) != 0 {
+            let device_name = String::from_utf16_lossy(
+                &info.szDevice[..info.szDevice.iter().position(|&c| c == 0).unwrap_or(info.szDevice.len())],
+            );
+            let x = info.monitorInfo.rcMonitor.left;
+            let y = info.monitorInfo.rcMonitor.top;
+            let width = info.monitorInfo.rcMonitor.right - x;
+            let height = info.monitorInfo.rcMonitor.bottom - y;
+            let is_primary = (info.monitorInfo.dwFlags & 1) != 0;
+
+            let mut refresh_rate = 0u32;
+            let wide: Vec<u16> = device_name.encode_utf16().chain(std::iter::once(0)).collect();
+            let mut dm: DEVMODEW = std::mem::zeroed();
+            dm.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
+            if EnumDisplaySettingsW(wide.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) != 0 {
+                refresh_rate = dm.dmDisplayFrequency.max(0) as u32;
+            }
+
+            let model = get_monitor_model_name(&device_name);
+            data.items.push(ScreenModeInfo {
+                device_name,
+                model,
+                is_primary,
+                x,
+                y,
+                width,
+                height,
+                refresh_rate,
+            });
+        }
+        1
+    }
+
+    let mut data = Data { items: Vec::new() };
+    unsafe {
+        EnumDisplayMonitors(std::ptr::null_mut(), std::ptr::null(), Some(proc), &mut data as *mut _ as isize);
+    }
+    data.items
+}
+
 #[tauri::command]
 pub async fn set_active_display(display_index: usize) -> Result<(), String> {
     ensure_display_states();
@@ -3224,26 +3313,26 @@ pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
 /// Map a parametric preset id to its corresponding builtin ICC filename.
 fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
     match preset_id {
-        "de-exposure-pro" => Some("NexBox_去曝光Pro.icc".to_string()),
-        "vivid" => Some("NexBox_鲜艳.icc".to_string()),
-        "movie" => Some("NexBox_电影.icc".to_string()),
-        "highlight" => Some("NexBox_高亮.icc".to_string()),
-        "soft" => Some("NexBox_柔和.icc".to_string()),
-        "gaming" => Some("NexBox_游戏.icc".to_string()),
-        "reading" => Some("NexBox_阅读.icc".to_string()),
-        "de-exposure" => Some("NexBox_去曝光.icc".to_string()),
-        "shadow-boost" => Some("NexBox_暗部增强.icc".to_string()),
-        "dam-contrast" => Some("NexBox_大坝降低对比度.icc".to_string()),
-        "aerospace" => Some("NexBox_航天推荐.icc".to_string()),
-        "whiter" => Some("NexBox_偏白.icc".to_string()),
-        "bluish" => Some("NexBox_偏蓝.icc".to_string()),
-        "cool-tone" => Some("NexBox_原亮 冷色调.icc".to_string()),
-        "delta-super" => Some("NexBox_三角洲超级推荐.icc".to_string()),
-        "delta-a" => Some("NexBox_三角洲推荐A.icc".to_string()),
-        "delta-b" => Some("NexBox_三角洲推荐B.icc".to_string()),
-        "delta-c" => Some("NexBox_三角洲推荐C.icc".to_string()),
-        "delta-d" => Some("NexBox_三角洲推荐D.icc".to_string()),
-        "delta-e" => Some("NexBox_三角洲推荐E.icc".to_string()),
+        "de-exposure-pro" => Some("NexBox_DeExposurePro.icc".to_string()),
+        "vivid" => Some("NexBox_Vivid.icc".to_string()),
+        "movie" => Some("NexBox_Movie.icc".to_string()),
+        "highlight" => Some("NexBox_Highlight.icc".to_string()),
+        "soft" => Some("NexBox_Soft.icc".to_string()),
+        "gaming" => Some("NexBox_Game.icc".to_string()),
+        "reading" => Some("NexBox_Reading.icc".to_string()),
+        "de-exposure" => Some("NexBox_DeExposure.icc".to_string()),
+        "shadow-boost" => Some("NexBox_ShadowBoost.icc".to_string()),
+        "dam-contrast" => Some("NexBox_LowerContrast.icc".to_string()),
+        "aerospace" => Some("NexBox_Aerospace.icc".to_string()),
+        "whiter" => Some("NexBox_White.icc".to_string()),
+        "bluish" => Some("NexBox_Blue.icc".to_string()),
+        "cool-tone" => Some("NexBox_OriginalCool.icc".to_string()),
+        "delta-super" => Some("NexBox_DeltaSuper.icc".to_string()),
+        "delta-a" => Some("NexBox_DeltaA.icc".to_string()),
+        "delta-b" => Some("NexBox_DeltaB.icc".to_string()),
+        "delta-c" => Some("NexBox_DeltaC.icc".to_string()),
+        "delta-d" => Some("NexBox_DeltaD.icc".to_string()),
+        "delta-e" => Some("NexBox_DeltaE.icc".to_string()),
         _ => None,
     }
 }

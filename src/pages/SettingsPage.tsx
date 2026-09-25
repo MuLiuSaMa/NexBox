@@ -50,8 +50,9 @@ import {
   LuTrash2,
   LuRotateCcw,
   LuSlidersHorizontal,
+  LuGithub,
 } from "react-icons/lu";
-import { RiBilibiliFill, RiTiktokFill } from "react-icons/ri";
+import { RiBilibiliFill, RiTiktokFill, RiGithubFill, RiGiteeFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -59,6 +60,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { useThemeMode } from "@/contexts/theme-mode-context";
 
 import { useFont } from "@/contexts/font-context";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { PRESET_COLORS, hexToRgba } from "@/lib/color-utils";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { fetchReleaseByTag, type ReleaseInfo } from "@/lib/update-checker";
@@ -863,16 +865,19 @@ function GeneralSettings() {
               isDisabled={autoStartLoading || !autoStart}
             />
           </HStack>
-          <HStack justify="space-between" py={2}>
-            <Text fontSize="sm" color={labelColor} fontWeight="medium">
-              {t("settings.generalSettings.autoUpdate")}
-            </Text>
-            <ThemeSwitch
-              size="md"
-              isChecked={autoUpdateEnabled}
-              onChange={(e) => setAutoUpdateEnabled(e.target.checked)}
-            />
-          </HStack>
+          {/* 商店版不提供应用内更新开关（版本由微软商店更新） */}
+          {!IS_STORE_BUILD && (
+            <HStack justify="space-between" py={2}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.generalSettings.autoUpdate")}
+              </Text>
+              <ThemeSwitch
+                size="md"
+                isChecked={autoUpdateEnabled}
+                onChange={(e) => setAutoUpdateEnabled(e.target.checked)}
+              />
+            </HStack>
+          )}
         </LiquidGlassCard>
       </Box>
 
@@ -1218,7 +1223,7 @@ function GeneralSettings() {
                 flexShrink={0}
               >
                 <img
-                  src={splashLogo || "/logo/Chinesew.png"}
+                  src={splashLogo || "/logo/Chinesew.webp"}
                   alt="Splash Logo"
                   style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 />
@@ -2235,7 +2240,7 @@ function AppearanceSettings() {
                           position="relative"
                         >
                           <img
-                            src="/logo/MR.png"
+                            src="/logo/MR.webp"
                             alt="MR"
                             style={{
                               width: "100%",
@@ -2728,7 +2733,7 @@ function SponsorSettings() {
               justifyContent="center"
             >
               <img
-                src="/sponsor/alipay.png"
+                src="/sponsor/alipay.webp"
                 alt={t("settings.sponsorSettings.alipay")}
                 style={{ width: "100%", height: "100%", objectFit: "contain" }}
                 onError={(e) => {
@@ -2852,6 +2857,28 @@ function ThanksItemCard({ item, onOpen }: { item: ThanksItem; onOpen: (url: stri
   );
 }
 
+/** 站点 favicon 图标：无对应矢量图标库资源时用远程 favicon，加载失败回退为首字母，避免破图 */
+function FaviconIcon({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  const fallbackColor = useColorModeValue("#1a202c", "#ffffff");
+
+  if (failed) {
+    return (
+      <Text fontSize="sm" fontWeight="bold" color={fallbackColor} lineHeight="1">
+        {name.charAt(0)}
+      </Text>
+    );
+  }
+  return (
+    <img
+      src={src}
+      alt={name}
+      style={{ width: size, height: size, objectFit: "contain" }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function AboutSettings() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("settings");
@@ -2859,13 +2886,13 @@ function AboutSettings() {
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const graphicLogoSrc = useColorModeValue("/logo/NBB.png", "/logo/NBW.png");
-  const textLogoSrc = useColorModeValue("/logo/CNBB.png", "/logo/CNBW.png");
+  const graphicLogoSrc = useColorModeValue("/logo/NBB.webp", "/logo/NBW.webp");
+  const textLogoSrc = useColorModeValue("/logo/CNBB.webp", "/logo/CNBW.webp");
   const changelogScrollColor = getActiveColor();
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "9.7.3";
+  const currentVersion = "9.9.3";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3020,20 +3047,98 @@ function AboutSettings() {
         </HStack>
       </LiquidGlassCard>
 
-      {/* 第一行：版本状态 + 版本号 + 问题反馈 */}
+      {/* 第一行：开源仓库 + 版本号（含更新状态） + 问题反馈 */}
       <HStack spacing={4} align="stretch" flexWrap="wrap" mb={4}>
-        {/* 版本状态 */}
+        {/* 开源仓库：GitHub / Gitee / AtomGit 三个平台直达 */}
+        <LiquidGlassCard className="no-bounce" role="group" p={5} flex="1" minW="200px">
+          <HStack spacing={4}>
+            <Box
+              w="42px"
+              h="42px"
+              borderRadius="lg"
+              bg={iconBg}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexShrink={0}
+            >
+              <LuGithub size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+            </Box>
+            <VStack spacing={1} align="start" flex={1}>
+              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
+                {t("settings.aboutSettings.repo")}
+              </Text>
+              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
+                {t("settings.aboutSettings.repoSubtitle")}
+              </Text>
+            </VStack>
+            <Flex align="center" gap={2}>
+              <Tooltip label="GitHub">
+                <Box
+                  w="30px"
+                  h="30px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  color={useColorModeValue("#1a202c", "#ffffff")}
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(128, 128, 128, 0.18)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://github.com/MuLiuSaMa/NexBox")}
+                >
+                  <RiGithubFill size={20} />
+                </Box>
+              </Tooltip>
+              <Tooltip label="Gitee">
+                <Box
+                  w="30px"
+                  h="30px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  color="#C71D23"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(199, 29, 35, 0.12)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://gitee.com/muliuawa/nexbox")}
+                >
+                  <RiGiteeFill size={20} />
+                </Box>
+              </Tooltip>
+              <Tooltip label="AtomGit">
+                <Box
+                  w="30px"
+                  h="30px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(128, 128, 128, 0.18)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://atomgit.com/MuLiuSaMa/nexbox")}
+                >
+                  <FaviconIcon src="https://atomgit.com/favicon.ico" name="AtomGit" />
+                </Box>
+              </Tooltip>
+            </Flex>
+          </HStack>
+        </LiquidGlassCard>
+
+        {/* 版本号：主标题为版本号，副标题展示更新状态（商店版由微软商店推送更新，不提供检查更新/下载安装） */}
         <LiquidGlassCard
           className="no-bounce"
           role="group"
           p={5}
           flex="1"
           minW="200px"
-          cursor={isDownloading || isDownloadComplete ? "default" : "pointer"}
-          onClick={handleVersionClick}
+          cursor={IS_STORE_BUILD || isDownloading || isDownloadComplete ? "default" : "pointer"}
+          onClick={IS_STORE_BUILD ? undefined : handleVersionClick}
           tabIndex={0}
           transition="border-color 0.2s"
-          _hover={{ borderColor: getActiveColor() }}
+          _hover={IS_STORE_BUILD ? undefined : { borderColor: getActiveColor() }}
           _focusVisible={{
             boxShadow: `0 0 0 2px ${getActiveColor()}`,
             outline: "none",
@@ -3050,31 +3155,38 @@ function AboutSettings() {
               justifyContent="center"
               flexShrink={0}
             >
-              {isChecking ? (
-                <LuRefreshCw className="animate-spin" size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+              {IS_STORE_BUILD ? (
+                <LuInfo size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+              ) : isChecking ? (
+                <LuRefreshCw className="animate-spin" size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
               ) : hasUpdate ? (
-                <LuDownload size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuDownload size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
               ) : (
-                <LuRefreshCw size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuCheck size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
               )}
             </Box>
             <VStack spacing={1} align="start" flex={1}>
               <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
-                {isChecking
-                  ? `${t("settings.aboutSettings.check")}...`
-                  : hasUpdate
-                    ? t("settings.aboutSettings.newVersion")
-                    : t("settings.aboutSettings.noUpdate")}
+                v{currentVersion}
               </Text>
               <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
-                {t("settings.aboutSettings.version")}
+                {IS_STORE_BUILD
+                  ? t("settings.aboutSettings.storeVersion")
+                  : isChecking
+                    ? `${t("settings.aboutSettings.check")}...`
+                    : hasUpdate
+                      ? t("settings.aboutSettings.newVersion")
+                      : t("settings.aboutSettings.noUpdate")}
               </Text>
             </VStack>
-            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
-              <Text fontSize="xl" lineHeight="1">›</Text>
-            </Box>
+            {!IS_STORE_BUILD && (
+              <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+                <Text fontSize="xl" lineHeight="1">›</Text>
+              </Box>
+            )}
           </HStack>
-          {(isDownloading && !isDownloadComplete) || isDownloadComplete ? (
+          {!IS_STORE_BUILD &&
+          ((isDownloading && !isDownloadComplete) || isDownloadComplete) ? (
             <Box mt={3}>
               {isDownloading && !isDownloadComplete ? (
                 <LiquidGlassButton
@@ -3112,50 +3224,6 @@ function AboutSettings() {
               )}
             </Box>
           ) : null}
-        </LiquidGlassCard>
-
-        {/* 版本号 */}
-        <LiquidGlassCard
-          className="no-bounce"
-          role="group"
-          p={5}
-          flex="1"
-          minW="200px"
-          cursor="pointer"
-          onClick={handleVersionClick}
-          tabIndex={0}
-          transition="border-color 0.2s"
-          _hover={{ borderColor: getActiveColor() }}
-          _focusVisible={{
-            boxShadow: `0 0 0 2px ${getActiveColor()}`,
-            outline: "none",
-          }}
-        >
-          <HStack spacing={4}>
-            <Box
-              w="42px"
-              h="42px"
-              borderRadius="lg"
-              bg={iconBg}
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              flexShrink={0}
-            >
-              <LuInfo size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
-            </Box>
-            <VStack spacing={1} align="start" flex={1}>
-              <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
-                v{currentVersion}
-              </Text>
-              <Text fontSize="sm" color={subLabelColor} noOfLines={1}>
-                {t("settings.aboutSettings.version")}
-              </Text>
-            </VStack>
-            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
-              <Text fontSize="xl" lineHeight="1">›</Text>
-            </Box>
-          </HStack>
         </LiquidGlassCard>
 
         {/* 问题反馈 */}
@@ -3233,6 +3301,26 @@ function AboutSettings() {
               </Text>
             </VStack>
             <Flex align="center" gap={2}>
+              <Tooltip label="小黑盒">
+                <Box
+                  w="30px"
+                  h="30px"
+                  borderRadius="md"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                  cursor="pointer"
+                  transition="all 0.2s"
+                  _hover={{ bg: "rgba(128, 128, 128, 0.18)", transform: "scale(1.1)" }}
+                  onClick={() => handleOpenLink("https://xiaoheihe.cn/app/user/profile/56380800")}
+                >
+                  <img
+                    src="/icons/xiaoheihe.webp"
+                    alt="小黑盒"
+                    style={{ width: "22px", height: "22px", objectFit: "contain" }}
+                  />
+                </Box>
+              </Tooltip>
               <Tooltip label="Bilibili">
                 <Box
                   w="30px"

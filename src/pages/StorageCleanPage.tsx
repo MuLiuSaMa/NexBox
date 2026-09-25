@@ -30,6 +30,7 @@ import {
   MenuList,
   MenuItemOption,
   MenuOptionGroup,
+  Portal,
   AlertDialog,
   AlertDialogOverlay,
   AlertDialogContent,
@@ -41,7 +42,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useTranslation } from "react-i18next";
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -62,6 +63,8 @@ import {
   Zap,
   Check,
   ChevronDown,
+  ArrowDownWideNarrow,
+  ArrowUpNarrowWide,
   FolderOpen,
   Trash,
   Download,
@@ -206,6 +209,48 @@ function getRiskColor(level: number): string {
     default:
       return "gray";
   }
+}
+
+// ============================================================================
+// 按大小排序(全站共享:快速清理卡片 / 垃圾分类卡片及其文件 / 大文件表格)
+// ============================================================================
+
+/** 当前排序方向对应的图标 */
+function SizeSortIcon({ desc }: { desc: boolean }) {
+  return desc ? <ArrowDownWideNarrow size={14} /> : <ArrowUpNarrowWide size={14} />;
+}
+
+/** 快速清理 / 深度清理工具栏使用的下拉排序菜单 */
+function SizeSortMenu({
+  desc,
+  onChange,
+  primaryColor,
+}: {
+  desc: boolean;
+  onChange: (desc: boolean) => void;
+  primaryColor: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Menu isLazy>
+      <MenuButton
+        as={Button}
+        size="sm"
+        variant="ghost"
+        leftIcon={<SizeSortIcon desc={desc} />}
+        rightIcon={<ChevronDown size={14} />}
+        color={primaryColor}
+      >
+        {t(desc ? "storageClean.sortSizeDesc" : "storageClean.sortSizeAsc")}
+      </MenuButton>
+      <MenuList zIndex={1100}>
+        <MenuOptionGroup type="radio" value={desc ? "desc" : "asc"} onChange={(v) => onChange(v === "desc")}>
+          <MenuItemOption value="desc">{t("storageClean.sortSizeDesc")}</MenuItemOption>
+          <MenuItemOption value="asc">{t("storageClean.sortSizeAsc")}</MenuItemOption>
+        </MenuOptionGroup>
+      </MenuList>
+    </Menu>
+  );
 }
 
 // ============================================================================
@@ -354,6 +399,7 @@ interface JunkCategoryCardProps {
   category: CategoryScanResult;
   isSelected: boolean;
   isExpanded: boolean;
+  sortDesc: boolean;
   onToggleSelect: (name: string) => void;
   onToggleExpand: (name: string) => void;
   primaryColor: string;
@@ -363,6 +409,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   category,
   isSelected,
   isExpanded,
+  sortDesc,
   onToggleSelect,
   onToggleExpand,
   primaryColor,
@@ -384,8 +431,15 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
     setFileLimit(PAGE_SIZE);
   }, [category.display_name]);
 
-  const visibleFiles = category.files.slice(0, fileLimit);
-  const hasMoreFiles = category.files.length > fileLimit;
+  // 文件按大小排序后再分页,保证「前 100 条」始终是当前排序方向下最大的文件
+  const sortedFiles = useMemo(() => {
+    const arr = [...category.files];
+    arr.sort((a, b) => (sortDesc ? b.size - a.size : a.size - b.size));
+    return arr;
+  }, [category.files, sortDesc]);
+
+  const visibleFiles = sortedFiles.slice(0, fileLimit);
+  const hasMoreFiles = sortedFiles.length > fileLimit;
 
   return (
     <LiquidGlassCard
@@ -506,7 +560,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
               onClick={() => setFileLimit((limit) => limit + PAGE_SIZE)}
             >
               {t("storageClean.junkLoadMore", {
-                count: Math.min(category.files.length - fileLimit, PAGE_SIZE),
+                count: Math.min(sortedFiles.length - fileLimit, PAGE_SIZE),
               })}
             </Button>
           )}
@@ -522,6 +576,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
 
 interface BigFilesTableProps {
   files: LargeFileEntry[];
+  sortDesc: boolean;
   revealingPath: string | null;
   onReveal: (path: string) => void;
   onDelete: (file: LargeFileEntry) => void;
@@ -529,10 +584,12 @@ interface BigFilesTableProps {
   subTextColor: string;
   themeColorHex: string;
   themeColorRgba: (opacity: number) => string;
+  sortMenu: React.ReactNode;
 }
 
 const BigFilesTable = memo(function BigFilesTable({
   files,
+  sortDesc,
   revealingPath,
   onReveal,
   onDelete,
@@ -540,8 +597,15 @@ const BigFilesTable = memo(function BigFilesTable({
   subTextColor,
   themeColorHex,
   themeColorRgba,
+  sortMenu,
 }: BigFilesTableProps) {
   const { t } = useTranslation();
+
+  const sortedFiles = useMemo(() => {
+    const arr = [...files];
+    arr.sort((a, b) => (sortDesc ? b.size - a.size : a.size - b.size));
+    return arr;
+  }, [files, sortDesc]);
 
   return (
     <LiquidGlassCard borderRadius="xl" overflow="hidden">
@@ -549,14 +613,17 @@ const BigFilesTable = memo(function BigFilesTable({
         <Text fontSize="sm" fontWeight="bold" color={headingColor}>
           {t("storageClean.bigResults")}
         </Text>
-        <Badge
-          variant="subtle"
-          fontSize="xs"
-          bg={themeColorRgba(0.15)}
-          color={themeColorHex}
-        >
-          {t("storageClean.bigFound", { count: files.length })}
-        </Badge>
+        <HStack spacing={2}>
+          {sortMenu}
+          <Badge
+            variant="subtle"
+            fontSize="xs"
+            bg={themeColorRgba(0.15)}
+            color={themeColorHex}
+          >
+            {t("storageClean.bigFound", { count: files.length })}
+          </Badge>
+        </HStack>
       </HStack>
       <Box maxH="480px" overflowY="auto">
         <Table size="sm" variant="simple">
@@ -571,7 +638,7 @@ const BigFilesTable = memo(function BigFilesTable({
             </Tr>
           </Thead>
           <Tbody>
-            {files.map((file, index) => (
+            {sortedFiles.map((file, index) => (
               <Tr key={file.path}>
                 <Td fontSize="xs" color={subTextColor}>
                   {index + 1}
@@ -662,6 +729,9 @@ export default function StorageCleanPage() {
   const selectBg = useColorModeValue("#ffffff", "#1e2024");
 
   const [tabIndex, setTabIndex] = useState(0);
+
+  // ---------- 按大小排序(三个页签共享,默认由大到小) ----------
+  const [sortDesc, setSortDesc] = useState(true);
 
   // ---------- 快速清理 ----------
   const [scanResult, setScanResult] = useState<QuickScanResult | null>(null);
@@ -1164,13 +1234,20 @@ export default function StorageCleanPage() {
     setDeleteTarget(null);
   };
 
-  // 隐藏无内容(0B)的卡片:快速清理项 / 垃圾分类
-  const quickItems = scanResult
-    ? scanResult.items.filter((item) => item.exists && item.size_bytes > 0)
-    : [];
-  const junkCategories = junkResult
-    ? junkResult.categories.filter((c) => c.file_count > 0)
-    : [];
+  // 隐藏无内容(0B)的卡片:快速清理项 / 垃圾分类;并按选中方向按大小排序(默认由大到小)
+  const quickItems = useMemo(() => {
+    if (!scanResult) return [];
+    return scanResult.items
+      .filter((item) => item.exists && item.size_bytes > 0)
+      .sort((a, b) => (sortDesc ? b.size_bytes - a.size_bytes : a.size_bytes - b.size_bytes));
+  }, [scanResult, sortDesc]);
+
+  const junkCategories = useMemo(() => {
+    if (!junkResult) return [];
+    return junkResult.categories
+      .filter((c) => c.file_count > 0)
+      .sort((a, b) => (sortDesc ? b.total_size - a.total_size : a.total_size - b.total_size));
+  }, [junkResult, sortDesc]);
 
   const selectedSize = scanResult
     ? scanResult.items
@@ -1277,6 +1354,8 @@ export default function StorageCleanPage() {
               bg: themeColorHex,
               color: getContrastTextColor(),
               boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+              // 悬停已选中的胶囊时保持实心主题色，避免被下面的半透明 hover 底色冲淡成「透明」
+              _hover: { bg: themeColorHex },
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
@@ -1293,6 +1372,8 @@ export default function StorageCleanPage() {
               bg: themeColorHex,
               color: getContrastTextColor(),
               boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+              // 悬停已选中的胶囊时保持实心主题色，避免被下面的半透明 hover 底色冲淡成「透明」
+              _hover: { bg: themeColorHex },
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
@@ -1309,6 +1390,8 @@ export default function StorageCleanPage() {
               bg: themeColorHex,
               color: getContrastTextColor(),
               boxShadow: `0 2px 14px -3px ${themeColorRgba(0.5)}`,
+              // 悬停已选中的胶囊时保持实心主题色，避免被下面的半透明 hover 底色冲淡成「透明」
+              _hover: { bg: themeColorHex },
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
@@ -1380,6 +1463,11 @@ export default function StorageCleanPage() {
                 >
                   {t("storageClean.deselectAll")}
                 </Button>
+                <SizeSortMenu
+                  desc={sortDesc}
+                  onChange={setSortDesc}
+                  primaryColor={themeConfig.primaryColor}
+                />
               </HStack>
 
               {isScanning ? (
@@ -1469,6 +1557,11 @@ export default function StorageCleanPage() {
                   >
                     {t("storageClean.deselectAll")}
                   </Button>
+                  <SizeSortMenu
+                    desc={sortDesc}
+                    onChange={setSortDesc}
+                    primaryColor={themeConfig.primaryColor}
+                  />
                 </HStack>
                 <HStack spacing={2} align="center">
                   <Text fontSize="xs" color={subTextColor}>
@@ -1516,6 +1609,7 @@ export default function StorageCleanPage() {
                       category={category}
                       isSelected={selectedCategories.has(category.display_name)}
                       isExpanded={expandedCategories.has(category.display_name)}
+                      sortDesc={sortDesc}
                       onToggleSelect={handleToggleJunkCategory}
                       onToggleExpand={handleToggleJunkExpand}
                       primaryColor={themeConfig.primaryColor}
@@ -1566,34 +1660,36 @@ export default function StorageCleanPage() {
                       >
                         {selectedDrive || "--"}
                       </MenuButton>
-                      <MenuList
-                        w="150px"
-                        minW="150px"
-                        bg={selectBg}
-                        borderColor={themeColorRgba(0.3)}
-                        boxShadow={`0 8px 24px -6px ${themeColorRgba(0.4)}`}
-                        maxH="260px"
-                        overflowY="auto"
-                      >
-                        <MenuOptionGroup
-                          type="radio"
-                          value={selectedDrive}
-                          onChange={(value) => setSelectedDrive(value as string)}
+                      <Portal>
+                        <MenuList
+                          w="150px"
+                          minW="150px"
+                          bg={selectBg}
+                          borderColor={themeColorRgba(0.3)}
+                          maxH="260px"
+                          overflowY="auto"
+                          zIndex={9999}
                         >
-                          {drives.map((drive) => (
-                            <MenuItemOption
-                              key={drive}
-                              value={drive}
-                              icon={<Check size={14} color={themeColorHex} />}
-                              _selected={{ bg: themeColorRgba(0.12), color: themeColorHex, fontWeight: "600" }}
-                              _hover={{ bg: themeColorRgba(0.08) }}
-                              fontSize="sm"
-                            >
-                              {drive}
-                            </MenuItemOption>
-                          ))}
-                        </MenuOptionGroup>
-                      </MenuList>
+                          <MenuOptionGroup
+                            type="radio"
+                            value={selectedDrive}
+                            onChange={(value) => setSelectedDrive(value as string)}
+                          >
+                            {drives.map((drive) => (
+                              <MenuItemOption
+                                key={drive}
+                                value={drive}
+                                icon={<Check size={14} color={themeColorHex} />}
+                                _selected={{ bg: themeColorRgba(0.12), color: themeColorHex, fontWeight: "600" }}
+                                _hover={{ bg: themeColorRgba(0.08) }}
+                                fontSize="sm"
+                              >
+                                {drive}
+                              </MenuItemOption>
+                            ))}
+                          </MenuOptionGroup>
+                        </MenuList>
+                      </Portal>
                     </Menu>
                   </VStack>
                   <HStack spacing={2}>
@@ -1650,6 +1746,7 @@ export default function StorageCleanPage() {
               {bigResults.length > 0 ? (
                 <BigFilesTable
                   files={bigResults}
+                  sortDesc={sortDesc}
                   revealingPath={revealingPath}
                   onReveal={handleRevealFile}
                   onDelete={handleDeleteFile}
@@ -1657,6 +1754,13 @@ export default function StorageCleanPage() {
                   subTextColor={subTextColor}
                   themeColorHex={themeColorHex}
                   themeColorRgba={themeColorRgba}
+                  sortMenu={
+                    <SizeSortMenu
+                      desc={sortDesc}
+                      onChange={setSortDesc}
+                      primaryColor={themeColorHex}
+                    />
+                  }
                 />
               ) : (
                 !bigScanning && (

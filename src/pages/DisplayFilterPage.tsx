@@ -158,7 +158,7 @@ const ICC_TO_PRESET: Record<string, string> = {
   "builtin_NexBox_LowerContrast": "dam-contrast",
   "builtin_NexBox_Aerospace": "aerospace",
   "builtin_NexBox_White": "whiter",
-  "builtin_NexBox_Bluish": "bluish",
+  "builtin_NexBox_Blue": "bluish",
   "builtin_NexBox_OriginalCool": "cool-tone",
   "builtin_NexBox_DeltaSuper": "delta-super",
   "builtin_NexBox_DeltaA": "delta-a",
@@ -348,7 +348,7 @@ export default function DisplayFilterPage() {
   const isDraggingRef = useRef(false);
   
   // 预览图片切换
-  const previewImages = ["/icc-preview.jpg", "/lhdbsn.jpg", "/BKSSW.jpg", "/htjdsn.jpg"];
+  const previewImages = ["/icc-preview.jpg", "/lhdbsn.webp", "/BKSSW.jpg", "/htjdsn.webp"];
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   
   const editValuesRef = useRef({
