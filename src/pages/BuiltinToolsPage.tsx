@@ -47,6 +47,7 @@ import { ViewList } from "@/components/special/view-list";
 import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { store } from "@/lib/store";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import type { ViewItem } from "@/components/special/view-types";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
@@ -126,14 +127,19 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "builtinTools.audioEqDesc",
     color: "#E74C3C",
   },
-  {
-    id: "nvidia-driver-download",
-    path: "/nvidia-driver-download",
-    icon: NvidiaLogo,
-    titleKey: "sidebar.nvidiaDriverDownload",
-    descriptionKey: "builtinTools.nvidiaDriverDownloadDesc",
-    color: "#76B900",
-  },
+  // 商店版隐藏：该页逐条跳转 NVIDIA 官网驱动下载页，触发 Store 10.1.5 Software Distribution
+  ...(IS_STORE_BUILD
+    ? []
+    : [
+        {
+          id: "nvidia-driver-download",
+          path: "/nvidia-driver-download",
+          icon: NvidiaLogo,
+          titleKey: "sidebar.nvidiaDriverDownload",
+          descriptionKey: "builtinTools.nvidiaDriverDownloadDesc",
+          color: "#76B900",
+        },
+      ]),
   {
     id: "autoclicker",
     path: "/autoclicker",

@@ -1,6 +1,7 @@
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import { useState, useEffect, useCallback } from "react";
 import { openExternal } from "@/hooks/use-qq-groups";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 
 /** 开屏广告项 */
 export interface SplashAd {
@@ -34,6 +35,11 @@ export function useAds() {
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
+    // 商店版不拉取广告：开屏弹窗与主页卡片均为服务端可控的站外跳转入口（Store 10.1.5）
+    if (IS_STORE_BUILD) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await invoke<AdsConfig>("get_ads");

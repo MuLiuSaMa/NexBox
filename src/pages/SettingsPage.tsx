@@ -78,6 +78,7 @@ import { useUpdate } from "@/contexts/update-context";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
 import { useAppStartup } from "@/contexts/app-startup-context";
+import { SHOW_REMOTE_ACCESS_CARD } from "@/components/QqFeedbackCards";
 import {
   DndContext,
   closestCenter,
@@ -202,6 +203,7 @@ function GeneralSettings() {
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [qqGroupCardEnabled, setQqGroupCardEnabled] = useState(true);
   const [docsCardEnabled, setDocsCardEnabled] = useState(true);
+  const [remoteAccessCardEnabled, setRemoteAccessCardEnabled] = useState(true);
   const [randomImageEnabled, setRandomImageEnabled] = useState(true);
   const [moodCardEnabled, setMoodCardEnabled] = useState(true);
   const [homeUsername, setHomeUsername] = useState("");
@@ -380,6 +382,15 @@ function GeneralSettings() {
       } else {
         const ls = localStorage.getItem("nexbox_docs_card_enabled");
         if (ls !== null) setDocsCardEnabled(ls === "true");
+      }
+
+      // 手机远程卡片
+      v = await store.get<boolean>("nexbox_remote_access_card_enabled");
+      if (v !== null && v !== undefined) {
+        setRemoteAccessCardEnabled(v);
+      } else {
+        const ls = localStorage.getItem("nexbox_remote_access_card_enabled");
+        if (ls !== null) setRemoteAccessCardEnabled(ls === "true");
       }
 
       // 主页随机图片卡片显示（store 持久化，默认开启）
@@ -644,6 +655,14 @@ function GeneralSettings() {
     store.set("nexbox_docs_card_enabled", newValue).then(() => store.save());
     localStorage.setItem("nexbox_docs_card_enabled", String(newValue));
     window.dispatchEvent(new CustomEvent("docs-card-setting-changed", { detail: newValue }));
+  };
+
+  const handleRemoteAccessCardToggle = () => {
+    const newValue = !remoteAccessCardEnabled;
+    setRemoteAccessCardEnabled(newValue);
+    store.set("nexbox_remote_access_card_enabled", newValue).then(() => store.save());
+    localStorage.setItem("nexbox_remote_access_card_enabled", String(newValue));
+    window.dispatchEvent(new CustomEvent("remote-access-card-setting-changed", { detail: newValue }));
   };
 
   const handleRandomImageToggle = () => {
@@ -1145,6 +1164,23 @@ function GeneralSettings() {
                     onChange={handleDocsCardToggle}
                   />
                 </HStack>
+                {SHOW_REMOTE_ACCESS_CARD && (
+                  <>
+                    <Divider />
+                    <HStack justify="space-between" py={2} minH="50px" align="center">
+                      <Box flex={1}>
+                        <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                          {t("settings.generalSettings.remoteAccessCardLabel") || "手机远程卡片"}
+                        </Text>
+                      </Box>
+                      <ThemeSwitch
+                        size="md"
+                        isChecked={remoteAccessCardEnabled}
+                        onChange={handleRemoteAccessCardToggle}
+                      />
+                    </HStack>
+                  </>
+                )}
               </VStack>
             </Box>
             {/* 右下角：底部右侧快捷启动 */}
@@ -2892,7 +2928,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "9.9.3";
+  const currentVersion = "10.0.0";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -2901,6 +2937,11 @@ function AboutSettings() {
   const [thanksLoading, setThanksLoading] = useState(true);
 
   useEffect(() => {
+    // 商店版隐藏特别鸣谢（第三方工具/开源项目卡片），跳过远程获取
+    if (IS_STORE_BUILD) {
+      setThanksLoading(false);
+      return;
+    }
     let cancelled = false;
     invoke<ThanksItem[]>("get_thanks")
       .then((data) => {
@@ -3049,7 +3090,8 @@ function AboutSettings() {
 
       {/* 第一行：开源仓库 + 版本号（含更新状态） + 问题反馈 */}
       <HStack spacing={4} align="stretch" flexWrap="wrap" mb={4}>
-        {/* 开源仓库：GitHub / Gitee / AtomGit 三个平台直达 */}
+        {/* 开源仓库：GitHub / Gitee / AtomGit 三个平台直达（商店版隐藏，见 Store 10.1.5） */}
+        {!IS_STORE_BUILD && (
         <LiquidGlassCard className="no-bounce" role="group" p={5} flex="1" minW="200px">
           <HStack spacing={4}>
             <Box
@@ -3126,6 +3168,7 @@ function AboutSettings() {
             </Flex>
           </HStack>
         </LiquidGlassCard>
+        )}
 
         {/* 版本号：主标题为版本号，副标题展示更新状态（商店版由微软商店推送更新，不提供检查更新/下载安装） */}
         <LiquidGlassCard
@@ -3300,6 +3343,8 @@ function AboutSettings() {
                 {t("settings.aboutSettings.author")}
               </Text>
             </VStack>
+            {/* 作者的三个平台图标（小黑盒/B站/抖音）：商店版隐藏站外链接，见 Store 10.1.5 */}
+            {!IS_STORE_BUILD && (
             <Flex align="center" gap={2}>
               <Tooltip label="小黑盒">
                 <Box
@@ -3356,6 +3401,7 @@ function AboutSettings() {
                 </Box>
               </Tooltip>
             </Flex>
+            )}
           </HStack>
         </LiquidGlassCard>
 
@@ -3441,23 +3487,26 @@ function AboutSettings() {
         )}
       </LiquidGlassCard>
 
-      {/* 特别鸣谢（远程 gitee thanks.json 实时获取，含内置兜底） */}
-      <Box mt={6}>
-        <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
-          {t("settings.aboutSettings.specialThanks.title")}
-        </Text>
-        {thanksLoading ? (
-          <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
-            {t("settings.sponsorSettings.sponsorList.loading")}
+      {/* 特别鸣谢（远程 gitee thanks.json 实时获取，含内置兜底）
+          商店版隐藏：这些第三方工具/开源项目卡片指向站外获取软件，触发 Store 10.1.5 Software Distribution */}
+      {!IS_STORE_BUILD && (
+        <Box mt={6}>
+          <Text fontSize="lg" fontWeight="bold" mb={4} color={titleColor}>
+            {t("settings.aboutSettings.specialThanks.title")}
           </Text>
-        ) : (
-          <Flex flexWrap="wrap" gap={4} justify="center">
-            {thanksItems.map((item, index) => (
-              <ThanksItemCard key={index} item={item} onOpen={handleOpenLink} />
-            ))}
-          </Flex>
-        )}
-      </Box>
+          {thanksLoading ? (
+            <Text fontSize="sm" color={subLabelColor} p={4} textAlign="center">
+              {t("settings.sponsorSettings.sponsorList.loading")}
+            </Text>
+          ) : (
+            <Flex flexWrap="wrap" gap={4} justify="center">
+              {thanksItems.map((item, index) => (
+                <ThanksItemCard key={index} item={item} onOpen={handleOpenLink} />
+              ))}
+            </Flex>
+          )}
+        </Box>
+      )}
     </Box>
   );
 }

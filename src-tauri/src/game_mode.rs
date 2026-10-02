@@ -540,11 +540,18 @@ fn release_all() {
 fn sweep_loop(app: tauri::AppHandle, generation: u64) {
     let mut system = System::new();
     let mut prev_game_running = false;
+    // 首轮立即扫描：set_preset 等配置变更会重启本线程，若仍「先睡 3s 再干活」，
+    // 用户「打开游戏模式」后要等满一个扫描周期才在 PC 端生效 / 顶栏同步。
+    let mut first = true;
     loop {
         if GENERATION.load(Ordering::Relaxed) != generation {
             break;
         }
-        thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+        if first {
+            first = false;
+        } else {
+            thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+        }
         if GENERATION.load(Ordering::Relaxed) != generation {
             break;
         }

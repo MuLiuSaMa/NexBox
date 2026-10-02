@@ -1,31 +1,30 @@
 import {
   Box,
-  Flex,
   Text,
   Heading,
   VStack,
   HStack,
   Badge,
   Button,
+  IconButton,
   useColorModeValue,
   Spinner,
-  Divider,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { AnimatePresence, motion } from "framer-motion";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
+  CheckCircle2,
+  Circle,
   ChevronDown,
   ChevronUp,
   Trash2,
   RefreshCw,
   ArrowLeft,
 } from "lucide-react";
-import { useBackground } from "@/contexts/background-context";
 import { useNavigate } from "react-router-dom";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
@@ -44,9 +43,17 @@ interface VendorScanResult {
 }
 
 interface ScanResult {
-  nvidia: VendorScanResult;
-  amd: VendorScanResult;
+  groups: VendorScanResult[];
+  total_size: number;
 }
+
+/** 扫描完成前的占位分组（保持卡片立即可见，顺序与后端 VENDORS 一致） */
+const FALLBACK_VENDORS: VendorScanResult[] = [
+  "nvidia",
+  "amd",
+  "intel",
+  "directx",
+].map((vendor) => ({ vendor, dirs: [], total_dirs: 0, total_size: 0 }));
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -65,7 +72,7 @@ function VendorCard({
   onToggleSelect,
   onToggleExpand,
 }: {
-  vendorKey: "nvidia" | "amd";
+  vendorKey: string;
   result: VendorScanResult | null;
   isSelected: boolean;
   isExpanded: boolean;
@@ -75,167 +82,131 @@ function VendorCard({
   const { t } = useTranslation();
   const headingColor = useColorModeValue("gray.800", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
-  const dirPathColor = useColorModeValue("gray.400", "#666666");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
+  const mutedColor = useColorModeValue("gray.400", "#8a8a8a");
+  const idleBorder = useColorModeValue("gray.200", "#333333");
+  const rowBg = useColorModeValue("rgba(0,0,0,0.02)", "rgba(255,255,255,0.03)");
+  const selectedBg = useColorModeValue(
+    "rgba(72,187,120,0.07)",
+    "rgba(72,187,120,0.12)"
+  );
 
-  const name =
-    vendorKey === "nvidia"
-      ? t("shaderCache.nvidia.name")
-      : t("shaderCache.amd.name");
-  const description =
-    vendorKey === "nvidia"
-      ? t("shaderCache.nvidia.description")
-      : t("shaderCache.amd.description");
-  const hasDetected = result && result.total_dirs > 0;
+  const name = t(`shaderCache.${vendorKey}.name`);
+  const description = t(`shaderCache.${vendorKey}.description`);
+  const hasDetected = !!result && result.total_dirs > 0;
+  const accent = "#38A169";
+  const dirs = result?.dirs ?? [];
+  // 折叠时把目录路径挂到悬浮提示；展开后列表里已能看到，就不再提示
+  const pathsTip =
+    !isExpanded && dirs.length ? dirs.map((d) => d.path).join("\n") : undefined;
 
   return (
     <LiquidGlassCard
       w="full"
       cursor="pointer"
-      onClick={onToggleExpand}
-      position="relative"
-      overflow="hidden"
+      onClick={onToggleSelect}
+      title={pathsTip}
+      border="1.5px solid"
+      borderColor={isSelected ? accent : idleBorder}
+      bg={isSelected ? selectedBg : undefined}
+      transition="border-color 0.15s ease, background 0.15s ease"
+      _hover={{ borderColor: isSelected ? accent : mutedColor }}
     >
-      <VStack align="stretch" spacing={4} p={5}>
-        <Flex justify="space-between" align="start">
-          <Box>
-            <Text fontSize="lg" fontWeight="bold" color={headingColor}>
+      <HStack spacing={3} px={4} py={3} align="center">
+        <Box color={isSelected ? accent : mutedColor} flexShrink={0}>
+          {isSelected ? <CheckCircle2 size={20} /> : <Circle size={20} />}
+        </Box>
+
+        <VStack align="start" spacing={0} flex={1} minW={0}>
+          <HStack spacing={2} maxW="full">
+            <Text fontSize="md" fontWeight="bold" color={headingColor}>
               {name}
             </Text>
-            <Text fontSize="sm" color={descColor} mt={1} maxW="280px">
-              {description}
-            </Text>
-          </Box>
-          <HStack spacing={2}>
             <Badge
-              variant="outline"
-              colorScheme={isSelected ? "green" : "gray"}
               borderRadius="full"
-              px={3}
-              py={1}
-              fontSize="xs"
+              px={2}
+              py={0.5}
+              fontSize="10px"
               fontWeight="medium"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleSelect();
-              }}
-              cursor="pointer"
-              _hover={{ transform: "scale(1.05)" }}
-              transition="all 0.15s"
+              colorScheme={hasDetected ? "green" : "gray"}
+              bg={useColorModeValue(
+                hasDetected ? "green.50" : "gray.50",
+                hasDetected ? "rgba(72,187,120,0.1)" : "rgba(128,128,128,0.15)"
+              )}
             >
-              {isSelected
-                ? t(`shaderCache.${vendorKey}.selected`)
-                : t(`shaderCache.${vendorKey}.selectable`)}
+              {hasDetected
+                ? t("shaderCache.detected")
+                : t("shaderCache.notDetected")}
             </Badge>
           </HStack>
-        </Flex>
+          <Text fontSize="xs" color={descColor} noOfLines={1} maxW="full">
+            {description}
+          </Text>
+        </VStack>
 
-        <AnimatePresence initial={false}>
-          {isExpanded && result && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              style={{ overflow: "hidden" }}
-            >
-              <VStack align="stretch" spacing={2} mt={2}>
-                {result.dirs.map((dir, idx) => (
-                  <Box
-                    key={idx}
-                    p={3}
-                    borderRadius="lg"
-                    bg={useColorModeValue(
-                      "rgba(0,0,0,0.02)",
-                      "rgba(255,255,255,0.03)"
-                    )}
-                    border="1px solid"
-                    borderColor={
-                      dir.exists
-                        ? useColorModeValue(
-                            "rgba(0,0,0,0.06)",
-                            "rgba(255,255,255,0.08)"
-                          )
-                        : useColorModeValue(
-                            "rgba(0,0,0,0.03)",
-                            "rgba(255,255,255,0.05)"
-                          )
-                    }
-                  >
-                    <Text fontSize="sm" fontWeight="semibold" color={headingColor}>
-                      {dir.name}
-                    </Text>
-                    <Text fontSize="xs" color={dirPathColor} mt={0.5}>
-                      {dir.path}
-                    </Text>
-                  </Box>
-                ))}
-              </VStack>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <Divider />
-
-        <HStack spacing={3}>
-          <Badge
-            borderRadius="full"
-            px={3}
-            py={1.5}
-            fontSize="xs"
-            fontWeight="medium"
-            colorScheme={hasDetected ? "green" : "gray"}
-            bg={useColorModeValue(
-              hasDetected ? "green.50" : "gray.50",
-              hasDetected ? "rgba(72,187,120,0.1)" : "rgba(128,128,128,0.15)"
-            )}
-          >
-            {hasDetected
-              ? t("shaderCache.detected")
-              : t("shaderCache.notDetected")}
-          </Badge>
-          <Badge
-            borderRadius="full"
-            px={3}
-            py={1.5}
-            fontSize="xs"
-            colorScheme="blue"
-            bg={useColorModeValue(
-              "blue.50",
-              "rgba(66,153,225,0.1)"
-            )}
-          >
-            {result
-              ? t("shaderCache.dirs", { count: result.total_dirs })
-              : t("shaderCache.dirs", { count: 0 })}
-          </Badge>
-          <Badge
-            borderRadius="full"
-            px={3}
-            py={1.5}
-            fontSize="xs"
-            colorScheme="orange"
-            bg={useColorModeValue(
-              "orange.50",
-              "rgba(237,137,54,0.1)"
-            )}
-          >
+        <VStack align="end" spacing={0} flexShrink={0}>
+          <Text fontSize="md" fontWeight="bold" color={headingColor}>
             {result ? formatSize(result.total_size) : "0 B"}
-          </Badge>
-          <Box flex={1} />
-          <Flex
-            alignItems="center"
-            color={useColorModeValue("gray.400", "gray.600")}
-          >
-            {isExpanded ? (
-              <ChevronUp size={16} />
-            ) : (
-              <ChevronDown size={16} />
-            )}
-          </Flex>
-        </HStack>
-      </VStack>
+          </Text>
+          <Text fontSize="xs" color={mutedColor}>
+            {t("shaderCache.dirs", { count: result?.total_dirs ?? 0 })}
+          </Text>
+        </VStack>
+
+        <IconButton
+          aria-label={isExpanded ? "collapse" : "expand"}
+          icon={isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          size="xs"
+          variant="ghost"
+          color={mutedColor}
+          flexShrink={0}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand();
+          }}
+        />
+      </HStack>
+
+      {isExpanded && (
+        <VStack align="stretch" spacing={1} px={4} pb={3} pt={0}>
+          {dirs.length === 0 ? (
+            <Text fontSize="xs" color={mutedColor}>
+              {t("shaderCache.notDetected")}
+            </Text>
+          ) : (
+            dirs.map((dir, idx) => (
+              <HStack
+                key={idx}
+                spacing={3}
+                px={2.5}
+                py={1.5}
+                borderRadius="md"
+                bg={rowBg}
+              >
+                <VStack align="start" spacing={0} flex={1} minW={0}>
+                  <Text
+                    fontSize="xs"
+                    fontWeight="semibold"
+                    color={headingColor}
+                    noOfLines={1}
+                  >
+                    {dir.name}
+                  </Text>
+                  <Text fontSize="10px" color={mutedColor} noOfLines={1}>
+                    {dir.path}
+                  </Text>
+                </VStack>
+                <Text
+                  fontSize="xs"
+                  color={dir.exists ? descColor : mutedColor}
+                  flexShrink={0}
+                >
+                  {dir.exists ? formatSize(dir.size_bytes) : "—"}
+                </Text>
+              </HStack>
+            ))
+          )}
+        </VStack>
+      )}
     </LiquidGlassCard>
   );
 }
@@ -243,7 +214,6 @@ function VendorCard({
 export default function ShaderCachePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("layers");
-  const { liquidGlassEnabled } = useBackground();
   const navigate = useNavigate();
 
   const adaptiveTitle = useAdaptiveTextColor();
@@ -297,9 +267,7 @@ export default function ShaderCachePage() {
     setSelectedVendors((prev) => {
       const next = new Set(prev);
       if (next.has(vendor)) {
-        if (next.size > 1) {
-          next.delete(vendor);
-        }
+        next.delete(vendor);
       } else {
         next.add(vendor);
       }
@@ -383,31 +351,22 @@ export default function ShaderCachePage() {
         <Box w="100px" />
       </HStack>
 
-      <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={5}>
-        <VendorCard
-          vendorKey="nvidia"
-          result={scanResult?.nvidia ?? null}
-          isSelected={selectedVendors.has("nvidia")}
-          isExpanded={expandedVendor === "nvidia"}
-          onToggleSelect={() => handleToggleVendor("nvidia")}
-          onToggleExpand={() =>
-            setExpandedVendor((prev) =>
-              prev === "nvidia" ? null : "nvidia"
-            )
-          }
-        />
-        <VendorCard
-          vendorKey="amd"
-          result={scanResult?.amd ?? null}
-          isSelected={selectedVendors.has("amd")}
-          isExpanded={expandedVendor === "amd"}
-          onToggleSelect={() => handleToggleVendor("amd")}
-          onToggleExpand={() =>
-            setExpandedVendor((prev) =>
-              prev === "amd" ? null : "amd"
-            )
-          }
-        />
+      <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={3} alignItems="start">
+        {(scanResult?.groups ?? FALLBACK_VENDORS).map((group) => (
+          <VendorCard
+            key={group.vendor}
+            vendorKey={group.vendor}
+            result={group}
+            isSelected={selectedVendors.has(group.vendor)}
+            isExpanded={expandedVendor === group.vendor}
+            onToggleSelect={() => handleToggleVendor(group.vendor)}
+            onToggleExpand={() =>
+              setExpandedVendor((prev) =>
+                prev === group.vendor ? null : group.vendor
+              )
+            }
+          />
+        ))}
       </Grid>
 
       <HStack spacing={3} justify="start">

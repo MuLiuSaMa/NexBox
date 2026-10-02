@@ -131,6 +131,16 @@ pub fn set_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
 }
 
+/// 只读监控当前是否开启（供局域网设备发现应答器使用）。
+pub fn is_enabled() -> bool {
+    ENABLED.load(Ordering::Relaxed)
+}
+
+/// 本机局域网 IPv4（供远程接入网关复用，避免重复实现 UDP 探测技巧）。
+pub fn local_ip() -> Option<String> {
+    detect_lan_ip()
+}
+
 /// 关闭 HTTP 服务并释放端口，清空运行态。
 /// 退出程序时调用；下一次必须手动开启才会重新监听。
 pub fn shutdown() {

@@ -719,6 +719,10 @@
       "number": "群号",
       "copied": "已复制群号",
       "tip": "点击群卡片即可加入，点击群号可复制"
+    },
+    "remoteAccess": {
+      "cardTitle": "手机远程",
+      "cardSubtitle": "局域网连接电脑 · 查看与远程控制"
     }
   },
   "gameLauncher": {
@@ -1015,6 +1019,8 @@
     "title": "显示器滤镜",
     "enable": "启用滤镜",
     "presets": "预设模式",
+    "groupNexbox": "新境盒",
+    "groupChampion": "冠军调试",
     "currentSettings": "当前设置",
     "colorTemperature": "色温",
     "brightness": "亮度",
@@ -1056,6 +1062,7 @@
     "paramsUpdated": "参数已更新",
     "paramsUpdatedHint": "请手动开启滤镜开关以生效",
     "rgbGamma": "RGB 通道伽马",
+    "shadowBoost": "暗部增强",
     "rGamma": "红色",
     "gGamma": "绿色",
     "bGamma": "蓝色",
@@ -1194,6 +1201,20 @@
       "noIp": "未检测到局域网 IP，请确认电脑已连接 WiFi / 网线",
       "enable": "启用远程监控",
       "style": "手机端样式"
+    },
+    "remoteAccess": {
+      "title": "手机远程连接",
+      "control": "远程控制（手机 App）",
+      "controlDesc": "开启后安卓原生 App 可扫码/搜索配对并远程控制已授权的精选功能",
+      "browser": "浏览器只读监控",
+      "browserDesc": "无需配对，手机浏览器打开下方地址、输入访问码即可实时查看硬件数值",
+      "codeExpires": "有效期剩余",
+      "discoveryHint": "手机在 App 内点「搜索设备」即可自动发现本机；也可直接扫描二维码连接。",
+      "pairedDevices": "已配对设备",
+      "noDevices": "暂无已配对设备",
+      "lastSeen": "最后在线",
+      "revoke": "撤销",
+      "noIp": "未检测到局域网 IP，请确认电脑已连接 WiFi / 网线"
     },
     "title": "悬浮框",
     "enableOverlay": "启用悬浮框",
@@ -1494,7 +1515,8 @@
     "overlayPanelDesc": "显示系统硬件状态的悬浮框",
     "gpuRenameDesc": "改写显卡名称以优化游戏性能",
     "resolutionConverterDesc": "管理显示器分辨率与画面比例",
-    "shaderCacheDesc": "强制清理 NVIDIA/AMD 着色器缓存释放磁盘空间",
+    "shaderCacheDesc": "强制清理 NVIDIA/AMD/Intel/DirectX 着色器缓存释放磁盘空间",
+    "psoCacheDesc": "清理《三角洲行动》PSO 着色器缓存（默认移入回收站）",
     "dlssPresetDesc": "切换DLSS模型预设以优化游戏画质",
     "nvidiaDriverDesc": "通过 NVAPI 直接控制 NVIDIA 驱动图形设置",
     "nvidiaDriverDownloadDesc": "查询并下载 NVIDIA 显卡驱动程序（含历史版本）",
@@ -1997,6 +2019,8 @@
       "confirmReset": "确认重置",
       "mediaKeysTitle": "键盘媒体键控制音乐（SMTC）",
       "mediaKeysDesc": "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件",
+      "islandExternalTitle": "灵动岛显示在桌面上",
+      "islandExternalDesc": "开启后提示与播放岛移出主窗口，固定显示在屏幕顶部中央；主窗口隐藏到托盘后仍然可见，光标不在岛体上时自动鼠标穿透",
       "gameListTitle": "游戏名单",
       "builtinCount": "内置 {{count}} 款",
       "addGame": "添加游戏",
@@ -2062,6 +2086,8 @@
       "qqGroupCardDesc": "在首页显示官方QQ群卡片",
       "docsCardLabel": "使用文档",
       "docsCardDesc": "在首页显示使用文档卡片",
+      "remoteAccessCardLabel": "手机远程卡片",
+      "remoteAccessCardDesc": "在首页显示手机远程连接卡片",
       "splash": "动画",
       "splashLogoLabel": "启动动画 Logo",
       "splashLogoDesc": "自定义启动动画中显示的 Logo 图片",
@@ -2802,13 +2828,25 @@
     "vendorSubtitle": "按厂商组织清理项，默认只选 NVIDIA。",
     "nvidia": {
       "name": "NVIDIA",
-      "description": "按 NVIDIA 官方路径清理 DXCache、GLCache、NV_Cache。",
+      "description": "按 NVIDIA 官方路径清理 DXCache、GLCache、ComputeCache、NV_Cache。",
       "selected": "已选择",
       "selectable": "可选择"
     },
     "amd": {
       "name": "AMD",
       "description": "清理 AMD Software Reset Shader Cache 对应的用户级缓存目录。",
+      "selected": "已选择",
+      "selectable": "点击选择"
+    },
+    "intel": {
+      "name": "Intel",
+      "description": "清理 Intel 核显着色器缓存目录。",
+      "selected": "已选择",
+      "selectable": "点击选择"
+    },
+    "directx": {
+      "name": "DirectX",
+      "description": "清理 Windows D3D 着色器缓存（D3DSCache、DirectXShaderCache）。",
       "selected": "已选择",
       "selectable": "点击选择"
     },
@@ -2830,6 +2868,38 @@
     "cleanError": "清理失败",
     "scanError": "扫描失败",
     "noVendorSelected": "请至少选择一个显卡厂商"
+  },
+  "psoCache": {
+    "title": "PSO 缓存清理",
+    "subtitle": "清理《三角洲行动》Saved\\PSOCache 缓存。仅在游戏更新后仍持续异常卡顿时使用，请先完全退出游戏。默认把缓存移入回收站（可恢复），保留 .ini 配置与目录本身。",
+    "back": "返回",
+    "currentPath": "当前目录",
+    "noPath": "未定位到 PSOCache 目录",
+    "autoDetect": "自动检测",
+    "detecting": "检测中…",
+    "manualSelect": "手动选择",
+    "rescan": "重新扫描",
+    "notDetected": "未自动找到 PSOCache",
+    "notDetectedDesc": "请点「手动选择」指定《三角洲行动》安装目录。",
+    "detectError": "自动检测失败",
+    "chooseError": "选择目录失败",
+    "gameRunningTitle": "检测到 {{names}} 正在运行",
+    "gameRunningDesc": "请完全退出游戏与启动器后再清理。",
+    "statSize": "可清理占用",
+    "statItems": "待清理条目",
+    "statIni": "保留 .ini",
+    "invalidDir": "该目录不满足安全校验（需 …\\DeltaForce\\…\\Saved\\PSOCache），未找到可清理内容。",
+    "permanent": "永久删除（不可恢复）",
+    "permanentDesc": "不勾选则移入回收站",
+    "cleanButton": "清理 PSO 缓存",
+    "cleaning": "清理中…",
+    "cleanSuccess": "清理完成，释放了 {{size}}",
+    "cleanError": "清理失败",
+    "rebootPending": "{{count}} 项被占用，将在重启后自动删除。",
+    "tipTitle": "使用提示",
+    "tip1": "1. 清理前请完全退出《三角洲行动》与启动器，并自行备份重要数据。",
+    "tip2": "2. 默认移入回收站，可从回收站恢复；勾选「永久删除」后不可恢复。",
+    "tip3": "3. 清理后重启游戏，需在游戏设置里手动「重新预热着色器」并等待完成。"
   },
   "storageClean": {
     "title": "存储清理",

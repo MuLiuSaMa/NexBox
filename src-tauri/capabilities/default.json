@@ -11,7 +11,8 @@
     "qqmusic-login",
     "migu-login",
     "desktop-lyrics",
-    "vertical-overlay"
+    "vertical-overlay",
+    "dynamic-island"
   ],
   "permissions": [
     "core:default",

@@ -213,7 +213,7 @@ export const optimizerItems: OptimizerItem[] = [
   },
   {
     id: "win32Priority",
-    regName: "调整处理器以获得最佳性能",
+    regName: "win32Priority",
     category: "gaming",
     icon: Cpu,
     color: COLORS[13],

@@ -27,7 +27,23 @@
         user-drag: none;
         pointer-events: none;
       }
+
+      /* 桌面灵动岛窗口（/dynamic-island）：必须在首帧之前整窗透明，
+         否则 :root 与 Chakra 的不透明底色会在屏幕顶部中央闪出一块深灰矩形，
+         并且 WebView2 背景不透明会让鼠标穿透完全失效。 */
+      html.nexbox-island-window,
+      html.nexbox-island-window body,
+      html.nexbox-island-window #root {
+        background: transparent !important;
+        background-color: transparent !important;
+      }
     </style>
+    <script>
+      // 首帧之前打上岛窗标记，让上面的透明规则从第一帧就生效
+      if (location.pathname === '/dynamic-island') {
+        document.documentElement.classList.add('nexbox-island-window');
+      }
+    </script>
     <script>
       document.addEventListener('DOMContentLoaded', function() {
         document.addEventListener('contextmenu', function(e) {
@@ -68,8 +84,8 @@
         });
       });
     </script>
-    <script type="module" crossorigin src="/assets/index-79mpXFPU.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-B6ZohhKt.css">
+    <script type="module" crossorigin src="/assets/index-CL0c1JWE.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CrfrGW-R.css">
   </head>
   <body>
     <div id="root"></div>

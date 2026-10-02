@@ -10,7 +10,7 @@ import HardwareModelCard from "@/components/HardwareModelCard";
 import GameWinKeyCard from "@/components/GameWinKeyCard";
 import RandomImageCard, { useRandomImageEnabled } from "@/components/RandomImageCard";
 import MoodCard from "@/components/MoodCard";
-import { FeedbackCard, DocsCard, QqGroupCard, useFeedbackEnabled, useDocsCardEnabled, useQqGroupCardEnabled } from "@/components/QqFeedbackCards";
+import { FeedbackCard, DocsCard, QqGroupCard, RemoteAccessCard, useFeedbackEnabled, useDocsCardEnabled, useQqGroupCardEnabled, useRemoteAccessCardEnabled, SHOW_REMOTE_ACCESS_CARD } from "@/components/QqFeedbackCards";
 import { HomeAdCards } from "@/components/ads/home-ad-card";
 import { useAds } from "@/hooks/use-ads";
 import { store } from "@/lib/store";
@@ -110,6 +110,7 @@ export default function HomePage() {
   } = useTodayPopularityEnabled();
   const { enabled: feedbackEnabled, ready: feedbackReady } = useFeedbackEnabled();
   const { enabled: qqGroupCardEnabled, ready: qqGroupCardReady } = useQqGroupCardEnabled();
+  const { enabled: remoteAccessCardEnabled, ready: remoteAccessCardReady } = useRemoteAccessCardEnabled();
   const { enabled: docsCardEnabled, ready: docsCardReady } = useDocsCardEnabled();
   const { enabled: announcementEnabled, ready: announcementReady } = useAnnouncementEnabled();
   const { enabled: randomQuoteEnabled, ready: randomQuoteReady } = useRandomQuoteEnabled();
@@ -228,12 +229,16 @@ export default function HomePage() {
             </HStack>
           ) : null}
         </Box>
-        {(feedbackReady && feedbackEnabled) || (docsCardReady && docsCardEnabled) || (qqGroupCardReady && qqGroupCardEnabled) || homeAds.length > 0 ? (
+        {(feedbackReady && feedbackEnabled) || (docsCardReady && docsCardEnabled) || (qqGroupCardReady && qqGroupCardEnabled) || (SHOW_REMOTE_ACCESS_CARD && remoteAccessCardReady && remoteAccessCardEnabled) || homeAds.length > 0 ? (
           <Box pt={6}>
             <VStack spacing={2} align="stretch">
-              {feedbackReady && feedbackEnabled && <FeedbackCard />}
-              {docsCardReady && docsCardEnabled && <DocsCard />}
-              {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
+              {/* 反馈/文档/QQ群：80px 方形图标块，一行排列（手机远程与广告卡保持横条样式，排在下方） */}
+              <HStack spacing={2} justify="flex-end">
+                {feedbackReady && feedbackEnabled && <FeedbackCard />}
+                {docsCardReady && docsCardEnabled && <DocsCard />}
+                {qqGroupCardReady && qqGroupCardEnabled && <QqGroupCard />}
+              </HStack>
+              {SHOW_REMOTE_ACCESS_CARD && remoteAccessCardReady && remoteAccessCardEnabled && <RemoteAccessCard />}
               {homeAds.length > 0 && <HomeAdCards ads={homeAds} />}
             </VStack>
           </Box>

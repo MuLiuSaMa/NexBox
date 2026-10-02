@@ -8,11 +8,13 @@ import {
   useColorModeValue,
   Card,
   CardBody,
+  Icon,
   IconButton,
   Tooltip,
   SimpleGrid,
   Button,
   Input,
+  Image,
   Slider,
   SliderTrack,
   SliderFilledTrack,
@@ -47,11 +49,11 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { 
   Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
-  Film, Heart, Palette, Gamepad2, Save, Settings2, ArrowLeft,
-  Upload, Trash2, FileImage, Download, Bookmark,
+  Film, Heart, Palette, Gamepad2, Settings2, ArrowLeft,
+  Upload, Trash2, FileImage, Download, Bookmark, Trophy,
   ChevronLeft, ChevronRight, Check, ChevronDown
 } from "lucide-react";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -59,6 +61,8 @@ import { useNavigate } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { store } from "@/lib/store";
+import nexboxLogo from "@/assets/nexbox-b.webp";
+import championLogo from "@/assets/champion.webp";
 
 interface FilterSettings {
   temperature: number;
@@ -68,6 +72,8 @@ interface FilterSettings {
   r_gamma: number;
   g_gamma: number;
   b_gamma: number;
+  /** 暗部增强：-100 ~ 100，0 = 不改变 */
+  shadow: number;
   s_curve: number;
   r_boost: number;
   g_boost: number;
@@ -168,6 +174,142 @@ const ICC_TO_PRESET: Record<string, string> = {
   "builtin_NexBox_DeltaE": "delta-e",
 };
 
+// 冠军调试系列：builtin_ChampionN ↔ champion-N
+// 与后端 preset_id_to_builtin_icc 的 champion-N → ChampionN.icc 映射一一对应。
+// 缺失会导致重启后冠军预设的选中高亮无法恢复。
+const CHAMPION_COUNT = 15;
+for (let i = 1; i <= CHAMPION_COUNT; i++) {
+  ICC_TO_PRESET[`builtin_Champion${i}`] = `champion-${i}`;
+}
+
+/** 冠军调试系列预设（id 前缀 champion-），与「新境盒」系列区分开渲染。 */
+const isChampionPreset = (preset: FilterPreset) =>
+  preset.id.startsWith("champion-");
+
+/** 冠军预设没有在 presetIcons/presetColors 里登记，按编号轮转取色。 */
+const CHAMPION_COLORS = [
+  "#F0C24B", "#FF8A5B", "#4CC9F0", "#7EE8A2", "#8E7CFF",
+  "#FF6B9D", "#06D6A0", "#FFD166", "#5AA9FF", "#E8B4B8",
+];
+const championColor = (id: string) => {
+  const n = parseInt(id.replace(/\D/g, ""), 10) || 1;
+  return CHAMPION_COLORS[(n - 1) % CHAMPION_COLORS.length];
+};
+
+/** 单个预设卡片（memo 化：点击卡片时只有新旧两张卡重渲染，避免整页卡顿）。
+ *  样式相关的主题值在本组件内部用 hook 取，父组件只传数据与稳定回调。 */
+const PresetCard = memo(function PresetCard({
+  preset,
+  isActive,
+  multiFilterEnabled,
+  accentColor,
+  onSelect,
+  onExport,
+}: {
+  preset: FilterPreset;
+  isActive: boolean;
+  multiFilterEnabled: boolean;
+  accentColor: string;
+  onSelect: (preset: FilterPreset) => void;
+  onExport: (id: string, e: React.MouseEvent) => void;
+}) {
+  const { t } = useTranslation();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const textColor = useColorModeValue("gray.700", "#ffffff");
+  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const miniGlassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
+  const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
+  const sliderBg = useColorModeValue("gray.100", "#222222");
+  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
+
+  const Icon =
+    presetIcons[preset.id] || (isChampionPreset(preset) ? Trophy : Monitor);
+
+  return (
+    <Tooltip label={preset.description} placement="top">
+      <Box
+        bg={liquidGlassEnabled
+          ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
+          : (isActive ? `${accentColor}20` : sliderBg)}
+        borderRadius="xl"
+        p={4}
+        cursor="pointer"
+        onClick={() => onSelect(preset)}
+        border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+        borderColor={liquidGlassEnabled
+          ? (isActive ? accentColor : miniGlassBorder)
+          : (isActive ? accentColor : "transparent")}
+        backdropFilter={`blur(${effectiveBlur}px)`}
+        sx={{
+          transform: "translateZ(0)",
+          WebkitTransform: "translateZ(0)",
+          WebkitBackfaceVisibility: "hidden",
+          backfaceVisibility: "hidden",
+          willChange: "backdrop-filter, transform",
+        }}
+        transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+        _hover={{ borderColor: accentColor }}
+        position="relative"
+        overflow="hidden"
+      >
+        {liquidGlassEnabled && (
+          <Box
+            style={getBorderGlowStyle(
+              isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
+            )}
+          />
+        )}
+
+        {multiFilterEnabled ? (
+          isActive && (
+            <HStack
+              position="absolute"
+              top={1.5}
+              right={1.5}
+              spacing={1}
+              bg={hexToRgba(accentColor, 0.9)}
+              color="#ffffff"
+              px={1.5}
+              py={0.5}
+              borderRadius="full"
+              fontSize="9px"
+              fontWeight="700"
+              pointerEvents="none"
+              zIndex={2}
+            >
+              <Box as="span">✓</Box>
+              <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
+            </HStack>
+          )
+        ) : (
+          <Tooltip label={t("displayFilter.exportIcc")} placement="top">
+            <IconButton
+              aria-label={t("displayFilter.exportIcc")}
+              icon={<Download size={14} />}
+              size="xs"
+              variant="ghost"
+              position="absolute"
+              top={1}
+              right={1}
+              color={subTextColor}
+              opacity={0.5}
+              _hover={{ opacity: 1, color: accentColor }}
+              onClick={(e) => onExport(preset.id, e)}
+            />
+          </Tooltip>
+        )}
+        <VStack spacing={2}>
+          <Icon size={24} color={accentColor} />
+          <Text color={textColor} fontSize="sm" fontWeight="600">
+            {preset.name}
+          </Text>
+        </VStack>
+      </Box>
+    </Tooltip>
+  );
+});
+
 const presetIcons: Record<string, React.ElementType> = {
   "de-exposure-pro": Monitor,
   "vivid": Sparkles,
@@ -239,6 +381,7 @@ export default function DisplayFilterPage() {
     r_gamma: 1.0,
     g_gamma: 1.0,
     b_gamma: 1.0,
+    shadow: 0,
     s_curve: 0.0,
     r_boost: 1.0,
     g_boost: 1.0,
@@ -311,12 +454,17 @@ export default function DisplayFilterPage() {
     r_gamma: number;
     g_gamma: number;
     b_gamma: number;
+    shadow: number;
   } | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [inputVersion, setInputVersion] = useState(0);
+  /** 拖动滑块时递增，用于触发实时预览重算（editValuesRef 是 ref，不会自己触发渲染） */
+  const [liveVersion, setLiveVersion] = useState(0);
   const [manualPresetChange, setManualPresetChange] = useState(false);
   const [iccPresets, setIccPresets] = useState<IccPresetInfo[]>([]);
   const [activeIccId, setActiveIccId] = useState<string | null>(null);
+  /** 滤镜预设分组 Tab：新境盒 / 冠军调试 / 自定义（数值调节） */
+  const [presetTab, setPresetTab] = useState<"mine" | "nexbox" | "champion" | "custom">("nexbox");
   const [deleteIccId, setDeleteIccId] = useState<string | null>(null);
   const [deleteUserPresetId, setDeleteUserPresetId] = useState<string | null>(null);
   const [showSavePresetDialog, setShowSavePresetDialog] = useState(false);
@@ -359,6 +507,7 @@ export default function DisplayFilterPage() {
     r_gamma: 1.0,
     g_gamma: 1.0,
     b_gamma: 1.0,
+    shadow: 0,
   });
   
   const { t } = useTranslation();
@@ -380,6 +529,8 @@ export default function DisplayFilterPage() {
   const miniGlassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
   const miniGlassBorder = useColorModeValue("rgba(255,255,255,0.5)", "rgba(255,255,255,0.2)");
   const miniGlassGlow = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.45)");
+  /** 预设分组 Tab 的选中底色 */
+  const tabActiveBg = useColorModeValue("white", "#3a3a3a");
   const hoverBg = useColorModeValue("gray.100", "#252525");
   const menuListBg = useColorModeValue("white", "#1a1a1a");
 
@@ -431,7 +582,7 @@ export default function DisplayFilterPage() {
 
   const loadCustomSettings = useCallback(async () => {
     try {
-      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number; r_gamma: number; g_gamma: number; b_gamma: number }>("get_custom_filter_settings", { displayIndex: activeDisplayIndexRef.current });
+      const result = await invoke<{ temperature: number; brightness: number; contrast: number; saturation: number; r_gamma: number; g_gamma: number; b_gamma: number; shadow: number }>("get_custom_filter_settings", { displayIndex: activeDisplayIndexRef.current });
       editValuesRef.current = {
         temperature: result.temperature,
         brightness: result.brightness,
@@ -440,6 +591,7 @@ export default function DisplayFilterPage() {
         r_gamma: result.r_gamma ?? 1.0,
         g_gamma: result.g_gamma ?? 1.0,
         b_gamma: result.b_gamma ?? 1.0,
+        shadow: result.shadow ?? 0,
       };
       setSavedCustom(result);
     } catch (error) {
@@ -452,6 +604,7 @@ export default function DisplayFilterPage() {
         r_gamma: 1.0,
         g_gamma: 1.0,
         b_gamma: 1.0,
+        shadow: 0,
       };
       editValuesRef.current = defaults;
       setSavedCustom(defaults);
@@ -657,8 +810,45 @@ export default function DisplayFilterPage() {
     if (presets.length === 0 || savedCustom === null) return;
     if (manualPresetChange) return;
     if (settings.icc_active) return; // ICC 激活时跳过预设匹配
+    // 冠军调试预设同样是 ICC 驱动、参数为中性值（6500/100/100/100），
+    // 参数化匹配会把它误判成「自定义」或其它中性预设 → 直接跳过，保持点击后的高亮。
+    if (activePresetId.startsWith("champion-")) return;
+    // 「我的预设」应用后 mode 归 0、参数来自用户保存值，不参与内置预设匹配，
+    // 保持点击后 / 重进页面恢复的高亮不被内置预设抢走。
+    if (userPresets.some((p) => p.id === activePresetId)) return;
+    if (activeIccId && (ICC_TO_PRESET[activeIccId] || "").startsWith("champion-")) return;
     if (activePresetId === "custom") return;
-    if (activePresetId === "") return; // ICC 预设选中时跳过同步
+
+    const matchesSavedCustom =
+      settings.mode === 0 &&
+      settings.temperature === savedCustom.temperature &&
+      settings.brightness === savedCustom.brightness &&
+      settings.contrast === savedCustom.contrast &&
+      settings.saturation === savedCustom.saturation;
+
+    // 空选中态（重进页面 / 切显示器后 loadSettings 清空高亮）：
+    // 「我的预设」是纯参数化应用（不写 ICC 状态），原先这里直接 return → 重进后高亮丢失。
+    // 现在按参数精确匹配「我的预设」恢复高亮；保存的自定义参数维持原有空选中语义。
+    if (activePresetId === "") {
+      if (activeIccId) return; // ICC 预设选中时跳过同步
+      if (matchesSavedCustom) return;
+      const userMatch = userPresets.find(
+        (p) =>
+          settings.mode === 0 &&
+          settings.shadow === 0 &&
+          settings.temperature === p.temperature &&
+          settings.brightness === p.brightness &&
+          settings.contrast === p.contrast &&
+          settings.saturation === p.saturation &&
+          settings.r_gamma === p.r_gamma &&
+          settings.g_gamma === p.g_gamma &&
+          settings.b_gamma === p.b_gamma
+      );
+      if (userMatch) {
+        setActivePresetId((prev) => (prev === userMatch.id ? prev : userMatch.id));
+      }
+      return;
+    }
 
     const exactPreset = presets.find(
       (p) =>
@@ -668,13 +858,6 @@ export default function DisplayFilterPage() {
         p.contrast === settings.contrast &&
         p.saturation === settings.saturation
     );
-
-    const matchesSavedCustom =
-      settings.mode === 0 &&
-      settings.temperature === savedCustom.temperature &&
-      settings.brightness === savedCustom.brightness &&
-      settings.contrast === savedCustom.contrast &&
-      settings.saturation === savedCustom.saturation;
 
     let nextId: string;
     if (matchesSavedCustom) {
@@ -687,7 +870,7 @@ export default function DisplayFilterPage() {
     }
 
     setActivePresetId((prev) => (prev === nextId ? prev : nextId));
-  }, [presets, settings, savedCustom, activePresetId, manualPresetChange]);
+  }, [presets, settings, savedCustom, activePresetId, activeIccId, manualPresetChange, userPresets]);
 
   const downloadIccTools = async () => {
     if (iccToolsBusy) return;
@@ -845,6 +1028,7 @@ export default function DisplayFilterPage() {
           r_gamma: s?.r_gamma ?? 1.0,
           g_gamma: s?.g_gamma ?? 1.0,
           b_gamma: s?.b_gamma ?? 1.0,
+          shadow: s?.shadow ?? 0,
           s_curve: s?.s_curve ?? 0.0,
           r_boost: s?.r_boost ?? 1.0,
           g_boost: s?.g_boost ?? 1.0,
@@ -917,7 +1101,8 @@ export default function DisplayFilterPage() {
           r.saturation !== savedCustom.saturation ||
           r.r_gamma !== savedCustom.r_gamma ||
           r.g_gamma !== savedCustom.g_gamma ||
-          r.b_gamma !== savedCustom.b_gamma
+          r.b_gamma !== savedCustom.b_gamma ||
+          (r.shadow ?? 0) !== (savedCustom.shadow ?? 0)
       );
       
       // 应用已保存的自定义滤镜设置
@@ -943,6 +1128,7 @@ export default function DisplayFilterPage() {
             r_gamma: savedCustom.r_gamma ?? 1.0,
             g_gamma: savedCustom.g_gamma ?? 1.0,
             b_gamma: savedCustom.b_gamma ?? 1.0,
+            shadow: savedCustom.shadow ?? 0,
             s_curve: 0.0,
             r_boost: 1.0,
             g_boost: 1.0,
@@ -1000,103 +1186,58 @@ export default function DisplayFilterPage() {
       r_gamma: 1.0,
       g_gamma: 1.0,
       b_gamma: 1.0,
+      shadow: 0,
     };
     setInputVersion((v) => v + 1);
+    setLiveVersion((v) => v + 1);
     setHasChanges(true);
+    // 屏幕一并恢复默认效果（不只是数值）：开关开启时立即用默认参数落屏
+    applyCustomLive();
   };
 
-  const saveAndApply = async () => {
-    setIsLoading(true);
-    setManualPresetChange(true);
-    setActivePresetId("custom");
-    
-    const temp = Math.max(1000, Math.min(10000, editValuesRef.current.temperature));
-    const brightness = Math.max(50, Math.min(150, editValuesRef.current.brightness));
-    const contrast = Math.max(50, Math.min(150, editValuesRef.current.contrast));
-    const saturation = Math.max(50, Math.min(150, editValuesRef.current.saturation));
-    const r_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.r_gamma));
-    const g_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.g_gamma));
-    const b_gamma = Math.max(0.5, Math.min(2.0, editValuesRef.current.b_gamma));
-    
+  /** 自定义调节实时落屏（不落盘）：开关开启时，拖动滑块过程中直接写屏（同「拇指调试」）。
+   *  latest-wins 串行化：同一时刻至多一个 invoke 在飞，期间产生的最新值在完成后补发；
+   *  值未变化时跳过；松手时兜底调用一次，保证最终值一定落屏。 */
+  const isActiveRef = useRef(settings.is_active);
+  isActiveRef.current = settings.is_active;
+  const liveApplyBusyRef = useRef(false);
+  const liveApplyPendingRef = useRef(false);
+  const liveApplyLastKeyRef = useRef("");
+  const applyCustomLive = async () => {
+    if (!isActiveRef.current) return; // 滤镜未开启时不写屏（仅前端预览，同参考实现）
+    const e = editValuesRef.current;
+    const key = `${e.temperature}|${e.brightness}|${e.contrast}|${e.saturation}|${e.r_gamma}|${e.g_gamma}|${e.b_gamma}|${e.shadow ?? 0}`;
+    if (key === liveApplyLastKeyRef.current) return; // 值没变，无需重复写屏
+    if (liveApplyBusyRef.current) {
+      liveApplyPendingRef.current = true; // 上一次还在飞：标记待补发，取最新值
+      return;
+    }
+    liveApplyBusyRef.current = true;
+    liveApplyLastKeyRef.current = key;
     try {
       const result: any = await invoke("set_filter_settings", {
         displayIndex: activeDisplayIndex,
-        temperature: temp,
-        brightness: brightness,
-        contrast: contrast,
-        saturation: saturation,
+        temperature: Math.max(1000, Math.min(10000, e.temperature)),
+        brightness: Math.max(50, Math.min(150, e.brightness)),
+        contrast: Math.max(50, Math.min(150, e.contrast)),
+        saturation: Math.max(50, Math.min(150, e.saturation)),
         mode: 0,
-        isActive: settings.is_active,
-        rGamma: r_gamma,
-        gGamma: g_gamma,
-        bGamma: b_gamma,
+        isActive: isActiveRef.current,
+        rGamma: Math.max(0.5, Math.min(2.0, e.r_gamma)),
+        gGamma: Math.max(0.5, Math.min(2.0, e.g_gamma)),
+        bGamma: Math.max(0.5, Math.min(2.0, e.b_gamma)),
+        shadow: Math.max(-100, Math.min(100, e.shadow ?? 0)),
       });
-      if (result.success) {
-        setSettings(prev => ({
-          temperature: temp,
-          brightness: brightness,
-          contrast: contrast,
-          saturation: saturation,
-          r_gamma: r_gamma,
-          g_gamma: g_gamma,
-          b_gamma: b_gamma,
-          s_curve: 0.0,
-          r_boost: 1.0,
-          g_boost: 1.0,
-          b_boost: 1.0,
-          mode: 0,
-          is_active: prev.is_active,
-          icc_active: false,
-          active_icc_id: null,
-          preview_filter_icc: null,
-          preview_tint_color_icc: null,
-          preview_tint_opacity_icc: null,
-          stacked: false,
-          stack_preset_ids: [],
-        }));
-        
-        await invoke("save_custom_filter_settings", {
-          displayIndex: activeDisplayIndex,
-          temperature: temp,
-          brightness: brightness,
-          contrast: contrast,
-          saturation: saturation,
-          rGamma: r_gamma,
-          gGamma: g_gamma,
-          bGamma: b_gamma,
-        });
-
-        setSavedCustom({
-          temperature: temp,
-          brightness: brightness,
-          contrast: contrast,
-          saturation: saturation,
-          r_gamma: r_gamma,
-          g_gamma: g_gamma,
-          b_gamma: b_gamma,
-        });
-        
-        setHasChanges(false);
-        setInputVersion(v => v + 1);
-        
-        toast({
-          title: t("displayFilter.saveSuccess"),
-          status: "success",
-          duration: 2000,
-          isClosable: true,
-        });
-      }
+      if (result?.settings) setSettings(result.settings as FilterSettings);
     } catch (error) {
-      toast({
-        title: t("displayFilter.error"),
-        description: String(error),
-        status: "error",
-        duration: 3000,
-        isClosable: true,
-      });
+      liveApplyLastKeyRef.current = ""; // 失败后允许重试
+      console.error("Failed to apply custom live:", error);
     } finally {
-      setIsLoading(false);
-      setTimeout(() => setManualPresetChange(false), 100);
+      liveApplyBusyRef.current = false;
+      if (liveApplyPendingRef.current) {
+        liveApplyPendingRef.current = false;
+        void applyCustomLive(); // 补发拖动期间产生的最新值
+      }
     }
   };
 
@@ -1147,7 +1288,7 @@ export default function DisplayFilterPage() {
   const applyUserFilterPreset = async (preset: UserFilterPresetInfo) => {
     setIsLoading(true);
     setManualPresetChange(true);
-    setActivePresetId("custom");
+    setActivePresetId(preset.id);
     setActiveIccId(null);
     setIccPreviewFilter(null);
     setIccTintColor(null);
@@ -1168,6 +1309,7 @@ export default function DisplayFilterPage() {
           r_gamma: preset.r_gamma,
           g_gamma: preset.g_gamma,
           b_gamma: preset.b_gamma,
+          shadow: 0,
           s_curve: 0.0,
           r_boost: 1.0,
           g_boost: 1.0,
@@ -1190,6 +1332,7 @@ export default function DisplayFilterPage() {
           r_gamma: preset.r_gamma,
           g_gamma: preset.g_gamma,
           b_gamma: preset.b_gamma,
+          shadow: 0,
         };
         setInputVersion(v => v + 1);
         setHasChanges(false);
@@ -1251,6 +1394,7 @@ export default function DisplayFilterPage() {
           r_gamma: rs?.r_gamma ?? 1.0,
           g_gamma: rs?.g_gamma ?? 1.0,
           b_gamma: rs?.b_gamma ?? 1.0,
+          shadow: rs?.shadow ?? 0,
           s_curve: rs?.s_curve ?? 0.0,
           r_boost: rs?.r_boost ?? 1.0,
           g_boost: rs?.g_boost ?? 1.0,
@@ -1273,6 +1417,7 @@ export default function DisplayFilterPage() {
           r_gamma: 1.0,
           g_gamma: 1.0,
           b_gamma: 1.0,
+          shadow: 0,
         };
         editValuesRef.current = normal;
         if (savedCustom) {
@@ -1283,7 +1428,8 @@ export default function DisplayFilterPage() {
               normal.saturation !== savedCustom.saturation ||
               normal.r_gamma !== savedCustom.r_gamma ||
               normal.g_gamma !== savedCustom.g_gamma ||
-              normal.b_gamma !== savedCustom.b_gamma
+              normal.b_gamma !== savedCustom.b_gamma ||
+              normal.shadow !== (savedCustom.shadow ?? 0)
           );
         } else {
           setHasChanges(false);
@@ -1443,21 +1589,42 @@ export default function DisplayFilterPage() {
   };
 
   // RGB 通道独立 Gamma 的 SVG 滤镜（自定义模式下逐通道模拟伽马效果）
+  /**
+   * 自定义模式下的预览参数：直接取正在拖动的待提交值，实现「拖动即时预览」。
+   * editValuesRef 是 ref（不会触发渲染），因此用 liveVersion/inputVersion 作为依赖。
+   */
+  const previewSettings = useMemo(() => {
+    if (activePresetId !== "custom") return settings;
+    const e = editValuesRef.current;
+    return {
+      ...settings,
+      temperature: e.temperature,
+      brightness: e.brightness,
+      contrast: e.contrast,
+      saturation: e.saturation,
+      r_gamma: e.r_gamma,
+      g_gamma: e.g_gamma,
+      b_gamma: e.b_gamma,
+      shadow: e.shadow ?? 0,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePresetId, settings, liveVersion, inputVersion]);
+
   const rgbGammaSvgFilter = useMemo(() => {
-    const isCustom = settings.mode === 0;
+    const isCustom = previewSettings.mode === 0;
     const hasPerChannel = isCustom && (
-      Math.abs(settings.r_gamma - 1.0) > 0.001 ||
-      Math.abs(settings.g_gamma - 1.0) > 0.001 ||
-      Math.abs(settings.b_gamma - 1.0) > 0.001
+      Math.abs(previewSettings.r_gamma - 1.0) > 0.001 ||
+      Math.abs(previewSettings.g_gamma - 1.0) > 0.001 ||
+      Math.abs(previewSettings.b_gamma - 1.0) > 0.001
     );
     if (!hasPerChannel) return null;
 
     // Rust 端 apply_gamma_curve: output = input ^ (1/gamma)
     // SVG feComponentTransfer gamma: C' = amplitude * C^exponent + offset
     // 所以 exponent = 1/gamma
-    const rExp = (1.0 / settings.r_gamma).toFixed(4);
-    const gExp = (1.0 / settings.g_gamma).toFixed(4);
-    const bExp = (1.0 / settings.b_gamma).toFixed(4);
+    const rExp = (1.0 / previewSettings.r_gamma).toFixed(4);
+    const gExp = (1.0 / previewSettings.g_gamma).toFixed(4);
+    const bExp = (1.0 / previewSettings.b_gamma).toFixed(4);
 
     return (
       <svg width="0" height="0" style={{ position: "absolute", pointerEvents: "none" }}>
@@ -1470,22 +1637,21 @@ export default function DisplayFilterPage() {
         </filter>
       </svg>
     );
-  }, [settings.mode, settings.r_gamma, settings.g_gamma, settings.b_gamma]);
+  }, [previewSettings]);
 
   // 计算 CSS filter 近似值（缓存结果，避免每次渲染触发浏览器重绘）
   const filterStyle = useMemo((): React.CSSProperties => {
-    const t = settings.temperature;
-    const b = settings.brightness / 100;
-    const c = settings.contrast / 100;
-    const s = settings.saturation / 100;
-    const params = modeParams[settings.mode] || modeParams[0];
+    const b = previewSettings.brightness / 100;
+    const c = previewSettings.contrast / 100;
+    const s = previewSettings.saturation / 100;
+    const params = modeParams[previewSettings.mode] || modeParams[0];
 
     // 判断是否使用逐通道 gamma（自定义模式且至少一个通道 gamma ≠ 1.0）
-    const isCustom = settings.mode === 0;
+    const isCustom = previewSettings.mode === 0;
     const hasPerChannelGamma = isCustom && (
-      Math.abs(settings.r_gamma - 1.0) > 0.001 ||
-      Math.abs(settings.g_gamma - 1.0) > 0.001 ||
-      Math.abs(settings.b_gamma - 1.0) > 0.001
+      Math.abs(previewSettings.r_gamma - 1.0) > 0.001 ||
+      Math.abs(previewSettings.g_gamma - 1.0) > 0.001 ||
+      Math.abs(previewSettings.b_gamma - 1.0) > 0.001
     );
 
     // 非自定义模式：gamma 通过加权亮度近似
@@ -1498,22 +1664,27 @@ export default function DisplayFilterPage() {
     // S-Curve 近似：增加或减少对比度
     const sCurveContrast = 1 + params.sCurve * 0.5;
 
+    // 暗部增强近似：正值提亮暗部（提亮 + 略降对比），负值压暗暗部
+    const sh = (previewSettings.shadow ?? 0) / 100;
+    const shadowBrightness = 1 + 0.18 * sh;
+    const shadowContrast = 1 - 0.12 * sh;
+
     const filterParts: string[] = [];
     if (hasPerChannelGamma) {
       filterParts.push("url(#nexbox-rgb-gamma)");
     }
     filterParts.push(
-      `brightness(${(b * gammaBrightness).toFixed(3)})`,
-      `contrast(${(c * sCurveContrast).toFixed(3)})`,
+      `brightness(${(b * gammaBrightness * shadowBrightness).toFixed(3)})`,
+      `contrast(${(c * sCurveContrast * shadowContrast).toFixed(3)})`,
       `saturate(${s.toFixed(3)})`,
     );
 
     return { filter: filterParts.join(" ") } as React.CSSProperties;
-  }, [settings.temperature, settings.brightness, settings.contrast, settings.saturation, settings.mode, settings.r_gamma, settings.g_gamma, settings.b_gamma]);
+  }, [previewSettings]);
 
   // 色温覆盖层颜色（缓存结果）
   const temperatureOverlay = useMemo((): React.CSSProperties => {
-    const t = settings.temperature;
+    const t = previewSettings.temperature;
     if (t >= 6400 && t <= 6600) return { display: "none" };
     let color: string;
     let opacity: number;
@@ -1536,7 +1707,7 @@ export default function DisplayFilterPage() {
       opacity: opacity,
       pointerEvents: "none",
     } as React.CSSProperties;
-  }, [settings.temperature]);
+  }, [previewSettings]);
 
   // 拖拽分割线
   const handleSplitMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1960,6 +2131,149 @@ export default function DisplayFilterPage() {
     </Box>
   );
 
+  // ── 滤镜预设分组 ──
+  // 新境盒 = 参数化内置预设；冠军调试 = 纯 ICC 驱动的 champion-N 系列；自定义 = 数值调节面板。
+  const nexboxPresets = useMemo(
+    () => presets.filter((p) => !isChampionPreset(p)),
+    [presets]
+  );
+  const championPresets = useMemo(
+    () => presets.filter(isChampionPreset),
+    [presets]
+  );
+
+  /** Tab 项：我的预设放第一位；新境盒 / 冠军调试 用图片 Logo，我的预设/自定义 用图标。默认进入新境盒。 */
+  const presetTabs: {
+    key: "mine" | "nexbox" | "champion" | "custom";
+    label: string;
+    count: number | null;
+    logo: string | null;
+    icon?: typeof Settings2;
+  }[] = [
+    { key: "mine", label: t("displayFilter.myPresets"), count: userPresets.length, logo: null, icon: Bookmark },
+    { key: "nexbox", label: t("displayFilter.groupNexbox"), count: nexboxPresets.length, logo: nexboxLogo },
+    { key: "champion", label: t("displayFilter.groupChampion"), count: championPresets.length, logo: championLogo },
+    { key: "custom", label: t("displayFilter.custom"), count: null, logo: null, icon: Settings2 },
+  ];
+
+  /** 切换预设分组；进入「自定义」时加载并应用已保存的自定义参数。 */
+  const handlePresetTabChange = (key: "mine" | "nexbox" | "champion" | "custom") => {
+    setPresetTab(key);
+    if (key === "custom" && activePresetId !== "custom") {
+      openCustom();
+    }
+  };
+
+  /** 稳定回调（ref 转发）：让 memo 化的卡片在页面其它状态变化时不因回调身份变化而重渲染。 */
+  const presetCardSelectRef = useRef<(preset: FilterPreset) => void>(() => {});
+  presetCardSelectRef.current = (preset) =>
+    multiFilterEnabled ? toggleStackSelection(preset.id) : applyPreset(preset);
+  const handlePresetCardSelect = useCallback(
+    (preset: FilterPreset) => presetCardSelectRef.current(preset),
+    []
+  );
+
+  const presetCardExportRef = useRef<(id: string, e: React.MouseEvent) => void>(() => {});
+  presetCardExportRef.current = handleExportIcc;
+  const handlePresetCardExport = useCallback(
+    (id: string, e: React.MouseEvent) => presetCardExportRef.current(id, e),
+    []
+  );
+
+  /** 单选模式下：当前参数与某个「我的预设」完全一致时高亮该卡片（我的预设本质是参数化预设）。 */
+  const matchesUserPreset = (p: UserFilterPresetInfo) =>
+    activePresetId === "custom" &&
+    settings.temperature === p.temperature &&
+    settings.brightness === p.brightness &&
+    settings.contrast === p.contrast &&
+    settings.saturation === p.saturation &&
+    settings.r_gamma === p.r_gamma &&
+    settings.g_gamma === p.g_gamma &&
+    settings.b_gamma === p.b_gamma &&
+    settings.shadow === 0;
+
+  /** 渲染预设卡片（卡片本体已抽为 memo 组件，点击时只重渲染新旧两张卡，避免整页卡顿）。 */
+  const renderPresetCard = (preset: FilterPreset) => (
+    <PresetCard
+      key={preset.id}
+      preset={preset}
+      isActive={
+        multiFilterEnabled
+          ? selectedStackIds.includes(preset.id)
+          : activePresetId === preset.id
+      }
+      multiFilterEnabled={multiFilterEnabled}
+      accentColor={
+        presetColors[preset.id] ||
+        (isChampionPreset(preset) ? championColor(preset.id) : primaryColor)
+      }
+      onSelect={handlePresetCardSelect}
+      onExport={handlePresetCardExport}
+    />
+  );
+
+
+  /** 拇指调试风格的简洁滑块：标题 + 实时数值一行，纯 Chakra Slider（无玻璃容器，重绘开销最小）。
+   *  onChange = 拖动中（更新预览 + 开关开启时实时写屏，applyCustomLive 内部已做
+   *  latest-wins 串行化，拖多快都只有一个 invoke 在飞）；onCommit = 松手兜底落屏。
+   *  ⚠️ 必须用 useMemo 固定组件引用：直接在组件体内定义会让每次渲染产生新的组件类型，
+   *  React 会把整个 Slider 卸载重建，正在进行的拖动手势被掐断 —— 表现为「每次只能 +1」。 */
+  const PresetSlider = useMemo(
+    () =>
+      function PresetSlider({
+        label,
+        value,
+        min,
+        max,
+        step,
+        unit = "",
+        decimals = 0,
+        onChange,
+        onCommit,
+      }: {
+        label: string;
+        value: number;
+        min: number;
+        max: number;
+        step: number;
+        unit?: string;
+        decimals?: number;
+        onChange: (v: number) => void;
+        onCommit?: (v: number) => void;
+      }) {
+        return (
+          <VStack align="stretch" spacing={1}>
+            <HStack justify="space-between">
+              <Text color={subTextColor} fontSize="sm">
+                {label}
+              </Text>
+              <Text color={primaryColor} fontSize="sm" fontWeight="600">
+                {decimals > 0 ? value.toFixed(decimals) : Math.round(value)}
+                {unit}
+              </Text>
+            </HStack>
+            <Slider
+              aria-label={label}
+              min={min}
+              max={max}
+              step={step}
+              value={value}
+              focusThumbOnChange={false}
+              onChange={(v) => { onChange(v); onCommit?.(v); }}
+              onChangeEnd={(v) => onCommit?.(v)}
+            >
+              <SliderTrack bg={sliderBg} h="4px" borderRadius="full">
+                <SliderFilledTrack bg={primaryColor} />
+              </SliderTrack>
+              <SliderThumb boxSize="14px" bg={primaryColor} />
+            </Slider>
+          </VStack>
+        );
+      },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sliderBg, primaryColor, subTextColor]
+  );
+
   const content = (
     <VStack align="start" spacing={6}>
       <Flex justify="space-between" align="flex-start" w="full" gap={4}>
@@ -2220,89 +2534,144 @@ export default function DisplayFilterPage() {
       </HStack>
 
       <VStack align="start" spacing={4} w="full">
-        <Text color={textColor} fontSize="md" fontWeight="600">
-          {t("displayFilter.presets")}
-        </Text>
-        <SimpleGrid
-          columns={{
-            base: 2,
-            sm: 3,
-            md: 4,
-            lg: 5,
-          }}
-          spacing={3}
-          w="full"
-        >
-          {presets.map((preset) => {
-            const Icon = presetIcons[preset.id] || Monitor;
-            // 多选模式：选中态由 selectedStackIds 驱动；单选模式保持原有 activePresetId 高亮
-            const isActive = multiFilterEnabled
-              ? selectedStackIds.includes(preset.id)
-              : activePresetId === preset.id;
-            const accentColor = presetColors[preset.id] || primaryColor;
-            return (
-              <Tooltip key={preset.id} label={preset.description} placement="top">
-                <Box
-                  bg={liquidGlassEnabled
-                    ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
-                    : (isActive ? `${accentColor}20` : sliderBg)}
-                  borderRadius="xl"
-                  p={4}
-                  cursor="pointer"
-                  onClick={() => (multiFilterEnabled ? toggleStackSelection(preset.id) : applyPreset(preset))}
-                  border={liquidGlassEnabled ? "1px solid" : "2px solid"}
-                  borderColor={liquidGlassEnabled
-                    ? (isActive ? accentColor : miniGlassBorder)
-                    : (isActive ? accentColor : "transparent")}
-                  backdropFilter={`blur(${effectiveBlur}px)`}
-                  sx={{
-                    transform: "translateZ(0)",
-                    WebkitTransform: "translateZ(0)",
-                    WebkitBackfaceVisibility: "hidden",
-                    backfaceVisibility: "hidden",
-                    willChange: "backdrop-filter, transform",
-                  }}
-                  transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-                  _hover={{
-                    borderColor: accentColor,
-                  }}
-                  position="relative"
-                  overflow="hidden"
-                >
-                  {liquidGlassEnabled && (
-                    <Box
-                      style={getBorderGlowStyle(
-                        isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
-                      )}
-                    />
-                  )}
-                  
-                  {multiFilterEnabled ? (
-                    isActive && (
-                      <HStack
-                        position="absolute"
-                        top={1.5}
-                        right={1.5}
-                        spacing={1}
-                        bg={hexToRgba(accentColor, 0.9)}
-                        color="#ffffff"
-                        px={1.5}
-                        py={0.5}
-                        borderRadius="full"
-                        fontSize="9px"
-                        fontWeight="700"
-                        pointerEvents="none"
-                        zIndex={2}
-                      >
-                        <Box as="span">✓</Box>
-                        <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
-                      </HStack>
+        <HStack justify="space-between" align="center" w="full" flexWrap="wrap" gap={3}>
+          <Text color={textColor} fontSize="md" fontWeight="600">
+            {t("displayFilter.presets")}
+          </Text>
+
+          {/* 分组切换 Tab：我的预设 / 新境盒 / 冠军调试 / 自定义（默认新境盒） */}
+          <HStack
+            spacing={1}
+            p={1}
+            borderRadius="xl"
+            bg={liquidGlassEnabled ? miniGlassBg : sliderBg}
+            border="1px solid"
+            borderColor={liquidGlassEnabled ? miniGlassBorder : "transparent"}
+          >
+            {presetTabs.map((opt) => {
+              const active = presetTab === opt.key;
+              return (
+                <Button
+                  key={opt.key}
+                  size="sm"
+                  variant="ghost"
+                  leftIcon={
+                    opt.logo ? (
+                      <Image
+                        src={opt.logo}
+                        boxSize="18px"
+                        objectFit="contain"
+                        opacity={active ? 1 : 0.6}
+                        transition="opacity 0.2s"
+                        alt={opt.label}
+                      />
+                    ) : (
+                      <Icon
+                        as={opt.icon || Settings2}
+                        boxSize="18px"
+                        color={active ? textColor : subTextColor}
+                        opacity={active ? 1 : 0.6}
+                      />
                     )
-                  ) : (
-                    <Tooltip label={t("displayFilter.exportIcc")} placement="top">
+                  }
+                  onClick={() => handlePresetTabChange(opt.key)}
+                  bg={active ? tabActiveBg : "transparent"}
+                  color={active ? textColor : subTextColor}
+                  fontWeight={active ? "700" : "500"}
+                  borderRadius="lg"
+                  px={3}
+                  h="30px"
+                  _hover={{ color: textColor }}
+                >
+                  {opt.label}{opt.count !== null ? ` (${opt.count})` : ""}
+                </Button>
+              );
+            })}
+          </HStack>
+        </HStack>
+
+        {presetTab === "mine" ? (
+          userPresets.length === 0 ? (
+            <Text color={subTextColor} fontSize="sm" py={2}>
+              {t("displayFilter.noPresets")}
+            </Text>
+          ) : (
+            <SimpleGrid
+              columns={{
+                base: 2,
+                sm: 3,
+                md: 4,
+                lg: 5,
+              }}
+              spacing={3}
+              w="full"
+            >
+              {userPresets.map((preset) => {
+                const accentColor = "#8B5CF6";
+                const isActive = multiFilterEnabled
+                  ? selectedStackIds.includes(preset.id)
+                  : activePresetId === preset.id || matchesUserPreset(preset);
+                return (
+                  <Box
+                    key={preset.id}
+                    bg={liquidGlassEnabled
+                      ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
+                      : (isActive ? `${accentColor}20` : sliderBg)}
+                    borderRadius="xl"
+                    p={4}
+                    cursor="pointer"
+                    onClick={() => (multiFilterEnabled ? toggleStackSelection(preset.id) : applyUserFilterPreset(preset))}
+                    border={liquidGlassEnabled ? "1px solid" : "2px solid"}
+                    borderColor={liquidGlassEnabled
+                      ? (isActive ? accentColor : miniGlassBorder)
+                      : (isActive ? accentColor : "transparent")}
+                    backdropFilter={`blur(${effectiveBlur}px)`}
+                    sx={{
+                      transform: "translateZ(0)",
+                      WebkitTransform: "translateZ(0)",
+                      WebkitBackfaceVisibility: "hidden",
+                      backfaceVisibility: "hidden",
+                      willChange: "backdrop-filter, transform",
+                    }}
+                    transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+                    _hover={{
+                      borderColor: accentColor,
+                    }}
+                    position="relative"
+                    overflow="hidden"
+                  >
+                    {liquidGlassEnabled && (
+                      <Box
+                        style={getBorderGlowStyle(
+                          isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
+                        )}
+                      />
+                    )}
+                    {multiFilterEnabled ? (
+                      isActive && (
+                        <HStack
+                          position="absolute"
+                          top={1.5}
+                          right={1.5}
+                          spacing={1}
+                          bg={hexToRgba(accentColor, 0.9)}
+                          color="#ffffff"
+                          px={1.5}
+                          py={0.5}
+                          borderRadius="full"
+                          fontSize="9px"
+                          fontWeight="700"
+                          pointerEvents="none"
+                          zIndex={2}
+                        >
+                          <Box as="span">✓</Box>
+                          <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
+                        </HStack>
+                      )
+                    ) : (
                       <IconButton
-                        aria-label={t("displayFilter.exportIcc")}
-                        icon={<Download size={14} />}
+                        aria-label={t("displayFilter.delete")}
+                        icon={<Trash2 size={14} />}
                         size="xs"
                         variant="ghost"
                         position="absolute"
@@ -2310,103 +2679,159 @@ export default function DisplayFilterPage() {
                         right={1}
                         color={subTextColor}
                         opacity={0.5}
-                        _hover={{ opacity: 1, color: accentColor }}
-                        onClick={(e) => handleExportIcc(preset.id, e)}
+                        _hover={{ opacity: 1, color: "red.400" }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteUserPresetId(preset.id);
+                        }}
                       />
-                    </Tooltip>
-                  )}
-                  <VStack spacing={2}>
-                    <Icon size={24} color={accentColor} />
-                    <Text color={textColor} fontSize="sm" fontWeight="600">
-                      {preset.name}
-                    </Text>
-                  </VStack>
-                </Box>
-              </Tooltip>
-            );
-          })}
-          
-          <Tooltip label={t("displayFilter.customDescription")} placement="top">
-            <Box
-              bg={liquidGlassEnabled
-                ? (activePresetId === "custom" ? hexToRgba(presetColors["custom"], 0.2) : miniGlassBg)
-                : (activePresetId === "custom" ? `${presetColors["custom"]}20` : sliderBg)}
-              borderRadius="xl"
-              p={4}
-              cursor="pointer"
-              onClick={openCustom}
-              border={liquidGlassEnabled ? "1px solid" : "2px solid"}
-              borderColor={liquidGlassEnabled
-                ? (activePresetId === "custom" ? presetColors["custom"] : miniGlassBorder)
-                : (activePresetId === "custom" ? presetColors["custom"] : "transparent")}
-              backdropFilter={`blur(${effectiveBlur}px)`}
-              sx={{
-                transform: "translateZ(0)",
-                WebkitTransform: "translateZ(0)",
-                WebkitBackfaceVisibility: "hidden",
-                backfaceVisibility: "hidden",
-                willChange: "backdrop-filter, transform",
-              }}
-              transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-              _hover={{
-                borderColor: presetColors["custom"],
-              }}
-              position="relative"
-              overflow="hidden"
-            >
-              {liquidGlassEnabled && (
-                <Box
-                  style={getBorderGlowStyle(
-                    activePresetId === "custom" ? hexToRgba(presetColors["custom"], 0.5) : miniGlassGlow
-                  )}
-                />
-              )}
-              
-              <Tooltip label={t("displayFilter.exportIcc")} placement="top">
-                <IconButton
-                  aria-label={t("displayFilter.exportIcc")}
-                  icon={<Download size={14} />}
-                  size="xs"
-                  variant="ghost"
-                  position="absolute"
-                  top={1}
-                  right={1}
-                  color={subTextColor}
-                  opacity={0.5}
-                  _hover={{ opacity: 1, color: presetColors["custom"] }}
-                  onClick={(e) => handleExportCustom(e)}
-                />
-              </Tooltip>
-              <VStack spacing={2}>
-                <Settings2 size={24} color={presetColors["custom"]} />
-                <Text color={textColor} fontSize="sm" fontWeight="600">
-                  {t("displayFilter.custom")}
-                </Text>
-              </VStack>
-            </Box>
-          </Tooltip>
-        </SimpleGrid>
-      </VStack>
+                    )}
+                    <VStack spacing={2}>
+                      <Bookmark size={24} color={accentColor} />
+                      <Text color={textColor} fontSize="sm" fontWeight="600">
+                        {preset.name}
+                      </Text>
+                    </VStack>
+                  </Box>
+                );
+              })}
+            </SimpleGrid>
+          )
+        ) : presetTab === "custom" ? (
+          <Box
+            w="full"
+            p={5}
+            borderRadius="xl"
+            border="1px solid"
+            borderColor={cardBorder}
+            bg={sliderBg}
+          >
+            <VStack align="stretch" spacing={5}>
+              <HStack justify="space-between" align="center" flexWrap="wrap" gap={3}>
+                <HStack spacing={2}>
+                  <Settings2 size={18} color={presetColors["custom"]} />
+                  <Text color={textColor} fontSize="md" fontWeight="600">
+                    {t("displayFilter.custom")}
+                  </Text>
+                </HStack>
+                <HStack spacing={2} flexWrap="wrap">
+                  <Button
+                    size="sm"
+                    leftIcon={<Bookmark size={14} />}
+                    variant="outline"
+                    borderColor={primaryColor}
+                    color={primaryColor}
+                    onClick={() => {
+                      setPresetNameInput("");
+                      setShowSavePresetDialog(true);
+                    }}
+                    isDisabled={isLoading}
+                    _hover={{ bg: `${primaryColor}15` }}
+                  >
+                    {t("displayFilter.saveAsPreset")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    leftIcon={<Download size={14} />}
+                    variant="outline"
+                    borderColor={primaryColor}
+                    color={primaryColor}
+                    onClick={handleExportCustom}
+                    isDisabled={isLoading}
+                    _hover={{ bg: `${primaryColor}15` }}
+                  >
+                    {t("displayFilter.exportIcc")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    leftIcon={<RotateCcw size={14} />}
+                    variant="ghost"
+                    color={subTextColor}
+                    onClick={resetCustomValues}
+                    isDisabled={isLoading}
+                    _hover={{ color: textColor, bg: sliderBg }}
+                  >
+                    {t("displayFilter.resetDefault")}
+                  </Button>
+                </HStack>
+              </HStack>
 
-      {/* User Filter Presets Section */}
-      <VStack align="start" spacing={4} w="full">
-        <HStack justify="space-between" w="full">
-          <HStack>
-            <Bookmark size={20} color={textColor} />
-            <Text color={textColor} fontSize="md" fontWeight="600">
-              {t("displayFilter.myPresets")}
-            </Text>
-            {userPresets.length > 0 && (
-              <Text color={subTextColor} fontSize="sm">
-                ({userPresets.length})
-              </Text>
-            )}
-          </HStack>
-        </HStack>
-        {userPresets.length === 0 ? (
-          <Text color={subTextColor} fontSize="sm" py={2}>
-            {t("displayFilter.noPresets")}
-          </Text>
+              <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={6} w="full">
+                <VStack spacing={4} align="stretch">
+                  <PresetSlider
+                    label={t("displayFilter.colorTemperature")}
+                    value={editValuesRef.current.temperature}
+                    min={1000} max={10000} step={100}
+                    unit=" K"
+                    onChange={(v) => { editValuesRef.current.temperature = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.brightness")}
+                    value={editValuesRef.current.brightness}
+                    min={50} max={150} step={1}
+                    unit="%"
+                    onChange={(v) => { editValuesRef.current.brightness = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.contrast")}
+                    value={editValuesRef.current.contrast}
+                    min={50} max={150} step={1}
+                    unit="%"
+                    onChange={(v) => { editValuesRef.current.contrast = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.saturation")}
+                    value={editValuesRef.current.saturation}
+                    min={50} max={150} step={1}
+                    unit="%"
+                    onChange={(v) => { editValuesRef.current.saturation = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.shadowBoost")}
+                    value={editValuesRef.current.shadow ?? 0}
+                    min={-100} max={100} step={1}
+                    unit=""
+                    onChange={(v) => { editValuesRef.current.shadow = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                </VStack>
+
+                <VStack spacing={4} align="stretch">
+                  <Text color={subTextColor} fontSize="10px" fontWeight="600">
+                    {t("displayFilter.rgbGamma")}
+                  </Text>
+                  <PresetSlider
+                    label={t("displayFilter.rGamma")}
+                    value={editValuesRef.current.r_gamma}
+                    min={0.5} max={2.0} step={0.01}
+                    decimals={2}
+                    onChange={(v) => { editValuesRef.current.r_gamma = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.gGamma")}
+                    value={editValuesRef.current.g_gamma}
+                    min={0.5} max={2.0} step={0.01}
+                    decimals={2}
+                    onChange={(v) => { editValuesRef.current.g_gamma = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                  <PresetSlider
+                    label={t("displayFilter.bGamma")}
+                    value={editValuesRef.current.b_gamma}
+                    min={0.5} max={2.0} step={0.01}
+                    decimals={2}
+                    onChange={(v) => { editValuesRef.current.b_gamma = v; setHasChanges(true); setLiveVersion((x) => x + 1); }}
+                    onCommit={applyCustomLive}
+                  />
+                </VStack>
+              </SimpleGrid>
+            </VStack>
+          </Box>
         ) : (
           <SimpleGrid
             columns={{
@@ -2418,93 +2843,7 @@ export default function DisplayFilterPage() {
             spacing={3}
             w="full"
           >
-            {userPresets.map((preset) => {
-              const accentColor = "#8B5CF6";
-              const isActive = multiFilterEnabled ? selectedStackIds.includes(preset.id) : false;
-              return (
-                <Box
-                  key={preset.id}
-                  bg={liquidGlassEnabled
-                    ? (isActive ? hexToRgba(accentColor, 0.2) : miniGlassBg)
-                    : (isActive ? `${accentColor}20` : sliderBg)}
-                  borderRadius="xl"
-                  p={4}
-                  cursor="pointer"
-                  onClick={() => (multiFilterEnabled ? toggleStackSelection(preset.id) : applyUserFilterPreset(preset))}
-                  border={liquidGlassEnabled ? "1px solid" : "2px solid"}
-                  borderColor={liquidGlassEnabled
-                    ? (isActive ? accentColor : miniGlassBorder)
-                    : (isActive ? accentColor : "transparent")}
-                  backdropFilter={`blur(${effectiveBlur}px)`}
-                  sx={{
-                    transform: "translateZ(0)",
-                    WebkitTransform: "translateZ(0)",
-                    WebkitBackfaceVisibility: "hidden",
-                    backfaceVisibility: "hidden",
-                    willChange: "backdrop-filter, transform",
-                  }}
-                  transition="background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-                  _hover={{
-                    borderColor: accentColor,
-                  }}
-                  position="relative"
-                  overflow="hidden"
-                >
-                  {liquidGlassEnabled && (
-                    <Box
-                      style={getBorderGlowStyle(
-                        isActive ? hexToRgba(accentColor, 0.5) : miniGlassGlow
-                      )}
-                    />
-                  )}
-                  {multiFilterEnabled ? (
-                    isActive && (
-                      <HStack
-                        position="absolute"
-                        top={1.5}
-                        right={1.5}
-                        spacing={1}
-                        bg={hexToRgba(accentColor, 0.9)}
-                        color="#ffffff"
-                        px={1.5}
-                        py={0.5}
-                        borderRadius="full"
-                        fontSize="9px"
-                        fontWeight="700"
-                        pointerEvents="none"
-                        zIndex={2}
-                      >
-                        <Box as="span">✓</Box>
-                        <Text as="span">{t("displayFilter.multiFilterSelected")}</Text>
-                      </HStack>
-                    )
-                  ) : (
-                    <IconButton
-                      aria-label={t("displayFilter.delete")}
-                      icon={<Trash2 size={14} />}
-                      size="xs"
-                      variant="ghost"
-                      position="absolute"
-                      top={1}
-                      right={1}
-                      color={subTextColor}
-                      opacity={0.5}
-                      _hover={{ opacity: 1, color: "red.400" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteUserPresetId(preset.id);
-                      }}
-                    />
-                  )}
-                  <VStack spacing={2}>
-                    <Bookmark size={24} color={accentColor} />
-                    <Text color={textColor} fontSize="sm" fontWeight="600">
-                      {preset.name}
-                    </Text>
-                  </VStack>
-                </Box>
-              );
-            })}
+            {(presetTab === "nexbox" ? nexboxPresets : championPresets).map(renderPresetCard)}
           </SimpleGrid>
         )}
       </VStack>
@@ -2878,54 +3217,6 @@ export default function DisplayFilterPage() {
                 </Text>
               )}
             </HStack>
-            {activePresetId === "custom" && (
-              <VStack spacing={1} align="stretch">
-                <Button
-                  size="xs"
-                  leftIcon={<Save size={12} />}
-                  bg={primaryColor}
-                  color={contrastText}
-                  onClick={saveAndApply}
-                  isLoading={isLoading}
-                  isDisabled={!hasChanges}
-                  _hover={{ bg: getHoverColor() }}
-                  fontSize="xs"
-                  w="full"
-                >
-                  {t("displayFilter.saveAndApply")}
-                </Button>
-                <Button
-                  size="xs"
-                  leftIcon={<Bookmark size={12} />}
-                  variant="outline"
-                  borderColor={primaryColor}
-                  color={primaryColor}
-                  onClick={() => {
-                    setPresetNameInput("");
-                    setShowSavePresetDialog(true);
-                  }}
-                  isDisabled={isLoading}
-                  _hover={{ bg: `${primaryColor}15` }}
-                  fontSize="xs"
-                  w="full"
-                >
-                  {t("displayFilter.saveAsPreset")}
-                </Button>
-                <Button
-                  size="xs"
-                  leftIcon={<RotateCcw size={12} />}
-                  variant="ghost"
-                  color={subTextColor}
-                  onClick={resetCustomValues}
-                  isDisabled={isLoading}
-                  _hover={{ color: textColor, bg: sliderBg }}
-                  fontSize="xs"
-                  w="full"
-                >
-                  {t("displayFilter.resetDefault")}
-                </Button>
-              </VStack>
-            )}
           </HStack>
 
           {activeIccId && (
@@ -2945,93 +3236,7 @@ export default function DisplayFilterPage() {
           )}
 
           <VStack spacing={1} align="stretch" flex={1} justify="center">
-              {activePresetId === "custom" ? (
-                <>
-                  <SliderInputItem
-                    label={t("displayFilter.colorTemperature")}
-                    value={editValuesRef.current.temperature}
-                    onChange={(v) => {
-                      editValuesRef.current.temperature = v;
-                      setHasChanges(true);
-                    }}
-                    min={1000} max={10000} step={100}
-                    unit="K"
-                    colorValue={editValuesRef.current.temperature}
-                    resetKey={inputVersion}
-                  />
-                  <SliderInputItem
-                    label={t("displayFilter.brightness")}
-                    value={editValuesRef.current.brightness}
-                    onChange={(v) => {
-                      editValuesRef.current.brightness = v;
-                      setHasChanges(true);
-                    }}
-                    min={50} max={150} step={1}
-                    unit="%"
-                    resetKey={inputVersion}
-                  />
-                  <SliderInputItem
-                    label={t("displayFilter.contrast")}
-                    value={editValuesRef.current.contrast}
-                    onChange={(v) => {
-                      editValuesRef.current.contrast = v;
-                      setHasChanges(true);
-                    }}
-                    min={50} max={150} step={1}
-                    unit="%"
-                    resetKey={inputVersion}
-                  />
-                  <SliderInputItem
-                    label={t("displayFilter.saturation")}
-                    value={editValuesRef.current.saturation}
-                    onChange={(v) => {
-                      editValuesRef.current.saturation = v;
-                      setHasChanges(true);
-                    }}
-                    min={50} max={150} step={1}
-                    unit="%"
-                    resetKey={inputVersion}
-                  />
-                  {/* RGB Gamma Section */}
-                  <Box pt={2} mt={1} borderTop="1px solid" borderColor={cardBorder}>
-                    <Text color={subTextColor} fontSize="10px" fontWeight="600" mb={2}>
-                      {t("displayFilter.rgbGamma")}
-                    </Text>
-                    <VStack spacing={1.5} align="stretch">
-                      <GammaSliderItem
-                        channelKey="r_gamma"
-                        label={t("displayFilter.rGamma")}
-                        value={editValuesRef.current.r_gamma}
-                        resetKey={inputVersion}
-                        onChange={(v) => {
-                          editValuesRef.current.r_gamma = v;
-                          setHasChanges(true);
-                        }}
-                      />
-                      <GammaSliderItem
-                        channelKey="g_gamma"
-                        label={t("displayFilter.gGamma")}
-                        value={editValuesRef.current.g_gamma}
-                        resetKey={inputVersion}
-                        onChange={(v) => {
-                          editValuesRef.current.g_gamma = v;
-                          setHasChanges(true);
-                        }}
-                      />
-                      <GammaSliderItem
-                        channelKey="b_gamma"
-                        label={t("displayFilter.bGamma")}
-                        value={editValuesRef.current.b_gamma}
-                        resetKey={inputVersion}
-                        onChange={(v) => {
-                          editValuesRef.current.b_gamma = v;
-                          setHasChanges(true);
-                        }}
-                      />
-                    </VStack>
-                  </Box>
-                </>
-              ) : settings.stacked ? (
+              {settings.stacked ? (
                 <VStack spacing={2} align="stretch" justify="center" py={2}>
                   <Box p={3} borderRadius="md" bg={hexToRgba(primaryColor, 0.08)}>
                     <Text color={textColor} fontSize="sm" fontWeight="600">

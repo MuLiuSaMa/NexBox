@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "9.9.3"
+version = "10.0.0"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
@@ -68,7 +68,7 @@ flate2 = "1"
 bytes = "1"
 dashmap = "6"
 parking_lot = "0.12"
-axum = "0.7"
+axum = { version = "0.7", features = ["ws"] }
 tower = "0.4"
 tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 async-stream = "0.3"

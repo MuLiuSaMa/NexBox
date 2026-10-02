@@ -36,7 +36,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
-import { listen } from "@tauri-apps/api/event";
+import { emit as tauriEmit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type { ExternalPlayback, Song } from "@/types/music";
 
@@ -108,6 +108,8 @@ interface IslandItem {
   persistent?: boolean;
   progress?: number;
   onClick?: () => void;
+  /** onClick 是否存在（可序列化版本，供桌面岛窗口判断点击行为） */
+  hasClick?: boolean;
   kind?: "music";
   timer?: ReturnType<typeof setTimeout>;
 }
@@ -238,9 +240,201 @@ let idSeed = 0;
 // getSnapshot 必须返回缓存引用（仅 store 变化时替换），否则 useSyncExternalStore 会无限重渲染
 let cachedSnapshot: { item: IslandItem | null; revision: number } = { item: null, revision: 0 };
 
+/* ------------------------------------------------------------------ */
+/* 跨窗口协议：把灵动岛搬到独立的桌面透明窗口（label=dynamic-island）。  */
+/* 状态真源永远在主窗口（队列 / 自动关闭计时 / 持久基线一行不改），      */
+/* 桌面窗口只是「纯渲染器」：                                           */
+/*   主窗口 store 每次变更 → emit("island:snapshot") 推可序列化快照；    */
+/*   桌面窗口的悬停 / 点击 → emit("island:cmd") 回传，由主窗口 store 执行。 */
+/* ReactNode 图标与 onClick/onCloseComplete 回调无法序列化，因此：       */
+/*   图标回退为 status/iconKey 渲染；回调留在主窗口按 id 查找并触发。    */
+/* ------------------------------------------------------------------ */
+
+/** 当前是否运行在桌面灵动岛独立窗口内 */
+export const IS_ISLAND_WINDOW =
+  typeof window !== "undefined" && window.location.pathname === "/dynamic-island";
+
+/**
+ * 外部渲染开关：由「用户意图」与「桌面窗口存活」两个信号共同决定，两者都在本模块内收敛，
+ * 避免设置页与桥接组件各持一份状态互相覆盖。
+ *   - externalRequested：设置页开关 / 启动恢复（与 store 同一 JS 上下文，同步生效，不等 IPC）
+ *   - islandWindowAlive：桌面窗口的心跳（主窗口重载等场景下也能自动接管）
+ */
+let externalRequested = false;
+let islandWindowAlive = false;
+let ignoreAliveUntil = 0;
+let remoteMode = false;
+
+function applyIslandMode() {
+  const next = externalRequested || islandWindowAlive;
+  // 必须「值真变了」才广播：桥接组件的 watchdog 每秒都会调 setIslandWindowAlive，
+  // 无守卫会导致每秒一次重渲染 + 每秒一次快照外发（封面可能几百 KB）
+  if (next === remoteMode) return;
+  remoteMode = next;
+  // remoteMode 是普通模块变量、不是 React 状态：内嵌岛的 visibility 在渲染期才读取它，
+  // 不通知订阅者则开关拨动后不会重渲染，要等到下一次 store 变更（如鼠标悬停）才生效。
+  // emit() 重建 cachedSnapshot 并通知订阅者 → 两个方向都立即生效；
+  // 它内部已带「remoteMode 为真时推快照」，开启瞬间顺带把当前内容送到桌面窗口。
+  emit();
+}
+
+/** 用户开关（设置页/启动恢复）：关闭时立即抹掉存活标记，
+ *  并丢弃短时间内还在路上的心跳（否则主窗口要等心跳超时才重新显示提示） */
+export function setIslandExternalRequested(value: boolean) {
+  externalRequested = value;
+  if (!value) {
+    islandWindowAlive = false;
+    ignoreAliveUntil = Date.now() + 1500;
+  }
+  applyIslandMode();
+}
+
+/** 桌面窗口心跳状态（true 仅在刚过关闭的短暂窗口期被丢弃；false 永远立即生效） */
+export function setIslandWindowAlive(value: boolean) {
+  if (value && Date.now() < ignoreAliveUntil) return;
+  islandWindowAlive = value;
+  applyIslandMode();
+}
+
+export function isIslandRemoteMode() {
+  return remoteMode;
+}
+
+/** 可跨窗口传输的岛内容 */
+export interface RemoteIslandItem {
+  id: string;
+  title?: string;
+  description?: string;
+  status: IslandStatus;
+  duration: number | null;
+  iconKey?: IconKey;
+  persistent?: boolean;
+  progress?: number;
+  kind?: "music";
+  hasClick: boolean;
+}
+
+export interface RemoteIslandSnapshot {
+  item: RemoteIslandItem | null;
+  revision: number;
+}
+
+function serializeItem(it: IslandItem | null): RemoteIslandItem | null {
+  if (!it) return null;
+  return {
+    id: it.id,
+    title: it.title,
+    description: it.description,
+    status: it.status,
+    duration: it.duration,
+    iconKey: it.iconKey,
+    persistent: it.persistent,
+    progress: it.progress,
+    kind: it.kind,
+    hasClick: Boolean(it.onClick),
+  };
+}
+
+/** 主窗口 store → 桌面窗口的推送出口（由 IslandRemoteBridge 注册/注销） */
+let snapshotSink: ((snap: RemoteIslandSnapshot) => void) | null = null;
+export function setIslandSnapshotSink(fn: ((snap: RemoteIslandSnapshot) => void) | null) {
+  snapshotSink = fn;
+  // 注册瞬间补推当前状态，避免桌面窗口就绪时机恰好错过最后一次变更
+  fn?.({ item: serializeItem(current), revision });
+}
+
+/** 桌面窗口：应用主窗口推来的快照（本地不建计时器，关闭时机由主窗口决定） */
+export function applyRemoteSnapshot(snap: RemoteIslandSnapshot) {
+  if (!IS_ISLAND_WINDOW) return;
+  revision = snap.revision;
+  const it = snap.item;
+  current = it
+    ? {
+        id: it.id,
+        title: it.title,
+        description: it.description,
+        status: it.status,
+        duration: it.duration,
+        iconKey: it.iconKey,
+        persistent: it.persistent,
+        progress: it.progress,
+        kind: it.kind,
+        hasClick: it.hasClick,
+      }
+    : null;
+  emit();
+}
+
+/** 主窗口：把当前快照立即推一次（桌面窗口刚就绪、错过之前变更时补帧） */
+export function pushIslandSnapshot() {
+  if (IS_ISLAND_WINDOW || !remoteMode) return;
+  snapshotSink?.({ item: serializeItem(current), revision });
+}
+
+/** 主窗口：处理桌面岛窗口回传的交互命令（真源在本窗口，那里只发命令不改本地状态） */
+export function applyIslandCommand(cmd: {
+  op: "hold" | "extend" | "close" | "click";
+  id: string;
+  shouldClose?: boolean;
+}) {
+  if (IS_ISLAND_WINDOW) return;
+  switch (cmd.op) {
+    case "hold":
+      hold(cmd.id);
+      return;
+    case "extend":
+      extend(cmd.id);
+      return;
+    case "close":
+      close(cmd.id);
+      return;
+    case "click": {
+      if (!current || current.id !== cmd.id) return;
+      // 自定义点击（如更新「点击重启安装」、下载加速岛跳转）优先，回调留在主窗口
+      if (current.onClick) {
+        current.onClick();
+        return;
+      }
+      if (cmd.shouldClose) close(cmd.id);
+      return;
+    }
+  }
+}
+
+/** 桌面窗口：立即清空自己的内容（开关关掉 / 窗口即将销毁时用，不留旧快照在桌面上） */
+export function clearRemoteSnapshot() {
+  if (!IS_ISLAND_WINDOW) return;
+  revision++;
+  current = null;
+  emit();
+}
+
+/** 桌面窗口的「光标已离开岛体」钩子：由页面在开启鼠标穿透前调用，
+ *  补上被穿透吞掉的 mouseleave（否则悬停时开启穿透 → 永远收不到 extend） */
+let islandIdleHook: (() => void) | null = null;
+export function setIslandIdleHook(fn: (() => void) | null) {
+  islandIdleHook = fn;
+}
+export function notifyIslandIdle() {
+  islandIdleHook?.();
+}
+
+/** 桌面窗口 → 主窗口的命令回传 */
+type IslandCmd =
+  | { op: "hold" | "extend" | "close"; id: string }
+  | { op: "click"; id: string; shouldClose: boolean };
+
+function sendIslandCmd(cmd: IslandCmd) {
+  void tauriEmit("island:cmd", cmd).catch((e) => console.error("[Island] cmd emit failed:", e));
+}
+
 function emit() {
   cachedSnapshot = { item: current, revision };
   for (const l of listeners) l();
+  // 外部桌面窗口模式：把快照同步过去，真源仍在本窗口（动画与关闭时机完全沿用现状）
+  if (remoteMode && !IS_ISLAND_WINDOW) {
+    snapshotSink?.({ item: serializeItem(current), revision });
+  }
 }
 
 function buildItem(options: IslandOptions): IslandItem {
@@ -260,11 +454,14 @@ function buildItem(options: IslandOptions): IslandItem {
     persistent: options.persistent,
     progress: options.progress,
     onClick: options.onClick,
+    hasClick: Boolean(options.onClick),
     kind: options.kind,
   };
 }
 
 function show(options: IslandOptions) {
+  // 桌面岛窗口只做渲染，不接受本地写入（内容一律由主窗口快照驱动）
+  if (IS_ISLAND_WINDOW) return;
   const next = buildItem(options);
   if (current) revision++; // 已有提示，触发「缩小→换内容→扩散」
   if (current?.timer) clearTimeout(current.timer);
@@ -281,6 +478,7 @@ function update(id: string, options: IslandOptions) {
 
 /** 显示持久基线（无自动关闭）。若当前正显示普通提示则不覆盖，等待其关闭后由 close() 恢复 */
 function showPersistent(options: IslandOptions) {
+  if (IS_ISLAND_WINDOW) return;
   const next = buildItem({ ...options, duration: null });
   pending = next;
   if (!current) {
@@ -302,6 +500,7 @@ function showPersistent(options: IslandOptions) {
  * 当前正显示普通提示时仅暂存 pending，待其关闭后恢复。
  */
 function updatePersistent(id: string, options: IslandOptions, animate = true) {
+  if (IS_ISLAND_WINDOW) return;
   if (!pending || pending.id !== id) return;
   const next = { ...pending, ...options, id };
   pending = next;
@@ -315,6 +514,7 @@ function updatePersistent(id: string, options: IslandOptions, animate = true) {
 
 /** 关闭持久基线：清除 pending；若正显示基线则淡出，否则不影响当前普通提示 */
 function closePersistent(id: string) {
+  if (IS_ISLAND_WINDOW) return;
   if (!pending || pending.id !== id) return;
   pending = null;
   if (current?.id === id) {
@@ -325,6 +525,11 @@ function closePersistent(id: string) {
 }
 
 function close(id: string) {
+  // 桌面岛窗口：关闭由主窗口真源决定，这里只回传命令（改本地 current 会与快照失步）
+  if (IS_ISLAND_WINDOW) {
+    sendIslandCmd({ op: "close", id });
+    return;
+  }
   if (!current || current.id !== id) return;
   if (current.timer) clearTimeout(current.timer);
   const cb = current.onCloseComplete;
@@ -340,6 +545,7 @@ function close(id: string) {
 }
 
 function closeAll() {
+  if (IS_ISLAND_WINDOW) return;
   if (current?.timer) clearTimeout(current.timer);
   // 清空普通提示后恢复持久基线；当前已是基线或无变化时不重复触发动画
   if (pending && current?.id !== pending.id) {
@@ -359,13 +565,26 @@ function isActive(id: string) {
 
 /** 悬停展开时暂停自动关闭 */
 function hold(id: string) {
+  if (IS_ISLAND_WINDOW) {
+    sendIslandCmd({ op: "hold", id });
+    return;
+  }
   if (!current || current.id !== id) return;
   if (current.timer) clearTimeout(current.timer);
   current.timer = undefined;
+  // 安全网：桌面岛窗口的 extend 回传可能因鼠标穿透切换、窗口被遮挡等原因而丢失，
+  // 一旦丢失提示就永远不会自己收起。这里额外挂一个充分长的兜底计时（仅普通提示）。
+  if (typeof current.duration === "number" && current.duration > 0) {
+    current.timer = setTimeout(() => close(current.id), current.duration + 30000);
+  }
 }
 
 /** 移开后恢复自动关闭计时 */
 function extend(id: string) {
+  if (IS_ISLAND_WINDOW) {
+    sendIslandCmd({ op: "extend", id });
+    return;
+  }
   if (!current || current.id !== id) return;
   if (current.timer) clearTimeout(current.timer);
   if (typeof current.duration === "number" && current.duration > 0) {
@@ -617,7 +836,9 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
   const isExternal = Boolean(externalTrack?.title) && !(currentSong && (isPlaying || !externalPlaying));
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const audioRef = useMusicStore((s) => s.audioRef);
-  const actionsRef = useRef(useMusicStore.getState());
+  // 每次调用实时取 store 动作：桌面岛窗口会在模块加载时把这些动作覆写为跨窗口 emit
+  // （见 pages/DynamicIslandWindowPage.tsx），缓存 getState() 会拿到覆写前的旧实现
+  const act = () => useMusicStore.getState();
   const playing = isExternal ? externalPlaying : isPlaying;
   const levels = useSongLevels(playing);
 
@@ -662,7 +883,7 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
     if (trackKey !== queriedKeyRef.current) {
       queriedKeyRef.current = trackKey;
       setExtDurationLookup(0);
-      if (isExternal && externalTrack?.title && externalDurationMs <= 0 && trackKey !== "|") {
+      if (isExternal && externalTrack?.title && externalDurationMs <= 0 && trackKey !== "|" && !IS_ISLAND_WINDOW) {
         let cancelled = false;
         (async () => {
           try {
@@ -730,12 +951,12 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
       if (isExternal) {
         // 外部进度条目前只读，正常不会走到这里；兜底放开并照常发送 seek
         setDragFrac(null);
-        actionsRef.current.externalControl("seek", Math.round(f * externalDurationMs));
+        act().externalControl("seek", Math.round(f * externalDurationMs));
       } else {
         // 内部：松手后先钉在拖到的位置，等音频 timeupdate 真正跳到目标附近再放开，
         // 避免松手瞬间进度条回弹一下再跳到目标。
         const target = f * (durationRef.current || 0);
-        actionsRef.current.seekTo(target);
+        act().seekTo(target);
         pendingSeekTargetRef.current = target;
         if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
         pendingTimerRef.current = setTimeout(clearPendingSeek, 2000);
@@ -932,18 +1153,18 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
         )}
         {/* 行3：控制按钮 —— 整宽居中、纯图标（音乐页同套）；右下角另加「打开播放器」跳转按钮 */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 26, position: "relative" }}>
-          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("prev") : actionsRef.current.prevTrack(); }}>
+          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("prev") : act().prevTrack(); }}>
             <MSkipBackIcon size={20} color={titleColor} />
           </ControlButton>
-          <ControlButton label={playing ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("play-pause") : actionsRef.current.togglePlay(); }}>
+          <ControlButton label={playing ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("play-pause") : act().togglePlay(); }}>
             {playing ? <MPauseIcon size={22} color={titleColor} /> : <MPlayIcon size={22} color={titleColor} />}
           </ControlButton>
-          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); isExternal ? actionsRef.current.externalControl("next") : actionsRef.current.nextTrack(); }}>
+          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("next") : act().nextTrack(); }}>
             <MSkipForwardIcon size={20} color={titleColor} />
           </ControlButton>
           {!isExternal && (
             <div style={{ position: "absolute", right: 12 }}>
-              <ControlButton label="打开播放器" onClick={(e) => { e.stopPropagation(); navigate("/music", { state: { expandPlayer: true } }); }}>
+              <ControlButton label="打开播放器" onClick={(e) => { e.stopPropagation(); if (IS_ISLAND_WINDOW) { void tauriEmit("island:music-control", { action: "open-player" }); return; } navigate("/music", { state: { expandPlayer: true } }); }}>
                 <MOpenPlayerIcon size={16} color={titleColor} />
               </ControlButton>
             </div>
@@ -1078,6 +1299,9 @@ const MUSIC_COLLAPSED_HEIGHT = 30;
 const MUSIC_COLLAPSED_WIDTH = 200;
 const MUSIC_EXPANDED_HEIGHT = 150;
 
+/** 岛体外层容器 id：桌面岛窗口轮询光标位置时据此算可交互矩形（做鼠标穿透判定） */
+export const ISLAND_HOST_DOM_ID = "nexbox-dynamic-island-host";
+
 export function DynamicIslandHost() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
   const { item, revision } = snapshot;
@@ -1086,7 +1310,10 @@ export function DynamicIslandHost() {
   const { liquidGlassEnabled, islandLiquidGlassEnabled } = useBackground();
   const { svgSupported } = useLiquidGlassRefraction();
   // 总开关 + 灵动岛子开关（设置页液态玻璃卡片内，默认关闭）同时打开才启用真实折射；不支持时回退磨砂玻璃
-  const islandGlass = liquidGlassEnabled && islandLiquidGlassEnabled && svgSupported;
+  // 桌面岛窗口强制不用真实折射：backdrop-filter 只采样本 WebView 表面，透明窗口背后是
+  // 桌面 → 采不到任何内容，会用不透明胶囊底色（pillBg）呈现
+  const islandGlass =
+    !IS_ISLAND_WINDOW && liquidGlassEnabled && islandLiquidGlassEnabled && svgSupported;
   const currentSong = useMusicStore((s) => s.currentSong);
   const externalTrack = useMusicStore((s) => s.externalTrack);
   const isPlaying = useMusicStore((s) => s.isPlaying);
@@ -1153,6 +1380,8 @@ export function DynamicIslandHost() {
   // 因此用「展示键(来源+曲目)」去重：仅当实际展示的曲目/来源变化时才触发 showPersistent 动画；
   // 仅 play/pause 翻转只实时驱动波形（useSongLevels），不再重复缩→扩动画。
   useEffect(() => {
+    // 桌面岛窗口不跑此逻辑：它的内容完全由主窗口快照驱动，否则会与真源失步
+    if (IS_ISLAND_WINDOW) return;
     const internalActive = Boolean(currentSong) && (isPlaying || !externalPlaying);
     const useExternal = Boolean(externalTrack?.title) && !internalActive;
     const key = useExternal
@@ -1327,9 +1556,11 @@ export function DynamicIslandHost() {
 
   const handleMouseLeave = useCallback(() => {
     const id = itemRef.current?.id;
-    if (!visibleRef.current || !expandedRef.current || !id) return;
-    run(playCollapse);
-    extend(id); // 移开后恢复自动关闭
+    if (!visibleRef.current || !id) return;
+    if (expandedRef.current) run(playCollapse);
+    // 无论是否已展开都必须恢复计时：playExpand 是排进动画队列异步执行的，
+    // 光标进→出很快时 expandedRef 仍为 false，旧逻辑会只 hold 不 extend，导致永不自动关闭
+    extend(id);
   }, [run, playCollapse]);
 
   // 兜底：展开期间监听全局鼠标移动，光标确实离开灵动岛区域（含一定边距）则自动收起。
@@ -1366,6 +1597,14 @@ export function DynamicIslandHost() {
     const it = itemRef.current;
     const id = it?.id;
     if (!it || !id) return;
+    if (IS_ISLAND_WINDOW) {
+      // 桌面岛窗口：展开/收起动画就地跑，关闭与自定义点击以命令回传给真源。
+      // shouldClose：折叠态、非持久且主窗口没挂自定义 onClick 时才是「点击关闭」。
+      sendIslandCmd({ op: "click", id, shouldClose: !expandedRef.current && !it.persistent && !it.hasClick });
+      if (expandedRef.current) run(playCollapse);
+      else if (it.persistent) run(playExpand);
+      return;
+    }
     if (it.onClick) {
       it.onClick();
       return;
@@ -1381,6 +1620,18 @@ export function DynamicIslandHost() {
     }
   }, [run, playCollapse, playExpand]);
 
+  // 桌面岛窗口：开启鼠标穿透前由页面通知「光标已离开」，补上被穿透吞掉的 mouseleave，
+  // 否则悬停中直接穿透 → 主窗口永远收不到 extend → 提示永不自动收起
+  useEffect(() => {
+    if (!IS_ISLAND_WINDOW) return;
+    setIslandIdleHook(() => {
+      const id = itemRef.current?.id;
+      if (expandedRef.current) run(playCollapse);
+      if (id) extend(id);
+    });
+    return () => setIslandIdleHook(null);
+  }, [run, playCollapse]);
+
   useEffect(() => {
     if (item) {
       if (!visibleRef.current) {
@@ -1394,7 +1645,12 @@ export function DynamicIslandHost() {
     }
   }, [item, revision, run, playAppear, playReplace, playDismiss]);
 
-  const pillBg = useColorModeValue("rgba(255,255,255,0.9)", "rgba(20,20,20,0.88)");
+  // 桌面岛窗口底下就是真实桌面：半透明底色会直接透出桌面内容（看起来像没加载完），
+  // 而 CSS backdrop-filter 在透明窗口里又采不到桌面像素，所以直接用不透明实色
+  const pillBg = useColorModeValue(
+    IS_ISLAND_WINDOW ? "#ffffff" : "rgba(255,255,255,0.9)",
+    IS_ISLAND_WINDOW ? "#141414" : "rgba(20,20,20,0.88)"
+  );
   const glassBg = useColorModeValue("rgba(255,255,255,0.10)", "rgba(12,12,12,0.22)");
   // 真实液态玻璃：SVG 位移折射 + 轻模糊 + 提饱和；折射强度/边缘带在 liquid-glass-svg-filter.tsx 顶部可调
   const glassBackdrop = `url(#${ISLAND_FILTER_ID}) blur(2px) saturate(1.35)`;
@@ -1411,8 +1667,19 @@ export function DynamicIslandHost() {
   const detailDesc =
     displayed?.title && displayed?.description ? displayed.description : undefined;
 
+  // 外部桌面窗口模式下隐藏内嵌岛：用 visibility 而不是 return null。
+  // 整棵树被卸载的话，隐藏期间 framer-motion 的 controls 处于未绑定状态（动画全部空跑），
+  // 关掉开关重新挂回来时会停在 initial 的 opacity:0 上 → 主窗口内什么都不显示；
+  // 而 visibility:hidden 保留布局（auto 宽度仍可测量）且不吃鼠标事件，切回来就是即时正确状态。
+  const hiddenByRemote = remoteMode && !IS_ISLAND_WINDOW;
+  // 音乐岛条目可能比跨窗口推过来的歌曲数据先到（重建窗口、心跳补推竞态），
+  // 此时 MusicIslandContent 会自己返回 null，剩下一个空白胶囊 → 直接隐藏等数据
+  const waitingMusicData =
+    displayed?.kind === "music" && !currentSong && !externalTrack?.title;
+
   return (
     <div
+      id={ISLAND_HOST_DOM_ID}
       style={{
         position: "fixed",
         top: 4,
@@ -1422,6 +1689,7 @@ export function DynamicIslandHost() {
         display: "flex",
         alignItems: "center",
         pointerEvents: "none",
+        visibility: hiddenByRemote || waitingMusicData ? "hidden" : "visible",
       }}
     >
       <motion.div

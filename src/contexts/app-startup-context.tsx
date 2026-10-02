@@ -4,6 +4,7 @@ import { createContext, useContext, useState, ReactNode, useEffect, useRef } fro
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
+import { setIslandExternalRequested } from "@/components/ui/dynamic-island";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
 
 /** 从 invoke 错误中提取可读的中文提示，避免显示 [object Object] */
@@ -418,6 +419,31 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
         overlaySettingsRef.current = DEFAULT_OVERLAY_SETTINGS;
         verticalPosRef.current = { x: null, y: null };
       }
+    }
+  };
+
+  /**
+   * 启动时恢复「灵动岛显示在桌面上」：与 nexbox_auto_overlay 同一套模式，
+   * 开启时让 Rust 创建常驻的透明置顶岛窗口（主窗口隐藏到托盘后仍能弹提示）。
+   */
+  const loadIslandExternalWindow = async () => {
+    try {
+      // 仅主窗口执行：独立窗口（桌面岛/托盘/歌词等）都挂了本 Provider，
+      // 重复创建会互相抢同一个窗口
+      if (window.location.pathname === "/dynamic-island") return;
+      let raw: unknown = await store.get<unknown>("nexbox_island_external_window");
+      if (raw === null || raw === undefined) {
+        raw = localStorage.getItem("nexbox_island_external_window");
+      }
+      // 强制布尔化：防止旧数据里的字符串/数字被当成 truthy 误判
+      const enabled = raw === true || raw === "true" || raw === 1;
+      // 先写模块开关：启动就开启时，主窗口内嵌岛从第一帧起就不渲染（不会两处同时出现）
+      setIslandExternalRequested(enabled);
+      if (enabled) {
+        await invoke("set_dynamic_island_enabled", { enabled: true });
+      }
+    } catch (e) {
+      console.error("Failed to restore desktop dynamic island window:", e);
     }
   };
 
@@ -841,6 +867,7 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
       "/desktop-lyrics",
       "/tray-menu",
       "/sensor-monitor",
+      "/dynamic-island",
     ];
     if (standalonePaths.includes(window.location.pathname)) return;
 
@@ -881,9 +908,18 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     if (hasStarted.current) return;
     hasStarted.current = true;
 
+    // 桌面灵动岛窗口只是「纯渲染器」（内容全部由主窗口快照推过来），
+    // 绝不能跟着跑一遍启动任务：重复注册热键、二次执行滤镜恢复会直接弄坏主窗口的状态。
+    if (window.location.pathname === "/dynamic-island") {
+      setIsStartupComplete(true);
+      setStartupProgress(100);
+      return;
+    }
+
     const runStartup = async () => {
       const tasks = [
         { name: "overlay-settings", fn: loadOverlaySettings, weight: 1 },
+        { name: "island-external-window", fn: loadIslandExternalWindow, weight: 1 },
         { name: "hardware-info", fn: loadHardwareInfo, weight: 4 },
         { name: "overlay-hotkey", fn: loadOverlayHotkey, weight: 1 },
         { name: "crosshair-hotkey", fn: loadCrosshairHotkey, weight: 1 },

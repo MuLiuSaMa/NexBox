@@ -41,7 +41,7 @@
 }
 
 :root {
-  font-family: var(--app-font-family, "Sinter-Regular"), Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--app-font-family, Inter), system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -291,83 +291,14 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
   overflow: hidden;
   pointer-events: none;
 }
-
 /* ============================================================
-   启动页背景层（仿 Mineradio WebGL 霓虹线）
-   背景结构：网格渐变（底层）→ WebGL canvas（动画）→ 暗角 → 噪点
+   启动页背景：纯黑，无任何线条 / 渐变 / 噪点
+   （历史背景层 grid / vignette / noise 已按需求移除）
    ============================================================ */
 .nexbox-splash {
-  background: #010304; /* 深蓝黑，非纯黑 */
+  background: #000; /* 纯黑 */
   overflow: hidden;
   color: #fff;
-}
-
-/* 渐变斜光 + 细网格线 + 呼吸（对应 Mineradio #splash::before） */
-.nexbox-splash-grid {
-  position: absolute;
-  inset: -8%;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      115deg,
-      transparent 0%,
-      rgba(255, 83, 103, 0.055) 24%,
-      transparent 42%,
-      rgba(244, 210, 138, 0.052) 62%,
-      transparent 82%
-    ),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 54px),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 46px),
-    linear-gradient(180deg, #020606 0%, #050607 42%, #000 100%);
-  filter: blur(0.4px);
-  opacity: 0.9;
-  animation: nexbox-splash-breathe 7s ease-in-out infinite alternate;
-}
-
-/* WebGL 霓虹线动画画布（对应 Mineradio #splash-canvas） */
-.nexbox-splash-canvas {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-}
-
-/* 四周暗角（对应 Mineradio #splash::after） */
-.nexbox-splash-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.82), transparent 21%, transparent 79%, rgba(0, 0, 0, 0.82)),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.68), transparent 32%, transparent 64%, rgba(0, 0, 0, 0.74));
-}
-
-/* 胶片噪点（对应 Mineradio .splash-bg-noise） */
-.nexbox-splash-noise {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  opacity: 0.038;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
-  mix-blend-mode: screen;
-}
-
-@keyframes nexbox-splash-breathe {
-  0% {
-    opacity: 0.72;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1.035);
-  }
 }
 
 /* 桌面歌词 - 细条主题色音量滑块 */

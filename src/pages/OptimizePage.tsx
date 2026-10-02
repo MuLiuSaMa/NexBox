@@ -19,6 +19,7 @@ import {
   MousePointer2,
   Download,
   Gamepad2,
+  Database,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
@@ -137,6 +138,14 @@ const defaultTools: ViewItem[] = [
     titleKey: "optimization.gameProcessOptimize.title",
     descriptionKey: "optimization.gameProcessOptimize.description",
     color: "#8B5CF6",
+  },
+  {
+    id: "pso-cache",
+    path: "/optimize/pso-cache",
+    icon: Database,
+    titleKey: "psoCache.title",
+    descriptionKey: "builtinTools.psoCacheDesc",
+    color: "#0EA5E9",
   },
 ];
 

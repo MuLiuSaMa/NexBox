@@ -1,0 +1,226 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Tauri / Rust
+src-tauri/target/
+installer/src-tauri/target/
+uninstaller/src-tauri/target/
+
+# C#（传感器服务位于 tools/ 根目录，与 csproj 同级）
+tools/bin/
+tools/obj/
+
+# Monitor C# 项目编译输出（net48，输出与源码同级）
+monitor/bin/
+monitor/obj/
+monitor/*.exe
+monitor/*.dll
+monitor/*.pdb
+monitor/*.config
+
+# 本地生成的图标源（可选用仓库内其他资源重新执行 `npx tauri icon`）
+icon-src.png
+
+# 环境
+.env
+.env.local
+.env.*.local
+
+# 日志与编辑器
+npm-debug.log
+.temp_old_filter.rs
+monitor/build.log*
+.DS_Store
+Thumbs.db
+
+# TypeScript 编译输出日志
+tscout*.txt
+query
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Build outputs
+Output/
+# 忽略构建产物 exe，但保留 src-tauri 资源目录下随包分发的工具 exe
+*.exe
+!src-tauri/resources/binaries/icc-tools/*.exe
+!src-tauri/resources/binaries/*.exe
+!src-tauri/resources/binaries/fxvad/*.exe
+*.zip
+
+# Tauri
+src-tauri/src-tauri.zip
+
+# Temporary directories
+
+# Atom code
+.atomcode/
+
+# Trae AI documents
+.trae/
+
+# CodeBuddy
+.codebuddy/
+
+# WorkBuddy
+.workbuddy/
+.workbuddy-ai/
+
+# Uploads
+.uploads/
+
+# Joycode
+.joycode/
+
+# Husky
+.husky/
+
+# Third-party executables
+nvidiaProfileInspector.exe
+Reference.xml
+nvidiaProfileInspector.exe.config
+
+# OpenCode
+.opencode/
+
+# CodeFlicker
+.codeflicker/
+
+# ZCode
+.zcode/
+
+# Video directory
+video/
+
+# ChineseSimplified.isl (Inno Setup translation, already in nexbox.iss)
+ChineseSimplified.isl
+
+# README
+README.md
+
+# Build output (frontend)
+dist/
+
+# Resources（本地资源纳入版本库，防止误删丢失）
+
+# 排除的文件
+1.icc
+软件介绍.md
+社区滤镜A.icc
+原亮 冷色调.icc
+Delta Force.nip
+MCTier技术介绍.md
+
+# 三角洲行动ICC色彩配置文件（本地资源，不随仓库分发）
+三角洲推荐A.icc
+三角洲推荐B.icc
+三角洲推荐C.icc
+三角洲推荐D.icc
+三角洲推荐E.icc
+三角洲超级推荐.icc
+
+debug.log
+.temp_old_filter.rs
+monitor/build.log
+
+# Third-party reference project (downloaded Mineradio source, not part of repo)
+Mineradio-main/
+
+# Third-party reference project (downloaded CrystalDiskInfo source, not part of repo)
+CrystalDiskInfo-master/
+
+# Third-party reference project (downloaded Pavise source, not part of repo)
+Pavise-Game-main/
+
+# Third-party reference project (downloaded Liquid Glass JS library, not part of repo)
+liquid-glass-main/
+
+# Third-party reference project (downloaded RyTuneX source, not part of repo)
+RyTuneX-main/
+
+# Third-party reference project (SteamTools source, not part of repo)
+SteamTools-develop/
+
+# Third-party reference project (downloaded tubatool source, not part of repo)
+tubatool-master/
+
+# Third-party reference project (downloaded Steam520 source, not part of repo)
+Steam520-main/
+
+# 根目录字体副本（与 public/fonts/ 下重复，仅提交 public/fonts 版本）
+NotoSerifSC-900.woff2
+
+# 临时调试测试文件
+src-tauri/reg_test.pdb
+src-tauri/reg_test.rs
+
+# 社区工具插件独立仓库（单独推送到 gitcode.com/MuLiuSaMa/NexBox-Tools，不随主程序提交）
+NexBox-Tools/
+
+# FreeBuff 内部工具工作副本（含完整仓库嵌套，不随主程序提交）
+.freebuff/
+
+
+# QQ音乐调试临时文件
+.tmp_yqq_*
+
+# MSIX 打包目录（仅提交打包脚本，产物/证书/临时文件不入库）
+msix/*
+!msix/build-msix.ps1
+!msix/install-msix.ps1
+!msix/support-email.txt
+
+# NexBox 源码快照副本（下载参考用，不随主程序提交）
+NexBox-main/
+
+# 字节专有二进制（bdms.node / metasecml.dll）与汽水签名用 Node 运行时：
+# 禁止公开分发，仅本地打包进安装包，勿提交
+src-tauri/resources/qishui-auth/bdms.node
+src-tauri/resources/qishui-auth/metasecml.dll
+src-tauri/resources/qishui-auth/node.exe
+
+# 汽水专有二进制下载目录（bdms.node / metasecml.dll），禁止公开分发，勿提交
+汽水文件/
+
+# NexBox/doralite 源码快照副本（本地备份与交接文档，不随主程序提交）
+doralite_lite-main/
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+bower_components/
+jspm_packages/
+__pycache__/
+site-packages/
+venv/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.egg-info/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

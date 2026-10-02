@@ -22,6 +22,7 @@ import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
 import ShaderCachePage from "./pages/ShaderCachePage";
+import PsoCachePage from "./pages/PsoCachePage";
 import PowerManagementPage from "./pages/PowerManagementPage";
 import StorageCleanPage from "./pages/StorageCleanPage";
 import StartupManagerPage from "./pages/StartupManagerPage";
@@ -38,6 +39,7 @@ import EpicFreePage from "./pages/EpicFreePage";
 import SteamPage from "./pages/SteamPage";
 import TrayMenuPage from "./pages/TrayMenuPage";
 import DesktopLyricsPage from "./pages/DesktopLyricsPage";
+import DynamicIslandWindowPage from "./pages/DynamicIslandWindowPage";
 import VerticalOverlayPage from "./pages/VerticalOverlayPage";
 import SensorMonitorPage from "./pages/SensorMonitorPage";
 import RuntimeRepairPage from "./pages/RuntimeRepairPage";
@@ -57,6 +59,7 @@ import ScreenTestPage from "./pages/ScreenTestPage";
 import BsodLogPage from "./pages/BsodLogPage";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 
 import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
@@ -68,6 +71,7 @@ import MusicPage from "./pages/MusicPage";
 import { ImportantAnnouncementModal } from "./components/ImportantAnnouncementModal";
 import { DynamicIslandHost } from "./components/ui/dynamic-island";
 import { AccelIslandBridge } from "./components/ui/accel-island-bridge";
+import { IslandRemoteBridge } from "./components/ui/island-remote-bridge";
 
 /** 启动完成后展示一次开屏广告弹窗（ads 为空时不显示任何内容） */
 function StartupAdHost() {
@@ -82,6 +86,11 @@ function App() {
   // Tray menu: render standalone, no main layout
   if (location.pathname === "/tray-menu") {
     return <TrayMenuPage />;
+  }
+
+  // 桌面灵动岛独立窗口：只负责渲染，状态真源在主窗口（见 IslandRemoteBridge）
+  if (location.pathname === "/dynamic-island") {
+    return <DynamicIslandWindowPage />;
   }
 
   // Desktop lyrics window: render standalone, no main layout
@@ -263,6 +272,12 @@ function App() {
                     }
                   />
                   <Route
+                    path="/optimize/pso-cache"
+                    element={
+                      <PsoCachePage />
+                    }
+                  />
+                  <Route
                     path="/optimize/power-management"
                     element={
                       <PowerManagementPage />
@@ -328,12 +343,15 @@ function App() {
                       <NvidiaDriverPage />
                     }
                   />
-                  <Route
-                    path="/nvidia-driver-download"
-                    element={
-                      <NvidiaDriverDownloadPage />
-                    }
-                  />
+                  {/* 商店版隐藏路由：整页为 NVIDIA 官网驱动下载入口（Store 10.1.5） */}
+                  {!IS_STORE_BUILD && (
+                    <Route
+                      path="/nvidia-driver-download"
+                      element={
+                        <NvidiaDriverDownloadPage />
+                      }
+                    />
+                  )}
                   <Route
                     path="/steam"
                     element={
@@ -438,6 +456,7 @@ function App() {
         <ImportantAnnouncementModal />
         <DynamicIslandHost />
         <AccelIslandBridge />
+        <IslandRemoteBridge />
       </>
     </MusicProvider>
   );

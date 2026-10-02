@@ -20,6 +20,7 @@ import {
   Bot,
   Volume2,
   Trash2,
+  Database,
   MemoryStick,
   Gauge,
   Gamepad2,
@@ -230,14 +231,19 @@ export const searchIndex: SearchItem[] = [
     category: "builtin-tool",
     keywords: ["EQ", "调音", "均衡器", "音频", "声卡", "equalizer", "audio", "fxsound", "音效"],
   },
-  {
-    id: "nvidia-driver-download",
-    nameKey: "sidebar.nvidiaDriverDownload",
-    path: "/nvidia-driver-download",
-    icon: Download,
-    category: "builtin-tool",
-    keywords: ["nvidia", "驱动下载", "显卡驱动", "下载驱动", "下载", "历史版本", "geforce", "driver", "download", "英伟达"],
-  },
+  // 商店版不索引「NVIDIA 显卡驱动下载」：整页直达 NVIDIA 官网下载页，触发 Store 10.1.5
+  ...(IS_STORE_BUILD
+    ? []
+    : [
+        {
+          id: "nvidia-driver-download",
+          nameKey: "sidebar.nvidiaDriverDownload",
+          path: "/nvidia-driver-download",
+          icon: Download,
+          category: "builtin-tool" as const,
+          keywords: ["nvidia", "驱动下载", "显卡驱动", "下载驱动", "下载", "历史版本", "geforce", "driver", "download", "英伟达"],
+        },
+      ]),
   {
     id: "nvidia-recording",
     nameKey: "sidebar.nvidiaRecording",
@@ -284,7 +290,15 @@ export const searchIndex: SearchItem[] = [
     path: "/optimize/shader-cache",
     icon: Trash2,
     category: "optimization",
-    keywords: ["着色器", "缓存", "shader", "cache", "清理", "nvidia", "amd"],
+    keywords: ["着色器", "缓存", "shader", "cache", "清理", "nvidia", "amd", "intel", "directx"],
+  },
+  {
+    id: "pso-cache",
+    nameKey: "psoCache.title",
+    path: "/optimize/pso-cache",
+    icon: Database,
+    category: "optimization",
+    keywords: ["pso", "缓存", "三角洲", "delta", "deltaforce", "着色器", "pipeline", "清理"],
   },
   {
     id: "power-management",

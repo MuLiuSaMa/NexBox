@@ -54,8 +54,8 @@ const config: ThemeConfig = {
 const theme = extendTheme({
   config,
   fonts: {
-    heading: 'var(--app-font-family, "Sinter-Regular"), Inter, system-ui, sans-serif',
-    body: 'var(--app-font-family, "Sinter-Regular"), Inter, system-ui, sans-serif',
+    heading: 'var(--app-font-family, Inter), system-ui, sans-serif',
+    body: 'var(--app-font-family, Inter), system-ui, sans-serif',
   },
   colors: {
     brand: {

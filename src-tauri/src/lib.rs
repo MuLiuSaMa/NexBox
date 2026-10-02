@@ -33,6 +33,7 @@ mod game_ping;
 mod gpu_rename;
 mod hardware;
 mod hardware_report;
+mod island_window;
 mod jedec;
 
 mod feature_flags;
@@ -50,6 +51,7 @@ mod runtime_repair;
 mod optimization;
 mod overlay_panel;
 mod remote_monitor;
+mod remote_access;
 mod power_settings;
 mod vertical_overlay;
 mod vac_repair;
@@ -58,6 +60,7 @@ mod vtx_virtualization;
 mod sensor;
 mod sensor_monitor;
 mod shader_cache;
+mod pso_cache;
 mod pawnio_driver;
 mod peripheral_drivers;
 mod smart;
@@ -363,6 +366,9 @@ pub fn run() {
 
             // 手机远程监控：若上次开启则自动重开局域网 HTTP 服务
             remote_monitor::restore_on_startup(app.handle());
+
+            // 远程接入网关（安卓控制）：注入 AppHandle 并载入历史配对设备（不自动重开服务）
+            remote_access::init(app.handle());
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -740,6 +746,14 @@ pub fn run() {
         remote_monitor::cmd_enable_remote_monitor,
         remote_monitor::cmd_disable_remote_monitor,
         remote_monitor::cmd_set_remote_style,
+        // === 远程接入网关（安卓控制 · 局域网） ===
+        remote_access::cmd_get_remote_access,
+        remote_access::cmd_enable_remote_access,
+        remote_access::cmd_rotate_pairing_code,
+        remote_access::cmd_list_paired_devices,
+        remote_access::cmd_revoke_device,
+        remote_access::cmd_list_pair_requests,
+        remote_access::cmd_resolve_pair_request,
         downloader::download_file,
         downloader::open_system_browser,
         downloader::open_installer,
@@ -1098,6 +1112,9 @@ pub fn run() {
         df_stats::df_stats_battle_report_season,
         df_stats::df_stats_map_stats,
         open_mood_window,
+        // === 桌面灵动岛窗口（把内嵌岛搬到桌面上，状态真源仍在主窗口）===
+        island_window::set_dynamic_island_enabled,
+        island_window::dynamic_island_set_click_through,
         game_launcher::launch_game,
         game_launcher::search_delta_force_launcher,
         game_launcher::get_default_delta_force_game,
@@ -1118,6 +1135,10 @@ pub fn run() {
         ads::get_ad_image,
         shader_cache::scan_shader_caches,
         shader_cache::clean_shader_cache,
+        pso_cache::pso_detect,
+        pso_cache::pso_scan,
+        pso_cache::pso_choose,
+        pso_cache::pso_clean,
         nvapi::get_nvapi_status,
         nvapi::diagnose_nvapi,
         nvapi::get_nvidia_driver_version,
@@ -1270,7 +1291,7 @@ pub fn run() {
                     }
                 }
                 // 退出流程开始前隐藏所有窗口，避免 WebView2 销毁后闪现原生标题栏
-                for label in &["main", "tray-menu", "desktop-lyrics", "vertical-overlay"] {
+                for label in &["main", "tray-menu", "desktop-lyrics", "vertical-overlay", "dynamic-island"] {
                     if let Some(w) = app_handle.get_webview_window(label) {
                         let _ = w.hide();
                     }
@@ -1300,6 +1321,7 @@ pub fn run() {
                 nvapi::cleanup();
                 hardware_report::stop_recording();
                 remote_monitor::shutdown(); // 关掉局域网 HTTP 服务并释放端口，下次启动只能手动开启
+                remote_access::shutdown(); // 关掉远程控制服务与发现应答器
             }
             _ => {}
         }

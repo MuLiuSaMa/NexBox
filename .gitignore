@@ -29,6 +29,7 @@ icon-src.png
 .env
 .env.local
 .env.*.local
+.env.store
 
 # 日志与编辑器
 npm-debug.log
@@ -193,3 +194,10 @@ src-tauri/resources/qishui-auth/node.exe
 
 # NexBox/doralite 源码快照副本（本地备份与交接文档，不随主程序提交）
 doralite_lite-main/
+
+# Android 子项目（独立版本管理，不随主仓库提交）
+NexBox-Android/
+
+# 本地工具/缓存目录（AI 编程工具与 cargo 配置，勿提交）
+.cargo/
+.qoder/

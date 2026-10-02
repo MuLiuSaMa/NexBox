@@ -381,6 +381,8 @@ pub(crate) struct DisplayState {
     r_gamma: f64,
     g_gamma: f64,
     b_gamma: f64,
+    /// 暗部增强：-100 ~ 100，0 = 不改变。正值提亮暗部，负值压暗暗部。
+    shadow: f64,
     mode: i32,
     icc_ramp: Option<[[u16; 256]; 3]>,
     icc_active: bool,
@@ -403,7 +405,7 @@ impl Default for DisplayState {
     fn default() -> Self {
         Self {
             temperature: 6500, brightness: 100, contrast: 100, saturation: 100,
-            r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0, mode: 0,
+            r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0, shadow: 0.0, mode: 0,
             icc_ramp: None, icc_active: false, active_icc_id: None, filter_active: false,
             restore_pending: false,
             stacked: false, stack_preset_ids: Vec::new(), operation_generation: 0,
@@ -1640,6 +1642,8 @@ impl FilterMode {
 pub struct FilterSettings {
     pub temperature: i32, pub brightness: i32, pub contrast: i32, pub saturation: i32,
     pub r_gamma: f64, pub g_gamma: f64, pub b_gamma: f64,
+    /// 暗部增强：-100 ~ 100，0 = 不改变
+    pub shadow: f64,
     pub s_curve: f64, pub r_boost: f64, pub g_boost: f64, pub b_boost: f64,
     pub mode: i32, pub is_active: bool,
     pub icc_active: bool, pub active_icc_id: Option<String>,
@@ -1681,6 +1685,7 @@ impl FilterSettings {
         FilterSettings {
             temperature, brightness, contrast, saturation,
             r_gamma, g_gamma, b_gamma,
+            shadow: state.shadow,
             s_curve, r_boost, g_boost, b_boost,
             mode: state.mode, is_active: state.filter_active,
             icc_active: state.icc_active, active_icc_id: state.active_icc_id.clone(),
@@ -1717,6 +1722,9 @@ pub struct FilterPreset {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CustomFilterSettings {
     pub temperature: i32, pub brightness: i32, pub contrast: i32, pub saturation: i32,
+    /// 暗部增强：-100 ~ 100，0 = 不改变
+    #[serde(default)]
+    pub shadow: f64,
     #[serde(default = "default_one_f64")] pub r_gamma: f64,
     #[serde(default = "default_one_f64")] pub g_gamma: f64,
     #[serde(default = "default_one_f64")] pub b_gamma: f64,
@@ -1726,7 +1734,7 @@ fn default_one_f64() -> f64 { 1.0 }
 
 impl Default for CustomFilterSettings {
     fn default() -> Self {
-        Self { temperature: 6500, brightness: 100, contrast: 100, saturation: 100, r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0 }
+        Self { temperature: 6500, brightness: 100, contrast: 100, saturation: 100, shadow: 0.0, r_gamma: 1.0, g_gamma: 1.0, b_gamma: 1.0 }
     }
 }
 
@@ -1748,6 +1756,8 @@ struct PersistentFilterState {
     r_gamma: f64,
     g_gamma: f64,
     b_gamma: f64,
+    #[serde(default)]
+    shadow: f64,
     mode: i32,
     icc_active: bool,
     active_icc_id: Option<String>,
@@ -1776,6 +1786,7 @@ fn save_all_filter_states() {
             r_gamma: s.r_gamma,
             g_gamma: s.g_gamma,
             b_gamma: s.b_gamma,
+            shadow: s.shadow,
             mode: s.mode,
             icc_active: s.icc_active,
             active_icc_id: s.active_icc_id.clone(),
@@ -1833,6 +1844,7 @@ pub fn restore_state_on_startup() {
                 state.r_gamma = pstate.r_gamma;
                 state.g_gamma = pstate.g_gamma;
                 state.b_gamma = pstate.b_gamma;
+                state.shadow = pstate.shadow;
                 state.mode = pstate.mode;
                 state.icc_active = pstate.icc_active;
                 state.active_icc_id = pstate.active_icc_id.clone();
@@ -1921,6 +1933,40 @@ fn apply_s_curve(input: f64, strength: f64) -> f64 {
     let strength = strength.clamp(-0.5, 0.5);
     let x = input - 0.5;
     (0.5 + x * (1.0 + strength * (1.0 - 4.0 * x * x))).clamp(0.0, 1.0)
+}
+
+/// 暗部增强：对已生成的 ramp 做「暗部提亮 / 压暗」后处理。
+///
+/// `shadow` 取 -100 ~ 100（0 = 不改变）。正值提亮暗部（参考「暗部增强」预设的
+/// 暗部抬升思路），负值压暗暗部。用幂曲线 + 暗部权重实现，保证高光基本不动。
+fn apply_shadow_lift(ramp: &mut [[u16; 256]; 3], shadow: f64) {
+    let s = (shadow / 100.0).clamp(-1.0, 1.0);
+    if s.abs() < 0.001 {
+        return;
+    }
+    // 提亮：gamma > 1（等价 output = input^(1/gamma)）；压暗：gamma < 1。强度上限 ±0.6。
+    let gamma = if s > 0.0 { 1.0 + 0.6 * s } else { 1.0 / (1.0 + 0.6 * (-s)) };
+    let inv = 1.0 / gamma;
+    for c in 0..3 {
+        for i in 0..256 {
+            let x = ramp[c][i] as f64 / 65535.0;
+            let lifted = x.powf(inv);
+            // 暗部权重：x=0 时为 1，x=1 时为 0（平方使高光几乎不受影响）
+            let weight = (1.0 - x) * (1.0 - x);
+            let y = x + (lifted - x) * weight;
+            ramp[c][i] = (y.clamp(0.0, 1.0) * 65535.0).round() as u16;
+        }
+    }
+    // 单调约束 + 端点固定（与 build_gamma_ramp 保持一致）
+    for c in 0..3 {
+        for i in 1..256 {
+            if ramp[c][i] < ramp[c][i - 1] {
+                ramp[c][i] = ramp[c][i - 1];
+            }
+        }
+    }
+    ramp[0][0] = 0; ramp[1][0] = 0; ramp[2][0] = 0;
+    ramp[0][255] = 65535; ramp[1][255] = 65535; ramp[2][255] = 65535;
 }
 
 fn build_gamma_ramp(
@@ -2424,8 +2470,10 @@ fn load_builtin_icc_preset_infos() -> Vec<IccPresetInfo> {
                 if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("icc") || e.eq_ignore_ascii_case("icm")).unwrap_or(false) {
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                         // Skip preset ICCs that already appear in the filter preset grid.
-                        // These are the NexBox_* files (鲜艳, 电影, 去曝光Pro, etc.).
-                        if stem.starts_with("NexBox_") {
+                        // - NexBox_*：参数化内置预设（鲜艳、电影、去曝光Pro 等）
+                        // - ChampionN：冠军调试系列预设（champion-N）
+                        // 这两类都已在「滤镜预设」区域展示，避免在 ICC 区域重复出现。
+                        if stem.starts_with("NexBox_") || stem.starts_with("Champion") {
                             continue;
                         }
                         let description = format!("内置 ICC 预设: {}", stem);
@@ -2833,10 +2881,10 @@ impl<'a> DisplayOps<'a> {
             }
         }
 
-        let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, mode) =
+        let (icc_active, temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma, shadow, mode) =
             self.with_state(idx, |state| {
                 (state.icc_active, state.temperature, state.brightness, state.contrast,
-                 state.saturation, state.r_gamma, state.g_gamma, state.b_gamma, state.mode)
+                 state.saturation, state.r_gamma, state.g_gamma, state.b_gamma, state.shadow, state.mode)
             })
             .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?;
 
@@ -2880,7 +2928,8 @@ impl<'a> DisplayOps<'a> {
             && mode == 0  // Normal
             && (r_gamma - 1.0).abs() < 0.001
             && (g_gamma - 1.0).abs() < 0.001
-            && (b_gamma - 1.0).abs() < 0.001;
+            && (b_gamma - 1.0).abs() < 0.001
+            && shadow.abs() < 0.001;
 
         if is_identity {
             log::info!("apply_filter_to_display[{}]: identity params → restore original ramp", idx);
@@ -2890,7 +2939,9 @@ impl<'a> DisplayOps<'a> {
         let temp_icc = get_temp_icc_path(idx, "custom_filter");
         let mode_enum = FilterMode::from_i32(mode);
         let custom_gamma = Some((r_gamma, g_gamma, b_gamma));
-        let ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
+        let mut ramp = build_gamma_ramp(temperature, brightness, contrast, saturation, mode_enum, custom_gamma);
+        // 暗部增强：在参数化 ramp 之上做暗部提亮/压暗后处理
+        apply_shadow_lift(&mut ramp, shadow);
         let icc_data = build_icc_profile(&ramp, "NexBox Custom Filter");
         fs::write(&temp_icc, &icc_data).map_err(|e| format!("无法写入临时 ICC 文件: {}", e))?;
         self.apply_generated_icc(idx, &temp_icc).map(RunResult::Executed)
@@ -2967,6 +3018,7 @@ pub async fn set_filter_settings(
     temperature: i32, brightness: i32, contrast: i32, saturation: i32,
     mode: i32, is_active: bool,
     r_gamma: Option<f64>, g_gamma: Option<f64>, b_gamma: Option<f64>,
+    shadow: Option<f64>,
 ) -> Result<FilterResult, String> {
     #[cfg(target_os = "windows")]
     {
@@ -2980,6 +3032,7 @@ pub async fn set_filter_settings(
         let r_gamma = r_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
         let g_gamma = g_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
         let b_gamma = b_gamma.unwrap_or(1.0).clamp(0.50, 2.00);
+        let shadow = shadow.unwrap_or(0.0).clamp(-100.0, 100.0);
 
         let (actually_active, operation_generation) = with_display_state(idx, |state| {
             state.temperature = temperature;
@@ -2989,6 +3042,7 @@ pub async fn set_filter_settings(
             state.r_gamma = r_gamma;
             state.g_gamma = g_gamma;
             state.b_gamma = b_gamma;
+            state.shadow = shadow;
             state.mode = mode;
             state.icc_active = false;
             state.active_icc_id = None;
@@ -3054,6 +3108,7 @@ pub async fn set_filter_settings(
             degraded: false,
             settings: Some(FilterSettings {
                 temperature, brightness, contrast, saturation, r_gamma, g_gamma, b_gamma,
+                shadow,
                 s_curve: 0.0, r_boost: 1.0, g_boost: 1.0, b_boost: 1.0,
                 mode, is_active: actually_active, icc_active: false, active_icc_id: None,
                 preview_filter_icc: None, preview_tint_color_icc: None, preview_tint_opacity_icc: None,
@@ -3285,29 +3340,8 @@ pub fn toggle_filter_sync(app_handle: &tauri::AppHandle) -> Result<FilterResult,
 
 #[tauri::command]
 pub async fn get_filter_presets() -> Result<Vec<FilterPreset>, String> {
-    Ok(vec![
-        FilterPreset { id: "de-exposure-pro".to_string(), name: "去曝光Pro".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "专业去曝光，保护高光细节".to_string() },
-        FilterPreset { id: "vivid".to_string(), name: "鲜艳".to_string(), mode: 1, temperature: 6800, brightness: 102, contrast: 105, saturation: 115, description: "增强色彩饱和度，画面更鲜艳".to_string() },
-        FilterPreset { id: "movie".to_string(), name: "电影".to_string(), mode: 2, temperature: 5800, brightness: 98, contrast: 95, saturation: 95, description: "电影质感，柔和色调".to_string() },
-        FilterPreset { id: "highlight".to_string(), name: "高亮".to_string(), mode: 3, temperature: 7200, brightness: 110, contrast: 102, saturation: 100, description: "提高亮度，适合暗光环境".to_string() },
-        FilterPreset { id: "soft".to_string(), name: "柔和".to_string(), mode: 4, temperature: 5200, brightness: 98, contrast: 92, saturation: 95, description: "柔和画面，减少眼睛疲劳".to_string() },
-        FilterPreset { id: "gaming".to_string(), name: "游戏".to_string(), mode: 5, temperature: 6800, brightness: 103, contrast: 108, saturation: 110, description: "增强对比度和色彩，适合游戏".to_string() },
-        FilterPreset { id: "reading".to_string(), name: "阅读".to_string(), mode: 6, temperature: 4800, brightness: 95, contrast: 100, saturation: 92, description: "暖色调，保护眼睛".to_string() },
-        FilterPreset { id: "de-exposure".to_string(), name: "去曝光".to_string(), mode: 7, temperature: 6500, brightness: 92, contrast: 103, saturation: 98, description: "压暗高光，降低过度曝光，恢复高光细节".to_string() },
-        FilterPreset { id: "shadow-boost".to_string(), name: "暗部增强".to_string(), mode: 8, temperature: 6500, brightness: 106, contrast: 94, saturation: 104, description: "提亮暗部阴影，让黑暗角落的敌人无处遁形".to_string() },
-        FilterPreset { id: "dam-contrast".to_string(), name: "大坝降低对比度".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "降低对比度，保护高光细节，画面更柔和".to_string() },
-        FilterPreset { id: "aerospace".to_string(), name: "航天推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "航天基地专属色彩调教".to_string() },
-        FilterPreset { id: "whiter".to_string(), name: "偏白".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "整体偏白调，亮部更通透".to_string() },
-        FilterPreset { id: "bluish".to_string(), name: "偏蓝".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冷色偏蓝调，画面更清爽".to_string() },
-        FilterPreset { id: "cool-tone".to_string(), name: "原亮 冷色调".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "保持原亮度，冷色调呈现".to_string() },
-        FilterPreset { id: "delta-super".to_string(), name: "三角洲超级推荐".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动超级推荐调校，压暗画面突出目标".to_string() },
-        FilterPreset { id: "delta-a".to_string(), name: "三角洲推荐A".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案A，适度提亮画面".to_string() },
-        FilterPreset { id: "delta-b".to_string(), name: "三角洲推荐B".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案B，高亮增强，暗处更清晰".to_string() },
-        FilterPreset { id: "delta-c".to_string(), name: "三角洲推荐C".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案C，轻度提亮，观感自然".to_string() },
-        FilterPreset { id: "delta-d".to_string(), name: "三角洲推荐D".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案D，压暗画面，减少眩光".to_string() },
-        FilterPreset { id: "delta-e".to_string(), name: "三角洲推荐E".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案E，压暗偏冷，久玩舒适".to_string() },
-        FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
-    ])
+    // 单一数据源：清单只在 get_filter_presets_sync 维护一份，避免两处不同步。
+    get_filter_presets_sync()
 }
 
 /// Map a parametric preset id to its corresponding builtin ICC filename.
@@ -3333,7 +3367,16 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
         "delta-c" => Some("NexBox_DeltaC.icc".to_string()),
         "delta-d" => Some("NexBox_DeltaD.icc".to_string()),
         "delta-e" => Some("NexBox_DeltaE.icc".to_string()),
-        _ => None,
+        // 冠军调试系列：champion-N → ChampionN.icc（位于 resources/icc-presets/）
+        // 文件名必须保持纯 ASCII：中文名在资源打包/路径解析环节会失效。
+        _ => {
+            if let Some(n) = preset_id.strip_prefix("champion-") {
+                if !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) {
+                    return Some(format!("Champion{}.icc", n));
+                }
+            }
+            None
+        }
     }
 }
 
@@ -3446,6 +3489,24 @@ fn get_filter_presets_sync() -> Result<Vec<FilterPreset>, String> {
         FilterPreset { id: "delta-d".to_string(), name: "三角洲推荐D".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案D，压暗画面，减少眩光".to_string() },
         FilterPreset { id: "delta-e".to_string(), name: "三角洲推荐E".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "三角洲行动推荐方案E，压暗偏冷，久玩舒适".to_string() },
         FilterPreset { id: "benq".to_string(), name: "明基(仿游戏加加)".to_string(), mode: 9, temperature: 6700, brightness: 110, contrast: 110, saturation: 140, description: "仿游戏加加明基滤镜：暗部提亮+色彩自然饱和，FPS 找人更快".to_string() },
+        // ── 冠军调试系列 ──
+        // 纯 ICC 驱动：参数保持中性，实际效果由 resources/icc-presets/ChampionN.icc 决定，
+        // 经 preset_id_to_builtin_icc 映射后与三角洲系列走完全相同的应用路径。
+        FilterPreset { id: "champion-1".to_string(), name: "冠军1".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 1".to_string() },
+        FilterPreset { id: "champion-2".to_string(), name: "冠军2".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 2".to_string() },
+        FilterPreset { id: "champion-3".to_string(), name: "冠军3".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 3".to_string() },
+        FilterPreset { id: "champion-4".to_string(), name: "冠军4".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 4".to_string() },
+        FilterPreset { id: "champion-5".to_string(), name: "冠军5".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 5".to_string() },
+        FilterPreset { id: "champion-6".to_string(), name: "冠军6".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 6".to_string() },
+        FilterPreset { id: "champion-7".to_string(), name: "冠军7".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 7".to_string() },
+        FilterPreset { id: "champion-8".to_string(), name: "冠军8".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 8".to_string() },
+        FilterPreset { id: "champion-9".to_string(), name: "冠军9".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 9".to_string() },
+        FilterPreset { id: "champion-10".to_string(), name: "冠军10".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 10".to_string() },
+        FilterPreset { id: "champion-11".to_string(), name: "冠军11".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 11".to_string() },
+        FilterPreset { id: "champion-12".to_string(), name: "冠军12".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 12".to_string() },
+        FilterPreset { id: "champion-13".to_string(), name: "冠军13".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 13".to_string() },
+        FilterPreset { id: "champion-14".to_string(), name: "冠军14".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 14".to_string() },
+        FilterPreset { id: "champion-15".to_string(), name: "冠军15".to_string(), mode: 0, temperature: 6500, brightness: 100, contrast: 100, saturation: 100, description: "冠军调试系列预设 15".to_string() },
     ])
 }
 
@@ -3643,7 +3704,7 @@ pub async fn apply_preset(
     }
 
     // Fallback: generate ICC from parameters (legacy / custom behavior)
-    set_filter_settings(display_index, preset.temperature, preset.brightness, preset.contrast, preset.saturation, preset.mode, is_active, None, None, None).await
+    set_filter_settings(display_index, preset.temperature, preset.brightness, preset.contrast, preset.saturation, preset.mode, is_active, None, None, None, None).await
 }
 
 /// 应用多滤镜叠加组合。`preset_ids` 按点选顺序排列（首个作用在输入层，末个作用在输出层）。
@@ -3950,11 +4011,13 @@ pub async fn save_custom_filter_settings(
     display_index: Option<usize>, temperature: i32, brightness: i32,
     contrast: i32, saturation: i32,
     r_gamma: Option<f64>, g_gamma: Option<f64>, b_gamma: Option<f64>,
+    shadow: Option<f64>,
 ) -> Result<CustomFilterSettings, String> {
     let idx = resolve_display_index(display_index);
     let settings = CustomFilterSettings {
         temperature: temperature.clamp(1000, 10000), brightness: brightness.clamp(50, 150),
         contrast: contrast.clamp(50, 150), saturation: saturation.clamp(50, 150),
+        shadow: shadow.unwrap_or(0.0).clamp(-100.0, 100.0),
         r_gamma: r_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
         g_gamma: g_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
         b_gamma: b_gamma.unwrap_or(1.0).clamp(0.50, 2.00),
@@ -3973,7 +4036,8 @@ pub async fn export_custom_filter(display_index: Option<usize>) -> Result<Option
         let idx = resolve_display_index(display_index);
         let settings = get_or_load_custom_settings().get(&idx).cloned().unwrap_or_default();
 
-        let ramp = build_gamma_ramp(settings.temperature, settings.brightness, settings.contrast, settings.saturation, FilterMode::Normal, Some((settings.r_gamma, settings.g_gamma, settings.b_gamma)));
+        let mut ramp = build_gamma_ramp(settings.temperature, settings.brightness, settings.contrast, settings.saturation, FilterMode::Normal, Some((settings.r_gamma, settings.g_gamma, settings.b_gamma)));
+        apply_shadow_lift(&mut ramp, settings.shadow);
         let default_name = "NexBox_Custom.icc";
         let result = rfd::FileDialog::new().set_title("导出自定义滤镜为 ICC").add_filter("ICC 文件", &["icc", "icm"]).set_file_name(default_name).save_file();
         let path = match result { Some(p) => p, None => return Ok(None) };
@@ -4053,7 +4117,7 @@ pub async fn apply_user_filter_preset(
 
     set_filter_settings(
         display_index, preset.temperature, preset.brightness, preset.contrast, preset.saturation,
-        0, is_active, Some(preset.r_gamma), Some(preset.g_gamma), Some(preset.b_gamma),
+        0, is_active, Some(preset.r_gamma), Some(preset.g_gamma), Some(preset.b_gamma), None,
     ).await
 }
 
@@ -4352,6 +4416,29 @@ mod delta_icc_tests {
             assert!((50..=150).contains(&c) && (50..=150).contains(&s), "{}: 派生对比/饱和越界", id);
             assert!((1000..=10000).contains(&t), "{}: 派生色温 {} 越界", id, t);
             let _ = compute_icc_preview(&ramp);
+        }
+    }
+
+    /// 冠军调试系列内置 ICC：每个 champion-N 都能映射到 resources/icc-presets/ChampionN.icc
+    /// 并解析出非恒等 ramp（与 delta 测试同规格，防止漏拷 ICC 文件导致预设点了没效果）。
+    #[test]
+    fn champion_presets_parse_to_meaningful_ramps() {
+        for n in 1..=15u32 {
+            let id = format!("champion-{}", n);
+            let filename = preset_id_to_builtin_icc(&id)
+                .unwrap_or_else(|| panic!("{}: preset_id_to_builtin_icc 未映射", id));
+            let path = get_builtin_icc_path(&filename)
+                .unwrap_or_else(|e| panic!("{}: 找不到内置 ICC {}: {}", id, filename, e));
+            let parsed = parse_icc_file(path.to_str().unwrap())
+                .unwrap_or_else(|e| panic!("{}: 解析 {} 失败: {}", id, filename, e));
+
+            let ramp = parsed.to_ramp_array();
+            let max_dev = (0..3).map(|c| {
+                (32..224).map(|i| {
+                    (ramp[c][i] as f64 / (i as u32 * 256) as f64 - 1.0).abs()
+                }).fold(0.0f64, f64::max)
+            }).fold(0.0f64, f64::max);
+            assert!(max_dev > 0.02, "{}: ramp 看起来是恒等的 (max_dev={})", id, max_dev);
         }
     }
 }

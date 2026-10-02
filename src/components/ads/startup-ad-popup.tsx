@@ -15,14 +15,15 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 
 const CAROUSEL_INTERVAL_MS = 5000;
 
-// 轮播切换入场动画：淡入 + 左滑
-const fadeSlide = keyframes`
-  from { opacity: 0; transform: translateX(40px); }
-  to { opacity: 1; transform: translateX(0); }
+// 轮播切换入场动画：淡入 + 中央放大
+const fadeScale = keyframes`
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
 `;
 
 /**
  * 开屏广告弹窗：启动完成展示一次。单图固定显示；多图每 5 秒轮播；图片铺满弹窗，点击跳转浏览器。
+ * 广告尺寸跟随窗口大小（宽 92vw，高上限 88vh，用 objectFit 保持比例不变形）。
  * 右上角为圆形关闭按钮（适配主题色）。ads 为空时不渲染任何内容。
  */
 export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
@@ -58,7 +59,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
   if (!isOpen || ads.length === 0) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} isCentered size="lg" closeOnOverlayClick>
+    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} isCentered closeOnOverlayClick>
       <ModalOverlay backdropFilter="blur(6px)" />
       <ModalContent
         className="no-bounce"
@@ -69,17 +70,20 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
         overflow="hidden"
         position="relative"
         p={0}
+        w="92vw"
+        maxW="92vw"
+        maxH="88vh"
       >
         {loading || !src ? (
           <Flex
             key={`splash-${index}`}
             w="100%"
-            h="300px"
+            minH="40vh"
             align="center"
             justify="center"
             bg="blackAlpha.300"
             borderRadius="2xl"
-            animation={`${fadeSlide} 0.5s ease`}
+            animation={`${fadeScale} 0.5s ease`}
           >
             <Spinner size="xl" color={activeColor} />
           </Flex>
@@ -89,16 +93,15 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
             as="img"
             src={src}
             alt="ad"
-            w="auto"
+            w="100%"
             h="auto"
-            maxW="90vw"
-            maxH="80vh"
+            maxH="88vh"
             objectFit="contain"
             draggable={false}
             borderRadius="2xl"
             cursor={ad.link ? "pointer" : "default"}
             onClick={() => ad.link && openExternal(ad.link)}
-            animation={`${fadeSlide} 0.5s ease`}
+            animation={`${fadeScale} 0.5s ease`}
           />
         )}
 

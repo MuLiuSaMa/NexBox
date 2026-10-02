@@ -25,6 +25,7 @@ import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { CustomSelect } from "@/components/special/custom-select";
 import nvidiaLogo from "@/assets/nvidia.png";
 import { useBackground } from "@/contexts/background-context";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
@@ -620,29 +621,31 @@ export default function NvidiaDriverPage() {
                 </Box>
               )}
 
-              {/* 建议操作 */}
-              <VStack spacing={2} align="start" w="full" mt={2}>
-                <Text fontWeight="semibold" fontSize="sm" color={textColor}>
-                  建议操作：
-                </Text>
-                <Text fontSize="xs" color={subTextColor}>
-                  {diagnostic?.suggestion || "请从 NVIDIA 官网下载并安装最新的显卡驱动程序。"}
-                </Text>
-                <VStack spacing={1} align="start" pl={4} mt={1}>
-                  <Text fontSize="xs" color={subTextColor}>
-                    1. 前往 NVIDIA 官网（nvidia.com/drivers）下载对应显卡型号的最新驱动
+              {/* 建议操作：商店版隐藏，文案（含后端 diagnostic.suggestion）引导前往 NVIDIA 官网下载驱动，触发 Store 10.1.5 */}
+              {!IS_STORE_BUILD && (
+                <VStack spacing={2} align="start" w="full" mt={2}>
+                  <Text fontWeight="semibold" fontSize="sm" color={textColor}>
+                    建议操作：
                   </Text>
                   <Text fontSize="xs" color={subTextColor}>
-                    2. 安装时选择「自定义安装」并勾选「执行清洁安装」
+                    {diagnostic?.suggestion || "请从 NVIDIA 官网下载并安装最新的显卡驱动程序。"}
                   </Text>
-                  <Text fontSize="xs" color={subTextColor}>
-                    3. 如果是笔记本，请确认是否使用了 OEM 定制驱动（如联想/戴尔/华硕版），建议改用 NVIDIA 官方驱动
-                  </Text>
-                  <Text fontSize="xs" color={subTextColor}>
-                    4. 安装完成后重启电脑，再返回此页面重试
-                  </Text>
+                  <VStack spacing={1} align="start" pl={4} mt={1}>
+                    <Text fontSize="xs" color={subTextColor}>
+                      1. 前往 NVIDIA 官网（nvidia.com/drivers）下载对应显卡型号的最新驱动
+                    </Text>
+                    <Text fontSize="xs" color={subTextColor}>
+                      2. 安装时选择「自定义安装」并勾选「执行清洁安装」
+                    </Text>
+                    <Text fontSize="xs" color={subTextColor}>
+                      3. 如果是笔记本，请确认是否使用了 OEM 定制驱动（如联想/戴尔/华硕版），建议改用 NVIDIA 官方驱动
+                    </Text>
+                    <Text fontSize="xs" color={subTextColor}>
+                      4. 安装完成后重启电脑，再返回此页面重试
+                    </Text>
+                  </VStack>
                 </VStack>
-              </VStack>
+              )}
 
               <HStack spacing={3} w="full" pt={2}>
                 <Button

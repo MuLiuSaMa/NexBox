@@ -1,0 +1,5 @@
+Windows Registry Editor Version 5.00
+
+; 恢复处理器调度为 Windows 默认（删除 Win32PrioritySeparation）
+[HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\PriorityControl]
+"Win32PrioritySeparation"=-

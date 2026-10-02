@@ -103,7 +103,7 @@ export default function WindowsUpdatePage() {
   const handlePause = async () => {
     setIsPauseOperating(true);
     try {
-      await invoke("apply_registry_tweak", { name: "暂停Windows更新" });
+      await invoke("apply_registry_tweak", { name: "pauseWindowsUpdate" });
       await checkPauseState();
       toast({
         title: t("windowsUpdate.pauseCard.applySuccess"),
@@ -127,7 +127,7 @@ export default function WindowsUpdatePage() {
   const handleRestorePause = async () => {
     setIsPauseOperating(true);
     try {
-      await invoke("restore_registry_tweak", { name: "暂停Windows更新" });
+      await invoke("restore_registry_tweak", { name: "pauseWindowsUpdate" });
       await checkPauseState();
       toast({
         title: t("windowsUpdate.pauseCard.restoreSuccess"),
@@ -167,7 +167,7 @@ export default function WindowsUpdatePage() {
   const handleDisableDefender = async () => {
     setIsDefenderOperating(true);
     try {
-      await invoke("apply_registry_tweak", { name: "关闭Windows Defender" });
+      await invoke("apply_registry_tweak", { name: "disableWindowsDefender" });
       await checkDefenderState();
       toast({
         title: t("windowsUpdate.defenderCard.applySuccess"),
@@ -191,7 +191,7 @@ export default function WindowsUpdatePage() {
   const handleRestoreDefender = async () => {
     setIsDefenderOperating(true);
     try {
-      await invoke("restore_registry_tweak", { name: "关闭Windows Defender" });
+      await invoke("restore_registry_tweak", { name: "disableWindowsDefender" });
       await checkDefenderState();
       toast({
         title: t("windowsUpdate.defenderCard.restoreSuccess"),

@@ -20,8 +20,8 @@ pub struct VendorScanResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
-    pub nvidia: VendorScanResult,
-    pub amd: VendorScanResult,
+    pub groups: Vec<VendorScanResult>,
+    pub total_size: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,27 +73,75 @@ fn get_local_low_dir() -> Option<PathBuf> {
     dirs::home_dir().map(|h| h.join("AppData").join("LocalLow"))
 }
 
-fn get_nvidia_dirs(base: &PathBuf) -> Vec<ShaderCacheDir> {
-    vec![
-        scan_cache_dir("NVIDIA DXCache", base.join("NVIDIA").join("DXCache")),
-        scan_cache_dir("NVIDIA GLCache", base.join("NVIDIA").join("GLCache")),
-        scan_cache_dir(
-            "NVIDIA Corporation NV_Cache",
-            base.join("NVIDIA Corporation").join("NV_Cache"),
-        ),
-    ]
+// ── 单一数据源：厂商分组与目录清单 ──
+// 扫描与清理共用此表，避免两处硬编码不同步。
+
+#[derive(Clone, Copy)]
+enum Base {
+    Local,
+    LocalLow,
 }
 
-fn get_amd_dirs(local: &PathBuf, local_low: &PathBuf) -> Vec<ShaderCacheDir> {
-    vec![
-        scan_cache_dir("AMD DxCache", local.join("AMD").join("DxCache")),
-        scan_cache_dir("AMD GLCache", local.join("AMD").join("GLCache")),
-        scan_cache_dir("AMD VkCache", local.join("AMD").join("VkCache")),
-        scan_cache_dir("AMD DxcCache", local.join("AMD").join("DxcCache")),
-        scan_cache_dir("AMD LocalLow DxCache", local_low.join("AMD").join("DxCache")),
-        scan_cache_dir("AMD LocalLow GLCache", local_low.join("AMD").join("GLCache")),
-        scan_cache_dir("AMD LocalLow VkCache", local_low.join("AMD").join("VkCache")),
-    ]
+struct DirDef {
+    name: &'static str,
+    rel: &'static str,
+    base: Base,
+}
+
+struct VendorDef {
+    vendor: &'static str,
+    dirs: &'static [DirDef],
+}
+
+const VENDORS: &[VendorDef] = &[
+    VendorDef {
+        vendor: "nvidia",
+        dirs: &[
+            DirDef { name: "NVIDIA DXCache", rel: r"NVIDIA\DXCache", base: Base::Local },
+            DirDef { name: "NVIDIA GLCache", rel: r"NVIDIA\GLCache", base: Base::Local },
+            DirDef { name: "NVIDIA ComputeCache", rel: r"NVIDIA\ComputeCache", base: Base::Local },
+            DirDef {
+                name: "NVIDIA Corporation NV_Cache",
+                rel: r"NVIDIA Corporation\NV_Cache",
+                base: Base::Local,
+            },
+        ],
+    },
+    VendorDef {
+        vendor: "amd",
+        dirs: &[
+            DirDef { name: "AMD DxCache", rel: r"AMD\DxCache", base: Base::Local },
+            DirDef { name: "AMD GLCache", rel: r"AMD\GLCache", base: Base::Local },
+            DirDef { name: "AMD VkCache", rel: r"AMD\VkCache", base: Base::Local },
+            DirDef { name: "AMD DxcCache", rel: r"AMD\DxcCache", base: Base::Local },
+            DirDef { name: "AMD LocalLow DxCache", rel: r"AMD\DxCache", base: Base::LocalLow },
+            DirDef { name: "AMD LocalLow GLCache", rel: r"AMD\GLCache", base: Base::LocalLow },
+            DirDef { name: "AMD LocalLow VkCache", rel: r"AMD\VkCache", base: Base::LocalLow },
+        ],
+    },
+    VendorDef {
+        vendor: "intel",
+        dirs: &[DirDef {
+            name: "Intel ShaderCache",
+            rel: r"Intel\ShaderCache",
+            base: Base::Local,
+        }],
+    },
+    VendorDef {
+        vendor: "directx",
+        dirs: &[
+            DirDef { name: "D3DSCache", rel: r"D3DSCache", base: Base::Local },
+            DirDef { name: "DirectXShaderCache", rel: r"DirectXShaderCache", base: Base::Local },
+        ],
+    },
+];
+
+/// 将目录定义解析为绝对路径。
+fn resolve(def: &DirDef, local: &Path, local_low: &Path) -> PathBuf {
+    match def.base {
+        Base::Local => local.join(def.rel),
+        Base::LocalLow => local_low.join(def.rel),
+    }
 }
 
 fn build_vendor_result(vendor: &str, dirs: Vec<ShaderCacheDir>) -> VendorScanResult {
@@ -216,13 +264,21 @@ pub async fn scan_shader_caches() -> Result<ScanResult, String> {
     let local_app_data = get_local_app_data().ok_or("无法获取 LocalAppData 目录")?;
     let local_low = get_local_low_dir().ok_or("无法获取 LocalLow 目录")?;
 
-    let nvidia_dirs = get_nvidia_dirs(&local_app_data);
-    let amd_dirs = get_amd_dirs(&local_app_data, &local_low);
+    let groups: Vec<VendorScanResult> = VENDORS
+        .iter()
+        .map(|v| {
+            let dirs = v
+                .dirs
+                .iter()
+                .map(|d| scan_cache_dir(d.name, resolve(d, &local_app_data, &local_low)))
+                .collect();
+            build_vendor_result(v.vendor, dirs)
+        })
+        .collect();
 
-    Ok(ScanResult {
-        nvidia: build_vendor_result("nvidia", nvidia_dirs),
-        amd: build_vendor_result("amd", amd_dirs),
-    })
+    let total_size = groups.iter().map(|g| g.total_size).sum();
+
+    Ok(ScanResult { groups, total_size })
 }
 
 #[tauri::command]
@@ -230,29 +286,17 @@ pub async fn clean_shader_cache(vendor: String) -> Result<CleanResult, String> {
     let local_app_data = get_local_app_data().ok_or("无法获取 LocalAppData 目录")?;
     let local_low = get_local_low_dir().ok_or("无法获取 LocalLow 目录")?;
 
-    let target_dirs: Vec<PathBuf> = match vendor.as_str() {
-        "nvidia" => vec![
-            local_app_data.join("NVIDIA").join("DXCache"),
-            local_app_data.join("NVIDIA").join("GLCache"),
-            local_app_data.join("NVIDIA Corporation").join("NV_Cache"),
-        ],
-        "amd" => vec![
-            local_app_data.join("AMD").join("DxCache"),
-            local_app_data.join("AMD").join("GLCache"),
-            local_app_data.join("AMD").join("VkCache"),
-            local_app_data.join("AMD").join("DxcCache"),
-            local_low.join("AMD").join("DxCache"),
-            local_low.join("AMD").join("GLCache"),
-            local_low.join("AMD").join("VkCache"),
-        ],
-        _ => return Err(format!("不支持的显卡厂商: {}", vendor)),
-    };
+    let def = VENDORS
+        .iter()
+        .find(|v| v.vendor == vendor)
+        .ok_or_else(|| format!("不支持的显卡厂商: {}", vendor))?;
 
     let mut total_freed: u64 = 0;
     let mut total_reboot: u64 = 0;
     let mut cleaned_count = 0;
 
-    for dir_path in target_dirs {
+    for d in def.dirs {
+        let dir_path = resolve(d, &local_app_data, &local_low);
         if !dir_path.exists() {
             continue;
         }

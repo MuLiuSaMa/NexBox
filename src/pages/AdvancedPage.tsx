@@ -21,10 +21,11 @@ import {
   ModalFooter,
 } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useDynamicIsland } from "@/components/ui/dynamic-island";
+import { useDynamicIsland, setIslandExternalRequested } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -39,6 +40,7 @@ import {
   LuHardDrive,
   LuDatabase,
   LuKeyboard,
+  LuMonitor,
 } from "react-icons/lu";
 import { Download } from "lucide-react";
 
@@ -76,6 +78,9 @@ function formatSize(bytes: number): string {
 function stripExeSuffix(name: string): string {
   return name.toLowerCase().endsWith(".exe") ? name.slice(0, -4) : name;
 }
+
+/** 桌面灵动岛开关的持久化键（store 为权威，localStorage 仅做首帧镜像避免开关自己弹一下） */
+const ISLAND_EXTERNAL_KEY = "nexbox_island_external_window";
 
 export default function AdvancedPage() {
   const { t } = useTranslation();
@@ -127,6 +132,33 @@ export default function AdvancedPage() {
       .catch((e) => console.error("[MediaKeys] 设置失败:", e));
   };
 
+  // ── 灵动岛显示在桌面上（独立透明置顶窗口）──
+  // 提示队列/计时等状态真源仍在主窗口，开关只负责创建/销毁渲染用的桌面窗口；
+  // 外部渲染的开启由 island:ready / island:closed / island:setting-changed 事件自动收敛。
+  // 首帧从 localStorage 镜像同步取值：否则本页每次挂载都先渲染成「关」，异步读到 store
+  // 后再自己弹一下开关。
+  const [islandExternalEnabled, setIslandExternalEnabled] = useState(
+    () => localStorage.getItem(ISLAND_EXTERNAL_KEY) === "true"
+  );
+  const handleIslandExternalToggle = () => {
+    const newValue = !islandExternalEnabled;
+    setIslandExternalEnabled(newValue);
+    localStorage.setItem(ISLAND_EXTERNAL_KEY, String(newValue));
+    store.set(ISLAND_EXTERNAL_KEY, newValue).then(() => store.save());
+    // 与 store 同一 JS 上下文：直接写模块开关，主窗口内的岛立即隐藏/恢复，
+    // 不等任何跨窗口事件（否则关掉后会有可见的延迟）
+    setIslandExternalRequested(newValue);
+    // 通知桌面岛窗口（它需要据此立即 hide 退场，不等 Rust 销毁）与桥接组件
+    void emit("island:setting-changed", { enabled: newValue });
+    invoke("set_dynamic_island_enabled", { enabled: newValue }).catch((e) => {
+      console.error("[Island] 桌面灵动岛窗口切换失败:", e);
+      setIslandExternalEnabled(!newValue);
+      setIslandExternalRequested(!newValue);
+      void emit("island:setting-changed", { enabled: !newValue });
+      toast({ title: t("settings.advanced.error", "操作失败"), description: String(e), status: "error", duration: 3000, isClosable: true });
+    });
+  };
+
   const refreshSizes = useCallback(async () => {
     try {
       const result = await invoke<StorageSizes>("get_storage_sizes");
@@ -166,6 +198,17 @@ export default function AdvancedPage() {
       .get<boolean>("nexbox_media_keys_enabled")
       .then((v) => {
         if (v != null) setMediaKeysEnabled(v);
+      })
+      .catch(() => {});
+    // 加载桌面灵动岛开关（store 为权威，纠正其他窗口里改过的值）
+    store
+      .get<boolean>(ISLAND_EXTERNAL_KEY)
+      .then((v) => {
+        if (v != null) {
+          const enabled = Boolean(v);
+          setIslandExternalEnabled(enabled);
+          localStorage.setItem(ISLAND_EXTERNAL_KEY, String(enabled));
+        }
       })
       .catch(() => {});
   }, [refreshSizes, refreshPawnio, refreshGames]);
@@ -461,6 +504,38 @@ export default function AdvancedPage() {
             size="md"
             isChecked={mediaKeysEnabled}
             onChange={handleMediaKeysToggle}
+          />
+        </HStack>
+      </LiquidGlassCard>
+
+      {/* 灵动岛显示在桌面上 */}
+      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
+        <HStack spacing={4} align="center">
+          <Flex
+            align="center"
+            justify="center"
+            w="40px"
+            h="40px"
+            borderRadius="xl"
+            flexShrink={0}
+            bg={accentSoft}
+            border={`1px solid ${accentBorder}`}
+            color={activeColor}
+          >
+            <LuMonitor size={20} />
+          </Flex>
+          <VStack align="flex-start" spacing={0.5} flex={1}>
+            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+              {t("settings.advanced.islandExternalTitle", "灵动岛显示在桌面上")}
+            </Text>
+            <Text fontSize="xs" color={subLabelColor}>
+              {t("settings.advanced.islandExternalDesc", "开启后提示与播放岛移出主窗口，固定显示在屏幕顶部中央；主窗口隐藏到托盘后仍然可见，光标不在岛体上时自动鼠标穿透")}
+            </Text>
+          </VStack>
+          <ThemeSwitch
+            size="md"
+            isChecked={islandExternalEnabled}
+            onChange={handleIslandExternalToggle}
           />
         </HStack>
       </LiquidGlassCard>
