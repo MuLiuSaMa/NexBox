@@ -11,6 +11,12 @@
   <a href="https://github.com/MuLiuSaMa/NexBox">
     <img src="https://img.shields.io/github/stars/MuLiuSaMa/NexBox?style=flat-square&logo=github&color=2dd4bf" alt="Stars" />
   </a>
+  <a href="https://atomgit.com/MuLiuSaMa/nexbox">
+    <img src="https://atomgit.com/MuLiuSaMa/nexbox/star/new_badge.svg" alt="AtomGitStars" />
+  </a>
+  <a href="https://gitcode.com/MuLiuSaMa/nexbox">
+    <img src="https://gitcode.com/MuLiuSaMa/nexbox/star/badge.svg" alt="GitCode Stars" />
+  </a>
   <img src="https://img.shields.io/badge/Tauri-2.10-ffc131?style=flat-square&logo=tauri" alt="Tauri" />
   <img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react" alt="React" />
   <img src="https://img.shields.io/badge/Rust-1.77.2-dea584?style=flat-square&logo=rust" alt="Rust" />
@@ -24,12 +30,12 @@
 </p>
 
 <p align="center">
-  🌐 <a href="https://nexbox.cn"><strong>nexbox.cn</strong></a>
-</p>
-
-<p align="center">
-  <strong>为 PC 游戏玩家打造的一站式性能工具箱</strong><br />
-  🖥️ 硬件监控 · ⚡ 系统优化 · 🎨 显示增强 · 🎮 游戏辅助 · 🎵 影音娱乐
+  <a href="https://nexbox.cn">
+    <img src="https://img.shields.io/badge/官网-nexbox.cn-2dd4bf?style=flat-square" alt="官网" />
+  </a>
+  <a href="https://github.com/MuLiuSaMa/NexBox/releases">
+    <img src="https://img.shields.io/github/downloads/MuLiuSaMa/NexBox/total?style=flat-square&logo=github&label=下载量&color=2dd4bf" alt="GitHub 下载量" />
+  </a>
 </p>
 
 ***
