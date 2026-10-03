@@ -11,11 +11,11 @@
   <a href="https://github.com/MuLiuSaMa/NexBox">
     <img src="https://img.shields.io/github/stars/MuLiuSaMa/NexBox?style=flat-square&logo=github&color=2dd4bf" alt="Stars" />
   </a>
-  <a href="https://atomgit.com/MuLiuSaMa/nexbox">
-    <img src="https://atomgit.com/MuLiuSaMa/nexbox/star/new_badge.svg" alt="AtomGitStars" />
-  </a>
   <a href="https://gitcode.com/MuLiuSaMa/nexbox">
     <img src="https://gitcode.com/MuLiuSaMa/nexbox/star/badge.svg" alt="GitCode Stars" />
+  </a>
+  <a href="https://github.com/MuLiuSaMa/NexBox/releases">
+    <img src="https://img.shields.io/github/downloads/MuLiuSaMa/NexBox/total?style=flat-square&logo=github&label=下载量&color=2dd4bf" alt="GitHub 下载量" />
   </a>
   <img src="https://img.shields.io/badge/Tauri-2.10-ffc131?style=flat-square&logo=tauri" alt="Tauri" />
   <img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react" alt="React" />
@@ -24,17 +24,17 @@
 </p>
 
 <p align="center">
+  <a href="https://nexbox.cn">
+    <img src="https://img.shields.io/badge/官网-nexbox.cn-2dd4bf?style=flat-square" alt="官网" />
+  </a>
   <a href="https://github.com/MuLiuSaMa/NexBox"><img src="https://img.shields.io/badge/GitHub-仓库-181717?style=flat-square&logo=github" alt="GitHub" /></a>
   <a href="https://gitee.com/muliuawa/nexbox"><img src="https://img.shields.io/badge/Gitee-仓库-C71D23?style=flat-square&logo=gitee" alt="Gitee" /></a>
   <a href="https://gitcode.com/MuLiuSaMa/nexbox"><img src="https://img.shields.io/badge/GitCode-仓库-1677FF?style=flat-square&logo=gitcode" alt="GitCode" /></a>
 </p>
 
 <p align="center">
-  <a href="https://nexbox.cn">
-    <img src="https://img.shields.io/badge/官网-nexbox.cn-2dd4bf?style=flat-square" alt="官网" />
-  </a>
-  <a href="https://github.com/MuLiuSaMa/NexBox/releases">
-    <img src="https://img.shields.io/github/downloads/MuLiuSaMa/NexBox/total?style=flat-square&logo=github&label=下载量&color=2dd4bf" alt="GitHub 下载量" />
+  <a href="https://atomgit.com/MuLiuSaMa/nexbox">
+    <img src="https://atomgit.com/MuLiuSaMa/nexbox/star/new_badge.svg" alt="AtomGitStars" />
   </a>
 </p>
 
