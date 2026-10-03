@@ -17,6 +17,9 @@
   <a href="https://github.com/MuLiuSaMa/NexBox/releases">
     <img src="https://img.shields.io/github/downloads/MuLiuSaMa/NexBox/total?style=flat-square&logo=github&label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=2dd4bf" alt="GitHub 下载量" />
   </a>
+  <a href="https://gitcode.com/MuLiuSaMa/nexbox/releases">
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fapi.gitcode.com%2Fapi%2Fv5%2Frepos%2FMuLiuSaMa%2Fnexbox%2Fdownload_statistics&query=%24.download_statistics_history_total&logo=gitcode&label=%E4%B8%8B%E8%BD%BD%E9%87%8F&color=1677FF&style=flat-square" alt="GitCode 下载量" />
+  </a>
   <img src="https://img.shields.io/badge/Tauri-2.10-ffc131?style=flat-square&logo=tauri" alt="Tauri" />
   <img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react" alt="React" />
   <img src="https://img.shields.io/badge/Rust-1.77.2-dea584?style=flat-square&logo=rust" alt="Rust" />
