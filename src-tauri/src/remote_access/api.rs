@@ -6,22 +6,26 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
+use axum::body::Body;
 use axum::extract::connect_info::ConnectInfo;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Query, State};
-use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
+use axum::extract::{DefaultBodyLimit, Multipart, Path, Query, State};
+use axum::http::{header, header::AUTHORIZATION, HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use tauri::Emitter;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::broadcast;
+use tokio_util::io::ReaderStream;
 
 use super::auth;
 use super::models::{ActionReq, PairReq, QueryReq};
 use super::registry;
+use super::transfer;
 
 /// handler 共享状态：AppHandle + 动作事件广播通道。
 #[derive(Clone)]
@@ -37,6 +41,13 @@ static BUS: std::sync::OnceLock<broadcast::Sender<String>> = std::sync::OnceLock
 #[allow(dead_code)]
 pub fn set_bus(tx: broadcast::Sender<String>) {
     let _ = BUS.set(tx);
+}
+
+/// 向所有活动 WS 广播一帧文本（文件互传等模块在 HTTP 之外触发变更时用）。
+pub fn broadcast(msg: String) {
+    if let Some(tx) = BUS.get() {
+        let _ = tx.send(msg);
+    }
 }
 
 // ───────────────────────── helpers ─────────────────────────
@@ -76,6 +87,16 @@ fn computer_name() -> String {
 // ───────────────────────── routes ─────────────────────────
 
 pub fn router(state: AppState) -> Router {
+    // 文件互传：上传走 multipart 流式落盘，放开默认 2MB body 限制（仅这一组路由）
+    let transfer_routes = Router::new()
+        .route("/files", get(transfer_list).post(transfer_upload))
+        .route("/files/:id/download", get(transfer_download))
+        .route("/files/:id/ack", post(transfer_ack))
+        .route("/files/:id/progress", post(transfer_progress_report))
+        .route("/files/:id", delete(transfer_remove))
+        .layer(DefaultBodyLimit::disable())
+        .with_state(state.clone());
+
     Router::new()
         .route("/api/info", get(info))
         .route("/api/pair", post(pair).delete(unpair))
@@ -84,6 +105,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/capabilities", get(capabilities))
         .route("/api/query", post(query))
         .route("/api/action", post(action))
+        .nest("/api/transfer", transfer_routes)
         .route("/api/ws", get(ws))
         .with_state(state)
 }
@@ -327,4 +349,232 @@ async fn run_socket(
 
     auth::unregister_connection(&device_id);
     let _ = state.app.emit("remote-access://connection-changed", ());
+}
+
+// ───────────────────────── 文件互传（手机端调用） ─────────────────────────
+
+/// GET /api/transfer/files —— 手机视角：incoming=PC 发来的待接收，outgoing=本机已发送。
+async fn transfer_list(headers: HeaderMap) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    let view = transfer::phone_view(&device_id);
+    json_ok(json!({
+        "incoming": view.to_device,
+        "outgoing": view.from_device,
+    }))
+}
+
+/// POST /api/transfer/files —— 手机 multipart 上传（可多文件），流式落盘 inbox。
+async fn transfer_upload(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut mp: Multipart,
+) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    let mut added: Vec<transfer::TransferFile> = Vec::new();
+
+    loop {
+        match mp.next_field().await {
+            Ok(Some(mut field)) => {
+                let Some(raw_name) = field.file_name().map(str::to_string) else { continue };
+                let Ok((entry, part_path)) = transfer::alloc_incoming(&device_id, &raw_name) else {
+                    continue;
+                };
+                let mut file = match tokio::fs::File::create(&part_path).await {
+                    Ok(f) => f,
+                    Err(e) => {
+                        transfer::abort_incoming(&device_id, &entry.id);
+                        return json_err(StatusCode::INTERNAL_SERVER_ERROR, &format!("create file: {e}"));
+                    }
+                };
+                let mut size: u64 = 0;
+                let mut failed = false;
+                // 接收进度：节流后推给 PC 前端，让「手机发来的文件」在电脑上也看得到速度
+                let started = std::time::Instant::now();
+                let mut last_emit = started - Duration::from_millis(500);
+                while let Some(chunk) = field.chunk().await.transpose() {
+                    match chunk {
+                        Ok(bytes) => {
+                            size += bytes.len() as u64;
+                            if let Err(e) = file.write_all(&bytes).await {
+                                log::warn!("[RemoteAccess] 互传落盘失败: {e}");
+                                failed = true;
+                                break;
+                            }
+                            let now = std::time::Instant::now();
+                            if now.duration_since(last_emit) >= Duration::from_millis(400) {
+                                last_emit = now;
+                                let secs = now.duration_since(started).as_secs_f64().max(0.05);
+                                let _ = state.app.emit(
+                                    "remote-access://transfer-progress",
+                                    json!({
+                                        "deviceId": device_id,
+                                        "fileId": entry.id,
+                                        "done": size,
+                                        "total": 0u64,
+                                        "speed": size as f64 / secs,
+                                    }),
+                                );
+                            }
+                        }
+                        Err(_) => {
+                            failed = true;
+                            break;
+                        }
+                    }
+                }
+                if failed {
+                    transfer::abort_incoming(&device_id, &entry.id);
+                    return json_err(StatusCode::BAD_REQUEST, "upload interrupted");
+                }
+                drop(file);
+                match transfer::finalize_incoming(&device_id, &entry.id, size) {
+                    Ok(done) => added.push(done),
+                    Err(_) => {
+                        transfer::abort_incoming(&device_id, &entry.id);
+                        return json_err(StatusCode::INTERNAL_SERVER_ERROR, "finalize failed");
+                    }
+                }
+            }
+            Ok(None) => break,
+            Err(_) => {
+                // 连接中断：字段中途的失败已在各自分支 abort 落盘条目，
+                // 能走到这里只在两个字段之间，没有在途条目需要清理
+                return json_err(StatusCode::BAD_REQUEST, "upload aborted");
+            }
+        }
+    }
+
+    if !added.is_empty() {
+        log::info!("[RemoteAccess] 设备 {device_id} 上传 {} 个文件", added.len());
+        // 通知 PC 前端：有新来件待另存为
+        let _ = state.app.emit("remote-access://transfer-changed", ());
+    }
+    json_ok(json!({ "added": added }))
+}
+
+/// GET /api/transfer/files/:id/download —— 手机流式下载 PC 发来的文件。
+async fn transfer_download(headers: HeaderMap, Path(id): Path<String>) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    let Some(entry) = transfer::find(&device_id, &id) else {
+        return json_err(StatusCode::NOT_FOUND, "no such file");
+    };
+    if entry.direction != "to_device" {
+        return json_err(StatusCode::FORBIDDEN, "not downloadable");
+    }
+    let path = match transfer::file_path(&device_id, &entry) {
+        Ok(p) => p,
+        Err(e) => return json_err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    };
+    let Ok(file) = tokio::fs::File::open(&path).await else {
+        return json_err(StatusCode::NOT_FOUND, "file missing");
+    };
+    let len = match file.metadata().await {
+        Ok(m) => m.len(),
+        Err(_) => entry.size,
+    };
+    let encoded_name = urlencoding::encode(&entry.name);
+    let stream = ReaderStream::new(file);
+    (
+        [
+            (header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream")),
+            (
+                header::CONTENT_LENGTH,
+                HeaderValue::from_str(&len.to_string()).unwrap_or(HeaderValue::from_static("0")),
+            ),
+            (
+                header::CONTENT_DISPOSITION,
+                HeaderValue::from_str(&format!("attachment; filename*=UTF-8''{encoded_name}"))
+                    .unwrap_or(HeaderValue::from_static("attachment")),
+            ),
+        ],
+        Body::from_stream(stream),
+    )
+        .into_response()
+}
+
+/// POST /api/transfer/files/:id/ack —— 手机下载完成回执，PC 端显示「已接收」。
+async fn transfer_ack(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    match transfer::mark_acked(&device_id, &id) {
+        Some(entry) => {
+            let _ = state.app.emit("remote-access://transfer-changed", ());
+            json_ok(json!({ "file": entry }))
+        }
+        None => json_err(StatusCode::NOT_FOUND, "no such file"),
+    }
+}
+
+/// DELETE /api/transfer/files/:id —— 手机清除自己会话里的条目（来件/去件都可清，同一份共享列表）。
+async fn transfer_remove(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    if transfer::find(&device_id, &id).is_none() {
+        return json_err(StatusCode::NOT_FOUND, "no such file");
+    }
+    match transfer::remove(&device_id, &id) {
+        Ok(_) => {
+            let _ = state.app.emit("remote-access://transfer-changed", ());
+            json_ok(json!({ "ok": true }))
+        }
+        Err(e) => json_err(StatusCode::INTERNAL_SERVER_ERROR, &e),
+    }
+}
+
+/// POST /api/transfer/files/:id/progress —— 手机下载时上报进度/速度，
+/// PC 端列表同步显示「手机接收中 · xx MB/s」（手机侧节流 ~500ms 一次）。
+#[derive(Deserialize)]
+struct TransferProgressBody {
+    #[serde(default)]
+    done: u64,
+    #[serde(default)]
+    total: u64,
+    #[serde(default)]
+    speed: f64,
+}
+
+async fn transfer_progress_report(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<TransferProgressBody>,
+) -> Response {
+    let device_id = match authorize(&headers) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    if transfer::note_progress(&device_id, &id, body.done, body.total, body.speed) {
+        let _ = state.app.emit(
+            "remote-access://transfer-progress",
+            json!({
+                "deviceId": device_id,
+                "fileId": id,
+                "done": body.done,
+                "total": body.total,
+                "speed": body.speed,
+            }),
+        );
+    }
+    json_ok(json!({ "ok": true }))
 }

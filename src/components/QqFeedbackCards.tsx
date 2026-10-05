@@ -194,15 +194,19 @@ export function RemoteAccessCard() {
 
   const [connected, setConnected] = useState<{ id: string; name: string }[]>([]);
   const [requests, setRequests] = useState<{ id: string; device_name: string }[]>([]);
+  /** 手机传来的未另存文件总数（文件互传角标） */
+  const [unsavedCount, setUnsavedCount] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
-      const [devices, reqs] = await Promise.all([
+      const [devices, reqs, unsaved] = await Promise.all([
         invoke<{ device_id: string; name: string; connected: boolean }[]>("cmd_list_paired_devices"),
         invoke<{ id: string; device_name: string }[]>("cmd_list_pair_requests"),
+        invoke<number>("cmd_transfer_unsaved_count"),
       ]);
       setConnected(devices.filter((d) => d.connected).map((d) => ({ id: d.device_id, name: d.name })));
       setRequests(reqs);
+      setUnsavedCount(unsaved);
     } catch {
       /* 非 Tauri 环境忽略 */
     }
@@ -220,6 +224,7 @@ export function RemoteAccessCard() {
         .catch(() => {});
     sub("remote-access://connection-changed");
     sub("remote-access://pair-request");
+    sub("remote-access://transfer-changed");
     return () => {
       disposed = true;
       clearInterval(timer);
@@ -255,12 +260,14 @@ export function RemoteAccessCard() {
   const hasRequest = requests.length > 0;
   const isConnected = connected.length > 0;
   let title = t("home.remoteAccess.cardTitle") || "手机远程";
-  let subtitle = t("home.remoteAccess.cardSubtitle") || "局域网连接电脑 · 查看与远程控制";
+  let subtitle = t("home.remoteAccess.cardSubtitle") || "新境盒-安卓端连接到PC";
   if (hasRequest) {
     subtitle = `「${requests[0].device_name}」请求连接${requests.length > 1 ? ` · 共 ${requests.length} 个` : ""}`;
   } else if (isConnected) {
     title = connected[0].name || title;
-    subtitle = connected.length > 1 ? `${connected.length} 台设备已连接` : "已连接 · 局域网远程控制";
+    const transferTip = unsavedCount > 0 ? ` · ${unsavedCount} 个文件待保存` : "";
+    subtitle =
+      (connected.length > 1 ? `${connected.length} 台设备已连接` : "已连接 · 局域网远程控制") + transferTip;
   }
 
   return (

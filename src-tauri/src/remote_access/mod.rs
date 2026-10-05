@@ -14,6 +14,8 @@ mod auth;
 mod discovery;
 mod models;
 mod registry;
+/// 文件互传：命令的隐藏 `__cmd__` 宏在此模块内，lib.rs 需以完整路径 `remote_access::transfer::cmd_*` 注册
+pub mod transfer;
 
 use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::OnceLock;
@@ -47,6 +49,7 @@ fn app_handle() -> Option<tauri::AppHandle> {
 pub fn init(app: &tauri::AppHandle) {
     let _ = APP_HANDLE.set(app.clone());
     auth::load_persisted(app);
+    transfer::load_all(app);
 }
 
 /// 远程控制服务当前是否开启。
@@ -225,6 +228,7 @@ pub async fn cmd_list_paired_devices(app: tauri::AppHandle) -> Result<Vec<Paired
 #[tauri::command]
 pub async fn cmd_revoke_device(app: tauri::AppHandle, device_id: String) -> Result<Vec<PairedDeviceView>, String> {
     auth::revoke(&device_id);
+    transfer::cleanup_device(&device_id);
     auth::persist(&app);
     Ok(auth::devices_view())
 }

@@ -754,6 +754,13 @@ pub fn run() {
         remote_access::cmd_revoke_device,
         remote_access::cmd_list_pair_requests,
         remote_access::cmd_resolve_pair_request,
+        // === 文件互传（PC ↔ 已配对手机 · 文件篮） ===
+        remote_access::transfer::cmd_transfer_add_files,
+        remote_access::transfer::cmd_transfer_list,
+        remote_access::transfer::cmd_transfer_remove,
+        remote_access::transfer::cmd_transfer_save_file,
+        remote_access::transfer::cmd_transfer_reveal,
+        remote_access::transfer::cmd_transfer_unsaved_count,
         downloader::download_file,
         downloader::open_system_browser,
         downloader::open_installer,
