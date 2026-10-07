@@ -1,5 +1,7 @@
 mod installer;
 
+pub mod webview2;
+
 use installer::*;
 
 /// 检测静默安装参数并执行无界面安装（供 Microsoft Store 等无人值守场景使用）。

@@ -253,8 +253,10 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
    ============================================================ */
 
 /* 基础类：SVG 折射液态玻璃
-   不设置 position，避免覆盖组件自身的 position（如 sidebar 的 fixed） */
-.real-liquid-glass {
+   不设置 position，避免覆盖组件自身的 position（如 sidebar 的 fixed）
+   灵动岛的毛玻璃（.island-frosted-glass）复用同一套边缘高光，只是不吃 SVG 折射滤镜 */
+.real-liquid-glass,
+.island-frosted-glass {
   isolation: isolate;
 }
 
@@ -262,7 +264,8 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
    白色 inset 阴影：模拟玻璃边缘的光线折射（细微高光）
    深色 inset 阴影：模拟玻璃内部的深度和暗角
    外部阴影：投影 */
-.real-liquid-glass {
+.real-liquid-glass,
+.island-frosted-glass {
   box-shadow:
     inset 0 0 2px 1px rgba(255, 255, 255, 0.18),
     inset 0 0 10px 4px rgba(255, 255, 255, 0.06),
@@ -273,7 +276,8 @@ body.jelly-bounce-enabled .jelly-bounce-sidebar-top.jelly-bouncing {
 }
 
 /* 暗色模式：减弱白色高光，增强深色阴影 */
-.chakra-ui-dark .real-liquid-glass {
+.chakra-ui-dark .real-liquid-glass,
+.chakra-ui-dark .island-frosted-glass {
   box-shadow:
     inset 0 0 2px 1px rgba(255, 255, 255, 0.10),
     inset 0 0 10px 4px rgba(255, 255, 255, 0.03),

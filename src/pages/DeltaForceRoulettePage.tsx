@@ -32,7 +32,14 @@ import { useRouletteImage } from "@/hooks/use-roulette-image";
 import { weapons, isPistol, RouletteWeapon } from "@/data/delta-roulette/weapons";
 import { armors } from "@/data/delta-roulette/armors";
 import { helmets } from "@/data/delta-roulette/helmets";
-import { maps, isClassifiedDifficulty, RouletteMap } from "@/data/delta-roulette/maps";
+import {
+  maps,
+  isClassifiedDifficulty,
+  isNormalDifficulty,
+  NORMAL_LOADOUT_LIMITS,
+  RouletteMap,
+  RouletteDifficulty,
+} from "@/data/delta-roulette/maps";
 import { operators } from "@/data/delta-roulette/operators";
 import { tasks } from "@/data/delta-roulette/tasks";
 
@@ -71,6 +78,20 @@ function pickWeaponByGrade(
   }
   const low = sorted.slice(0, band);
   return pickOne(low);
+}
+
+// 按地图难度裁剪装备池：
+// 普通（常规）难度排除 6 套（护甲/头盔 6 级）与 5 级及以上弹药；机密/绝密/永夜不做限制。
+// 抽装备与结果区的滚动候选图池都走这里，保证「候选图里不会出现本该被排除的装备」。
+function poolsForDifficulty(difficulty: RouletteDifficulty) {
+  if (!isNormalDifficulty(difficulty)) {
+    return { helmets, armors, weapons };
+  }
+  return {
+    helmets: helmets.filter((h) => h.protectLevel <= NORMAL_LOADOUT_LIMITS.maxProtectLevel),
+    armors: armors.filter((a) => a.protectLevel <= NORMAL_LOADOUT_LIMITS.maxProtectLevel),
+    weapons: weapons.filter((w) => w.selectedAmmoGrade <= NORMAL_LOADOUT_LIMITS.maxAmmoGrade),
+  };
 }
 
 // 可重复使用的结果卡片壳（玻璃 / 非玻璃两套）
@@ -303,14 +324,17 @@ function SlotScroller({
   const [spinKey, setSpinKey] = useState(0);
 
   const generate = useCallback(() => {
-    const pool = onlyClassified ? maps.filter((m) => isClassifiedDifficulty(m.difficulty)) : maps;
+    const mapPool = onlyClassified ? maps.filter((m) => isClassifiedDifficulty(m.difficulty)) : maps;
+    // 先定地图，再按地图难度裁剪装备池（普通/常规 不给 6 套与 5 级及以上弹药）
+    const map = pickOne(mapPool);
+    const pool = poolsForDifficulty(map.difficulty);
     const op = pickOne(operators);
-    const helmet = pickOne(helmets);
-    const armor = pickOne(armors);
-    const weaponPool = noPistol ? weapons.filter((w) => !isPistol(w)) : weapons;
+    const helmet = pickOne(pool.helmets);
+    const armor = pickOne(pool.armors);
+    const weaponPool = noPistol ? pool.weapons.filter((w) => !isPistol(w)) : pool.weapons;
     const weapon = pickWeaponByGrade(weaponPool, false, false);
     setResult({
-      map: pickOne(pool),
+      map,
       operatorName: op.name,
       operatorPic: op.pic,
       weapon,
@@ -325,14 +349,19 @@ function SlotScroller({
     setSpinKey((k) => k + 1);
   }, [onlyClassified, skipAnimation, noPistol]);
 
-  // 各物品的候选图池（用于滚动定格动画），与 generate 中的过滤逻辑保持一致
+  // 各物品的候选图池（用于滚动定格动画），与 generate 中的过滤逻辑保持一致。
+  // 装备图池跟随抽到的地图难度，避免动画里滚出本该被排除的 6 套 / 5 级弹药图。
+  // 这些池只在有结果时渲染，没有结果时用全量即可。
+  const loadoutPools = result ? poolsForDifficulty(result.map.difficulty) : null;
   const mapPicPool = (onlyClassified ? maps.filter((m) => isClassifiedDifficulty(m.difficulty)) : maps).map(
     (m) => m.pic,
   );
-  const weaponPicPool = (noPistol ? weapons.filter((w) => !isPistol(w)) : weapons).map((w) => w.pic);
+  const weaponPicPool = (loadoutPools?.weapons ?? weapons)
+    .filter((w) => !noPistol || !isPistol(w))
+    .map((w) => w.pic);
   const operatorPicPool = operators.map((o) => o.pic);
-  const helmetPicPool = helmets.map((h) => h.pic);
-  const armorPicPool = armors.map((a) => a.pic);
+  const helmetPicPool = (loadoutPools?.helmets ?? helmets).map((h) => h.pic);
+  const armorPicPool = (loadoutPools?.armors ?? armors).map((a) => a.pic);
 
   const highlightBadge = useMemo(
     () => (level: number) => ({

@@ -3,7 +3,8 @@
 //! 在既有只读远程监控 `remote_monitor` 之上，提供"配对码 + 设备令牌"鉴权的
 //! 远程控制能力：结构化 REST + WebSocket JSON API，以及局域网 UDP 设备发现。
 //! 安全模型：
-//! - 仅监听局域网；控制服务默认关闭，需用户在弹窗手动开启。
+//! - 仅监听局域网；控制服务默认关闭，用户在弹窗手动开启后跨重启保持
+//!   （开关状态落盘，下次启动自动重开服务）。
 //! - 只暴露"精选安全白名单"动作/查询（见 `registry.rs` / `actions.rs`），
 //!   危险项（注册表批量、驱动装卸、卸载、删除、网络重置等）从不注册、天然不可达。
 //! - 首次用短时效 6 位配对码换取长期随机设备令牌；令牌仅存哈希、常量时间比较；PC 端可查看/撤销。
@@ -13,6 +14,8 @@ mod api;
 mod auth;
 mod discovery;
 mod models;
+/// 统一「当前播放」：软件内播放器 + 外部 SMTC，供手机端查看与控制。
+mod music;
 mod registry;
 /// 文件互传：命令的隐藏 `__cmd__` 宏在此模块内，lib.rs 需以完整路径 `remote_access::transfer::cmd_*` 注册
 pub mod transfer;
@@ -45,11 +48,59 @@ fn app_handle() -> Option<tauri::AppHandle> {
     APP_HANDLE.get().cloned()
 }
 
-/// 在 setup 阶段注入 AppHandle 并载入历史配对设备（不自动重开服务，与 remote_monitor 一致）。
+/// 「手机控制」开关的持久化文件（`remote-access/service-enabled.json`）：
+/// 用户手动开启后写入 true，下次启动据此自动重开服务；关闭时写回 false。
+fn enabled_flag_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let dir = app.path().app_data_dir().ok()?;
+    Some(dir.join("remote-access").join("service-enabled.json"))
+}
+
+/// 立即落盘开关状态（不走 auth 的 5s 节流，避免关掉后秒退留下脏的 true）。
+fn persist_enabled_flag(on: bool) {
+    let app = match app_handle() {
+        Some(a) => a,
+        None => return,
+    };
+    let path = match enabled_flag_path(&app) {
+        Some(p) => p,
+        None => return,
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let content = serde_json::json!({ "enabled": on }).to_string();
+    if let Err(e) = std::fs::write(&path, content) {
+        log::warn!("[RemoteAccess] 持久化开关状态失败: {e}");
+    }
+}
+
+/// 启动时读取上次是否开启（文件缺失/损坏按未开启处理）。
+fn read_enabled_flag(app: &tauri::AppHandle) -> bool {
+    let path = match enabled_flag_path(app) {
+        Some(p) => p,
+        None => return false,
+    };
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("enabled").and_then(|b| b.as_bool()))
+        .unwrap_or(false)
+}
+
+/// 在 setup 阶段注入 AppHandle 并载入历史配对设备；上次开启过则自动重开服务
+/// （已配对设备凭长期令牌即可重连，无需重新配对）。
 pub fn init(app: &tauri::AppHandle) {
     let _ = APP_HANDLE.set(app.clone());
     auth::load_persisted(app);
     transfer::load_all(app);
+    if read_enabled_flag(app) {
+        tauri::async_runtime::spawn(async {
+            match cmd_enable_remote_access(true).await {
+                Ok(info) => log::info!("[RemoteAccess] 已按上次状态自动开启，端口 {}", info.port),
+                Err(e) => log::warn!("[RemoteAccess] 自动开启失败: {e}"),
+            }
+        });
+    }
 }
 
 /// 远程控制服务当前是否开启。
@@ -210,6 +261,8 @@ pub async fn cmd_enable_remote_access(on: bool) -> Result<AccessInfo, String> {
     } else {
         shutdown();
     }
+    // 开关状态落盘：开启后重启软件保持开启（退出时 shutdown() 不会清此标志）
+    persist_enabled_flag(on);
     Ok(build_info())
 }
 

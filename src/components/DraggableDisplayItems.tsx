@@ -21,6 +21,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { PawnioInstallModal } from "./PawnioInstallModal";
 
 export interface DisplayItem {
@@ -156,7 +157,7 @@ function SortableItem({
           mr={1}
         />
       )}
-      {item.id === "cpu_temp" && (
+      {item.id === "cpu_temp" && !IS_STORE_BUILD && (
         <Button
           size="xs"
           variant="outline"
@@ -242,11 +243,13 @@ export function DraggableDisplayItems({
         </Box>
       </SortableContext>
 
-      {/* PawnIO 安装对话框 */}
-      <PawnioInstallModal
-        isOpen={isPawnioModalOpen}
-        onClose={onPawnioModalClose}
-      />
+      {/* PawnIO 安装对话框：商店版不提供安装功能 */}
+      {!IS_STORE_BUILD && (
+        <PawnioInstallModal
+          isOpen={isPawnioModalOpen}
+          onClose={onPawnioModalClose}
+        />
+      )}
     </DndContext>
   );
 }

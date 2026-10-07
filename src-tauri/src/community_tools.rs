@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use futures_util::future::join_all;
 use tokio::sync::Semaphore;
 use tauri::{Emitter, Manager};
+use tauri_plugin_store::StoreExt;
 
 /// 读取社区工具列表时的最大并发请求数（GitCode 有 50/min 限流，宁可稍慢也不要触发 429）
 const MAX_CONCURRENT: usize = 12;
@@ -294,10 +295,18 @@ fn save_settings_value(app: &tauri::AppHandle, key: &str, value: serde_json::Val
         .and_then(|c| serde_json::from_str(&c).ok())
         .unwrap_or_else(|| serde_json::json!({}));
     if let Some(obj) = json.as_object_mut() {
-        obj.insert(key.to_string(), value);
+        obj.insert(key.to_string(), value.clone());
     }
     if let Ok(content) = serde_json::to_string_pretty(&json) {
         let _ = std::fs::write(&path, content);
+    }
+    // `settings.json` 同时被前端 @tauri-apps/plugin-store 以「整份内存缓存」的方式读写：
+    // 任意一次 store.set()/store.save()（含 100ms 自动保存）都会把该实例的整份缓存写回磁盘。
+    // 如果这里只直接写文件、不同步插件内存缓存，下一次前端保存其它设置时就会用旧缓存把
+    // 这个键抹掉（社区工具下载位置就曾因此表现为“改完重启又回到默认下载目录”）。
+    // 同步更新插件内存中的同一个 store 实例，保证后续整文件写回不会丢失该键。
+    if let Ok(settings) = app.store("settings.json") {
+        settings.set(key, value);
     }
 }
 

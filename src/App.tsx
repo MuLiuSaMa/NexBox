@@ -17,6 +17,8 @@ import DeltaForcePage from "./pages/DeltaForcePage";
 import OtherGunCodePlatformsPage from "./pages/OtherGunCodePlatformsPage";
 import DeltaForceRoulettePage from "./pages/DeltaForceRoulettePage";
 import DeltaStatsPage from "./pages/DeltaStatsPage";
+import StreamerDirectoryPage from "./pages/StreamerDirectoryPage";
+import StreamerProfilePage from "./pages/StreamerProfilePage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
@@ -251,6 +253,18 @@ function App() {
                     path="/delta-force/stats"
                     element={
                       <DeltaStatsPage />
+                    }
+                  />
+                  <Route
+                    path="/delta-force/streamers"
+                    element={
+                      <StreamerDirectoryPage />
+                    }
+                  />
+                  <Route
+                    path="/delta-force/streamers/:id"
+                    element={
+                      <StreamerProfilePage />
                     }
                   />
                   <Route

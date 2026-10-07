@@ -367,7 +367,10 @@ pub fn run() {
             // 手机远程监控：若上次开启则自动重开局域网 HTTP 服务
             remote_monitor::restore_on_startup(app.handle());
 
-            // 远程接入网关（安卓控制）：注入 AppHandle 并载入历史配对设备（不自动重开服务）
+            // NVIDIA 驱动列表缓存预热：启动后台静默刷新，进入驱动下载页秒开
+            nvidia_driver_download::warm_cache_on_startup(app.handle());
+
+            // 远程接入网关（安卓控制）：注入 AppHandle 并载入历史配对设备；上次开启过则自动重开服务
             remote_access::init(app.handle());
 
             if cfg!(debug_assertions) {
@@ -736,6 +739,8 @@ pub fn run() {
         music_api::qishui::qishui_lyric,
         music_api::qishui::qishui_deps_status,
         music_api::qishui::qishui_deps_download,
+        music_api::qishui::qishui_liked_tracks,
+        music_api::qishui::qishui_like_toggle,
         // === 多平台管理 ===
         music_api::music_get_login_statuses,
         music_api::music_switch_provider,
@@ -1102,6 +1107,7 @@ pub fn run() {
         delta_force::toggle_dlss_indicator,
         delta_force::toggle_dlss_lock,
         delta_force::get_dlss_settings_status,
+        delta_force::open_url_in_system_browser,
         delta_force::open_platform_window,
         df_stats::open_df_stats_login,
         df_stats::close_df_stats_login,

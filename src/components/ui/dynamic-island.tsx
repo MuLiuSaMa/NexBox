@@ -1307,13 +1307,16 @@ export function DynamicIslandHost() {
   const { item, revision } = snapshot;
   const { config } = useThemeColor();
   const primaryColor = config.primaryColor;
-  const { liquidGlassEnabled, islandLiquidGlassEnabled } = useBackground();
+  const { liquidGlassEnabled, islandLiquidGlassEnabled, islandGlassMode } = useBackground();
   const { svgSupported } = useLiquidGlassRefraction();
-  // 总开关 + 灵动岛子开关（设置页液态玻璃卡片内，默认关闭）同时打开才启用真实折射；不支持时回退磨砂玻璃
-  // 桌面岛窗口强制不用真实折射：backdrop-filter 只采样本 WebView 表面，透明窗口背后是
-  // 桌面 → 采不到任何内容，会用不透明胶囊底色（pillBg）呈现
-  const islandGlass =
-    !IS_ISLAND_WINDOW && liquidGlassEnabled && islandLiquidGlassEnabled && svgSupported;
+  // 总开关 + 灵动岛子开关（设置页液态玻璃卡片内，默认关闭）同时打开才启用玻璃。
+  // 桌面岛窗口强制不用玻璃：backdrop-filter 只采样本 WebView 表面，透明窗口背后是
+  // 桌面 → 采不到任何内容，只能用不透明胶囊底色（pillBg）呈现
+  const islandGlassOn = !IS_ISLAND_WINDOW && liquidGlassEnabled && islandLiquidGlassEnabled;
+  // 真实液态玻璃：SVG 位移折射，环境不支持时自动退化成毛玻璃
+  const islandGlassReal = islandGlassOn && islandGlassMode === "real" && svgSupported;
+  // 毛玻璃：纯模糊磨砂，不吃 SVG 滤镜
+  const islandGlassFrosted = islandGlassOn && !islandGlassReal;
   const currentSong = useMusicStore((s) => s.currentSong);
   const externalTrack = useMusicStore((s) => s.externalTrack);
   const isPlaying = useMusicStore((s) => s.isPlaying);
@@ -1654,6 +1657,21 @@ export function DynamicIslandHost() {
   const glassBg = useColorModeValue("rgba(255,255,255,0.10)", "rgba(12,12,12,0.22)");
   // 真实液态玻璃：SVG 位移折射 + 轻模糊 + 提饱和；折射强度/边缘带在 liquid-glass-svg-filter.tsx 顶部可调
   const glassBackdrop = `url(#${ISLAND_FILTER_ID}) blur(2px) saturate(1.35)`;
+  // 毛玻璃：比真实液态玻璃更不透明 + 轻模糊，靠磨砂质感而不是折射。
+  // 胶囊只有 30px 高，模糊给大了会糊成一团，10px 是「看得出磨砂但还能辨认内容」的量
+  const frostBg = useColorModeValue("rgba(255,255,255,0.52)", "rgba(24,24,26,0.55)");
+  const frostBackdrop = "blur(10px) saturate(1.4)";
+  const islandBg = islandGlassReal ? glassBg : islandGlassFrosted ? frostBg : pillBg;
+  const islandBackdrop = islandGlassReal
+    ? glassBackdrop
+    : islandGlassFrosted
+      ? frostBackdrop
+      : "blur(20px)";
+  const islandGlassClass = islandGlassReal
+    ? "real-liquid-glass"
+    : islandGlassFrosted
+      ? "island-frosted-glass"
+      : undefined;
   const pillBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.12)");
   const titleColor = useColorModeValue("#1a1a1a", "#ffffff");
   const descColor = useColorModeValue("rgba(0,0,0,0.62)", "rgba(255,255,255,0.66)");
@@ -1702,13 +1720,13 @@ export function DynamicIslandHost() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         onPointerLeave={handleMouseLeave}
-        className={islandGlass ? "real-liquid-glass" : undefined}
+        className={islandGlassClass}
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
-          background: islandGlass ? glassBg : pillBg,
+          background: islandBg,
           border: `1px solid ${pillBorder}`,
-          backdropFilter: islandGlass ? glassBackdrop : "blur(20px)",
-          WebkitBackdropFilter: islandGlass ? glassBackdrop : "blur(20px)",
+          backdropFilter: islandBackdrop,
+          WebkitBackdropFilter: islandBackdrop,
           overflow: "hidden",
           cursor: "pointer",
           pointerEvents: displayed ? "auto" : "none",

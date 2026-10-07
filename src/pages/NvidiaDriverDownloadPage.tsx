@@ -116,31 +116,44 @@ export default function NvidiaDriverDownloadPage() {
       setDrivers(list);
     } catch (e) {
       setError(String(e));
-      setDrivers([]);
+      // 仅在还没有任何数据时才清空，避免刷新失败把已有列表也清掉
+      setDrivers((prev) => (prev.length > 0 ? prev : []));
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // 3. 首次进入时自动拉取（并监听后台刷新完成事件，旧缓存可立即展示）
+  // 3. 首次进入时自动拉取
+  //    - nvidia-drivers-partial：后端每拿到一个通道就推送增量结果，先到先渲染
+  //    - nvidia-drivers-updated：全部通道完成后推送最终结果
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    const unlisteners: Array<() => void> = [];
+    const applyList = (payload: DriverEntry[]) => {
+      setDrivers(payload);
+      setIsLoading(false);
+    };
     (async () => {
       try {
-        unlisten = await listen<DriverEntry[]>(
-          "nvidia-drivers-updated",
-          (event) => {
-            setDrivers(event.payload);
-            setIsLoading(false);
-          }
+        // 先注册监听，再发起拉取，确保增量事件不会漏收
+        unlisteners.push(
+          await listen<DriverEntry[]>("nvidia-drivers-partial", (event) =>
+            applyList(event.payload)
+          )
+        );
+        unlisteners.push(
+          await listen<DriverEntry[]>("nvidia-drivers-updated", (event) =>
+            applyList(event.payload)
+          )
         );
       } catch {
         /* 事件监听失败不影响主流程 */
       }
+      if (!cancelled) fetchDrivers();
     })();
-    fetchDrivers();
     return () => {
-      unlisten?.();
+      cancelled = true;
+      unlisteners.forEach((fn) => fn());
     };
   }, [fetchDrivers]);
 
@@ -302,7 +315,7 @@ export default function NvidiaDriverDownloadPage() {
                   <Text fontWeight="semibold" color={headingColor} fontSize="md">
                     {t("nvidiaDriverDownload.driverList")}
                   </Text>
-                  {!isLoading && drivers.length > 0 && (
+                  {drivers.length > 0 && (
                     <Badge
                       colorScheme="green"
                       fontSize="xs"
@@ -313,6 +326,14 @@ export default function NvidiaDriverDownloadPage() {
                         count: drivers.length,
                       })}
                     </Badge>
+                  )}
+                  {isLoading && drivers.length > 0 && (
+                    <HStack spacing={1.5}>
+                      <Spinner size="xs" color={getActiveColor()} />
+                      <Text fontSize="xs" color={subTextColor}>
+                        {t("nvidiaDriverDownload.loading")}
+                      </Text>
+                    </HStack>
                   )}
                 </HStack>
                 <HStack spacing={2}>
@@ -348,8 +369,8 @@ export default function NvidiaDriverDownloadPage() {
                 </HStack>
               </HStack>
 
-              {/* 加载中 */}
-              {isLoading && (
+              {/* 加载中（仅在还没有任何数据时才占位，避免刷新时列表消失） */}
+              {isLoading && drivers.length === 0 && (
                 <Flex w="full" justify="center" align="center" minH="150px">
                   <VStack spacing={3}>
                     <Spinner size="lg" color={getActiveColor()} />
@@ -362,7 +383,7 @@ export default function NvidiaDriverDownloadPage() {
 
               {/* 驱动列表 */}
               <>
-                {!isLoading && filteredDrivers.length > 0 && (
+                {filteredDrivers.length > 0 && (
                   <VStack spacing={2} align="stretch" w="full" maxH="500px" overflowY="auto">
                     {filteredDrivers.map((driver, idx) => (
                       <Box

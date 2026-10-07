@@ -1319,6 +1319,33 @@ export const useMusicStore = create<MusicState>((set, get) => ({
       })
     );
 
+    // 手机远程控制（远程接入网关下发）→ 控制软件内播放器。
+    // 刻意不复用 smtc:control：那条被 mediaKeysEnabled 门禁 + shouldHandleSmtc 去重挡住，
+    // 手机指令不受「键盘媒体键控制」开关影响，也不该被 150ms 去重窗口吞掉。
+    unlistenFns.push(
+      await listen<{ action: string; positionMs?: number }>("remote-music:control", (event) => {
+        // 只有真正持有播放器的窗口才响应（其它窗口的 store 只是镜像快照，没有 audioRef）
+        if (!get().audioRef) return;
+        const { action, positionMs } = event.payload;
+        switch (action) {
+          case "play-pause":
+            get().togglePlay();
+            break;
+          case "prev":
+            get().prevTrack();
+            break;
+          case "next":
+            get().nextTrack();
+            break;
+          case "seek":
+            if (typeof positionMs === "number") {
+              get().seekTo(positionMs / 1000);
+            }
+            break;
+        }
+      })
+    );
+
     // 外部客户端播放状态监听已移至 DynamicIslandHost（全局常驻组件）注册，
     // 避免仅在音乐页打开时才生效导致灵动岛不显示。
 
@@ -3167,8 +3194,11 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         // 咪咕暂不支持红心读取
         set({ likedSongIds: new Set() });
       } else if (provider === "qishui") {
-        // 汽水暂不支持红心读取
-        set({ likedSongIds: new Set() });
+        // 汽水: 读「我喜欢的音乐」歌单里的曲目 id。
+        // 这里刻意不 catch：接口失败就抛给外层，保留已有红心，别被空集合清掉。
+        const ids = await invoke<string[]>("qishui_liked_tracks");
+        console.log("[Music] qishui liked songs loaded:", ids.length);
+        set({ likedSongIds: new Set(ids) });
       } else {
         const ids = await invoke<string[]>("music_likelist");
         console.log("[Music] liked songs loaded:", ids.length);
@@ -3189,11 +3219,6 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     // 咪咕暂不支持红心
     if (provider === "migu") {
       set({ musicToast: { type: "warning", message: "咪咕音乐暂不支持红心收藏" } });
-      return;
-    }
-    // 汽水暂不支持红心
-    if (provider === "qishui") {
-      set({ musicToast: { type: "warning", message: "汽水音乐暂不支持红心收藏" } });
       return;
     }
     const liked = get().likedSongIds.has(songId);
@@ -3240,6 +3265,23 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         await get().loadLikedList();
         // 后台异步刷新歌单列表，更新"我喜欢"的歌单曲目数量
         get().loadUserPlaylists();
+      } else if (provider === "qishui") {
+        // 汽水只需 track id，不需要完整 Song 对象
+        await invoke("qishui_like_toggle", { songId, like: !liked });
+        await get().loadLikedList();
+        // 收藏列表接口可能有一小段延迟：写已经成功了，就不允许这次回读
+        // 把刚点的红心抹掉（否则表现为"红心过一会消失"）
+        const after = get().likedSongIds;
+        if (after.has(songId) !== !liked) {
+          const patched = new Set(after);
+          if (liked) {
+            patched.delete(songId);
+          } else {
+            patched.add(songId);
+          }
+          set({ likedSongIds: patched });
+        }
+        get().loadUserPlaylists();
       } else {
         await invoke("music_like", { id: songId, like: !liked });
         // 刷新喜欢列表和歌单列表, 确保与服务器同步
@@ -3249,6 +3291,9 @@ export const useMusicStore = create<MusicState>((set, get) => ({
     } catch (e) {
       // 回滚
       console.error("Toggle like failed:", e, "provider:", provider, "songId:", songId, "like:", !liked);
+      if (provider === "qishui" && !notifyQishuiDepsMissing(e)) {
+        set({ musicToast: { type: "warning", message: `汽水收藏失败：${String(e)}` } });
+      }
       const rollback = new Set(get().likedSongIds);
       if (liked) {
         rollback.add(songId);

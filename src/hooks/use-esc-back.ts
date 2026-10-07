@@ -54,7 +54,27 @@ const PAGE_PARENT: Record<string, string> = {
   // 三角洲行动子页
   "/delta-force/other-platforms": "/delta-force",
   "/delta-force/random-equipment": "/delta-force",
+  "/delta-force/stats": "/delta-force",
+  "/delta-force/streamers": "/delta-force",
 };
+
+/**
+ * 动态路由（带参数）的返回映射：按前缀匹配，取最长命中。
+ * 例：/delta-force/streamers/<id> → 回到主播列表，而不是直接回三角洲首页。
+ */
+const PAGE_PARENT_PREFIX: Array<[string, string]> = [
+  ["/delta-force/streamers/", "/delta-force/streamers"],
+];
+
+function resolveParent(pathname: string): string | undefined {
+  let best: [string, string] | undefined;
+  for (const rule of PAGE_PARENT_PREFIX) {
+    if (pathname.startsWith(rule[0]) && (!best || rule[0].length > best[0].length)) {
+      best = rule;
+    }
+  }
+  return best ? best[1] : PAGE_PARENT[pathname];
+}
 
 /**
  * 全局 Esc 返回入口页（仅主窗口，挂载于 MainLayout）。
@@ -86,7 +106,7 @@ export function useEscBack() {
 
       if (isOverlayOpen()) return;
 
-      const parent = PAGE_PARENT[location.pathname];
+      const parent = resolveParent(location.pathname);
       if (!parent) return;
       navigate(parent);
     };

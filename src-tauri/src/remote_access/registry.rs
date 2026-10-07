@@ -116,6 +116,42 @@ pub fn capabilities() -> Value {
                     { "key": "apps.list", "title": "已安装应用列表" }
                 ],
                 "actions": []
+            },
+            {
+                "id": "music",
+                "title": "音乐控制",
+                "queries": [
+                    { "key": "music.state", "title": "当前播放(软件内/外部统一)" }
+                ],
+                "actions": [
+                    {
+                        "key": "music.play_pause",
+                        "title": "播放/暂停",
+                        "needsConfirm": false,
+                        "params": [ param("source", "string", false, Some(vec!["auto", "app", "external"])) ]
+                    },
+                    {
+                        "key": "music.next",
+                        "title": "下一曲",
+                        "needsConfirm": false,
+                        "params": [ param("source", "string", false, Some(vec!["auto", "app", "external"])) ]
+                    },
+                    {
+                        "key": "music.prev",
+                        "title": "上一曲",
+                        "needsConfirm": false,
+                        "params": [ param("source", "string", false, Some(vec!["auto", "app", "external"])) ]
+                    },
+                    {
+                        "key": "music.seek",
+                        "title": "跳转进度",
+                        "needsConfirm": false,
+                        "params": [
+                            param("positionMs", "number", true, None),
+                            param("source", "string", false, Some(vec!["auto", "app", "external"]))
+                        ]
+                    }
+                ]
             }
         ]
     })
@@ -133,6 +169,7 @@ pub fn is_known_action(key: &str) -> bool {
         "mem.optimize" | "sys.clean_temp" | "power.high_perf" | "power.activate"
             | "gamemode.set_preset" | "gamemode.set_auto" | "filter.enable" | "filter.disable" | "overlay.toggle"
             | "crosshair.toggle"
+            | "music.play_pause" | "music.next" | "music.prev" | "music.seek"
     )
 }
 
@@ -143,5 +180,6 @@ pub fn is_known_query(key: &str) -> bool {
         "stats.hw" | "mem.status" | "disk.status" | "hw.info" | "power.active" | "power.plans"
             | "gamemode.status" | "filter.settings" | "apps.list"
             | "crosshair.status" | "overlay.status"
+            | "music.state"
     )
 }

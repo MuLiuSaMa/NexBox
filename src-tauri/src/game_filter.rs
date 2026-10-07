@@ -217,7 +217,7 @@ pub const BUILTIN_GAMES: &[(&str, &[&str])] = &[
     ("卡拉彼丘", &["Strinova"]),
     // ─── 腾讯 (Tencent) ───
     ("逆战未来", &["NZM"]),
-    ("逆战", &["NZ", "NZLauncher"]),
+    ("逆战", &["TGame"]),
     ("穿越火线", &["CrossFire", "CF"]),
     ("地下城与勇士", &["DNF", "DNFCHINA"]),
     ("天涯明月刀", &["wuxia", "wuxia_client"]),

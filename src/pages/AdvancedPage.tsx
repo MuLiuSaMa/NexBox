@@ -31,6 +31,7 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { store } from "@/lib/store";
 import { useMusicStore } from "@/stores/music-store";
 import {
@@ -320,85 +321,87 @@ export default function AdvancedPage() {
         {t("settings.advanced.label", "高级")}
       </Text>
 
-      {/* PawnIO 精简管理 */}
-      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
-        <VStack spacing={4} align="stretch">
-          <HStack spacing={4} align="center">
-            <img
-              src="/pawnio.webp"
-              alt={t("settings.pawnio.label", "PawnIO")}
-              style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
-            />
-            <VStack align="flex-start" spacing={0.5} flex={1}>
-              <HStack spacing={2}>
-                <Text fontSize="sm" color={subLabelColor} fontWeight="medium">
-                  {t("settings.pawnio.label", "PawnIO")}
+      {/* PawnIO 精简管理：商店版不展示驱动安装入口 */}
+      {!IS_STORE_BUILD && (
+        <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
+          <VStack spacing={4} align="stretch">
+            <HStack spacing={4} align="center">
+              <img
+                src="/pawnio.webp"
+                alt={t("settings.pawnio.label", "PawnIO")}
+                style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
+              />
+              <VStack align="flex-start" spacing={0.5} flex={1}>
+                <HStack spacing={2}>
+                  <Text fontSize="sm" color={subLabelColor} fontWeight="medium">
+                    {t("settings.pawnio.label", "PawnIO")}
+                  </Text>
+                  {!pawnioChecking && (
+                    <Badge
+                      variant="solid"
+                      bg={isPawnioInstalled ? activeColor : undefined}
+                      color={isPawnioInstalled ? accent : undefined}
+                      fontSize="xs"
+                      borderRadius="full"
+                      px={2.5}
+                      py={0.5}
+                      textTransform="none"
+                    >
+                      {isPawnioInstalled
+                        ? `${t("settings.pawnio.installed", "已安装")}${pawnioStatus.version ? ` v${pawnioStatus.version}` : ""}`
+                        : t("settings.pawnio.notInstalled", "未安装")}
+                    </Badge>
+                  )}
+                </HStack>
+                <Text fontSize="sm" color={subLabelColor}>
+                  {t("settings.pawnio.descriptionShort", "可选内核级驱动，提供 CPU 温度、风扇转速等更详细的硬件信息。")}
                 </Text>
-                {!pawnioChecking && (
-                  <Badge
-                    variant="solid"
-                    bg={isPawnioInstalled ? activeColor : undefined}
-                    color={isPawnioInstalled ? accent : undefined}
-                    fontSize="xs"
-                    borderRadius="full"
-                    px={2.5}
-                    py={0.5}
-                    textTransform="none"
+              </VStack>
+              {pawnioChecking && <Spinner size="sm" color={activeColor} />}
+            </HStack>
+            <Divider borderColor={dividerColor} />
+            <HStack spacing={3}>
+              {isPawnioInstalled ? (
+                <>
+                  <Button
+                    size="sm"
+                    bg={activeColor}
+                    color={accent}
+                    _hover={{ bg: activeColor, opacity: 0.85 }}
+                    leftIcon={<LuRefreshCw size={14} />}
+                    onClick={refreshPawnio}
+                    isLoading={pawnioChecking}
                   >
-                    {isPawnioInstalled
-                      ? `${t("settings.pawnio.installed", "已安装")}${pawnioStatus.version ? ` v${pawnioStatus.version}` : ""}`
-                      : t("settings.pawnio.notInstalled", "未安装")}
-                  </Badge>
-                )}
-              </HStack>
-              <Text fontSize="sm" color={subLabelColor}>
-                {t("settings.pawnio.descriptionShort", "可选内核级驱动，提供 CPU 温度、风扇转速等更详细的硬件信息。")}
-              </Text>
-            </VStack>
-            {pawnioChecking && <Spinner size="sm" color={activeColor} />}
-          </HStack>
-          <Divider borderColor={dividerColor} />
-          <HStack spacing={3}>
-            {isPawnioInstalled ? (
-              <>
+                    {t("settings.pawnio.refresh", "刷新状态")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    borderColor={accentBorder}
+                    color={labelColor}
+                    leftIcon={<LuTrash2 size={14} />}
+                    onClick={handleUninstallPawnio}
+                    isLoading={installing}
+                  >
+                    {t("settings.pawnio.uninstall", "卸载")}
+                  </Button>
+                </>
+              ) : (
                 <Button
                   size="sm"
                   bg={activeColor}
                   color={accent}
                   _hover={{ bg: activeColor, opacity: 0.85 }}
-                  leftIcon={<LuRefreshCw size={14} />}
-                  onClick={refreshPawnio}
-                  isLoading={pawnioChecking}
+                  leftIcon={<Download size={14} />}
+                  onClick={onPawnioModalOpen}
                 >
-                  {t("settings.pawnio.refresh", "刷新状态")}
+                  {t("settings.pawnio.install", "安装 PawnIO 驱动")}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  borderColor={accentBorder}
-                  color={labelColor}
-                  leftIcon={<LuTrash2 size={14} />}
-                  onClick={handleUninstallPawnio}
-                  isLoading={installing}
-                >
-                  {t("settings.pawnio.uninstall", "卸载")}
-                </Button>
-              </>
-            ) : (
-              <Button
-                size="sm"
-                bg={activeColor}
-                color={accent}
-                _hover={{ bg: activeColor, opacity: 0.85 }}
-                leftIcon={<Download size={14} />}
-                onClick={onPawnioModalOpen}
-              >
-                {t("settings.pawnio.install", "安装 PawnIO 驱动")}
-              </Button>
-            )}
-          </HStack>
-        </VStack>
-      </LiquidGlassCard>
+              )}
+            </HStack>
+          </VStack>
+        </LiquidGlassCard>
+      )}
 
       {/* 清除缓存 / 数据 */}
       <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
@@ -671,12 +674,14 @@ export default function AdvancedPage() {
         </ModalContent>
       </Modal>
 
-      {/* PawnIO 安装对话框 */}
-      <PawnioInstallModal
-        isOpen={isPawnioModalOpen}
-        onClose={onPawnioModalClose}
-        onSuccess={refreshPawnio}
-      />
+      {/* PawnIO 安装对话框：商店版不提供安装功能 */}
+      {!IS_STORE_BUILD && (
+        <PawnioInstallModal
+          isOpen={isPawnioModalOpen}
+          onClose={onPawnioModalClose}
+          onSuccess={refreshPawnio}
+        />
+      )}
     </Box>
   );
 }

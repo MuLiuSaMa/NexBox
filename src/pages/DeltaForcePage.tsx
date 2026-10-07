@@ -46,6 +46,7 @@ import {
   Image,
   Dices,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -1302,6 +1303,60 @@ function StatsAnalysisCard() {
   );
 }
 
+// ── StreamerSettingsCard ──
+function StreamerSettingsCard() {
+  const { t } = useTranslation();
+  const { getActiveColor } = useThemeColor();
+  const primaryColor = getActiveColor();
+  const subTextColor = useColorModeValue("#000000", "#ffffff");
+  const cardBg = useColorModeValue("gray.50", "#1a1a1a");
+  const cardHoverBg = useColorModeValue("gray.100", "#222222");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
+  const textColor = useColorModeValue("#000000", "#ffffff");
+
+  const content = (
+    <VStack align="center" spacing={3} py={2} justify="center" h="100%">
+      <Users size={28} color={primaryColor} />
+      <Text fontWeight="semibold" fontSize="sm" color={textColor} textAlign="center">
+        {t("streamerSettings.cardTitle", "主播设置")}
+      </Text>
+      <Text color={subTextColor} fontSize="xs" textAlign="center">
+        {t("streamerSettings.cardDesc", "主播同款游戏设置、驱动与外设配置")}
+      </Text>
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return (
+      <Box flex={1} as={Link} to="/delta-force/streamers" style={{ textDecoration: "none" }}>
+        <LiquidGlassCard p={4} h="100%" cursor="pointer">
+          {content}
+        </LiquidGlassCard>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      flex={1}
+      bg={cardBg}
+      borderRadius="xl"
+      p={4}
+      border="1px solid"
+      borderColor={borderColor}
+      cursor="pointer"
+      _hover={{ bg: cardHoverBg }}
+      transition="background-color 0.2s"
+      as={Link}
+      to="/delta-force/streamers"
+      style={{ textDecoration: "none" }}
+    >
+      {content}
+    </Box>
+  );
+}
+
 // ── Main Page ──
 export default function DeltaForcePage() {
   const { t } = useTranslation();
@@ -1319,8 +1374,9 @@ export default function DeltaForcePage() {
         <PasswordCard />
       </Box>
 
-      {/* 随机装备 / 战绩分析 / 更多改枪码 / 官方地图 / 官方壁纸 */}
+      {/* 主播设置 / 随机装备 / 战绩分析 / 更多改枪码 / 官方地图 / 官方壁纸 */}
       <HStack align="stretch" spacing={6} mb={6} wrap="wrap">
+        <StreamerSettingsCard />
         <RouletteCard />
         <StatsAnalysisCard />
         <MoreGunCodesCard />

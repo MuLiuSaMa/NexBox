@@ -105,6 +105,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/capabilities", get(capabilities))
         .route("/api/query", post(query))
         .route("/api/action", post(action))
+        .route("/api/music/cover", get(music_cover))
         .nest("/api/transfer", transfer_routes)
         .route("/api/ws", get(ws))
         .with_state(state)
@@ -264,6 +265,66 @@ async fn action(
     }
 }
 
+// ───────────────────────── 音乐封面 ─────────────────────────
+
+/// 封面端点的鉴权：query token 优先（方便手机端图片加载器直接拼 URL），回退 Bearer。
+fn authorize_cover(headers: &HeaderMap, token_q: Option<&str>) -> Result<String, Response> {
+    if !super::is_enabled() {
+        return Err(json_err(StatusCode::NOT_FOUND, "closed"));
+    }
+    let token = token_q
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            headers
+                .get(AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|a| a.strip_prefix("Bearer "))
+                .map(|s| s.trim().to_string())
+        })
+        .unwrap_or_default();
+    if token.is_empty() {
+        return Err(json_err(StatusCode::UNAUTHORIZED, "missing token"));
+    }
+    auth::auth_token(&token).ok_or_else(|| json_err(StatusCode::UNAUTHORIZED, "invalid token"))
+}
+
+#[derive(Deserialize)]
+struct CoverQuery {
+    token: Option<String>,
+    /// 封面内容标识（`music.state.coverKey`）。必须与当前生效来源的 hash 一致。
+    k: Option<String>,
+}
+
+/// GET /api/music/cover?k=<coverKey>&token=<deviceToken>
+/// 返回当前「正在播放」那首歌的封面字节（内容寻址，可长期缓存）。
+async fn music_cover(headers: HeaderMap, Query(q): Query<CoverQuery>) -> Response {
+    if let Err(r) = authorize_cover(&headers, q.token.as_deref()) {
+        return r;
+    }
+    let Some(k) = q.k.filter(|s| !s.is_empty()) else {
+        return json_err(StatusCode::BAD_REQUEST, "missing k");
+    };
+    // 取封面是阻塞操作（网络下载 + 图片解码），必须挪出 async 上下文
+    let fetched = tokio::task::spawn_blocking(move || super::music::cover_bytes(&k)).await;
+    match fetched {
+        // 显式构造响应：不要用 `([headers], Vec<u8>)` 元组形式——
+        // axum 对 Vec<u8> 的 IntoResponse 会先塞 application/octet-stream，
+        // 元组再 extend 会变成两个 Content-Type。
+        Ok(Some((bytes, mime))) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, mime)
+            .header(header::CACHE_CONTROL, "public, max-age=86400, immutable")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|_| {
+                json_err(StatusCode::INTERNAL_SERVER_ERROR, "build cover response failed")
+            }),
+        // 无封面 / key 过期 / key 与当前来源不符，统一 404（不泄漏本机路径信息）
+        _ => json_err(StatusCode::NOT_FOUND, "no cover"),
+    }
+}
+
 #[derive(Deserialize)]
 struct WsQuery {
     token: Option<String>,
@@ -301,10 +362,32 @@ async fn run_socket(
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     // 首个 tick 立即触发
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // 音乐状态推送去重：签名（换歌/播放态/封面）变化，或位置推进 ≥800ms 才推。
+    // 封面只给 coverKey（字节走 /api/music/cover），因此帧很小、可以每秒推。
+    let mut last_music_sig = String::new();
+    let mut last_music_pos: Option<i64> = None;
 
     loop {
         tokio::select! {
             _ = tick.tick() => {
+                // 音乐状态放在硬件快照之前，避免被下面的 continue 跳过
+                let music = super::music::snapshot();
+                let music_sig = music.signature();
+                let pos_moved = match last_music_pos {
+                    Some(prev) => (music.position_ms - prev).abs() >= 800,
+                    None => true, // 首拍必推一次（含无播放的空态）
+                };
+                if music_sig != last_music_sig || pos_moved {
+                    last_music_sig = music_sig;
+                    last_music_pos = Some(music.position_ms);
+                    if let Ok(v) = serde_json::to_value(&music) {
+                        let frame = json!({ "type": "music.state", "data": v }).to_string();
+                        if sink.send(Message::Text(frame)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+
                 let data = tokio::task::spawn_blocking(crate::overlay_panel::collect_hardware_data).await;
                 let payload = match data {
                     Ok(d) => match serde_json::to_value(&d) {

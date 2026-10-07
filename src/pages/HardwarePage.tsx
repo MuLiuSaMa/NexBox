@@ -41,6 +41,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
+import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { BrandLogo } from "@/components/hardware-brand-logo";
 import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 
@@ -823,15 +824,17 @@ export default function HardwarePage() {
           >
             全部传感器状态
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            colorScheme="blue"
-            leftIcon={<Download size={15} />}
-            onClick={onPawnioModalOpen}
-          >
-            安装驱动（获取CPU温度）
-          </Button>
+          {!IS_STORE_BUILD && (
+            <Button
+              size="sm"
+              variant="outline"
+              colorScheme="blue"
+              leftIcon={<Download size={15} />}
+              onClick={onPawnioModalOpen}
+            >
+              安装驱动（获取CPU温度）
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -1106,11 +1109,13 @@ export default function HardwarePage() {
         specs={detailCard?.specs || []}
       />
 
-      {/* PawnIO 安装对话框 */}
-      <PawnioInstallModal
-        isOpen={isPawnioModalOpen}
-        onClose={onPawnioModalClose}
-      />
+      {/* PawnIO 安装对话框：商店版不提供安装功能 */}
+      {!IS_STORE_BUILD && (
+        <PawnioInstallModal
+          isOpen={isPawnioModalOpen}
+          onClose={onPawnioModalClose}
+        />
+      )}
     </Box>
   );
 }

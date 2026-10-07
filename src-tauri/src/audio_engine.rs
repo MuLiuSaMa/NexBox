@@ -198,33 +198,67 @@ impl BiquadFilter {
 
 // ── EQ Filter Chain ───────────────────────────────────────────────────
 
+/// 每段 Q 按相邻频段的倍频程间距自适应（与前端 src/lib/eq-curve.ts 同一规则）：
+/// 1 倍频程（10 波段）→ Q≈1.41，1/3 倍频程（31 波段）→ Q≈4.32，
+/// 避免密集波段用宽 Q 互相重叠导致同一曲线在不同波段数下提升量不同。
+fn band_q_values(bands: &[BandParam]) -> Vec<f64> {
+    let n = bands.len();
+    if n == 0 { return Vec::new(); }
+    if n == 1 { return vec![1.41]; }
+    let mut qs = Vec::with_capacity(n);
+    for i in 0..n {
+        let oct = if i == 0 {
+            (bands[1].freq.max(1.0) / bands[0].freq.max(1.0)).log2()
+        } else if i == n - 1 {
+            (bands[n - 1].freq.max(1.0) / bands[n - 2].freq.max(1.0)).log2()
+        } else {
+            let lo = (bands[i].freq.max(1.0) / bands[i - 1].freq.max(1.0)).log2();
+            let hi = (bands[i + 1].freq.max(1.0) / bands[i].freq.max(1.0)).log2();
+            (lo + hi) / 2.0
+        };
+        let oct = oct.clamp(0.1, 3.0);
+        let q = 2.0f64.powf(oct).sqrt() / (2.0f64.powf(oct) - 1.0);
+        qs.push(q.clamp(0.4, 8.0));
+    }
+    qs
+}
+
 struct EqChain {
     filters: Vec<BiquadFilter>,
+    /// 当前激活的波段数（不得从 filters.len() 推断：
+    /// update 只在波段数变化时重建滤波器组，缩波段后旧滤波器必须整体废弃，
+    /// 否则左右声道会串用旧布局的滤波器导致偏音）
+    num_bands: usize,
     sample_rate: f64,
 }
 
 impl EqChain {
     fn new(sample_rate: f64, num_channels: usize) -> Self {
-        // 初始分配 10 段 * 通道数，后续在 update 中动态调整
+        // 初始分配 10 段 * 通道数，后续在 update 中按波段数重建
         let filters = (0..(10 * num_channels)).map(|_| BiquadFilter::new()).collect();
-        Self { filters, sample_rate }
+        Self { filters, num_bands: 10, sample_rate }
     }
 
     fn update(&mut self, bands: &[BandParam], num_channels: usize) {
         let num_bands = bands.len();
         if num_bands == 0 { return; }
-        // 确保滤波器数量足够
         let needed = num_bands * num_channels;
-        if self.filters.len() < needed {
-            self.filters.resize_with(needed, BiquadFilter::new);
+        if self.filters.len() != needed {
+            // 波段数变化：整体重建，旧布局的滤波器状态与排列全部废弃
+            self.filters = (0..needed).map(|_| BiquadFilter::new()).collect();
         }
-        let q = 1.41;
+        self.num_bands = num_bands;
+        // 升序排序副本：级联顺序不影响频响，但 Q 需按相邻频段间距计算
+        let mut sorted: Vec<BandParam> = bands.to_vec();
+        sorted.sort_by(|a, b| a.freq.partial_cmp(&b.freq).unwrap_or(std::cmp::Ordering::Equal));
+        let qs = band_q_values(&sorted);
         for ch in 0..num_channels {
             for i in 0..num_bands {
                 let idx = ch * num_bands + i;
                 if idx >= self.filters.len() { break; }
-                let freq = bands[i].freq;
-                let gain = bands[i].gain;
+                let freq = sorted[i].freq;
+                let gain = sorted[i].gain.clamp(-12.0, 12.0);
+                let q = qs[i];
                 if i == 0 {
                     self.filters[idx].set_low_shelf(self.sample_rate, freq, gain, q);
                 } else if i == num_bands - 1 {
@@ -237,8 +271,8 @@ impl EqChain {
     }
 
     fn process_interleaved(&mut self, samples: &mut [f64], num_channels: usize) {
-        let num_bands = if num_channels > 0 { self.filters.len() / num_channels } else { 0 };
-        if num_bands == 0 { return; }
+        let num_bands = self.num_bands;
+        if num_bands == 0 || num_channels == 0 { return; }
         let num_frames = samples.len() / num_channels;
         for frame in 0..num_frames {
             for ch in 0..num_channels {

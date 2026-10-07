@@ -201,3 +201,6 @@ NexBox-Android/
 # 本地工具/缓存目录（AI 编程工具与 cargo 配置，勿提交）
 .cargo/
 .qoder/
+
+# 主播档案抓取工作区（gjts.cn 抓取/打包脚本与原始数据，仅本地保留；运行时数据在 public/streamer-data）
+主播/

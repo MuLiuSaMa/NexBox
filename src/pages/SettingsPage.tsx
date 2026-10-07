@@ -100,6 +100,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import AdvancedPage from "@/pages/AdvancedPage";
 import { store } from "@/lib/store";
+import { getLanguagePreference, setLanguagePreference } from "@/lib/i18n";
 
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({
@@ -191,7 +192,7 @@ function GeneralSettings() {
   // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
-  const [language, setLanguage] = useState(i18n.language || "zh");
+  const [language, setLanguage] = useState(getLanguagePreference);
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
   const [announcementEnabled, setAnnouncementEnabled] = useState(true);
   const [randomQuoteEnabled, setRandomQuoteEnabled] = useState(true);
@@ -281,8 +282,7 @@ function GeneralSettings() {
   const segmentedActiveText = getContrastTextColor();
 
   useEffect(() => {
-    const savedLang = i18n.language || "zh";
-    setLanguage(savedLang);
+    setLanguage(getLanguagePreference());
 
     (async () => {
       // 今日人气
@@ -545,8 +545,7 @@ function GeneralSettings() {
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
-    i18n.changeLanguage(newLang);
-    localStorage.setItem("i18nextLng", newLang);
+    void setLanguagePreference(newLang);
   };
 
   const handleTodayPopularityToggle = () => {
@@ -920,6 +919,10 @@ function GeneralSettings() {
               value={language}
               onChange={handleLanguageChange}
               options={[
+                {
+                  value: "system",
+                  label: t("settings.generalSettings.languages.system"),
+                },
                 { value: "zh", label: "简体中文" },
                 { value: "zh-TW", label: "繁體中文" },
                 { value: "en", label: "English" },
@@ -1518,6 +1521,8 @@ function AppearanceSettings() {
     setLiquidGlassMode,
     islandLiquidGlassEnabled,
     setIslandLiquidGlassEnabled,
+    islandGlassMode,
+    setIslandGlassMode,
     backgroundBlur,
     setBackgroundBlur,
     activePresetIndex,
@@ -1825,7 +1830,8 @@ function AppearanceSettings() {
                   onChange={(val) => setLiquidGlassMode(val as "normal" | "real")}
                   width="160px"
                   options={[
-                    { value: "normal", label: t("settings.appearanceSettings.liquidGlassModeNormal") },
+                    // 取值仍保留 "normal"（已持久化，不改），显示名按需求叫「毛玻璃」
+                    { value: "normal", label: t("settings.appearanceSettings.liquidGlassModeFrosted") },
                     { value: "real", label: t("settings.appearanceSettings.liquidGlassModeReal") },
                   ]}
                 />
@@ -1833,7 +1839,7 @@ function AppearanceSettings() {
               <Text fontSize="xs" color={subLabelColor} mt={1}>
                 {liquidGlassMode === "real"
                   ? t("settings.appearanceSettings.liquidGlassModeRealDesc")
-                  : t("settings.appearanceSettings.liquidGlassModeNormalDesc")}
+                  : t("settings.appearanceSettings.liquidGlassModeFrostedDesc")}
               </Text>
             </Box>
           )}
@@ -1876,6 +1882,29 @@ function AppearanceSettings() {
                   onChange={() => setIslandLiquidGlassEnabled(!islandLiquidGlassEnabled)}
                 />
               </HStack>
+              {islandLiquidGlassEnabled && (
+                <>
+                  <HStack justify="space-between" mt={3}>
+                    <Text fontSize="sm" color={labelColor}>
+                      {t("settings.appearanceSettings.islandGlassModeLabel")}
+                    </Text>
+                    <CustomSelect
+                      value={islandGlassMode}
+                      onChange={(val) => setIslandGlassMode(val as "real" | "frosted")}
+                      width="160px"
+                      options={[
+                        { value: "frosted", label: t("settings.appearanceSettings.islandGlassModeFrosted") },
+                        { value: "real", label: t("settings.appearanceSettings.islandGlassModeReal") },
+                      ]}
+                    />
+                  </HStack>
+                  <Text fontSize="xs" color={subLabelColor} mt={1}>
+                    {islandGlassMode === "real"
+                      ? t("settings.appearanceSettings.islandGlassModeRealDesc")
+                      : t("settings.appearanceSettings.islandGlassModeFrostedDesc")}
+                  </Text>
+                </>
+              )}
             </Box>
           )}
         </LiquidGlassCard>
@@ -2928,7 +2957,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "10.0.0";
+  const currentVersion = "10.1.3";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

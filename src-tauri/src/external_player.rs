@@ -497,7 +497,7 @@ mod imp {
 }
 
 /// 外部播放曲目信息
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExternalTrack {
     pub title: String,
@@ -530,6 +530,17 @@ pub fn external_player_state() -> Option<ExternalPlayback> {
 #[tauri::command]
 pub fn external_control(action: String, value_ms: Option<i64>) {
     imp::control(&action, value_ms.unwrap_or(0));
+}
+
+/// 读取最近一次缓存的外部播放状态（供远程接入模块直接调用，不经 Tauri 命令层）。
+pub fn current_state() -> Option<ExternalPlayback> {
+    imp::current_state()
+}
+
+/// 发送控制命令到外部客户端（供远程接入模块直接调用，不经 Tauri 命令层）。
+/// action: `play-pause` / `prev` / `next` / `seek`；`value_ms` 仅 `seek` 使用（毫秒）。
+pub fn control(action: &str, value_ms: i64) {
+    imp::control(action, value_ms);
 }
 
 /// 媒体键转发入口（仅 Windows；由 media_keys 低层钩子调用）

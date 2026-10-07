@@ -56,7 +56,7 @@
 - 生化危机 4 重制（re4）
 - 穿越火线（CrossFire / CF）
 - 逆战未来（NZM）
-- 逆战（NZ / NZLauncher）
+- 逆战（TGame）
 - 使命召唤OL（codol）
 - 战争雷霆（aces / aces_x64）
 - 反恐精英OL（cso）

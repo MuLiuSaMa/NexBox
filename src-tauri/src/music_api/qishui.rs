@@ -776,8 +776,9 @@ fn qishui_extract_media(json: &serde_json::Value) -> Vec<serde_json::Value> {
     Vec::new()
 }
 
-/// 把一条 luna 媒体项映射成统一 Song（对照 Mineradio mapQishuiMedia，取常用字段）
-fn qishui_map_media(raw: &serde_json::Value) -> Option<Song> {
+/// luna 媒体项的层级解析：返回 (track, base)。
+/// **单一数据源** —— id 与其它字段都从这里取值，避免各处各写一套兜底链。
+fn qishui_media_layers(raw: &serde_json::Value) -> (&serde_json::Value, &serde_json::Value) {
     let entity = raw.get("entity").or_else(|| raw.get("data")).unwrap_or(raw);
     let media = entity.get("media").or_else(|| raw.get("media")).unwrap_or(entity);
     let wrapper = entity
@@ -796,15 +797,14 @@ fn qishui_map_media(raw: &serde_json::Value) -> Option<Song> {
         .or_else(|| media.get("base_info"))
         .or_else(|| raw.get("base_info"))
         .unwrap_or(track);
-    let display = track
-        .get("display_info")
-        .or_else(|| media.get("display_info"))
-        .or_else(|| raw.get("display_info"));
-    let related = track
-        .get("related_info")
-        .or_else(|| media.get("related_info"))
-        .or_else(|| raw.get("related_info"));
+    (track, base)
+}
 
+/// luna 媒体项的 id —— 前端 `Song.id` 就是它，红心匹配必须与这里完全一致。
+fn qishui_media_id(raw: &serde_json::Value) -> String {
+    let (track, base) = qishui_media_layers(raw);
+    let entity = raw.get("entity").or_else(|| raw.get("data")).unwrap_or(raw);
+    let media = entity.get("media").or_else(|| raw.get("media")).unwrap_or(entity);
     let mut id = json_str(base, &["id"]);
     if id.is_empty() {
         id = json_str(track, &["id"]);
@@ -815,6 +815,24 @@ fn qishui_map_media(raw: &serde_json::Value) -> Option<Song> {
     if id.is_empty() {
         id = json_str(raw, &["id", "media_id", "item_id", "song_id"]);
     }
+    id
+}
+
+/// 把一条 luna 媒体项映射成统一 Song（对照 Mineradio mapQishuiMedia，取常用字段）
+fn qishui_map_media(raw: &serde_json::Value) -> Option<Song> {
+    let entity = raw.get("entity").or_else(|| raw.get("data")).unwrap_or(raw);
+    let media = entity.get("media").or_else(|| raw.get("media")).unwrap_or(entity);
+    let (track, base) = qishui_media_layers(raw);
+    let display = track
+        .get("display_info")
+        .or_else(|| media.get("display_info"))
+        .or_else(|| raw.get("display_info"));
+    let related = track
+        .get("related_info")
+        .or_else(|| media.get("related_info"))
+        .or_else(|| raw.get("related_info"));
+
+    let id = qishui_media_id(raw);
     let mut name = json_str(base, &["name", "title"]);
     if name.is_empty() {
         name = json_str(track, &["name", "title"]);
@@ -1049,6 +1067,147 @@ fn qishui_collection_cards(body: &serde_json::Value) -> Vec<serde_json::Value> {
         }
     }
     out
+}
+
+/// 歌单 type：官方客户端用 `type == 1` 认「我喜欢的音乐」、`type == 4` 认抖音收藏
+fn qishui_playlist_type(pl: &serde_json::Value) -> i64 {
+    match pl.get("type") {
+        Some(serde_json::Value::Number(n)) => n.as_i64().unwrap_or(-1),
+        Some(serde_json::Value::String(s)) => s.trim().parse::<i64>().unwrap_or(-1),
+        _ => -1,
+    }
+}
+
+/// 当前登录用户 id（`/luna/pc/me` → `my_info.id`）
+async fn qishui_my_user_id(cookie: &str) -> Option<String> {
+    let me = qishui_luna_get(cookie, "/luna/pc/me", &[]).await.ok()?;
+    let id = me
+        .get("my_info")
+        .and_then(|m| m.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id)
+    }
+}
+
+/// 定位「我喜欢的音乐」歌单 id。
+/// 官方侧边栏用 `GetMyPlaylists`（GET `/luna/pc/me/playlist`），
+/// 「我喜欢的音乐」就是其中 `type === 1` 的那条（客户端存成 `favoritesPlaylistId`，
+/// 播放上报对应 `queue_type=favorite_track_playlist`）。
+///
+/// 返回 `Ok(None)` = 确实没有这个歌单；`Err` = 网络/接口失败（调用方别当空集合用）。
+async fn qishui_favorites_playlist_id(cookie: &str) -> Result<Option<String>, String> {
+    let mut pages: Vec<serde_json::Value> = Vec::new();
+    // 1) 官方侧边栏接口（收藏歌单 type==1 在这里）
+    pages.push(
+        qishui_luna_get(
+            cookie,
+            "/luna/pc/me/playlist",
+            &[("cursor", String::new()), ("count", "50".to_string())],
+        )
+        .await?,
+    );
+    // 2) 兜底：项目原先用的用户歌单接口（自建 + 收藏混在一起）；失败不影响主路径
+    if let Some(uid) = qishui_my_user_id(cookie).await {
+        if let Ok(j) = qishui_luna_get(
+            cookie,
+            "/luna/pc/user/playlist",
+            &[
+                ("user_id", uid),
+                ("cursor", String::new()),
+                ("count", "100".to_string()),
+            ],
+        )
+        .await
+        {
+            pages.push(j);
+        }
+    }
+
+    let mut all: Vec<&serde_json::Value> = Vec::new();
+    for page in &pages {
+        let data = page.get("data").unwrap_or(page);
+        if let Some(lists) = data.get("playlists").and_then(|v| v.as_array()) {
+            all.extend(lists.iter());
+        }
+    }
+    // 优先 type == 1
+    for pl in &all {
+        if qishui_playlist_type(pl) == 1 {
+            let id = json_str(pl, &["id"]);
+            if !id.is_empty() {
+                return Ok(Some(id));
+            }
+        }
+    }
+    // 兜底只认精确名字，避免误命中用户自建的「xx喜欢的音乐」
+    for pl in &all {
+        if json_str(pl, &["title", "public_title", "name"]) == "我喜欢的音乐" {
+            let id = json_str(pl, &["id"]);
+            if !id.is_empty() {
+                return Ok(Some(id));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// 在 `json` 与 `json.data` 两层里取字段（汽水有的接口包一层 data，有的不包）
+fn qishui_field<'a>(json: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    let data = json.get("data").unwrap_or(json);
+    data.get(key).or_else(|| json.get(key))
+}
+
+/// 读一个歌单的全部曲目 id。
+/// 官方客户端取歌单曲目时 count 直接给 1000，这里同样先要大页；
+/// 若服务端仍回 `has_more`，再按 `next_cursor` 续（上限 10 页，防异常游标打死循环）。
+async fn qishui_playlist_all_track_ids(
+    cookie: &str,
+    playlist_id: &str,
+) -> Result<Vec<String>, String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut cursor = String::new();
+    for _ in 0..10 {
+        let json = qishui_luna_get(
+            cookie,
+            "/luna/pc/playlist/detail",
+            &[
+                ("playlist_id", playlist_id.to_string()),
+                ("cursor", cursor.clone()),
+                ("count", "1000".to_string()),
+            ],
+        )
+        .await?;
+        let raw = qishui_extract_media(&json);
+        if raw.is_empty() {
+            break;
+        }
+        for item in raw.iter() {
+            let id = qishui_media_id(item);
+            if !id.is_empty() && !out.contains(&id) {
+                out.push(id);
+            }
+        }
+        let has_more = match qishui_field(&json, "has_more") {
+            Some(serde_json::Value::Bool(b)) => *b,
+            Some(serde_json::Value::Number(n)) => n.as_i64().unwrap_or(0) != 0,
+            Some(serde_json::Value::String(s)) => s == "true" || s == "1",
+            _ => false,
+        };
+        let next = qishui_field(&json, "next_cursor")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if !has_more || next.is_empty() || next == cursor {
+            break;
+        }
+        cursor = next;
+    }
+    Ok(out)
 }
 
 /// 歌单节点 → Playlist（收藏卡片与 search/playlist 实体同构，字段名容错）
@@ -1343,6 +1502,110 @@ async fn qishui_signed_post(
     let body_text = parsed.get("body").and_then(|v| v.as_str()).unwrap_or("");
     serde_json::from_str(body_text)
         .map_err(|e| format!("汽水接口返回无效 JSON: {e} | {}", clip(body_text, 200)))
+}
+
+/// 从回包里提取可读的错误文案（status_info 可能是字符串，也可能是对象）
+fn qishui_status_text(body: &serde_json::Value) -> String {
+    for key in ["status_info", "status_message", "message", "msg"] {
+        if let Some(v) = body.get(key) {
+            if let Some(s) = v.as_str() {
+                if !s.is_empty() {
+                    return s.to_string();
+                }
+            }
+            if v.is_object() {
+                let s = json_str(v, &["message", "msg", "info", "text", "status_info"]);
+                if !s.is_empty() {
+                    return s;
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+/// 汽水业务码判定：只有顶层真的存在 status_code / code 时才校验，缺失即视为成功。
+/// 官方写接口的成功回包常常不带 status_code，硬判 `== 0` 会把成功全当失败。
+fn qishui_check_biz(body: &serde_json::Value) -> Result<(), String> {
+    for key in ["status_code", "code"] {
+        let raw = match body.get(key) {
+            Some(v) => v,
+            None => continue,
+        };
+        let code = match raw {
+            serde_json::Value::Number(n) => n.as_i64().unwrap_or(0),
+            serde_json::Value::String(s) => s.trim().parse::<i64>().unwrap_or(0),
+            _ => continue,
+        };
+        if code != 0 {
+            let info = qishui_status_text(body);
+            return Err(if info.is_empty() {
+                format!("错误码 {code}")
+            } else {
+                info
+            });
+        }
+        return Ok(());
+    }
+    Ok(())
+}
+
+/// 汽水「我喜欢的音乐」曲目 id 列表。
+/// 只要 cookie，不需要 Node 签名包。
+///
+/// 关键（对照官方 main.asar 确认）：**红心不在 collection/mixed 里** ——
+/// 官方只用 `GetMyMixedCollections` 取专辑/歌单（`item_types:['album','playlist']`）。
+/// 单曲的收藏状态挂在每个 media 的 `state.is_collected` 上，而「我喜欢的音乐」
+/// 本身是一个 `type == 1` 的歌单（客户端把它存成 `favoritesPlaylistId`）。
+/// 所以这里直接读那个歌单的全部曲目 id。
+#[tauri::command]
+pub async fn qishui_liked_tracks(app: AppHandle) -> Result<Vec<String>, String> {
+    let cookie = crate::music_api::load_provider_cookie(&app, "qishui").await;
+    if !qishui_cookie_has_login(&cookie) {
+        // 未登录当作空集合，不打扰用户
+        return Ok(Vec::new());
+    }
+    let pid = match qishui_favorites_playlist_id(&cookie).await {
+        Ok(Some(pid)) => pid,
+        Ok(None) => {
+            log::warn!("[Qishui] 未找到「我喜欢的音乐」歌单（type==1）");
+            return Ok(Vec::new());
+        }
+        // 接口失败要抛出去：前端据此保留已有红心，别把空集合当成「一首都没收藏」
+        Err(e) => return Err(e),
+    };
+    let ids = qishui_playlist_all_track_ids(&cookie, &pid).await?;
+    log::info!("[Qishui] liked tracks: {} (playlist {})", ids.len(), pid);
+    Ok(ids)
+}
+
+/// 汽水红心收藏 / 取消收藏。
+/// 需要 bdms 应用级签名（与 feed / track_v2 同一条链路），不需要零信任 ticket。
+#[tauri::command]
+pub async fn qishui_like_toggle(app: AppHandle, song_id: String, like: bool) -> Result<bool, String> {
+    let cookie = crate::music_api::load_provider_cookie(&app, "qishui").await;
+    if !qishui_cookie_has_login(&cookie) {
+        return Err("汽水音乐未登录".into());
+    }
+    if song_id.trim().is_empty() {
+        return Err("缺少汽水曲目 id".into());
+    }
+    let (path, body) = if like {
+        (
+            "/luna/pc/me/collection/media",
+            serde_json::json!({ "scene": "", "media": [{ "type": "track", "id": song_id }] }),
+        )
+    } else {
+        // 取消收藏接口不带 scene 字段
+        (
+            "/luna/pc/me/collection/media/delete",
+            serde_json::json!({ "media": [{ "type": "track", "id": song_id }] }),
+        )
+    };
+    let resp = qishui_signed_post(&app, &cookie, path, body).await?;
+    qishui_check_biz(&resp)?;
+    log::info!("[Qishui] like_toggle id={} like={}", song_id, like);
+    Ok(true)
 }
 
 /// 汽水「听歌模式」列表（官方 /luna/pc/feed/mode，需签名）

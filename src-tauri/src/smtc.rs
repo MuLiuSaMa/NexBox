@@ -14,12 +14,37 @@
 //! `--disable-features=MediaSessionService,HardwareMediaKeyHandling` 禁用它，
 //! 只保留本会话（显示名「新境盒」）。参数必须全窗口一致，否则 WebView2 环境冲突。
 
+use std::sync::Mutex;
+
+/// 软件内播放器最近一次推送的状态缓存（跨平台，与 `imp` 内的 SMTC 会话无关）。
+///
+/// 手机远程接入（`remote_access::music`）据此合成统一「当前播放」。
+/// 注意：缓存写入**必须早于** `media_keys::control_enabled()` 的早退判断——
+/// 否则「键盘媒体键控制」关闭时手机端会看不到软件内音乐。
+static CURRENT: Mutex<Option<SmtcState>> = Mutex::new(None);
+
+/// 读取最近一次缓存的软件内播放状态（供远程接入合成统一快照）。
+pub fn current_state() -> Option<SmtcState> {
+    CURRENT.lock().ok().and_then(|s| s.clone())
+}
+
+/// 把封面来源字符串解析为规范化图片字节（供远程接入的封面端点复用）。
+///
+/// 内部委托 `imp`：支持 `data:` URI / `file://` 本地路径 / `http(s)` 下载（带防盗链 Referer）。
+/// **阻塞**（可能网络下载 + 图片解码），调用方必须放进 `spawn_blocking`。
+pub fn cover_bytes_for(src: &str) -> Option<Vec<u8>> {
+    imp::cover_bytes_for(src)
+}
+
 #[cfg(not(target_os = "windows"))]
 mod imp {
     /// 非 Windows 平台 no-op
     pub fn start(_app: tauri::AppHandle) {}
     pub fn update(_state: super::SmtcState) {}
     pub fn clear() {}
+    pub fn cover_bytes_for(_src: &str) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -378,6 +403,12 @@ mod imp {
         Some(bytes)
     }
 
+    /// 对外暴露的封面取字节入口（远程接入的 `/api/music/cover` 复用同一套解析逻辑）。
+    /// 保持 `resolve_cover_bytes` 私有，仅此一层包装对外。
+    pub fn cover_bytes_for(src: &str) -> Option<Vec<u8>> {
+        resolve_cover_bytes(src)
+    }
+
     /// 下载网络封面（带防盗链 Referer，按域名判断；QQ 封面含 y.qq.com/qpic.cn/gtimg.cn）
     fn download_cover(cover: &str) -> Option<Vec<u8>> {
         let referer = if cover.contains("qq.com")
@@ -508,6 +539,11 @@ pub fn start(app: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn smtc_update_state(state: SmtcState) {
+    // 先缓存：无论「键盘媒体键控制」是否开启，手机远程接入都应能看到软件内音乐。
+    if let Ok(mut cur) = CURRENT.lock() {
+        *cur = Some(state.clone());
+    }
+
     // 「设置 → 高级 → 键盘媒体键控制」关闭时：不向系统推送/启用本应用媒体会话。
     // 启用中的 SMTC 会话会让系统把物理媒体键路由给新境盒（前端又因开关不响应），
     // 导致其他音乐软件收不到媒体键；此处直接忽略推送，保持会话禁用。
@@ -519,5 +555,8 @@ pub fn smtc_update_state(state: SmtcState) {
 
 #[tauri::command]
 pub fn smtc_clear() {
+    if let Ok(mut cur) = CURRENT.lock() {
+        *cur = None;
+    }
     imp::clear();
 }

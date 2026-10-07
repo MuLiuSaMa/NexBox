@@ -51,9 +51,13 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
   const [hover, setHover] = useState(false);
   const [dragging, setDragging] = useState(false);
   const elRef = useRef<HTMLElement | null>(null);
+  const thumbRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef(0);
   const dragRef = useRef<{ startY: number; startScrollTop: number; max: number; travel: number } | null>(null);
 
-  // 重新计算轨道与滑块几何：轨道长度适中，滑块长度按可见比例、位移按滚动进度
+  // 重新计算轨道与滑块几何：轨道长度适中，滑块长度按可见比例、位移按滚动进度。
+  // 滑块位移直接写 DOM（滚动热路径不进 React）；轨道几何量只有真正变化才 setState，
+  // 配合 rAF 合帧，滚动时每帧最多一次计算、零重渲染。
   const update = useCallback(() => {
     const el = elRef.current;
     if (!el) return;
@@ -72,8 +76,28 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
     const thumbHeight = Math.min(Math.max(ratio * trackHeight, MIN_THUMB), trackHeight * THUMB_CAP, THUMB_MAX);
     const travel = Math.max(trackHeight - thumbHeight, 0);
     const thumbTop = (scrollTop / max) * travel;
-    setGeom({ visible: true, trackTop, trackHeight, thumbTop, thumbHeight });
+    setGeom((prev) => {
+      const same =
+        prev.visible &&
+        prev.trackTop === trackTop &&
+        prev.trackHeight === trackHeight &&
+        prev.thumbHeight === thumbHeight;
+      // 纯滚动：只有位移变化，跳过重渲染
+      if (same) return prev;
+      return { visible: true, trackTop, trackHeight, thumbTop, thumbHeight };
+    });
+    const thumb = thumbRef.current;
+    if (thumb) thumb.style.transform = `translate(-50%, ${thumbTop}px)`;
   }, []);
+
+  // 滚动事件按 rAF 合帧：一帧内多次 scroll 事件只算一次
+  const scheduleUpdate = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = 0;
+      update();
+    });
+  }, [update]);
 
   // 绑定滚动容器与事件监听；容器尚未挂载时用 rAF 重试
   useEffect(() => {
@@ -90,13 +114,13 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
       }
       elRef.current = el;
       update();
-      el.addEventListener("scroll", update, { passive: true });
+      el.addEventListener("scroll", scheduleUpdate, { passive: true });
       if (typeof ResizeObserver !== "undefined") {
-        ro = new ResizeObserver(update);
+        ro = new ResizeObserver(scheduleUpdate);
         ro.observe(el);
         if (el.firstElementChild) ro.observe(el.firstElementChild);
       }
-      window.addEventListener("resize", update);
+      window.addEventListener("resize", scheduleUpdate);
     };
 
     attach();
@@ -104,13 +128,15 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
     return () => {
       disposed = true;
       cancelAnimationFrame(rafId);
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
       const el = elRef.current;
-      el?.removeEventListener("scroll", update);
+      el?.removeEventListener("scroll", scheduleUpdate);
       ro?.disconnect();
-      window.removeEventListener("resize", update);
+      window.removeEventListener("resize", scheduleUpdate);
       elRef.current = null;
     };
-  }, [targetId, update]);
+  }, [targetId, update, scheduleUpdate]);
 
   // 路由切换后新内容挂载，重算一次
   useEffect(() => {
@@ -168,6 +194,7 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
     >
       <Box
         as="div"
+        ref={thumbRef}
         position="absolute"
         top={0}
         left="50%"

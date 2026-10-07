@@ -25,6 +25,8 @@ type NvDisplayHandle = *mut std::ffi::c_void;
 
 const NVAPI_UNICODE_STRING_MAX: usize = 2048;
 const NVAPI_SHORT_STRING_MAX: usize = 64;
+const NVDRS_BASE_PROFILE_LOCATION: NvU32 = 2;
+const NVDRS_DEFAULT_PROFILE_LOCATION: NvU32 = 3;
 
 // ---------------------------------------------------------------------------
 // NVIDIA DRS structures (replicated from nvapi.h)
@@ -74,6 +76,26 @@ impl NvdrsSettingV1 {
 // Compile-time verification: sizeof(NVDRS_SETTING_V1) with pack(8)
 // = 4 + 4096 + 4 + 4 + 4 + 4 + 4 + 4100 + 4100 = 12320
 const _: () = assert!(std::mem::size_of::<NvdrsSettingV1>() == 12320);
+
+#[repr(C)]
+struct NvdrsApplicationV4 {
+    version: NvU32,
+    is_predefined: NvU32,
+    app_name: [NvU16; NVAPI_UNICODE_STRING_MAX],
+    user_friendly_name: [NvU16; NVAPI_UNICODE_STRING_MAX],
+    launcher: [NvU16; NVAPI_UNICODE_STRING_MAX],
+    file_in_folder: [NvU16; NVAPI_UNICODE_STRING_MAX],
+    flags: NvU32,
+    command_line: [NvU16; NVAPI_UNICODE_STRING_MAX],
+}
+
+impl NvdrsApplicationV4 {
+    fn new() -> Self {
+        let mut app: Self = unsafe { std::mem::zeroed() };
+        app.version = (std::mem::size_of::<Self>() as NvU32) | (4u32 << 16);
+        app
+    }
+}
 
 #[repr(C)]
 struct NvDisplayDriverVersion {
@@ -183,6 +205,17 @@ extern "C" {
     ) -> NvAPI_Status;
     fn NvAPI_DRS_GetBaseProfile(
         session: NvDRSSessionHandle,
+        profile: *mut NvDRSProfileHandle,
+    ) -> NvAPI_Status;
+    fn NvAPI_DRS_FindApplicationByName(
+        session: NvDRSSessionHandle,
+        app_name: *const NvU16,
+        profile: *mut NvDRSProfileHandle,
+        application: *mut NvdrsApplicationV4,
+    ) -> NvAPI_Status;
+    fn NvAPI_DRS_FindProfileByName(
+        session: NvDRSSessionHandle,
+        profile_name: *const NvU16,
         profile: *mut NvDRSProfileHandle,
     ) -> NvAPI_Status;
     fn NvAPI_DRS_GetSetting(
@@ -499,6 +532,120 @@ fn get_global_profile(state: &NvapiState) -> Result<NvDRSProfileHandle, String> 
         nvapi_error_string(current_status),
         nvapi_error_string(base_status)
     ))
+}
+
+fn to_unicode_string(value: &str) -> [NvU16; NVAPI_UNICODE_STRING_MAX] {
+    let mut target = [0u16; NVAPI_UNICODE_STRING_MAX];
+    let encoded: Vec<u16> = value.encode_utf16().take(NVAPI_UNICODE_STRING_MAX - 1).collect();
+    target[..encoded.len()].copy_from_slice(&encoded);
+    target
+}
+
+fn find_application_profile(
+    state: &NvapiState,
+    executable_names: &[&str],
+) -> Option<NvDRSProfileHandle> {
+    for executable_name in executable_names {
+        let mut profile: NvDRSProfileHandle = std::ptr::null_mut();
+        let mut application = NvdrsApplicationV4::new();
+        let app_name = to_unicode_string(executable_name);
+        let status = unsafe {
+            NvAPI_DRS_FindApplicationByName(
+                state.session,
+                app_name.as_ptr(),
+                &mut profile,
+                &mut application,
+            )
+        };
+        if status == NVAPI_OK && !profile.is_null() {
+            return Some(profile);
+        }
+    }
+    None
+}
+
+fn find_profile_by_name(state: &NvapiState, profile_names: &[&str]) -> Option<NvDRSProfileHandle> {
+    for profile_name in profile_names {
+        let mut profile: NvDRSProfileHandle = std::ptr::null_mut();
+        let name = to_unicode_string(profile_name);
+        let status =
+            unsafe { NvAPI_DRS_FindProfileByName(state.session, name.as_ptr(), &mut profile) };
+        if status == NVAPI_OK && !profile.is_null() {
+            return Some(profile);
+        }
+    }
+    None
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NvidiaDrsSettingValue {
+    pub current_value: NvU32,
+    pub setting_location: NvU32,
+}
+
+impl NvidiaDrsSettingValue {
+    pub fn is_explicit(&self) -> bool {
+        self.setting_location != NVDRS_BASE_PROFILE_LOCATION
+            && self.setting_location != NVDRS_DEFAULT_PROFILE_LOCATION
+    }
+}
+
+fn read_profile_setting(
+    state: &NvapiState,
+    profile: NvDRSProfileHandle,
+    setting_id: NvU32,
+) -> Option<NvidiaDrsSettingValue> {
+    let mut setting = NvdrsSettingV1::new();
+    setting.setting_id = setting_id;
+    let status = unsafe { NvAPI_DRS_GetSetting(state.session, profile, setting_id, &mut setting) };
+    if status != NVAPI_OK {
+        return None;
+    }
+
+    Some(NvidiaDrsSettingValue {
+        current_value: setting.current_u32(),
+        setting_location: setting.setting_location,
+    })
+}
+
+/// Read DRS settings for a game profile. Application lookup is preferred so
+/// values changed in NVIDIA App are visible; the global profile is the fallback.
+pub fn get_nvidia_profile_settings(
+    executable_names: &[&str],
+    profile_names: &[&str],
+    setting_ids: &[NvU32],
+) -> Result<Vec<Option<NvidiaDrsSettingValue>>, String> {
+    try_init_nvapi()?;
+    with_state(|state| {
+        // NVIDIA App can change DRS values after this process created its
+        // session. Reload settings so repeated status checks are not stale.
+        let load_status = unsafe { NvAPI_DRS_LoadSettings(state.session) };
+        if load_status != NVAPI_OK {
+            log::warn!(
+                "NvAPI_DRS_LoadSettings refresh failed: {} (code {})",
+                nvapi_error_string(load_status),
+                load_status
+            );
+        }
+
+        let global_profile = get_global_profile(state)?;
+        let profile = find_application_profile(state, executable_names)
+            .or_else(|| find_profile_by_name(state, profile_names))
+            .unwrap_or(global_profile);
+
+        Ok(setting_ids
+            .iter()
+            .map(|&setting_id| {
+                read_profile_setting(state, profile, setting_id).or_else(|| {
+                    if profile == global_profile {
+                        None
+                    } else {
+                        read_profile_setting(state, global_profile, setting_id)
+                    }
+                })
+            })
+            .collect())
+    })
 }
 
 // ---------------------------------------------------------------------------

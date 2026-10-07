@@ -8,6 +8,7 @@
 //! - 请求带有限流（并发 3）与自动重试，避免偶发握手失败/超时导致整页拿不到数据
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -28,6 +29,13 @@ const API_RESULT_LIMIT: u32 = 50;
 /// 同时进行的请求数上限（共 4 个查询任务全部并行，以缩短总耗时；
 /// 并发进一步加大 NVIDIA 后端会拒绝握手）
 const MAX_CONCURRENCY: usize = 4;
+
+/// 单个请求的整体超时（NVIDIA 这个老接口偶尔会长时间挂起，
+/// 超时后交给重试/其它通道，避免整页被一个慢请求拖死）
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// TCP 建连超时（网络不可达时快速失败）
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// 单个驱动版本在某个设备类型下的信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +206,9 @@ static DRIVER_CACHE: Mutex<Option<DriverCache>> = Mutex::new(None);
 /// GPU 检测结果缓存（避免每次进入页面都重复走 NVAPI / WMI 检测）
 static GPU_DETECT_CACHE: Mutex<Option<GpuDetection>> = Mutex::new(None);
 
+/// 后台刷新进行中标记（防止启动预热与页面请求同时拉取，重复打 NVIDIA 接口）
+static REFRESH_INFLIGHT: AtomicBool = AtomicBool::new(false);
+
 /// 缓存有效期（2 小时，驱动不会更新得那么频繁）
 const CACHE_TTL: Duration = Duration::from_secs(2 * 60 * 60);
 
@@ -238,25 +249,18 @@ pub async fn fetch_nvidia_drivers(
     // 2) 磁盘缓存
     if !force {
         if let Some((fetched_at, entries)) = load_disk_cache(&app) {
+            // 无论新旧都先写入内存缓存，避免同一次运行内重复读盘
+            set_memory_cache(entries.clone());
             if fetched_at
                 .elapsed()
                 .map(|d| d < CACHE_TTL)
                 .unwrap_or(false)
             {
-                // 磁盘缓存仍新鲜：写入内存缓存后直接返回
-                set_memory_cache(entries.clone());
+                // 磁盘缓存仍新鲜：直接返回
                 return Ok(entries);
             }
             // 磁盘缓存已过期：先返回旧数据，后台刷新完成后推送事件
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                match do_fetch_drivers(&app).await {
-                    Ok(entries) => {
-                        let _ = app.emit("nvidia-drivers-updated", &entries);
-                    }
-                    Err(e) => log::warn!("后台刷新驱动列表失败: {e}"),
-                }
-            });
+            spawn_background_refresh(&app);
             return Ok(entries);
         }
     }
@@ -265,17 +269,67 @@ pub async fn fetch_nvidia_drivers(
     do_fetch_drivers(&app).await
 }
 
+/// 启动后台刷新（同一时刻只允许一个在跑，避免重复请求 NVIDIA 接口）
+fn spawn_background_refresh(app: &AppHandle) {
+    if REFRESH_INFLIGHT
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return; // 已有刷新在进行中
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        match do_fetch_drivers(&app).await {
+            Ok(entries) => {
+                let _ = app.emit("nvidia-drivers-updated", &entries);
+            }
+            Err(e) => log::warn!("后台刷新驱动列表失败: {e}"),
+        }
+        REFRESH_INFLIGHT.store(false, Ordering::SeqCst);
+    });
+}
+
+/// 启动时后台预热驱动列表缓存。
+///
+/// 若磁盘缓存缺失或已过期，则在应用启动后台静默拉取一次，
+/// 这样用户真正进入「NVIDIA 驱动下载」页面时通常已命中缓存 → 秒开，
+/// 无需再盯着加载动画等网络。命中新鲜缓存或已有刷新在跑时直接跳过。
+pub fn warm_cache_on_startup(app: &AppHandle) {
+    if let Some((fetched_at, _)) = load_disk_cache(app) {
+        if fetched_at
+            .elapsed()
+            .map(|d| d < CACHE_TTL)
+            .unwrap_or(false)
+        {
+            return; // 缓存仍新鲜，无需预热
+        }
+    }
+    // 延迟 3 秒，避免与应用启动时的其它初始化任务抢网络/CPU
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        spawn_background_refresh(&app);
+    });
+}
+
 /// 实际执行网络拉取 + 合并排序 + 写入缓存（内存 + 磁盘）
+///
+/// 采用「边到边渲染」策略：4 个通道（台式机/笔记本 × 2 个系列）谁先返回就先合并，
+/// 并通过 "nvidia-drivers-partial" 事件把当前已拿到的结果推给前端，
+/// 前端无需等全部 4 个通道完成即可展示列表，显著缩短「首次可见时间」。
 async fn do_fetch_drivers(app: &AppHandle) -> Result<Vec<DriverEntry>, String> {
     let client = reqwest::Client::builder()
         .user_agent(USER_AGENT)
-        .timeout(std::time::Duration::from_secs(45))
+        .timeout(REQUEST_TIMEOUT)
+        .connect_timeout(CONNECT_TIMEOUT)
         .build()
         .map_err(|e| format!("创建 HTTP 客户端失败: {}", e))?;
 
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
+    let (tx, mut rx) =
+        tokio::sync::mpsc::channel::<(bool, Result<Vec<ClassDriver>, String>)>(MAX_CONCURRENCY);
 
-    let mut handles = Vec::new();
+    let mut spawned = 0usize;
     for series in SERIES_TO_FETCH {
         for is_laptop in [false, true] {
             let (psid, pfid) = if is_laptop {
@@ -285,22 +339,28 @@ async fn do_fetch_drivers(app: &AppHandle) -> Result<Vec<DriverEntry>, String> {
             };
             let client = client.clone();
             let semaphore = semaphore.clone();
-            handles.push(tokio::spawn(async move {
+            let tx = tx.clone();
+            spawned += 1;
+            tauri::async_runtime::spawn(async move {
                 let _permit = semaphore.acquire_owned().await;
                 let result = fetch_series_drivers_with_retry(&client, psid, pfid).await;
-                (is_laptop, result)
-            }));
+                let _ = tx.send((is_laptop, result)).await;
+            });
         }
     }
+    // 关闭原始发送端，保证 rx 在全部任务结束后自然结束
+    drop(tx);
 
     let mut desktop_map: HashMap<String, DriverClassInfo> = HashMap::new();
     let mut laptop_map: HashMap<String, DriverClassInfo> = HashMap::new();
     let mut meta_map: HashMap<String, (String, String, String)> = HashMap::new();
     let mut any_success = false;
+    let mut received = 0usize;
 
-    for handle in handles {
-        match handle.await {
-            Ok((is_laptop, Ok(list))) => {
+    while let Some((is_laptop, result)) = rx.recv().await {
+        received += 1;
+        match result {
+            Ok(list) => {
                 any_success = true;
                 for d in list {
                     let info = DriverClassInfo {
@@ -318,9 +378,16 @@ async fn do_fetch_drivers(app: &AppHandle) -> Result<Vec<DriverEntry>, String> {
                         .entry(d.version.clone())
                         .or_insert((d.name, d.release_date, d.branch));
                 }
+                // 每拿到一个通道就推送一次增量结果，让前端尽早出内容
+                let partial = build_entries(&desktop_map, &laptop_map, &meta_map);
+                if !partial.is_empty() {
+                    let _ = app.emit("nvidia-drivers-partial", &partial);
+                }
             }
-            Ok((_, Err(e))) => log::warn!("获取 GeForce 驱动列表失败: {}", e),
-            Err(e) => log::warn!("驱动列表查询任务失败: {}", e),
+            Err(e) => log::warn!("获取 GeForce 驱动列表失败: {}", e),
+        }
+        if received >= spawned {
+            break;
         }
     }
 
@@ -328,7 +395,25 @@ async fn do_fetch_drivers(app: &AppHandle) -> Result<Vec<DriverEntry>, String> {
         return Err("未能获取到任何驱动版本，NVIDIA 官网接口可能暂时不可用".into());
     }
 
-    // 合并两个通道的版本号，从新到旧排序
+    let entries = build_entries(&desktop_map, &laptop_map, &meta_map);
+
+    if entries.is_empty() {
+        return Err("未能获取到任何驱动版本，NVIDIA 官网接口可能已变更".into());
+    }
+
+    // 写入缓存（内存 + 磁盘）
+    set_memory_cache(entries.clone());
+    save_disk_cache(app, &entries);
+
+    Ok(entries)
+}
+
+/// 由三个映射表构建「从新到旧」排序后的驱动条目列表（最新一条标记 is_latest_only）
+fn build_entries(
+    desktop_map: &HashMap<String, DriverClassInfo>,
+    laptop_map: &HashMap<String, DriverClassInfo>,
+    meta_map: &HashMap<String, (String, String, String)>,
+) -> Vec<DriverEntry> {
     let mut versions: Vec<String> = desktop_map
         .keys()
         .chain(laptop_map.keys())
@@ -355,17 +440,11 @@ async fn do_fetch_drivers(app: &AppHandle) -> Result<Vec<DriverEntry>, String> {
         });
     }
 
-    if entries.is_empty() {
-        return Err("未能获取到任何驱动版本，NVIDIA 官网接口可能已变更".into());
+    if let Some(first) = entries.first_mut() {
+        first.is_latest_only = true;
     }
 
-    entries[0].is_latest_only = true;
-
-    // 写入缓存（内存 + 磁盘）
-    set_memory_cache(entries.clone());
-    save_disk_cache(app, &entries);
-
-    Ok(entries)
+    entries
 }
 
 /// 驱动列表磁盘缓存结构
@@ -419,20 +498,22 @@ fn set_memory_cache(entries: Vec<DriverEntry>) {
     }
 }
 
-/// 带重试的系列查询：最多尝试 3 次，间隔 1s / 2s
+/// 带重试的系列查询：最多尝试 2 次，仅在两次之间等待 600ms
+/// （不再在最后一次失败后空等，避免白白拖慢整体耗时）
 async fn fetch_series_drivers_with_retry(
     client: &reqwest::Client,
     psid: u32,
     pfid: u32,
 ) -> Result<Vec<ClassDriver>, String> {
     let mut last_err = String::new();
-    for attempt in 0..3 {
+    for attempt in 0..2 {
         match fetch_series_drivers(client, psid, pfid).await {
             Ok(list) => return Ok(list),
             Err(e) => {
                 last_err = e;
-                let delay = std::time::Duration::from_millis(500 * (attempt as u64 + 1) * 2);
-                tokio::time::sleep(delay).await;
+                if attempt == 0 {
+                    tokio::time::sleep(Duration::from_millis(600)).await;
+                }
             }
         }
     }

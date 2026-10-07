@@ -55,6 +55,7 @@ import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { fitEngineGains, interpolateCurveToLayout } from "@/lib/eq-curve";
 
 // ===== 类型定义 =====
 interface DriverStatus {
@@ -97,13 +98,44 @@ interface AudioDevice {
   is_default: boolean;
 }
 
-// ===== EQ 频段常量 =====
-const DEFAULT_EQ_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-// 每个频段的固定频率范围
-const BAND_FREQ_RANGES: [number, number][] = [
-  [22, 41], [44, 81], [88, 162], [175, 325], [350, 650],
-  [700, 1300], [1400, 2600], [2800, 5200], [5600, 10400], [11200, 20800],
-];
+// ===== EQ 波段布局定义（5/10/15/20/31 波段，可切换） =====
+interface BandLayoutDef {
+  count: number;
+  freqs: number[];              // 各频段默认中心频率
+  ranges?: [number, number][];  // 频率旋钮可调范围（仅 5/10 波段提供）
+  rangeLabels?: string[];       // 5 波段显示范围标签
+}
+
+const LAYOUT_5: BandLayoutDef = {
+  count: 5,
+  // 默认中心频率 = 各范围几何平均
+  freqs: [88, 251, 1001, 4010, 11320],
+  ranges: [[62, 124], [126, 500], [501, 2000], [2010, 8000], [8010, 16000]],
+  rangeLabels: ["62-124", "126-500", "501-2k", "2.01k-8k", "8.01k-16k"],
+};
+const LAYOUT_10: BandLayoutDef = {
+  count: 10,
+  freqs: [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000],
+  // 每个频段的固定频率范围
+  ranges: [
+    [22, 41], [44, 81], [88, 162], [175, 325], [350, 650],
+    [700, 1300], [1400, 2600], [2800, 5200], [5600, 10400], [11200, 20800],
+  ],
+};
+const LAYOUT_15: BandLayoutDef = {
+  count: 15,
+  freqs: [25, 40, 63, 100, 160, 250, 400, 630, 1000, 1600, 2500, 4000, 6300, 10000, 16000],
+};
+const LAYOUT_20: BandLayoutDef = {
+  count: 20,
+  freqs: [20, 32, 40, 63, 80, 125, 160, 250, 315, 500, 630, 1000, 1200, 2000, 2500, 4000, 5000, 8000, 10000, 16000],
+};
+const LAYOUT_31: BandLayoutDef = {
+  count: 31,
+  freqs: [20, 25, 32, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1200, 1600, 2000, 2500, 3200, 4000, 5000, 6300, 8000, 10000, 12000, 16000, 20000],
+};
+const BAND_LAYOUTS: BandLayoutDef[] = [LAYOUT_5, LAYOUT_10, LAYOUT_15, LAYOUT_20, LAYOUT_31];
+
 const EQ_STORE_SELECTED = "eq-selected-preset-id";
 const EQ_STORE_BANDS = "eq-current-bands";
 const EQ_STORE_IMPORTED = "eq-imported-preset-ids";
@@ -112,31 +144,25 @@ const EQ_STORE_CUSTOM_BANDS = "eq-custom-bands";
 const EQ_STORE_PREAMP = "eq-preamp";
 const EQ_STORE_FX = "eq-effects";
 const EQ_STORE_DEVICE = "eq-device";
+const EQ_STORE_LAYOUT = "eq-band-layout";
 
 // ===== 辅助函数 =====
-/** 将任意数量的 EQ 频段下采样到 10 个标准频段 */
-function downsampleBands(bands: EqBand[]): EqBand[] {
-  const STANDARD_FREQS = [31.25, 62.5, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
-  if (bands.length <= 10) return bands;
-  const sorted = [...bands].sort((a, b) => a.freq - b.freq);
-  return STANDARD_FREQS.map((targetFreq) => {
-    // 在 sorted 中找到最接近 targetFreq 的频段
-    let best = sorted[0];
-    let bestDist = Math.abs(best.freq - targetFreq);
-    for (let i = 1; i < sorted.length; i++) {
-      const dist = Math.abs(sorted[i].freq - targetFreq);
-      if (dist < bestDist) {
-        best = sorted[i];
-        bestDist = dist;
-      }
-    }
-    return { ...best };
-  });
+/** 将任意来源的 EQ 频段曲线映射到目标波段布局（对数轴线性插值，切换波段音色不变） */
+function mapBandsToLayout(source: EqBand[], layout: BandLayoutDef): EqBand[] {
+  return interpolateCurveToLayout(source, layout.freqs) as EqBand[];
+}
+
+/** 曲线 → 引擎增益：对曲线做最小二乘拟合，使实测频响与曲线一致 */
+function engineBandsFromCurve(curve: EqBand[]): [number, number][] {
+  const freqs = curve.map((b) => b.freq);
+  const fitted = fitEngineGains(freqs, curve.map((b) => b.gain));
+  return freqs.map((f, i) => [f, fitted[i]] as [number, number]);
 }
 
 function formatFreq(freq: number): string {
   if (freq >= 1000) {
-    return `${(freq / 1000).toFixed(freq >= 10000 ? 2 : 1)}k`;
+    const k = freq / 1000;
+    return `${k >= 10 ? k.toFixed(0) : k.toFixed(1)}k`;
   }
   return `${Math.round(freq)}`;
 }
@@ -330,9 +356,13 @@ function FreqKnob({
 function EqBandSlider({
   band,
   onChange,
+  label,
+  compact,
 }: {
   band: EqBand;
   onChange: (gain: number) => void;
+  label?: string;
+  compact?: boolean;
 }) {
   const labelColor = useColorModeValue("gray.600", "#ffffff");
   const valueColor = useColorModeValue("gray.800", "#e0e0e0");
@@ -345,19 +375,20 @@ function EqBandSlider({
   const sZeroBg = useColorModeValue("gray.400", "#555555");
 
   return (
-    <VStack spacing={1} align="center" w="full">
+    <VStack spacing={1} align="center" w="full" minW={compact ? 0 : undefined}>
       {/* 增益值 */}
       <Text
-        fontSize="xs"
+        fontSize={compact ? "10px" : "xs"}
         fontWeight="bold"
         color={gain > 0 ? "green.500" : gain < 0 ? "orange.500" : valueColor}
         minH="16px"
+        whiteSpace="nowrap"
       >
         {gain > 0 ? "+" : ""}{gain.toFixed(0)}
       </Text>
 
       {/* 垂直滑块 */}
-      <Box position="relative" h="120px" w="32px" display="flex" justifyContent="center">
+      <Box position="relative" h="120px" w={compact ? "full" : "32px"} minW={compact ? 0 : undefined} display="flex" justifyContent="center">
         {/* 滑轨 */}
         <Box
           position="absolute"
@@ -374,7 +405,7 @@ function EqBandSlider({
           left="50%"
           transform="translateX(-50%)"
           top="50%"
-          w="16px"
+          w={compact ? "12px" : "16px"}
           h="2px"
           bg={sZeroBg}
           borderRadius="full"
@@ -397,8 +428,8 @@ function EqBandSlider({
           left="50%"
           transform="translate(-50%, -50%)"
           top={`${100 - gainPercent}%`}
-          w="16px"
-          h="16px"
+          w={compact ? "12px" : "16px"}
+          h={compact ? "12px" : "16px"}
           borderRadius="full"
           bg={activeColor}
           cursor="pointer"
@@ -415,7 +446,7 @@ function EqBandSlider({
           style={{
             position: "absolute",
             width: "120px",
-            height: "32px",
+            height: compact ? "20px" : "32px",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%) rotate(-90deg)",
@@ -426,8 +457,8 @@ function EqBandSlider({
       </Box>
 
       {/* 频率标签 */}
-      <Text fontSize="xs" color={labelColor} fontWeight="medium">
-        {formatFreq(band.freq)}
+      <Text fontSize={compact ? "10px" : "xs"} color={labelColor} fontWeight="medium" whiteSpace="nowrap">
+        {label ?? formatFreq(band.freq)}
       </Text>
     </VStack>
   );
@@ -447,6 +478,7 @@ export default function AudioEqPage() {
   const iconBg = useColorModeValue("gray.100", "#222222");
   const warningBg = useColorModeValue("orange.50", "rgba(237, 137, 54, 0.1)");
   const warningColor = useColorModeValue("orange.600", "orange.300");
+  const switcherBg = useColorModeValue("gray.100", "#2a2a2a");
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
 
@@ -454,8 +486,9 @@ export default function AudioEqPage() {
   const [engineStatus, setEngineStatus] = useState<EngineStatus>({ running: false, pid: null });
   const [presets, setPresets] = useState<EqPreset[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [bandLayout, setBandLayout] = useState<BandLayoutDef>(LAYOUT_10);
   const [bands, setBands] = useState<EqBand[]>(
-    DEFAULT_EQ_FREQS.map((f) => ({ freq: f, gain: 0 }))
+    LAYOUT_10.freqs.map((f) => ({ freq: f, gain: 0 }))
   );
   const [loading, setLoading] = useState(true);
   const [installing, setInstalling] = useState(false);
@@ -486,7 +519,7 @@ export default function AudioEqPage() {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
-      const [status, engine, presetList, savedId, savedBands, savedImported, savedUser, savedPreamp, savedFx, devList, savedDevice] = await Promise.all([
+      const [status, engine, presetList, savedId, savedBands, savedImported, savedUser, savedPreamp, savedFx, devList, savedDevice, savedLayout] = await Promise.all([
         invoke<DriverStatus>("check_virtual_audio_driver"),
         invoke<EngineStatus>("get_eq_engine_status"),
         invoke<EqPreset[]>("get_eq_presets"),
@@ -498,7 +531,11 @@ export default function AudioEqPage() {
         store.get<typeof defaultFx>(EQ_STORE_FX),
         invoke<AudioDevice[]>("list_audio_devices"),
         store.get<string>(EQ_STORE_DEVICE),
+        store.get<number>(EQ_STORE_LAYOUT),
       ]);
+      // 恢复波段布局（缺省 10 波段）
+      const layout = BAND_LAYOUTS.find((l) => l.count === savedLayout) ?? LAYOUT_10;
+      setBandLayout(layout);
       setDriverStatus(status);
       setEngineStatus(engine);
       setPresets(presetList);
@@ -516,7 +553,11 @@ export default function AudioEqPage() {
         setSelectedDevice(def?.name ?? "");
       }
 
-      if (presetList.length === 0) return;
+      if (presetList.length === 0) {
+        // 无预设：恢复上次频段或布局默认值
+        setBands(mapBandsToLayout(savedBands ?? [], layout));
+        return;
+      }
 
       // 恢复上次选中的预设和频段
       if (savedId) {
@@ -524,7 +565,7 @@ export default function AudioEqPage() {
         if (savedId === CUSTOM_PRESET_ID) {
           setSelectedPresetId(CUSTOM_PRESET_ID);
           selectedPresetIdRef.current = CUSTOM_PRESET_ID;
-          if (savedBands) setBands(savedBands);
+          setBands(mapBandsToLayout(savedBands ?? [], layout));
           return;
         }
         // 已保存的预设
@@ -532,7 +573,7 @@ export default function AudioEqPage() {
         if (saved) {
           setSelectedPresetId(saved.id);
           selectedPresetIdRef.current = saved.id;
-          setBands(downsampleBands(savedBands ?? saved.bands));
+          setBands(mapBandsToLayout(savedBands ?? saved.bands, layout));
           return;
         }
       }
@@ -541,7 +582,7 @@ export default function AudioEqPage() {
       const first = presetList[0];
       setSelectedPresetId(first.id);
       selectedPresetIdRef.current = first.id;
-      setBands(downsampleBands(first.bands));
+      setBands(mapBandsToLayout(savedBands?.length === layout.count ? savedBands : first.bands, layout));
     } catch (error) {
       console.error("Failed to load EQ data:", error);
     } finally {
@@ -639,9 +680,8 @@ export default function AudioEqPage() {
     setStartingEngine(true);
     try {
       await invoke("start_eq_engine", { deviceName: selectedDevice });
-      // 引擎启动后，同步当前设置
-      const bandTuples = bands.map((b) => [b.freq, b.gain] as [number, number]);
-      await invoke("update_eq_bands", { bands: bandTuples }).catch(() => {});
+      // 引擎启动后，同步当前设置（频段用拟合增益）
+      await invoke("update_eq_bands", { bands: engineBandsFromCurve(bands) }).catch(() => {});
       await invoke("update_eq_preamp", { gain: preamp }).catch(() => {});
       await invoke("update_eq_effects", { ...fx }).catch(() => {});
       toast({
@@ -714,11 +754,11 @@ export default function AudioEqPage() {
   const handleSelectPreset = async (preset: EqPreset) => {
     setSelectedPresetId(preset.id);
     selectedPresetIdRef.current = preset.id;
-    const displayBands = downsampleBands(preset.bands);
+    const displayBands = mapBandsToLayout(preset.bands, bandLayout);
     setBands(displayBands);
 
     await store.set(EQ_STORE_SELECTED, preset.id);
-    await store.set(EQ_STORE_BANDS, preset.bands);
+    await store.set(EQ_STORE_BANDS, displayBands);
 
     // 音效参数：导入预设用预设值，内置/自定义重置为 0
     const fx = preset.effects
@@ -737,6 +777,10 @@ export default function AudioEqPage() {
     await store.save();
     try {
       await invoke("apply_eq_preset", { presetId: preset.id });
+      // 引擎统一接收拟合增益（与滑块曲线一致，切换波段音色不变）
+      if (engineStatus.running) {
+        invoke("update_eq_bands", { bands: engineBandsFromCurve(displayBands) }).catch(() => {});
+      }
       toast({
         title: t("audioEq.presetApplied"),
         description: preset.name,
@@ -750,13 +794,13 @@ export default function AudioEqPage() {
   };
 
   // 节流同步到音频引擎（避免拖拽时每帧都发送）
+  // 引擎接收拟合增益而非曲线原值，保证实测频响与滑块曲线一致
   const syncBandsToEngine = (bands: EqBand[]) => {
     if (!engineStatus.running) return;
     const now = Date.now();
     if (now - lastEngineSyncRef.current < 50) return; // 50ms 节流
     lastEngineSyncRef.current = now;
-    const bandTuples = bands.map((b) => [b.freq, b.gain] as [number, number]);
-    invoke("update_eq_bands", { bands: bandTuples }).catch(() => {});
+    invoke("update_eq_bands", { bands: engineBandsFromCurve(bands) }).catch(() => {});
   };
 
   // 更新频段频率（实时同步到音频引擎）
@@ -798,8 +842,7 @@ export default function AudioEqPage() {
       store.set(EQ_STORE_CUSTOM_BANDS, resetBands).catch(() => {});
     }
     if (engineStatus.running) {
-      const bandTuples = resetBands.map((b) => [b.freq, b.gain] as [number, number]);
-      invoke("update_eq_bands", { bands: bandTuples }).catch(() => {});
+      invoke("update_eq_bands", { bands: engineBandsFromCurve(resetBands) }).catch(() => {});
     }
   };
 
@@ -876,7 +919,7 @@ ${fx.dynamics > 0 ? 1 : 0}: Integer[3]
 ${fx.bass > 0 ? 1 : 0}: Integer[4]
 0: Integer[5]
 2: Integer[6]
-10: Number of EQ Bands
+${bands.length}: Number of EQ Bands
 1: On/Off Flag
 ${bandsStr}`;
   };
@@ -925,13 +968,29 @@ ${bandsStr}`;
     }
   };
 
+  // 切换波段布局（5/10/15/20/31）：当前曲线按频率就近映射到新布局
+  const handleLayoutChange = async (layout: BandLayoutDef) => {
+    if (layout.count === bandLayout.count) return;
+    const mapped = mapBandsToLayout(bands, layout);
+    setBandLayout(layout);
+    setBands(mapped);
+    Promise.all([
+      store.set(EQ_STORE_LAYOUT, layout.count),
+      store.set(EQ_STORE_BANDS, mapped),
+      ...(selectedPresetIdRef.current === CUSTOM_PRESET_ID ? [store.set(EQ_STORE_CUSTOM_BANDS, mapped)] : []),
+    ]).then(() => store.save()).catch(() => {});
+    if (engineStatus.running) {
+      invoke("update_eq_bands", { bands: engineBandsFromCurve(mapped) }).catch(() => {});
+    }
+  };
+
   // 切换到自定义模式（恢复上次自定义值，首次则为全零）
   const handleCustomPreset = async () => {
     setSelectedPresetId(CUSTOM_PRESET_ID);
     selectedPresetIdRef.current = CUSTOM_PRESET_ID;
-    // 读取上次保存的自定义频段
+    // 读取上次保存的自定义频段（波段数一致才按索引恢复）
     const savedCustom = await store.get<EqBand[]>(EQ_STORE_CUSTOM_BANDS);
-    const customBands = savedCustom
+    const customBands = savedCustom && savedCustom.length === bands.length
       ? bands.map((b, i) => ({ ...b, gain: savedCustom[i]?.gain ?? 0 }))
       : bands.map((b) => ({ ...b, gain: 0 }));
     setBands(customBands);
@@ -942,8 +1001,7 @@ ${bandsStr}`;
       invoke("update_eq_effects", { ...savedFx }).catch(() => {});
     }
     store.set(EQ_STORE_SELECTED, CUSTOM_PRESET_ID).then(() => store.save()).catch(() => {});
-    const bandTuples = customBands.map((b) => [b.freq, b.gain] as [number, number]);
-    invoke("update_eq_bands", { bands: bandTuples }).catch(() => {});
+    invoke("update_eq_bands", { bands: engineBandsFromCurve(customBands) }).catch(() => {});
   };
 
   // 删除保存的预设（从 presets tab 中删除）
@@ -1276,7 +1334,33 @@ ${bandsStr}`;
                   <Text fontWeight="bold" fontSize="md" color={headingColor}>
                     {t("audioEq.equalizer")}
                   </Text>
-                  <HStack spacing={1}>
+                  <HStack spacing={2}>
+                    {/* 波段数切换器 */}
+                    <HStack spacing={0} p="2px" borderRadius="full" bg={switcherBg}>
+                      {BAND_LAYOUTS.map((l) => {
+                        const active = l.count === bandLayout.count;
+                        return (
+                          <Box
+                            key={l.count}
+                            as="button"
+                            px={2}
+                            py="2px"
+                            borderRadius="full"
+                            fontSize="xs"
+                            fontWeight={active ? "bold" : "medium"}
+                            bg={active ? activeColor : "transparent"}
+                            color={active ? "white" : descColor}
+                            _hover={{ color: active ? "white" : headingColor }}
+                            transition="all 0.15s"
+                            cursor="pointer"
+                            lineHeight="1.5"
+                            onClick={() => handleLayoutChange(l)}
+                          >
+                            {l.count}
+                          </Box>
+                        );
+                      })}
+                    </HStack>
                     <Button leftIcon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleResetBands}>
                       {t("audioEq.reset")}
                     </Button>
@@ -1286,16 +1370,22 @@ ${bandsStr}`;
                   <Box position="absolute" inset={0} zIndex={1} pointerEvents="none">
                     <FrequencyResponseCurve bands={bands} />
                   </Box>
-                  <HStack justify="space-between" align="stretch" spacing={1} px={1}>
+                  <HStack justify="space-between" align="stretch" spacing={bandLayout.count > 16 ? 0.5 : 1} px={1}>
                     {bands.map((band, index) => (
-                      <EqBandSlider key={index} band={band} onChange={(gain) => handleBandChange(index, gain)} />
+                      <EqBandSlider
+                        key={index}
+                        band={band}
+                        compact={bandLayout.count > 16}
+                        label={bandLayout.rangeLabels?.[index]}
+                        onChange={(gain) => handleBandChange(index, gain)}
+                      />
                     ))}
                   </HStack>
                 </Box>
-                {bands.length <= 10 && (
+                {bandLayout.ranges && (
                   <HStack spacing={1} justify="space-between" px={1}>
                     {bands.map((band, index) => {
-                      const range = BAND_FREQ_RANGES[index];
+                      const range = bandLayout.ranges![index];
                       const minF = range?.[0] ?? band.freq * 0.7;
                       const maxF = range?.[1] ?? band.freq * 1.4;
                       return (

@@ -26,3 +26,15 @@ export const maps: RouletteMap[] = [
 export function isClassifiedDifficulty(d: RouletteDifficulty): boolean {
   return d === "绝密" || d === "永夜";
 }
+
+/** 普通难度（游戏里叫「常规」）：不给 6 套、也不给 5 级及以上弹药 */
+export function isNormalDifficulty(d: RouletteDifficulty): boolean {
+  return d === "常规";
+}
+
+/**
+ * 普通难度的装备上限（单一数据源，别在页面里另写一份数字）：
+ * - maxProtectLevel 5 → 排除 6 级护甲/头盔（即「6 套」）
+ * - maxAmmoGrade 4    → 排除 5、6 级弹药（即「5 级蛋及以上」）
+ */
+export const NORMAL_LOADOUT_LIMITS = { maxProtectLevel: 5, maxAmmoGrade: 4 } as const;

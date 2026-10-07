@@ -1,3 +1,4 @@
+use crate::nvapi;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::os::windows::process::CommandExt;
@@ -71,6 +72,33 @@ pub struct DLSSSettingsStatus {
 }
 
 static DELTA_PASSWORD_CACHE: std::sync::Mutex<Option<(Vec<DeltaPasswordItem>, std::time::Instant)>> = std::sync::Mutex::new(None);
+
+const DLSS_SR_OVERRIDE_ID: u32 = 0x10E41E01;
+const DLSS_SR_PRESET_ID: u32 = 0x10E41DF3;
+const DLSS_SR_MODE_ID: u32 = 0x10AFB768;
+const TEXTURE_FILTERING_QUALITY_ID: u32 = 0x00CE2691;
+const AA_MODE_REPLAY_ID: u32 = 0x10D48A85;
+const DLSS_STATUS_SETTING_IDS: [u32; 5] = [
+    DLSS_SR_OVERRIDE_ID,
+    DLSS_SR_PRESET_ID,
+    DLSS_SR_MODE_ID,
+    TEXTURE_FILTERING_QUALITY_ID,
+    AA_MODE_REPLAY_ID,
+];
+
+const DELTA_EXECUTABLE_NAMES: [&str; 2] = [
+    "deltaforceclient-win64-shipping.exe",
+    "DeltaForceClient-Win64-Shipping.exe",
+];
+
+const DELTA_PROFILE_NAMES: [&str; 6] = [
+    "Delta Force",
+    "Delta Force: Hawk Ops",
+    "DeltaForce",
+    "DeltaForceClient-Win64-Shipping",
+    "三角洲行动",
+    "三角洲",
+];
 
 fn fetch_delta_passwords_from_primary_api() -> Option<Vec<DeltaPasswordItem>> {
     let url = "https://i.elaina.vin/api/%E4%B8%89%E8%A7%92%E6%B4%B2/%E5%AF%86%E7%A0%81/";
@@ -641,6 +669,124 @@ fn generate_dlss_lock_config(lock_enabled: bool) -> Vec<u8> {
     bytes
 }
 
+fn dlss_preset_name(value: u32) -> String {
+    match value {
+        1 => "A",
+        2 => "B",
+        3 => "C",
+        4 => "D",
+        5 => "E",
+        6 => "F",
+        7 => "G",
+        8 => "H",
+        9 => "I",
+        10 => "J",
+        11 => "K",
+        12 => "L",
+        13 => "M",
+        14 => "N",
+        15 => "O",
+        _ => "default",
+    }
+    .to_string()
+}
+
+fn dlss_quality_name(value: u32) -> String {
+    match value {
+        0 => "performance",
+        1 => "balanced",
+        2 => "quality",
+        4 => "dlaa",
+        5 => "ultra_performance",
+        _ => "default",
+    }
+    .to_string()
+}
+
+fn texture_quality_name(value: u32) -> String {
+    match value {
+        0xFFFFFFF6 => "high_quality",
+        0x00000000 => "quality",
+        0x0000000A => "performance",
+        0x00000014 => "high_performance",
+        _ => "default",
+    }
+    .to_string()
+}
+
+fn antialiasing_name(value: u32) -> String {
+    match value & 0x70 {
+        0x10 => "2x",
+        0x20 => "4x",
+        0x30 => "8x",
+        _ if value & 0x0F == 0 => "off",
+        _ => "default",
+    }
+    .to_string()
+}
+
+fn setting_value(
+    values: &[Option<nvapi::NvidiaDrsSettingValue>],
+    setting_id: u32,
+) -> Option<nvapi::NvidiaDrsSettingValue> {
+    let index = DLSS_STATUS_SETTING_IDS
+        .iter()
+        .position(|id| *id == setting_id)?;
+    values.get(index).and_then(|value| *value)
+}
+
+fn read_dlss_preset_status_from_nvapi() -> Result<DLSSPresetStatus, String> {
+    let values = nvapi::get_nvidia_profile_settings(
+        &DELTA_EXECUTABLE_NAMES,
+        &DELTA_PROFILE_NAMES,
+        &DLSS_STATUS_SETTING_IDS,
+    )?;
+
+    let override_value = setting_value(&values, DLSS_SR_OVERRIDE_ID);
+    let preset_value = setting_value(&values, DLSS_SR_PRESET_ID);
+    let preset = match (override_value, preset_value) {
+        (Some(override_value), Some(preset_value))
+            if override_value.is_explicit() && override_value.current_value != 0 =>
+        {
+            dlss_preset_name(preset_value.current_value)
+        }
+        (_, Some(preset_value)) if preset_value.is_explicit() && preset_value.current_value != 0 => {
+            dlss_preset_name(preset_value.current_value)
+        }
+        _ => "default".to_string(),
+    };
+
+    let quality = setting_value(&values, DLSS_SR_MODE_ID)
+        .filter(|value| value.is_explicit() && value.current_value != 3)
+        .map(|value| dlss_quality_name(value.current_value))
+        .unwrap_or_else(|| "default".to_string());
+
+    let texture_quality = setting_value(&values, TEXTURE_FILTERING_QUALITY_ID)
+        .filter(|value| value.is_explicit())
+        .map(|value| texture_quality_name(value.current_value))
+        .unwrap_or_else(|| "default".to_string());
+
+    let antialiasing = setting_value(&values, AA_MODE_REPLAY_ID)
+        .filter(|value| value.is_explicit())
+        .map(|value| antialiasing_name(value.current_value))
+        .unwrap_or_else(|| "default".to_string());
+
+    Ok(DLSSPresetStatus {
+        preset,
+        quality,
+        texture_quality,
+        antialiasing,
+    })
+}
+
+fn read_dlss_preset_status_from_file() -> Option<DLSSPresetStatus> {
+    let exe_path = std::env::current_exe().ok()?;
+    let parent_dir = exe_path.parent()?;
+    let status_path = parent_dir.join("delta_force_dlss_status.json");
+    let content = fs::read_to_string(status_path).ok()?;
+    serde_json::from_str::<DLSSPresetStatus>(&content).ok()
+}
+
 #[tauri::command]
 pub async fn get_dlss_settings_status() -> Result<DLSSSettingsStatus, String> {
     let dlss_indicator_enabled = get_dlss_indicator_registry_value();
@@ -655,20 +801,17 @@ pub async fn get_dlss_settings_status() -> Result<DLSSSettingsStatus, String> {
 
 #[tauri::command]
 pub async fn get_dlss_preset_status() -> Result<DLSSPresetStatus, String> {
-    let exe_path = std::env::current_exe()
-        .map_err(|e| format!("获取程序路径失败: {}", e))?;
-    let parent_dir = exe_path.parent().ok_or("无法获取父目录")?;
-    let status_path = parent_dir.join("delta_force_dlss_status.json");
+    read_dlss_preset_status_from_nvapi()
+        .or_else(|error| {
+            log::warn!("读取 NVIDIA DLSS Profile 失败，回退到状态文件: {error}");
+            read_dlss_preset_status_from_file().ok_or(error)
+        })
+}
 
-    if status_path.exists() {
-        let content = fs::read_to_string(&status_path)
-            .map_err(|e| format!("读取状态文件失败: {}", e))?;
-        if let Ok(status) = serde_json::from_str::<DLSSPresetStatus>(&content) {
-            return Ok(status);
-        }
-    }
-
-    Ok(DLSSPresetStatus { preset: "default".to_string(), quality: "default".to_string(), texture_quality: "default".to_string(), antialiasing: "default".to_string() })
+/// 用系统默认浏览器打开外部链接（不走内嵌窗口）
+#[tauri::command]
+pub fn open_url_in_system_browser(url: String) -> Result<(), String> {
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| format!("打开失败: {e}"))
 }
 
 /// 在独立 WebView 窗口中打开外部平台链接，iframe 内嵌支持完整跳转

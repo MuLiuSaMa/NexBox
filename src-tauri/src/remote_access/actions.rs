@@ -87,6 +87,8 @@ pub async fn exec_query(app: &tauri::AppHandle, key: &str, args: &Value) -> Resu
             .await
             .map(|active| json!({ "active": active }))),
         "apps.list" => v(crate::app_manager::list_installed_apps().await),
+        // 统一「当前播放」：软件内播放器 / 外部 SMTC，按优先级二选一
+        "music.state" => super::music::state_json(),
         _ => Err(format!("unknown query: {key}")),
     }
 }
@@ -120,6 +122,27 @@ pub async fn exec_action(app: &tauri::AppHandle, key: &str, args: &Value) -> Res
         "overlay.toggle" => v(crate::overlay_panel::toggle_overlay_panel(app.clone()).await),
         // 准心切换：直接调已有命令（内部同步置位 CROSSHAIR_ACTIVE，回读即准确）
         "crosshair.toggle" => v(crate::crosshair::toggle_crosshair(app.clone()).await),
+        // 音乐控制：source 缺省/auto 时按统一优先级打给当前生效来源
+        "music.play_pause" => {
+            let source = get_str(args, "source");
+            super::music::control(app, "play-pause", 0, source.as_deref())
+        }
+        "music.next" => {
+            let source = get_str(args, "source");
+            super::music::control(app, "next", 0, source.as_deref())
+        }
+        "music.prev" => {
+            let source = get_str(args, "source");
+            super::music::control(app, "prev", 0, source.as_deref())
+        }
+        "music.seek" => {
+            let position_ms = args
+                .get("positionMs")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| "缺少参数 positionMs".to_string())?;
+            let source = get_str(args, "source");
+            super::music::control(app, "seek", position_ms, source.as_deref())
+        }
         _ => Err(format!("unknown action: {key}")),
     }
 }

@@ -5,5 +5,7 @@ fn main() {
     if let Some(code) = nexbox_installer_lib::detect_silent_install() {
         std::process::exit(code);
     }
+    // GUI 模式依赖 WebView2 渲染，缺失时无法创建 Tauri 窗口，需在启动前原生提示并引导下载
+    nexbox_installer_lib::webview2::ensure_runtime_or_exit();
     nexbox_installer_lib::run()
 }

@@ -21,7 +21,7 @@ import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 
-const CURRENT_VERSION = "v10.0.0";
+const CURRENT_VERSION = "v10.1.3";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";

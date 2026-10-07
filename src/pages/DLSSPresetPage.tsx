@@ -36,8 +36,9 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { useNavigate } from "react-router-dom";
-import { getHardwareInfo, GpuInfo, GpuVendor } from "@/lib/hardware";
+import { getHardwareInfo, GpuInfo, GpuVendor, type HardwareInfo } from "@/lib/hardware";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { useAppStartup } from "@/contexts/app-startup-context";
 
 interface DLSSModelPreset {
   id: string;
@@ -206,15 +207,34 @@ function DLSSCard() {
   }, []);
 
   useEffect(() => {
-    invoke<DLSSPresetStatus>("get_dlss_preset_status")
-      .then((status) => {
-        setSelectedPreset(status.preset || "K");
-        setSelectedQuality(status.quality || "default");
-        setSelectedTextureQuality(status.texture_quality || "default");
-        setSelectedAntialiasing(status.antialiasing || "default");
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+    let cancelled = false;
+    const loadStatus = () => {
+      invoke<DLSSPresetStatus>("get_dlss_preset_status")
+        .then((status) => {
+          if (cancelled) return;
+          setSelectedPreset(status.preset || "default");
+          setSelectedQuality(status.quality || "default");
+          setSelectedTextureQuality(status.texture_quality || "default");
+          setSelectedAntialiasing(status.antialiasing || "default");
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setIsLoading(false);
+        });
+    };
+    const handleFocus = () => loadStatus();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") loadStatus();
+    };
+
+    loadStatus();
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
@@ -405,23 +425,44 @@ function DLSSCard() {
   );
 }
 
+/** 从硬件信息里挑出要展示的显卡：优先 NVIDIA 独显，否则取第一块 */
+function pickDisplayGpu(info: HardwareInfo | null): GpuInfo | null {
+  if (!info) return null;
+  return info.gpu.find((g) => g.vendor === GpuVendor.NVIDIA) || info.gpu[0] || null;
+}
+
 function GpuInfoCard() {
   const { config: themeConfig } = useThemeColor();
-  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // 复用应用启动时已加载的硬件信息：进页面即可同步渲染，不再每次重新扫描全量硬件
+  const { hardwareInfo } = useAppStartup();
+  const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(() => pickDisplayGpu(hardwareInfo));
+  const [isLoading, setIsLoading] = useState(!hardwareInfo);
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
   useEffect(() => {
+    // 全局缓存就绪：直接使用，零等待
+    if (hardwareInfo) {
+      setGpuInfo(pickDisplayGpu(hardwareInfo));
+      setIsLoading(false);
+      return;
+    }
+    // 仅当全局缓存尚未加载时才自行获取（兜底）
+    let cancelled = false;
+    setIsLoading(true);
     getHardwareInfo()
       .then((info) => {
-        const nvidiaGpu = info.gpu.find((g) => g.vendor === GpuVendor.NVIDIA);
-        setGpuInfo(nvidiaGpu || info.gpu[0] || null);
+        if (!cancelled) setGpuInfo(pickDisplayGpu(info));
       })
       .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hardwareInfo]);
 
   if (isLoading || !gpuInfo) return null;
 
