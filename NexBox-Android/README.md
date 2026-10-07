@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="新境盒" width="820" style="">
+  <img src="docs/banner-1.png" alt="新境盒" width="820" style="">
 </p>
 
 <h1 align="center">新境盒-安卓端</h1>
