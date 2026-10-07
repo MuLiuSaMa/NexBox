@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icon.png" alt="新境盒" width="128">
+  <img src="docs/banner.png" alt="新境盒" width="820" style="">
 </p>
 
 <h1 align="center">新境盒-安卓端</h1>
@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/license-GPL--3.0-green?style=flat-square" alt="License">
 </p>
 
-新境盒（NexBox）的安卓伴侣 App，与 [NexBox PC 端](../README.md)在同一局域网内配对，用手机查看电脑、互传文件、掌握游戏资讯。Kotlin + Jetpack Compose 原生开发，整机采用液态玻璃视觉语言。
+新境盒（NexBox）的安卓 App，与 [NexBox PC 端](../README.md)在同一局域网内配对，用手机查看电脑、互传文件、掌握游戏资讯。Kotlin + Jetpack Compose 原生开发，整机采用液态玻璃视觉语言。
 
 > 本目录随主仓库分发维护，即主仓库的 `NexBox-Android/` 子目录。
 
@@ -39,7 +39,7 @@
 
 | 项目 | 要求 |
 | --- | --- |
-| **操作系统** | Android 8.0 及以上 |
+| **操作系统** | Android 8.0 及以上（液态玻璃需13.0及以上） |
 | **配对设备** | 同一局域网内运行 NexBox 的 Windows 电脑 |
 
 ## 下载
