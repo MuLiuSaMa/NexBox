@@ -1,0 +1,37 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+
+# 签名证书与口令：绝对不能入库（口令走 local.properties，证书放仓库外）
+*.jks
+*.keystore
+*.p12
+keystore.properties
+*.dex
+/app/build/
+build/
+# Keep
+!gradle-wrapper.jar
+
+# debug temp
+ui_now.xml
+screen_now.png
+color_sample.txt
+*.log
+.kotlin/
+
+# AI 编程工具工作区（图标备份与记忆，仅本地保留）
+.workbuddy-ai/
+
+# 字体原始拷贝（与 app/src/main/res/font/misans.ttf 完全相同，勿重复入库）
+/MiSansVF.ttf

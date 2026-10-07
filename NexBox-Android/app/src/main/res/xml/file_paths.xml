@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件互传「打开」按钮的 FileProvider 共享路径：
+     旧系统（API 26-28）无权限时互传文件落在应用私有 Download 目录 -->
+<paths>
+    <external-path
+        name="public_downloads"
+        path="Download/NexBox" />
+    <external-files-path
+        name="app_downloads"
+        path="Download" />
+    <files-path
+        name="internal_files"
+        path="." />
+</paths>
