@@ -107,6 +107,8 @@ ChineseSimplified.isl
 
 # README
 README.md
+# 安卓端说明文档随源码分发，需要放行
+!NexBox-Android/README.md
 
 # Build output (frontend)
 dist/
