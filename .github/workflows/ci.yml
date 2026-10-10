@@ -3,6 +3,7 @@ on:
   push:
     branches: [main, master]
   pull_request:
+
 jobs:
   web:
     runs-on: ubuntu-latest
@@ -13,11 +14,9 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      # 移除 npm run lint，规避 eslint-config-next 模块缺失报错
       - run: npm run build
 
   tauri:
-    # 增加 needs: web，web构建成功后才开始编译tauri，避免无效编译
     needs: web
     runs-on: windows-latest
     steps:
@@ -27,6 +26,23 @@ jobs:
           node-version: "22"
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli
       - run: npm ci
       - run: npm run build
-      - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Build Tauri Windows Installer
+        run: cargo tauri build
+      # ========== SignPath 签名步骤（你后续填入Secret即可启用） ==========
+      # - name: SignPath Code Signing
+      #   uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     project-slug: 你的项目slug
+      #     signing-policy-slug: release
+      #   env:
+      #     SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      # ========== 上传打包产物为Artifact ==========
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexbox-windows-installer
+          path: src-tauri/target/release/bundle/msi/*.msi
