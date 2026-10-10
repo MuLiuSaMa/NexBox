@@ -26,23 +26,6 @@ jobs:
           node-version: "22"
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install Tauri CLI
-        run: cargo install tauri-cli
       - run: npm ci
       - run: npm run build
-      - name: Build Tauri Windows Installer
-        run: cargo tauri build
-      # ========== SignPath 签名步骤（你后续填入Secret即可启用） ==========
-      # - name: SignPath Code Signing
-      #   uses: signpath/github-action-submit-signing-request@v1
-      #   with:
-      #     project-slug: 你的项目slug
-      #     signing-policy-slug: release
-      #   env:
-      #     SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
-      # ========== 上传打包产物为Artifact ==========
-      - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: nexbox-windows-installer
-          path: src-tauri/target/release/bundle/msi/*.msi
+      - run: cargo check --manifest-path src-tauri/Cargo.toml
