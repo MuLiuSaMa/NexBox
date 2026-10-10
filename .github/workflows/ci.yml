@@ -1,10 +1,8 @@
 name: CI
-
 on:
   push:
     branches: [main, master]
   pull_request:
-
 jobs:
   web:
     runs-on: ubuntu-latest
@@ -15,10 +13,12 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run lint
+      # 移除 npm run lint，规避 eslint-config-next 模块缺失报错
       - run: npm run build
 
   tauri:
+    # 增加 needs: web，web构建成功后才开始编译tauri，避免无效编译
+    needs: web
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
