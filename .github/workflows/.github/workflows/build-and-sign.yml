@@ -2,7 +2,7 @@ name: Build & Sign NexBox
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 支持网页手动点击触发
+  workflow_dispatch: # 网页手动触发
 
 jobs:
   build-windows:
@@ -24,7 +24,7 @@ jobs:
       - name: Build Tauri App
         run: cargo tauri build
 
-      # 直接上传单独exe（不打包zip，对应你SignPath里<pe-file>工件配置）
+      # 直接上传单独exe，对应SignPath <pe-file>
       - name: Upload unsigned EXE artifact
         id: upload-unsigned-artifact
         uses: actions/upload-artifact@v4
