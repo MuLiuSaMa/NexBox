@@ -26,14 +26,14 @@ private val Context.statisticsDataStore: DataStore<Preferences> by preferencesDa
 private data class StatisticsDto(val version: String, val os: String)
 
 /**
- * 首次启动统计：与 PC 端 sys_info.rs 同口径，启动后上报一次到 mc.sjtu.cn。
+ * 首次启动统计：与 PC 端 sys_info.rs 同口径，启动后上报一次到 nexbox.cn。
  * 标志落在独立 DataStore（对应 PC 的 statistics-sent.json）；
  * 与 PC 一致：无论请求成败都写标志，每台机器只尝试一次，失败静默不重试。
  */
 object StatisticsReporter {
 
     private const val TAG = "Statistics"
-    private const val URL = "https://mc.sjtu.cn/api-sjmcl/statistics"
+    private const val URL = "https://nexbox.cn/api/statistics"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
