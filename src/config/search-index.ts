@@ -200,6 +200,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["显卡", "改写", "gpu", "rename", "伪装"],
   },
   {
+    id: "cpu-rename",
+    nameKey: "sidebar.cpuRename",
+    path: "/cpu-rename",
+    icon: Cpu,
+    category: "builtin-tool",
+    keywords: ["cpu", "处理器", "改名", "改名卡", "娱乐", "rename"],
+  },
+  {
     id: "nvidia-driver",
     nameKey: "sidebar.nvidiaDriver",
     path: "/nvidia-driver",

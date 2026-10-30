@@ -1,12 +1,10 @@
 import {
   Box,
   Button,
-  Heading,
   Text,
   VStack,
   useColorModeValue,
   HStack,
-  IconButton,
   Card,
   CardBody,
   Input,
@@ -16,7 +14,6 @@ import {
   TabPanels,
   TabPanel,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useEffect, useState } from "react";
@@ -24,8 +21,9 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Monitor } from "lucide-react";
+
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
@@ -52,10 +50,8 @@ export default function GpuRenamePage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const toast = useDynamicIsland("gpu");
-  const navigate = useNavigate();
 
   const { getActiveColor, getContrastTextColor } = useThemeColor();
-  const adaptiveTitle = useAdaptiveTextColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
 
@@ -263,22 +259,12 @@ export default function GpuRenamePage() {
       : `${g.name} (${t("gpuRename.discrete")})`,
   }));
 
-  const content = (
-    <VStack align="start" spacing={6}>
-      <HStack>
-        <IconButton
-          aria-label={t("builtinTools.back")}
-          icon={<ArrowLeft size={20} />}
-          variant="ghost"
-          onClick={() => navigate("/builtin-tools")}
-          color={headingColor}
-        />
-        <Monitor size={28} color={headingColor} />
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("gpuRename.title")}
-        </Heading>
-      </HStack>
+  const header = (
+    <PageHeader title={t("gpuRename.title")} mb={6} />
+      );
 
+      const content = (
+      <VStack align="start" spacing={6}>
       {loading ? (
         <Text color={textColor}>{t("gpuRename.loading")}</Text>
       ) : (
@@ -440,6 +426,7 @@ export default function GpuRenamePage() {
 
   return (
     <Box pt={8}>
+      {header}
       {liquidGlassEnabled ? (
         <LiquidGlassCard
           w="full"

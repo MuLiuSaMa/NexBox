@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Button,
@@ -24,14 +23,12 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useProcessIcons } from "@/hooks/use-process-icons";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
   Gamepad2,
   FileSearch,
   ListFilter,
@@ -45,9 +42,10 @@ import {
   Search,
   Play,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
-import { useNavigate } from "react-router-dom";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface GameOptimizeConfig {
@@ -158,7 +156,7 @@ function CoreSelectionModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="md">
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="xl">
+      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="3xl">
         <ModalHeader color={headingColor}>
           {t("gameProcessOptimize.affinitySettings.title")}
           <Text fontSize="xs" color="gray.500" fontWeight="normal" mt={1}>
@@ -270,7 +268,7 @@ function ProcessPickerModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="xl" maxH="70vh">
+      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="3xl" maxH="70vh">
         <ModalHeader color={headingColor}>
           {t("gameProcessOptimize.fromProcess")}
           <Text fontSize="xs" color="gray.500" fontWeight="normal" mt={1}>
@@ -386,7 +384,7 @@ function FilterPickerModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="xl" maxH="70vh">
+      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="3xl" maxH="70vh">
         <ModalHeader color={headingColor}>
           {t("gameProcessOptimize.fromFilterList")}
           <Text fontSize="xs" color="gray.500" fontWeight="normal" mt={1}>
@@ -754,7 +752,6 @@ function GameCard({
 export default function GameProcessOptimizePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("gamepad");
-  const navigate = useNavigate();
   const { icons, ensureIcons } = useProcessIcons();
 
   const { liquidGlassEnabled } = useBackground();
@@ -762,7 +759,6 @@ export default function GameProcessOptimizePage() {
   const cardBg = useColorModeValue("white", "#111111");
   const borderColorVal = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [configs, setConfigs] = useState<GameOptimizeConfig[]>([]);
   const [autoStatuses, setAutoStatuses] = useState<Record<string, GameAutoStatus>>({});
@@ -1045,7 +1041,7 @@ export default function GameProcessOptimizePage() {
       return <LiquidGlassCard p={4} _hover={{ transform: "translateY(-2px)" }} transition="transform 0.2s">{content}</LiquidGlassCard>;
     }
     return (
-      <Box p={4} borderRadius="xl" bg={cardBg} border="1px solid" borderColor={borderColorVal} _hover={{ transform: "translateY(-2px)" }} transition="transform 0.2s">
+      <Box p={4} borderRadius="3xl" bg={cardBg} border="1px solid" borderColor={borderColorVal} _hover={{ transform: "translateY(-2px)" }} transition="transform 0.2s">
         {content}
       </Box>
     );
@@ -1053,19 +1049,7 @@ export default function GameProcessOptimizePage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6} flexWrap="wrap" gap={3}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/optimize")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("gameProcessOptimize.title")}
-          </Heading>
-        </HStack>
+      <PageHeader title={t("gameProcessOptimize.title")} mb={6}>
         {!isAdmin && (
           <Badge colorScheme="orange" variant="subtle" px={3} py={1} borderRadius="full" fontSize="xs">
             <HStack spacing={1}>
@@ -1074,11 +1058,7 @@ export default function GameProcessOptimizePage() {
             </HStack>
           </Badge>
         )}
-      </HStack>
-
-      <Text fontSize="sm" color="gray.500" mb={6}>
-        {t("gameProcessOptimize.subtitle")}
-      </Text>
+      </PageHeader>
 
       {/* 添加游戏区 */}
       <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mb={6}>

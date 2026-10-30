@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, useColorModeValue } from "@chakra-ui/react";
-import { ReactNode, useEffect, useRef, useState, useMemo } from "react";
+import { ReactNode, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { Sidebar } from "./sidebar";
 import { TitleBar } from "./title-bar";
@@ -56,6 +56,17 @@ export function MainLayout({ children }: MainLayoutProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoReady, setVideoReady] = useState(false);
   const idCounter = useRef(0);
+
+  // 切换页面时把主滚动容器复位到顶部。
+  // MainLayout 在路由切换时不重新挂载，滚动容器是同一个 DOM，
+  // 不复位的话「上一页滑到底 → 进新页面」会直接停在新页面底部。
+  useLayoutEffect(() => {
+    const el = document.getElementById("app-main-scroll");
+    if (el) {
+      el.scrollTop = 0;
+      el.scrollLeft = 0;
+    }
+  }, [location.pathname]);
 
   // MR 背景配色：适配主题色（config.primaryColor）或自定义颜色，派生三通道霓虹色
   const mrColors = useMemo(() => {

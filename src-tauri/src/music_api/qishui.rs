@@ -1622,6 +1622,20 @@ pub async fn qishui_feed_modes(app: AppHandle) -> Result<Vec<serde_json::Value>,
         return Err("汽水音乐未登录".into());
     }
     let json = qishui_signed_post(&app, &cookie, "/luna/pc/feed/mode", serde_json::json!({})).await?;
+    // 登录态失效时官方接口仍回 HTTP 200，只是带错误码 / 不含 feed_mode_block。
+    // 不校验业务码的话前端只会拿到空数组，被误报成「听歌模式获取失败」。
+    if let Err(e) = qishui_check_biz(&json) {
+        let lower = e.to_lowercase();
+        if lower.contains("登录")
+            || lower.contains("登陆")
+            || lower.contains("login")
+            || lower.contains("session")
+            || lower.contains("unauthorized")
+        {
+            return Err("汽水音乐登录已失效，请重新登录".into());
+        }
+        return Err(e);
+    }
     let mut out: Vec<serde_json::Value> = Vec::new();
     if let Some(blocks) = json.get("feed_mode_block").and_then(|v| v.as_array()) {
         for block in blocks {

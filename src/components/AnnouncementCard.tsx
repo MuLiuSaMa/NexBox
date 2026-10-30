@@ -207,7 +207,7 @@ export function AnnouncementCard() {
       ) : (
         <Box
           bg={cardBg}
-          borderRadius="xl"
+          borderRadius="3xl"
           border="1px solid"
           borderColor={borderColor}
           py={2}

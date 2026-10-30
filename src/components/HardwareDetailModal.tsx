@@ -81,7 +81,7 @@ export default function HardwareDetailModal({
         bg={contentBg}
         border="1px solid"
         borderColor={borderColor}
-        borderRadius="xl"
+        borderRadius="3xl"
         mx={4}
         maxH="80vh"
         overflow="hidden"

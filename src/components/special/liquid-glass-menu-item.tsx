@@ -55,7 +55,7 @@ export function LiquidGlassMenuItem({
       className={`jelly-bounce-menu-item${isReal ? " real-liquid-glass" : ""}`}
       onClick={onClick}
       cursor="pointer"
-      borderRadius="lg"
+      borderRadius="2xl"
       px={3}
       py={2.5}
       bg={isActive ? activeBg : (liquidGlassEnabled ? (isHovering ? glassHoverBg : glassInactiveBg) : (isHovering ? hoverBg : defaultInactiveBg))}

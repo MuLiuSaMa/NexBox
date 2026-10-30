@@ -100,6 +100,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
 import AdvancedPage from "@/pages/AdvancedPage";
 import { store } from "@/lib/store";
+import { STARTUP_PAGES, STARTUP_PAGE_STORE_KEY } from "@/config/startup-pages";
 import { getLanguagePreference, setLanguagePreference } from "@/lib/i18n";
 
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
@@ -215,8 +216,15 @@ function GeneralSettings() {
   const [sidebarShowLabel, setSidebarShowLabel] = useState(() => localStorage.getItem("nexbox_sidebar_show_label") !== "false");
   const [navVisibility, setNavVisibility] = useState<Record<string, boolean>>({});
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
+  const [startupPage, setStartupPage] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STARTUP_PAGE_STORE_KEY) || "/";
+    } catch {
+      return "/";
+    }
+  });
   const NAV_ORDER_KEY = "nexbox_nav_order";
-  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
   const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
   const navSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -458,7 +466,7 @@ function GeneralSettings() {
 
       // 导航可见性
       const visibilityMap: Record<string, boolean> = {};
-      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/music", "/delta-force", "/steam", "/epic-free", "/custom"]) {
+      for (const p of ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"]) {
         const key = `nexbox_nav_visible_${p.replace(/\//g, "").replace(/-/g, "_")}`;
         let vis = await store.get<boolean>(key);
         if (vis === null || vis === undefined) {
@@ -511,6 +519,17 @@ function GeneralSettings() {
       .then((enabled) => setAutoStart(enabled))
       .catch(() => {})
       .finally(() => setAutoStartLoading(false));
+
+    // 读取「默认启动页面」设置
+    store
+      .get<string>(STARTUP_PAGE_STORE_KEY)
+      .then((v) => {
+        if (typeof v === "string" && v) {
+          setStartupPage(v);
+          localStorage.setItem(STARTUP_PAGE_STORE_KEY, v);
+        }
+      })
+      .catch(() => {});
 
     // 读取"开机最小化启动"设置
     store
@@ -747,12 +766,17 @@ function GeneralSettings() {
     window.dispatchEvent(new CustomEvent("nav-order-changed"));
   }, [navOrder]);
 
-  const handleNavPositionChange = (value: string) => {
-    const newValue = value as "left" | "top";
+  const handleNavPositionChange = (value: string) => {    const newValue = value as "left" | "top";
     setNavPosition(newValue);
     localStorage.setItem("nexbox_nav_position", newValue);
     store.set("nexbox_nav_position", newValue).then(() => store.save());
     window.dispatchEvent(new CustomEvent("nav-position-changed", { detail: newValue }));
+  };
+
+  const handleStartupPageChange = (value: string) => {
+    setStartupPage(value);
+    localStorage.setItem(STARTUP_PAGE_STORE_KEY, value);
+    store.set(STARTUP_PAGE_STORE_KEY, value).then(() => store.save());
   };
 
   const handleAutoStartToggle = () => {
@@ -1323,6 +1347,37 @@ function GeneralSettings() {
           textTransform="uppercase"
           letterSpacing="0.05em"
         >
+          {t("settings.generalSettings.startupSection")}
+        </Text>
+        <LiquidGlassCard px={4} py={3} boxShadow="sm">
+          <HStack justify="space-between" py={2}>
+            <Box flex={1}>
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.generalSettings.startupPage")}
+              </Text>
+              <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                {t("settings.generalSettings.startupPageDesc")}
+              </Text>
+            </Box>
+            <CustomSelect
+              value={startupPage}
+              onChange={handleStartupPageChange}
+              options={STARTUP_PAGES.map((p) => ({ value: p.value, label: t(p.labelKey) }))}
+              width="140px"
+            />
+          </HStack>
+        </LiquidGlassCard>
+      </Box>
+
+      <Box mb={6}>
+        <Text
+          fontSize="xs"
+          fontWeight="semibold"
+          color={subLabelColor}
+          mb={3}
+          textTransform="uppercase"
+          letterSpacing="0.05em"
+        >
           {t("settings.navigation")}
         </Text>
         <LiquidGlassCard px={4} py={3} boxShadow="sm">
@@ -1387,6 +1442,7 @@ function GeneralSettings() {
                     "/tools": t("sidebar.tools"),
                     "/builtin-tools": t("sidebar.builtinTools"),
                     "/optimization": t("sidebar.optimization"),
+                    "/system-optimizer": t("sidebar.systemOptimizer"),
                     "/music": t("sidebar.music"),
                     "/delta-force": t("sidebar.deltaForce"),
                     "/steam": t("sidebar.steam"),
@@ -2757,7 +2813,7 @@ function SponsorSettings() {
             <Box
               w="180px"
               h="180px"
-              borderRadius="xl"
+              borderRadius="3xl"
               overflow="hidden"
               border="1px solid"
               borderColor={cardBorder}
@@ -2788,7 +2844,7 @@ function SponsorSettings() {
             <Box
               w="180px"
               h="180px"
-              borderRadius="xl"
+              borderRadius="3xl"
               overflow="hidden"
               border="1px solid"
               borderColor={cardBorder}
@@ -2957,7 +3013,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "10.2.1";
+  const currentVersion = "10.3.1";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Input,
@@ -18,10 +17,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
-  DownloadCloud,
   Pause,
   Play,
   X,
@@ -34,6 +30,8 @@ import {
   FileCheck2,
   FolderOpen,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
@@ -95,7 +93,6 @@ function formatEta(seconds: number): string {
 
 export default function DownloadAcceleratorPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useToast();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
@@ -464,20 +461,12 @@ export default function DownloadAcceleratorPage() {
 
   return (
     <VStack align="stretch" spacing={5} pb={10}>
-      <HStack>
-        <IconButton
-          aria-label="back"
-          icon={<ArrowLeft size={18} />}
-          variant="ghost"
-          onClick={() => navigate("/builtin-tools")}
-        />
-        <Heading size="lg" color={textColor}>
-          {t("sidebar.downloadAccelerator")}
-        </Heading>
-        <DownloadCloud size={26} color={themeColor} style={{ marginLeft: 4 }} />
+      <PageHeader
+        title={t("sidebar.downloadAccelerator")}
+        mb={0}
+      >
         <Tooltip label={t("downloadAccel.resetLearnedTip")} hasArrow>
           <Button
-            ml="auto"
             size="xs"
             variant="ghost"
             color={subTextColor}
@@ -491,7 +480,7 @@ export default function DownloadAcceleratorPage() {
             {resetDone ? t("downloadAccel.resetLearnedDone") : t("downloadAccel.resetLearned")}
           </Button>
         </Tooltip>
-      </HStack>
+      </PageHeader>
 
       <LiquidGlassCard forceGlass>
         <Box p={5}>

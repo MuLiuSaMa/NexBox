@@ -109,7 +109,7 @@ export function ImportantAnnouncementModal() {
       closeOnEsc={false}
     >
       <ModalOverlay />
-      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
+      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="3xl">
         <ModalHeader color={labelColor}>
           <VStack align="start" spacing={1}>
             <HStack>

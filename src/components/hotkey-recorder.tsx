@@ -218,7 +218,7 @@ export function HotkeyRecorder({
       onBlur={stopRecording}
       px={3}
       py={2}
-      borderRadius="lg"
+      borderRadius="xl"
       border="2px solid"
       borderColor={isRecording ? recordBorder : borderColor}
       bg={isRecording ? recordBg : "transparent"}

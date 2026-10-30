@@ -10,14 +10,14 @@ import {
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { ArrowLeft, MousePointer2, Keyboard, Mouse } from "lucide-react";
+import { MousePointer2, Keyboard, Mouse } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
 interface PeripheralStatus {
@@ -38,7 +38,6 @@ const RECOMMENDED = {
 
 export default function PeripheralOptimizePage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("mouse");
   const { liquidGlassEnabled } = useBackground();
 
@@ -59,7 +58,6 @@ export default function PeripheralOptimizePage() {
   const contrastText = getContrastTextColor();
   const themeColorHex = primaryColor || "#98DDD0";
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
-  const adaptiveTitle = useAdaptiveTextColor();
   const optionBg = useColorModeValue(themeColorRgba(0.1), themeColorRgba(0.15));
 
   useEffect(() => {
@@ -231,7 +229,7 @@ export default function PeripheralOptimizePage() {
     return (
       <Box
         w="full"
-        borderRadius="xl"
+        borderRadius="3xl"
         bg={isSelected ? optionBg : cardBg}
         border="2px solid"
         borderColor={isSelected ? themeColorHex : cardBorder}
@@ -245,28 +243,10 @@ export default function PeripheralOptimizePage() {
     );
   }
 
+  const header = <PageHeader title={t("peripheralOptimize.pageTitle")} mb={6} />;
+
   const content = (
     <VStack align="start" spacing={8}>
-      <HStack spacing={3}>
-        <Box
-          as="button"
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-          w={9}
-          h={9}
-          borderRadius="lg"
-          _hover={{ bg: useColorModeValue("gray.100", "rgba(255,255,255,0.08)") }}
-          onClick={() => navigate("/optimize")}
-          color={headingColor}
-        >
-          <ArrowLeft size={20} />
-        </Box>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {t("peripheralOptimize.pageTitle")}
-        </Heading>
-      </HStack>
-
       <Box w="full">
         <HStack spacing={2} mb={1}>
           <MousePointer2 size={18} color={themeColorHex} />
@@ -376,6 +356,7 @@ export default function PeripheralOptimizePage() {
   if (liquidGlassEnabled) {
     return (
       <Box pt={8}>
+        {header}
         <LiquidGlassCard w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
           {content}
         </LiquidGlassCard>
@@ -385,9 +366,10 @@ export default function PeripheralOptimizePage() {
 
   return (
     <Box pt={8}>
+      {header}
       <Box
         bg={cardBg}
-        borderRadius="xl"
+        borderRadius="3xl"
         borderWidth="1px"
         borderColor={cardBorder}
         w="full"

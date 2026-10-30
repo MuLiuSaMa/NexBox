@@ -109,7 +109,7 @@ export function RemoteMonitorDialog({ size = "sm" }: { size?: "sm" | "md" }) {
           color={contentColor}
           border="1px solid"
           borderColor={modalBorderColor}
-          borderRadius="xl"
+          borderRadius="3xl"
         >
           <ModalHeader>{t("overlayPanel.remoteMonitor.title") || "手机远程监控"}</ModalHeader>
           <ModalCloseButton />
@@ -139,7 +139,7 @@ export function RemoteMonitorDialog({ size = "sm" }: { size?: "sm" | "md" }) {
                   bg={hexToRgba(getActiveColor(), 0.08)}
                   border="1px solid"
                   borderColor={hexToRgba(getActiveColor(), 0.28)}
-                  borderRadius="xl"
+                  borderRadius="2xl"
                   p={4}
                 >
                   {info?.url ? (

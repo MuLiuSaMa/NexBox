@@ -6,9 +6,7 @@ import {
   Box,
   Button,
   Flex,
-  Heading,
   HStack,
-  IconButton,
   SimpleGrid,
   Spinner,
   Text,
@@ -18,13 +16,13 @@ import {
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, RefreshCw, ShieldCheck, ShieldOff, Cpu, AlertTriangle, RotateCcw, Wrench } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { RefreshCw, ShieldCheck, ShieldOff, Cpu, AlertTriangle, RotateCcw, Wrench } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface VtxStatus {
   hvci_enabled: boolean;
@@ -39,7 +37,6 @@ type ActionKind = "fix" | "restore";
 
 export default function VtxVirtualizationPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
@@ -49,8 +46,6 @@ export default function VtxVirtualizationPage() {
   const [isChecking, setIsChecking] = useState(true);
   const [actionKind, setActionKind] = useState<ActionKind | null>(null);
 
-  const adaptiveTitle = useAdaptiveTextColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#969696");
   const borderColor = useColorModeValue("gray.200", "rgba(255,255,255,0.16)");
@@ -169,31 +164,10 @@ export default function VtxVirtualizationPage() {
   return (
     <Box pt={8} w="full">
       <VStack align="stretch" spacing={5} w="full">
-        <Flex
-          direction={{ base: "column", md: "row" }}
-          justify="space-between"
-          align={{ base: "stretch", md: "center" }}
-          gap={4}
-          wrap="wrap"
+        <PageHeader
+          title={t("vtxVirtualization.title")}
+          mb={0}
         >
-          <HStack spacing={3} minW={0}>
-            <IconButton
-              aria-label={t("builtinTools.back")}
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate("/builtin-tools")}
-              color={headingColor}
-              flexShrink={0}
-            />
-            <Box minW={0}>
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
-                {t("vtxVirtualization.title")}
-              </Heading>
-              <Text mt={1} fontSize="sm" color={subLabelColor} noOfLines={2}>
-                {t("vtxVirtualization.subtitle")}
-              </Text>
-            </Box>
-          </HStack>
           <Button
             size="sm"
             variant="outline"
@@ -206,7 +180,7 @@ export default function VtxVirtualizationPage() {
           >
             {t("vtxVirtualization.refresh")}
           </Button>
-        </Flex>
+        </PageHeader>
 
         {!status && isChecking && (
           <LiquidGlassCard p={6} boxShadow="sm" w="full">

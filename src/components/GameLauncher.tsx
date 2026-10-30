@@ -744,7 +744,7 @@ export default function GameLauncher() {
 
       <Modal isOpen={isOpen} onClose={onClose} isCentered>
         <ModalOverlay />
-        <ModalContent bg={useColorModeValue("white", "#111111")} borderRadius="xl">
+        <ModalContent bg={useColorModeValue("white", "#111111")} borderRadius="3xl">
           <ModalHeader color={titleColor}>{t("gameLauncher.addGame")}</ModalHeader>
           <ModalCloseButton />
           <ModalBody>

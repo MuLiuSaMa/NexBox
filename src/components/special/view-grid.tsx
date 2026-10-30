@@ -75,7 +75,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
 
   const cardContent = (
     <>
-      {tool.beta && (
+      {(tool.badge || tool.beta) && (
         <Box
           position="absolute"
           top={2}
@@ -89,7 +89,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
           borderRadius="full"
           zIndex={1}
         >
-          BETA
+          {tool.badge || "BETA"}
         </Box>
       )}
       <VStack align="start" spacing={4}>
@@ -130,7 +130,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
   ) : (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={6}
       minH="200px"
       border="2px solid"
@@ -201,7 +201,7 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
 
   const cardContent = (
     <>
-      {tool.beta && (
+      {(tool.badge || tool.beta) && (
         <Box
           position="absolute"
           top={2}
@@ -215,7 +215,7 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
           borderRadius="full"
           zIndex={1}
         >
-          BETA
+          {tool.badge || "BETA"}
         </Box>
       )}
       <VStack align="start" spacing={4}>
@@ -267,7 +267,7 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
       <PressTilt color={tool.color}>
         <Box
           bg={cardBg}
-          borderRadius="xl"
+          borderRadius="3xl"
           p={6}
           minH="200px"
           cursor="pointer"

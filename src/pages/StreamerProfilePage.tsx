@@ -2,20 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Flex,
-  Button,
   IconButton,
   Spinner,
   useColorModeValue,
   Tooltip,
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   ChevronDown,
   Gamepad2,
   SlidersHorizontal,
@@ -33,10 +30,11 @@ import {
   Check,
   CircleDot,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { Surface } from "@/components/df/surface";
 import { StreamerProfileCard } from "@/components/df/StreamerProfileCard";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import {
   loadStreamerLibrary,
   displayValue,
@@ -260,7 +258,7 @@ function GroupCard({ group, fields }: { group: SettingGroup; fields: SettingFiel
 
   // 标题栏与内容区同底：不加独立背景/色条，玻璃感由外层面板统一提供
   return (
-    <Box border="1px solid" borderColor={cardBorder} borderRadius="xl" overflow="hidden">
+    <Box border="1px solid" borderColor={cardBorder} borderRadius="3xl" overflow="hidden">
       <HStack px={{ base: 3, md: 4 }} py={2.5} spacing={2}>
         <Text fontSize="sm" fontWeight="700" color={textColor}>
           {group.title}
@@ -433,14 +431,11 @@ function TogglePill({
 
 export default function StreamerProfilePage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#8a8a8a");
   const borderColor = useColorModeValue("gray.200", "#2c2c2c");
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [entries, setEntries] = useState<StreamerEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -506,15 +501,7 @@ export default function StreamerProfilePage() {
   if (error) {
     return (
       <Box pt={8} pb={8}>
-        <Button
-          size="sm"
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          color={headingColor}
-          onClick={() => navigate("/delta-force/streamers")}
-        >
-          {t("deltaForce.back", "返回")}
-        </Button>
+        <PageBackButton size="sm" />
         <Surface p={8} mt={4} textAlign="center">
           <Text fontSize="sm" color={subTextColor}>
             {t("streamerSettings.loadFailed", "主播数据加载失败")}：{error}
@@ -535,15 +522,7 @@ export default function StreamerProfilePage() {
   if (!entry) {
     return (
       <Box pt={8} pb={8}>
-        <Button
-          size="sm"
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          color={headingColor}
-          onClick={() => navigate("/delta-force/streamers")}
-        >
-          {t("deltaForce.back", "返回")}
-        </Button>
+        <PageBackButton size="sm" />
         <Surface p={10} mt={4} textAlign="center">
           <Text fontSize="sm" color={subTextColor}>
             {t("streamerSettings.notFound", "没有找到这位主播")}
@@ -557,23 +536,17 @@ export default function StreamerProfilePage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack mb={6} spacing={4}>
-        <Button
-          size="sm"
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          color={headingColor}
-          onClick={() => navigate("/delta-force/streamers")}
-        >
-          {t("deltaForce.back", "返回")}
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {entry.name}
-        </Heading>
-        <Text fontSize="sm" color={subTextColor} pt={1}>
-          {entry.game}
-        </Text>
-      </HStack>
+      <PageHeader
+        title={
+          <HStack spacing={2} justify="center">
+            <Text as="span">{entry.name}</Text>
+            <Text as="span" fontSize="sm" fontWeight="400" opacity={0.65}>
+              {entry.game}
+            </Text>
+          </HStack>
+        }
+        mb={6}
+      />
 
       {/* 左右排版：左=主播个人信息 / 外设，右=设置面板。
           断点用 md 而不是 xl —— 主窗口默认 1230px，用 xl(1280) 会退化成上下堆叠。 */}

@@ -34,7 +34,7 @@ export function Surface({
     <Box
       className={cls}
       bg={bg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor={border}
       {...rest}

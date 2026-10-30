@@ -1,14 +1,12 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Button,
   SimpleGrid,
   useColorModeValue,
   Badge,
-  IconButton,
   Switch,
   Tooltip,
 } from "@chakra-ui/react";
@@ -16,12 +14,12 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Gauge, Cpu, Zap, Settings2, Shield, Info } from "lucide-react";
+import { Gauge, Cpu, Zap, Settings2, Shield, Info } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
-import { useNavigate } from "react-router-dom";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface AcGroup {
   key: string;
@@ -156,9 +154,7 @@ function ActionItem({
 export default function AntiCheatOptimizePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("shield");
-  const navigate = useNavigate();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -352,26 +348,9 @@ export default function AntiCheatOptimizePage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/optimize")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("optimization.aceOptimize.title")}
-          </Heading>
-        </HStack>
-      </HStack>
+      <PageHeader title={t("optimization.aceOptimize.title")} mb={6} />
 
-      <Box w="100%" maxW="1500px" mx="auto" px={{ base: 2, md: 4 }}>
-        <Text fontSize="sm" color={subTextColor} mb={5}>
-          按反作弊分组逐个限制资源，将反作弊进程降级并锁到 E 核（小核），释放性能给游戏。被反作弊句柄保护的进程可能无法压制，属正常现象。
-        </Text>
-
+        <Box w="100%" maxW="1500px" mx="auto" px={{ base: 2, md: 4 }}>
         {groups.length === 0 && (
           <Text color={subTextColor} fontSize="sm">加载中...</Text>
         )}
@@ -382,7 +361,7 @@ export default function AntiCheatOptimizePage() {
             return liquidGlassEnabled ? (
               <LiquidGlassCard key={g.key} p={5}>{content}</LiquidGlassCard>
             ) : (
-              <Box key={g.key} bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+              <Box key={g.key} bg={cardBg} borderRadius="3xl" p={5} border="1px solid" borderColor={borderColor}>
                 {content}
               </Box>
             );

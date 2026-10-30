@@ -2,11 +2,9 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
   Badge,
-  Button,
   useColorModeValue,
   Spinner,
   SimpleGrid,
@@ -17,9 +15,9 @@ import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Wrench, FileText, BarChart3, ShieldBan, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { Wrench, FileText, BarChart3, ShieldBan, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 
 interface UpdateState {
   services_disabled: boolean;
@@ -32,9 +30,7 @@ interface UpdateState {
 export default function WindowsUpdatePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("download");
-  const navigate = useNavigate();
 
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const descColor = useColorModeValue("gray.600", "#ffffff");
@@ -260,7 +256,6 @@ export default function WindowsUpdatePage() {
     setIsOperating(false);
   };
 
-
   const StatusCard = ({
     icon: Icon,
     label,
@@ -305,23 +300,10 @@ export default function WindowsUpdatePage() {
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
       {/* Header */}
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-                    返回
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("windowsUpdate.pageTitle")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
+      <PageHeader title={t("windowsUpdate.pageTitle")} mb={6} />
 
-      {/* Description */}
-      <Text fontSize="sm" color={subTextColor} textAlign="center">
+        {/* Description */}
+        <Text fontSize="sm" color={subTextColor} textAlign="center">
         {t("windowsUpdate.pageDesc")}
       </Text>
 

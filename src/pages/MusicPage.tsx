@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback, useMemo, memo } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-
 import { useLocation } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
@@ -84,6 +83,7 @@ import {
   AlertCircle,
   History,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider, PlayHistoryEntry } from "@/types/music";
@@ -1494,7 +1494,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
             /* 普通模式 */
             <Box
               position="relative"
-              borderRadius="2xl"
+              borderRadius="3xl"
               overflow="hidden"
               boxShadow="2xl"
               sx={{
@@ -1508,7 +1508,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 w={{ base: "200px", md: "280px", lg: "320px" }}
                 h={{ base: "200px", md: "280px", lg: "320px" }}
                 objectFit="cover"
-                fallback={<Box w="280px" h="280px" bg="gray.700" borderRadius="2xl" />}
+                fallback={<Box w="280px" h="280px" bg="gray.700" borderRadius="3xl" />}
               />
             </Box>
           )}
@@ -2057,7 +2057,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     ? createPortal(playerEl, document.body)
     : playerEl;
 });
-
 
 // ═══════════════════════════════════════════════
 // 播放时间格式化工具
@@ -4009,16 +4008,28 @@ export default function MusicPage() {
 
   // 汽水：进入汽水源后探测签名依赖（Node 包）并拉取「听歌模式」列表
   const qishuiDeps = useMusicStore((s) => s.qishuiDeps);
-  // null = 尚未请求；数组 = 已请求（空数组说明接口失败或无模式，据此结束 loading 态）
+  // null = 尚未请求；数组 = 已请求（空数组说明接口成功但没有模式，或彻底失败，靠 qishuiFeedError 区分）
   const [qishuiFeedModes, setQishuiFeedModes] = useState<QishuiFeedMode[] | null>(null);
-  const loadQishuiFeedModes = useCallback(() => {
+  const [qishuiFeedError, setQishuiFeedError] = useState<string | null>(null);
+  const loadQishuiFeedModes = useCallback(async () => {
     setQishuiFeedModes(null);
-    invoke<QishuiFeedMode[]>("qishui_feed_modes")
-      .then((modes) => setQishuiFeedModes(modes ?? []))
-      .catch((e) => {
+    setQishuiFeedError(null);
+    // 首次失败多半是 Node 签名进程抖动（冷启动/并发），等一下重试一次再报错
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const modes = await invoke<QishuiFeedMode[]>("qishui_feed_modes");
+        setQishuiFeedModes(modes ?? []);
+        return;
+      } catch (e) {
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          continue;
+        }
         console.error("qishui_feed_modes failed:", e);
+        setQishuiFeedError(String(e));
         setQishuiFeedModes([]);
-      });
+      }
+    }
   }, []);
   useEffect(() => {
     if (playbackSource !== "qishui" || !loginInfo?.logged_in) return;
@@ -4706,16 +4717,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
       >
         <HStack spacing={3} flexShrink={0}>
-          <Tooltip label="返回">
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowLeft size={18} />}
-              size="sm"
-              variant="ghost"
-              onClick={handleBack}
-              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-            />
-          </Tooltip>
+          <PageBackButton size="sm" onClick={handleBack} />
           {selectedArtist && (
             <HStack spacing={3}>
               <ChakraImage
@@ -5339,16 +5341,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
       >
         <HStack spacing={3} flexShrink={0}>
-          <Tooltip label="返回">
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowLeft size={18} />}
-              size="sm"
-              variant="ghost"
-              onClick={handleBackToMain}
-              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-            />
-          </Tooltip>
+          <PageBackButton size="sm" onClick={handleBackToMain} />
           <Text fontSize="lg" fontWeight="bold" color={textColor}>
             搜索 "{searchInput}"
           </Text>
@@ -5628,16 +5621,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         sx={{ maxWidth: "100%", overflowX: "hidden", position: "relative" }}
       >
         <HStack spacing={3} flexShrink={0}>
-          <Tooltip label="返回">
-            <IconButton
-              aria-label="Back"
-              icon={<ArrowLeft size={18} />}
-              size="sm"
-              variant="ghost"
-              onClick={handleBackToUnifiedSearch}
-              sx={{ color: activeColor, _hover: { bg: hoverBg } }}
-            />
-          </Tooltip>
+          <PageBackButton size="sm" onClick={handleBackToUnifiedSearch} />
           <Text fontSize="lg" fontWeight="bold" color={textColor}>
             全部歌手 - "{searchInput}"
           </Text>
@@ -6351,10 +6335,38 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                             </Button>
                           )}
                         </>
+                      ) : qishuiFeedError ? (
+                        <>
+                          <Text color={subTextColor} fontSize="sm" textAlign="center">
+                            听歌模式加载失败
+                          </Text>
+                          <Text color={subTextColor} fontSize="xs" textAlign="center" noOfLines={3}>
+                            {qishuiFeedError}
+                          </Text>
+                          {qishuiFeedError.includes("登录") && (
+                            <Button
+                              size="xs"
+                              bg={activeColor}
+                              color={contrastText}
+                              _hover={{ opacity: 0.9 }}
+                              onClick={() => void storeActions.openQishuiQr()}
+                            >
+                              重新登录
+                            </Button>
+                          )}
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            color={activeColor}
+                            onClick={loadQishuiFeedModes}
+                          >
+                            重新加载
+                          </Button>
+                        </>
                       ) : qishuiFeedModes ? (
                         <>
                           <Text color={subTextColor} fontSize="sm" textAlign="center">
-                            听歌模式获取失败（可能需要重新登录）
+                            暂无可用听歌模式
                           </Text>
                           <Button
                             size="xs"

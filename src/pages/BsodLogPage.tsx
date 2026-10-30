@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   SimpleGrid,
@@ -27,12 +26,9 @@ import {
   useToast,
   Collapse,
 } from "@chakra-ui/react";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
-  ScrollText,
   RefreshCw,
   FolderOpen,
   AlertTriangle,
@@ -42,9 +38,10 @@ import {
   ChevronRight,
   Search as IconSearch,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { hexToRgba } from "@/lib/color-utils";
 
 // ---------------------------------------------------------------------------
@@ -388,11 +385,9 @@ function FindingCard({ f, index }: { f: Finding; index: number }) {
 // ============================================================================
 export default function BsodLogPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, config: themeConfig, getContrastTextColor } = useThemeColor();
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
@@ -433,17 +428,7 @@ export default function BsodLogPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6} flexWrap="wrap" gap={2}>
-        <HStack>
-          <IconButton aria-label={t("builtinTools.back")} icon={<ArrowLeft size={20} />}
-            variant="ghost" onClick={() => navigate("/builtin-tools")} color={headingColor} />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            <HStack spacing={2}>
-              <ScrollText size={24} />
-              <Text>{t("bsodLog.title")}</Text>
-            </HStack>
-          </Heading>
-        </HStack>
+      <PageHeader title={t("bsodLog.title")} mb={6}>
         <HStack spacing={2}>
           <Button leftIcon={<FolderOpen size={16} />} variant="outline" size="sm" onClick={handleOpenDumpDir}>
             {t("bsodLog.openDumpDir")}
@@ -453,7 +438,7 @@ export default function BsodLogPage() {
             {t("bsodLog.refresh")}
           </Button>
         </HStack>
-      </HStack>
+      </PageHeader>
 
       {loading && !data && (
         <VStack py={20} spacing={4}>

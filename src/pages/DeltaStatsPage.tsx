@@ -48,15 +48,15 @@ import {
   Coins,
   CheckCircle2,
   AlertCircle,
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useNavigate } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import qqPlatformLogo from "@/assets/df-qq.webp";
 import wechatPlatformLogo from "@/assets/df-wechat.webp";
 
@@ -1119,7 +1119,7 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
             maxW="min(880px, 92vw)"
             maxH="90vh"
             overflowY="auto"
-            borderRadius="2xl"
+            borderRadius="3xl"
             border="1px solid"
             borderColor={modalBorder}
             bg={modalBg}
@@ -2137,7 +2137,7 @@ function Collections() {
           <Box
             w="100%"
             maxW="min(520px, 90vw)"
-            borderRadius="2xl"
+            borderRadius="3xl"
             border="1px solid"
             borderColor={modalBorder}
             bg={modalBg}
@@ -2182,7 +2182,6 @@ export default function DeltaStatsPage() {
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#888888");
   const toast = useToast();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [login, setLogin] = useState<DfLoginState | null>(null);
   const [loading, setLoading] = useState(true);
@@ -2286,20 +2285,7 @@ export default function DeltaStatsPage() {
   return (
     <Box position="relative" w="100%" minW={0}>
       {/* 顶部标题栏 */}
-      <HStack justify="space-between" align="center" mb={5} wrap="wrap" spacing={3}>
-        <HStack spacing={3} align="center">
-          <Tooltip label="返回三角洲专区">
-            <IconButton
-              aria-label="返回三角洲专区"
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              color={textColor}
-              onClick={() => navigate("/delta-force")}
-            />
-          </Tooltip>
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>战绩分析</Heading>
-          <Text fontSize="xs" color={subTextColor}>三角洲行动 · WeGame 数据</Text>
-        </HStack>
+      <PageHeader title="战绩分析" mb={5}>
         {login?.logged_in && (
           <HStack spacing={2}>
             <HStack
@@ -2311,7 +2297,7 @@ export default function DeltaStatsPage() {
               border="1px solid"
               borderColor={borderColor}
               maxW="220px"
-            >
+      >
               <Box w="20px" h="20px" borderRadius="full" overflow="hidden" bg={`${primaryColor}22`} display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
                 {userAvatar ? (
                   <img src={userAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
@@ -2334,7 +2320,7 @@ export default function DeltaStatsPage() {
             </Tooltip>
           </HStack>
         )}
-      </HStack>
+      </PageHeader>
 
       {loading ? (
         <HStack justify="center" py={20}><Spinner size="md" color={primaryColor} /></HStack>

@@ -50,7 +50,7 @@ export function UpdateModal() {
   return (
     <Modal isOpen={isModalOpen} onClose={closeModal} isCentered closeOnOverlayClick>
       <ModalOverlay />
-      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
+      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="3xl">
         <ModalHeader color={labelColor}>
           {t("settings.aboutSettings.updateModal.title")}
         </ModalHeader>

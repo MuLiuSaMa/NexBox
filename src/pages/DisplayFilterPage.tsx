@@ -1,7 +1,6 @@
 import {
   Box,
   Flex,
-  Heading,
   Text,
   VStack,
   HStack,
@@ -39,7 +38,6 @@ import {
   Progress,
   Portal,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
@@ -47,17 +45,34 @@ import { ThemeSwitch } from "@/components/special/theme-switch";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { 
-  Sun, BookOpen, Monitor, Sparkles, RotateCcw, 
-  Film, Heart, Palette, Gamepad2, Settings2, ArrowLeft,
-  Upload, Trash2, FileImage, Download, Bookmark, Trophy,
-  ChevronLeft, ChevronRight, Check, ChevronDown
+import {
+  Sun,
+  BookOpen,
+  Monitor,
+  Sparkles,
+  RotateCcw,
+  Film,
+  Heart,
+  Palette,
+  Gamepad2,
+  Settings2,
+  Upload,
+  Trash2,
+  FileImage,
+  Download,
+  Bookmark,
+  Trophy,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+  ChevronDown,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useNavigate } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { store } from "@/lib/store";
@@ -370,9 +385,7 @@ const modeParams: Record<number, { gamma: number; sCurve: number; rBoost: number
 };
 
 export default function DisplayFilterPage() {
-  const navigate = useNavigate();
   const { filterHotkey, saveFilterHotkey } = useAppStartup();
-  const adaptiveTitle = useAdaptiveTextColor();
   const [settings, setSettings] = useState<FilterSettings>({
     temperature: 6500,
     brightness: 100,
@@ -2212,7 +2225,6 @@ export default function DisplayFilterPage() {
     />
   );
 
-
   /** 拇指调试风格的简洁滑块：标题 + 实时数值一行，纯 Chakra Slider（无玻璃容器，重绘开销最小）。
    *  onChange = 拖动中（更新预览 + 开关开启时实时写屏，applyCustomLive 内部已做
    *  latest-wins 串行化，拖多快都只有一个 invoke 在飞）；onCommit = 松手兜底落屏。
@@ -2274,69 +2286,59 @@ export default function DisplayFilterPage() {
     [sliderBg, primaryColor, subTextColor]
   );
 
-  const content = (
-    <VStack align="start" spacing={6}>
-      <Flex justify="space-between" align="flex-start" w="full" gap={4}>
-        <HStack flexShrink={0}>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700" whiteSpace="nowrap">
-            {t("displayFilter.title")}
-          </Heading>
-        </HStack>
-        <VStack align="flex-end" spacing={1} flex={1} minW={0}>
-          <HStack justify="flex-end">
-            <Tooltip label={t("displayFilter.resetDefault")}>
-              <IconButton
-                aria-label="Reset"
-                icon={<RotateCcw size={18} />}
-                variant="ghost"
-                onClick={resetToDefault}
+  const header = (
+    <PageHeader title={t("displayFilter.title")} mb={6}>
+      <VStack align="flex-end" spacing={1} flex={1} minW={0}>
+        <HStack justify="flex-end">
+          <Tooltip label={t("displayFilter.resetDefault")}>
+            <IconButton
+              aria-label="Reset"
+              icon={<RotateCcw size={18} />}
+              variant="ghost"
+              onClick={resetToDefault}
+              isDisabled={isLoading}
+            />
+          </Tooltip>
+          <HStack spacing={4} flexWrap="wrap" justify="flex-end">
+            <HotkeyRecorder
+              value={filterHotkey}
+              onChange={async (val) => {
+                const err = await saveFilterHotkey(val);
+                toast({
+                  title: err
+                    ? err
+                    : (t("displayFilter.hotkeySaved") || "快捷键已保存"),
+                  status: err ? "error" : "success",
+                  duration: 2000,
+                  isClosable: true,
+                });
+              }}
+            />
+            <HStack
+              bg={settings.is_active ? hexToRgba(primaryColor, 0.2) : sliderBg}
+              px={4}
+              py={2}
+              borderRadius="xl"
+              border="1px solid"
+              borderColor={settings.is_active ? primaryColor : "transparent"}
+            >
+              <Text color={textColor} fontSize="sm" fontWeight="500">
+                {t("displayFilter.enable")}
+              </Text>
+              <ThemeSwitch
+                isChecked={settings.is_active}
+                onChange={toggleFilter}
                 isDisabled={isLoading}
               />
-            </Tooltip>
-            <HStack spacing={4} flexWrap="wrap" justify="flex-end">
-              <HotkeyRecorder
-                value={filterHotkey}
-                onChange={async (val) => {
-                  const err = await saveFilterHotkey(val);
-                  toast({
-                    title: err
-                      ? err
-                      : (t("displayFilter.hotkeySaved") || "快捷键已保存"),
-                    status: err ? "error" : "success",
-                    duration: 2000,
-                    isClosable: true,
-                  });
-                }}
-              />
-              <HStack
-                bg={settings.is_active ? hexToRgba(primaryColor, 0.2) : sliderBg}
-                px={4}
-                py={2}
-                borderRadius="xl"
-                border="1px solid"
-                borderColor={settings.is_active ? primaryColor : "transparent"}
-              >
-                <Text color={textColor} fontSize="sm" fontWeight="500">
-                  {t("displayFilter.enable")}
-                </Text>
-                <ThemeSwitch
-                  isChecked={settings.is_active}
-                  onChange={toggleFilter}
-                  isDisabled={isLoading}
-                />
-              </HStack>
             </HStack>
           </HStack>
-          </VStack>
-      </Flex>
+        </HStack>
+      </VStack>
+    </PageHeader>
+  );
 
+  const content = (
+    <VStack align="start" spacing={6}>
       {!iccToolsInstalled && (
         <LiquidGlassCard px={5} py={4} w="full">
           <HStack spacing={4} align="center" w="full" flexWrap="wrap">
@@ -2701,7 +2703,7 @@ export default function DisplayFilterPage() {
           <Box
             w="full"
             p={5}
-            borderRadius="xl"
+            borderRadius="3xl"
             border="1px solid"
             borderColor={cardBorder}
             bg={sliderBg}
@@ -3195,7 +3197,7 @@ export default function DisplayFilterPage() {
           align="stretch"
           spacing={2}
           bg={sliderBg}
-          borderRadius="xl"
+          borderRadius="3xl"
           border="1px solid"
           borderColor={cardBorder}
           p={3}
@@ -3433,6 +3435,7 @@ export default function DisplayFilterPage() {
           </AlertDialogContent>
         </AlertDialogOverlay>
       </AlertDialog>
+      {header}
       {liquidGlassEnabled ? (
         <LiquidGlassCard
           w="full"

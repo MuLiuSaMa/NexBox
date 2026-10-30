@@ -27,6 +27,7 @@ import {
   Clock,
   ScanLine,
   ScrollText,
+  Microchip,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import csLogoImg from "@/assets/cs-logo.png";
@@ -245,6 +246,15 @@ const defaultTools: ViewItem[] = [
     descriptionKey: "builtinTools.bsodLogDesc",
     color: "#EF4444",
     beta: true,
+  },
+  {
+    id: "cpu-rename",
+    path: "/cpu-rename",
+    icon: Microchip,
+    titleKey: "sidebar.cpuRename",
+    descriptionKey: "builtinTools.cpuRenameDesc",
+    color: "#8B5CF6",
+    badge: "仅供娱乐",
   },
 ];
 

@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Switch,
@@ -31,13 +30,13 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, Trash2, Plus, Move, RotateCcw, Settings } from "lucide-react";
+import { Eye, EyeOff, Trash2, Plus, Move, RotateCcw, Settings } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
-import { useNavigate } from "react-router-dom";
 import { CustomSelect } from "@/components/special/custom-select";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { DraggableDisplayItems, DisplayItem } from "@/components/DraggableDisplayItems";
@@ -180,7 +179,7 @@ function SettingCard({
   }
 
   return (
-    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+    <Box bg={cardBg} borderRadius="3xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
         <Text fontWeight="medium" color={headerColor}>{title}</Text>
         {children}
@@ -286,8 +285,6 @@ export default function OverlayPanelPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("panels");
   const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
-  const navigate = useNavigate();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [hardwareData, setHardwareData] = useState<HardwareData>({
     fps: null,
@@ -329,7 +326,6 @@ export default function OverlayPanelPage() {
     onClose: onMapSettingsClose,
   } = useDisclosure();
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
   const sliderBg = useColorModeValue("gray.200", "gray.600");
   const { getActiveColor, getHoverColor } = useThemeColor();
@@ -693,23 +689,9 @@ export default function OverlayPanelPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("overlayPanel.title") || "悬浮框"}
-          </Heading>
-        </HStack>
-        <HStack gap={2}>
-          <RemoteMonitorDialog />
-        </HStack>
-      </HStack>
+      <PageHeader title={t("overlayPanel.title") || "悬浮框"} mb={6}>
+        <RemoteMonitorDialog />
+      </PageHeader>
 
       <VStack align="stretch" spacing={5}>
         <SettingCard title={t("overlayPanel.enableOverlay") || "启用悬浮框"}>

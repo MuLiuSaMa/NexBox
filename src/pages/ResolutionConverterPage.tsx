@@ -1,13 +1,11 @@
 import {
   Box,
   Flex,
-  Heading,
   Text,
   VStack,
   HStack,
   useColorModeValue,
   SimpleGrid,
-  IconButton,
   useBreakpointValue,
   Button,
   Spinner,
@@ -19,13 +17,13 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { Monitor, ArrowLeft } from "lucide-react";
+import { Monitor } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { CustomSelect } from "@/components/special/custom-select";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K" | "custom";
 
@@ -310,7 +308,6 @@ function ResolutionSelector({
 
 export default function ResolutionConverterPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
@@ -373,9 +370,6 @@ export default function ResolutionConverterPage() {
     return list;
   }, [displayModes, selectedResKey]);
 
-
-
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const textColor = useColorModeValue("gray.700", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -536,24 +530,15 @@ export default function ResolutionConverterPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  const header = (
+    <PageHeader
+      title={t("resolutionConverter.title")}
+      mb={6}
+    />
+  );
+
   const content = (
     <VStack align="start" spacing={6}>
-      <HStack justify="space-between" w="full">
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Monitor size={28} color={headingColor} />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-            {t("resolutionConverter.title")}
-          </Heading>
-        </HStack>
-      </HStack>
-
       <VStack align="start" spacing={4} w="full">
         <Text color={textColor} fontSize="md" fontWeight="600">
           {t("resolutionConverter.selectResolution")}
@@ -846,6 +831,7 @@ export default function ResolutionConverterPage() {
 
   return (
     <Box pt={8}>
+      {header}
       {liquidGlassEnabled ? (
         <LiquidGlassCard
           w="full"
@@ -859,7 +845,7 @@ export default function ResolutionConverterPage() {
       ) : (
         <Box
           bg={cardBg}
-          borderRadius="xl"
+          borderRadius="3xl"
           borderWidth="1px"
           borderColor={cardBorder}
           w="full"

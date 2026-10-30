@@ -30,6 +30,7 @@ mod game_mode;
 mod game_process_optimize;
 mod game_win_key;
 mod game_ping;
+mod cpu_rename;
 mod gpu_rename;
 mod hardware;
 mod hardware_report;
@@ -1123,6 +1124,9 @@ pub fn run() {
         game_launcher::get_default_delta_force_game,
         game_launcher::select_exe_file,
         game_launcher::get_file_icon,
+        cpu_rename::get_cpu_rename_info,
+        cpu_rename::apply_cpu_rename,
+        cpu_rename::restore_cpu_name,
         gpu_rename::get_gpu_info,
         gpu_rename::get_gpu_list,
         gpu_rename::get_gpu_options,

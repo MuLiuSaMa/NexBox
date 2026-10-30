@@ -75,7 +75,7 @@ export function QqGroupModal({ isOpen, onClose, onJoin }: QqGroupModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
       <ModalOverlay backdropFilter="blur(4px)" />
-      <ModalContent bg={modalBg} borderRadius="xl" boxShadow="xl">
+      <ModalContent bg={modalBg} borderRadius="3xl" boxShadow="xl">
         <ModalHeader color={textColor} fontSize="lg">
           <HStack spacing={2}>
             <FaQq color="#12B7F5" />

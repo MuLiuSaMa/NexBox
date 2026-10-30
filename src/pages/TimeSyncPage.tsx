@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   IconButton,
@@ -13,11 +12,11 @@ import {
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Clock, Server, ShieldCheck, RefreshCw } from "lucide-react";
+import { Server, ShieldCheck, RefreshCw } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useNavPosition } from "@/components/ui/main-layout";
 
 interface NtpQueryResult {
@@ -70,7 +69,6 @@ function MiniDivider() {
 
 export default function TimeSyncPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor } = useThemeColor();
 
   const activeColor = getActiveColor();
@@ -192,7 +190,6 @@ export default function TimeSyncPage() {
     [t],
   );
 
-  const adaptiveTitle = useAdaptiveTextColor();
   const navPosition = useNavPosition();
   const fillMinH = navPosition === "top" ? "calc(100vh - 152px)" : "calc(100vh - 88px)";
 
@@ -204,21 +201,10 @@ export default function TimeSyncPage() {
   return (
     <Box pt={2} minH={fillMinH} display="flex" flexDirection="column">
       <VStack align="stretch" spacing={4} flex={1}>
-        <HStack justify="space-between" align="center" flexWrap="wrap">
-          <HStack spacing={3}>
-            <IconButton
-              aria-label="back"
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate(-1)}
-            />
-            <HStack spacing={2}>
-              <Clock color={activeColor} />
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-                {t("timeSync.title")}
-              </Heading>
-            </HStack>
-          </HStack>
+        <PageHeader
+          title={t("timeSync.title")}
+          mb={0}
+        >
           <HStack spacing={2}>
             <Tooltip label={t("timeSync.redetect")}>
               <IconButton
@@ -247,7 +233,7 @@ export default function TimeSyncPage() {
               </Badge>
             </Tooltip>
           </HStack>
-        </HStack>
+        </PageHeader>
 
         {/* 实时系统时钟卡片 */}
         <LiquidGlassCard p={4}>

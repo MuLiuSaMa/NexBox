@@ -5,10 +5,11 @@ import {
   Input, Alert, AlertIcon, AlertDescription, Badge,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { ArrowLeft, MemoryStick, Cpu, HardDrive, Settings } from "lucide-react";
+import { MemoryStick, Cpu, HardDrive, Settings } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -61,7 +62,6 @@ export default function MemoryCleanupPage() {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("memory");
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -513,17 +513,12 @@ export default function MemoryCleanupPage() {
   return (
     <Box pt={8}>
       <VStack align="start" spacing={6}>
-        {/* Top bar: back button + cleanup buttons */}
-          <HStack justifyContent="space-between" alignItems="center" w="full">
-            <Button
-              variant="ghost"
-              leftIcon={<ArrowLeft size={18} />}
-              onClick={() => navigate("/optimize")}
-              color={headingColor}
-            >
-                            返回
-            </Button>
-            <HStack spacing={3}>
+        {/* Top bar: 标题居中 + 清理按钮 */}
+        <PageHeader
+          title={t("optimization.memoryCleanup.title")}
+          mb={0}
+        >
+          <HStack spacing={3}>
               <Button
                 bg={themeConfig.primaryColor}
                 color={getContrastTextColor()}
@@ -561,7 +556,7 @@ export default function MemoryCleanupPage() {
                 {t("optimization.memoryCleanup.trimWorkingSet")}
               </Button>
             </HStack>
-          </HStack>
+        </PageHeader>
 
           {loading ? (
             <Text color={subTextColor} textAlign="center" w="full" py={8}>

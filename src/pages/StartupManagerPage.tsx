@@ -2,10 +2,8 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
-  Button,
   useColorModeValue,
   Spinner,
   Table,
@@ -33,15 +31,14 @@ import {
   Ban,
   RotateCcw,
   RefreshCw,
-  ArrowLeft,
   FolderOpen,
   Search,
   FileCode,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface StartupItem {
   name: string;
@@ -69,9 +66,7 @@ export default function StartupManagerPage() {
   const toast = useDynamicIsland("rocket");
   const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
-  const navigate = useNavigate();
 
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tableBg = liquidGlassEnabled
@@ -291,25 +286,11 @@ export default function StartupManagerPage() {
     }
   };
 
-
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-                        返回
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("optimization.startupManager.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
+      <PageHeader title={t("optimization.startupManager.title")} mb={6} />
 
-      <Tabs variant="soft-rounded" isLazy>
+        <Tabs variant="soft-rounded" isLazy>
         <TabList>
           <Tab
             fontSize="sm"

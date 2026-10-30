@@ -167,7 +167,7 @@ const OptimizeCard = memo(function OptimizeCard({
     <Box
       w="full"
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor={cardBorder}
       p={4}
@@ -633,7 +633,7 @@ export default function SystemOptimizerPage() {
             </Flex>
           </LiquidGlassCard>
         ) : (
-          <Box bg={cardBg} borderRadius="xl" borderWidth="1px" borderColor={cardBorder} w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
+          <Box bg={cardBg} borderRadius="3xl" borderWidth="1px" borderColor={cardBorder} w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
             <Flex w="full" minH="360px" align="center" justify="center" direction="column" gap={4}>
               <Spinner size="xl" color={activeColor} thickness="3px" />
               <Text color={subTextColor} fontSize="sm">
@@ -797,7 +797,7 @@ export default function SystemOptimizerPage() {
         closeOnEsc={false}
       >
         <ModalOverlay />
-        <ModalContent bg={cardBg} borderRadius="xl" borderWidth="1px" borderColor={cardBorder}>
+        <ModalContent bg={cardBg} borderRadius="3xl" borderWidth="1px" borderColor={cardBorder}>
           <ModalHeader color={headingColor} fontSize="lg">
             {t("systemOptimizer.noticeTitle")}
           </ModalHeader>
@@ -842,7 +842,7 @@ export default function SystemOptimizerPage() {
     <Box pt={8}>
       <Box
         bg={cardBg}
-        borderRadius="xl"
+        borderRadius="3xl"
         borderWidth="1px"
         borderColor={cardBorder}
         w="full"

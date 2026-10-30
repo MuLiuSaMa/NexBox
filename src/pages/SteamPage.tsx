@@ -373,7 +373,7 @@ function UserCard({
       bg={cardBg}
       border="1px solid"
       borderColor={borderColor}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       transition="all 0.2s"
       position="relative"
@@ -599,7 +599,7 @@ const GameCard = memo(function GameCard({
       bg={cardBg}
       border="1px solid"
       borderColor={borderColor}
-      borderRadius="xl"
+      borderRadius="3xl"
       overflow="visible"
       transition="all 0.2s"
       _hover={{ borderColor: activeColor, boxShadow: "lg" }}
@@ -714,7 +714,7 @@ const InventoryGameCard = memo(function InventoryGameCard({
       bg={cardBg}
       border="1px solid"
       borderColor={borderColor}
-      borderRadius="xl"
+      borderRadius="3xl"
       overflow="visible"
       transition="all 0.2s"
       _hover={{ borderColor: activeColor, boxShadow: "lg" }}
@@ -789,7 +789,7 @@ function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCoun
   }
 
   return (
-    <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="xl" p={4}>
+    <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="3xl" p={4}>
       {inner}
     </Box>
   );
@@ -1140,7 +1140,7 @@ export default function SteamPage() {
       );
     }
     return (
-      <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="xl" px={4} py={2}>
+      <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="3xl" px={4} py={2}>
         <HStack spacing={2}>
           <Box color={activeColor}>{icon}</Box>
           <Text fontSize="sm" color={subTextColor}>{label}</Text>
@@ -1262,7 +1262,7 @@ export default function SteamPage() {
                 ))}
               </SimpleGrid>
             ) : (
-              <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="xl" p={6} textAlign="center">
+              <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="3xl" p={6} textAlign="center">
                 <VStack spacing={2}>
                   <LuUsers size={32} color={subTextColor} />
                   <Text color={subTextColor} fontSize="sm">
@@ -1316,7 +1316,7 @@ export default function SteamPage() {
                 })}
               </SimpleGrid>
             ) : (
-              <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="xl" p={6} textAlign="center">
+              <Box bg={cardBg} border="1px solid" borderColor={borderColor} borderRadius="3xl" p={6} textAlign="center">
                 <VStack spacing={2}>
                   <LuHardDrive size={32} color={subTextColor} />
                   <Text color={subTextColor} fontSize="sm">

@@ -2,7 +2,6 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
   Button,
@@ -32,7 +31,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  ArrowLeft,
   RefreshCw,
   Search,
   Play,
@@ -40,7 +38,8 @@ import {
   FolderOpen,
   AppWindow,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
@@ -120,7 +119,6 @@ export default function AppManagerPage() {
   const toast = useDynamicIsland("rocket");
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const navigate = useNavigate();
   const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -277,23 +275,7 @@ export default function AppManagerPage() {
 
   return (
     <VStack align="stretch" spacing={5} pt={8} px={1}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/builtin-tools")}
-          color={headingColor}
-        >
-          返回
-        </Button>
-        <Heading
-          size="lg"
-          color={adaptiveTitle.text}
-          textShadow={adaptiveTitle.shadow}
-          fontWeight="700"
-        >
-          应用管理
-        </Heading>
+      <PageHeader title="应用管理" mb={0}>
         <HStack spacing={2}>
           <Tooltip label="刷新列表" hasArrow>
             <IconButton
@@ -307,7 +289,7 @@ export default function AppManagerPage() {
           </Tooltip>
           <Box w="10px" />
         </HStack>
-      </HStack>
+      </PageHeader>
 
       <HStack spacing={3} w="full">
         <Box position="relative" flex={1} minW="200px">
@@ -367,7 +349,7 @@ export default function AppManagerPage() {
       {isLoading ? (
         <Grid templateColumns="repeat(auto-fill, minmax(340px, 1fr))" gap={4}>
           {Array.from({ length: 6 }).map((_, i) => (
-            <LiquidGlassCard key={i} p={4} borderRadius="8px">
+            <LiquidGlassCard key={i} p={4}>
               <HStack spacing={3}>
                 <Skeleton w="48px" h="48px" borderRadius="8px" />
                 <VStack align="start" spacing={1.5} flex={1}>
@@ -379,7 +361,7 @@ export default function AppManagerPage() {
           ))}
         </Grid>
       ) : filtered.length === 0 ? (
-        <LiquidGlassCard p={10} borderRadius="8px">
+        <LiquidGlassCard p={10}>
           <VStack spacing={2} py={8}>
             <AppWindow size={40} color={secondaryColor} />
             <Text color={subTextColor} fontWeight="medium">
@@ -395,7 +377,6 @@ export default function AppManagerPage() {
               <LiquidGlassCard
                 key={`${app.name}-${idx}`}
                 p={4}
-                borderRadius="8px"
                 transition="all 0.2s"
                 cursor="pointer"
                 onClick={() => setDetailApp(app)}

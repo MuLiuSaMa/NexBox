@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   useColorModeValue,
@@ -18,10 +17,10 @@ import {
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Cpu, Settings2, AlertTriangle, RefreshCw, Monitor, Eye } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
+import { Cpu, Settings2, AlertTriangle, RefreshCw, Monitor, Eye } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { CustomSelect } from "@/components/special/custom-select";
 import nvidiaLogo from "@/assets/nvidia.png";
 import { useBackground } from "@/contexts/background-context";
@@ -138,12 +137,10 @@ const SETTING_IDS: Record<string, number> = {
 
 export default function NvidiaDriverPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("gpu");
   const { liquidGlassEnabled } = useBackground();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isNvidiaAvailable, setIsNvidiaAvailable] = useState<boolean | null>(null);
@@ -342,7 +339,6 @@ export default function NvidiaDriverPage() {
     return (
       <LiquidGlassCard
         p={5}
-        borderRadius="xl"
         w="full"
       >
         <HStack mb={4} spacing={2}>
@@ -386,17 +382,9 @@ export default function NvidiaDriverPage() {
     return (
       <Box pt={8}>
         <VStack spacing={6} align="start">
-          <HStack>
-            <Box as="button" onClick={() => navigate(-1)} p={1} borderRadius="md"
-              _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
-              <ArrowLeft size={20} />
-            </Box>
-            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-              显卡设置（仅 NVIDIA）
-            </Heading>
-          </HStack>
+          <PageHeader title="显卡设置（仅 NVIDIA）" mb={0} />
 
-          <Alert status="warning" borderRadius="xl" bg={useColorModeValue("orange.50", "rgba(255, 152, 0, 0.1)")}>
+            <Alert status="warning" borderRadius="xl" bg={useColorModeValue("orange.50", "rgba(255, 152, 0, 0.1)")}>
             <AlertIcon />
             <Box>
               <AlertTitle>未检测到 NVIDIA 显卡</AlertTitle>
@@ -416,19 +404,10 @@ export default function NvidiaDriverPage() {
     return (
       <Box pt={8}>
         <VStack spacing={6} align="start">
-          <HStack>
-            <Box as="button" onClick={() => navigate(-1)} p={1} borderRadius="md"
-              _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
-              <ArrowLeft size={20} />
-            </Box>
-            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-              显卡设置（仅 NVIDIA）
-            </Heading>
-          </HStack>
+          <PageHeader title="显卡设置（仅 NVIDIA）" mb={0} />
 
-          <LiquidGlassCard
+            <LiquidGlassCard
             p={6}
-            borderRadius="xl"
             w="full"
           >
             <VStack spacing={4} align="start">
@@ -660,16 +639,6 @@ export default function NvidiaDriverPage() {
                 >
                   重新检测
                 </Button>
-                <Button
-                  variant="outline"
-                  borderColor={borderColor}
-                  size="md"
-                  borderRadius="lg"
-                  color={textColor}
-                  onClick={() => navigate(-1)}
-                >
-                  返回
-                </Button>
               </HStack>
             </VStack>
           </LiquidGlassCard>
@@ -686,21 +655,12 @@ export default function NvidiaDriverPage() {
       <VStack spacing={6} align="start">
         {/* 标题栏 */}
         <HStack w="full" justify="space-between">
-          <HStack>
-            <Box as="button" onClick={() => navigate(-1)} p={1} borderRadius="md"
-              _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}>
-              <ArrowLeft size={20} />
-            </Box>
-            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-              显卡设置（仅 NVIDIA）
-            </Heading>
-          </HStack>
-        </HStack>
+          <PageHeader title="显卡设置（仅 NVIDIA）" mb={0} />
+            </HStack>
 
         {/* 驱动信息卡片 */}
         <LiquidGlassCard
           p={4}
-          borderRadius="xl"
           w="full"
           borderLeft="4px solid"
           borderLeftColor={getActiveColor()}
@@ -724,7 +684,6 @@ export default function NvidiaDriverPage() {
             </Box>
           </HStack>
         </LiquidGlassCard>
-
 
         {/* 同步与显示 */}
         {renderSettingGroup(

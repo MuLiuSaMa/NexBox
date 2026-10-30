@@ -74,7 +74,7 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
 
   const cardContent = (
     <>
-      {tool.beta && (
+      {(tool.badge || tool.beta) && (
         <Box
           position="absolute"
           top={2}
@@ -88,7 +88,7 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
           borderRadius="full"
           zIndex={1}
         >
-          BETA
+          {tool.badge || "BETA"}
         </Box>
       )}
       <HStack spacing={4} align="center">
@@ -240,7 +240,7 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
       const IconComponent = tool.icon;
       return (
         <>
-          {tool.beta && (
+          {(tool.badge || tool.beta) && (
             <Box
               position="absolute"
               top={2}
@@ -254,7 +254,7 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
               borderRadius="full"
               zIndex={1}
             >
-              BETA
+              {tool.badge || "BETA"}
             </Box>
           )}
           <HStack spacing={4} align="center">

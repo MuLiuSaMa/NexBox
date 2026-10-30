@@ -254,7 +254,6 @@ function StatCard({
   if (liquidGlassEnabled) {
     return (
       <LiquidGlassCard
-        borderRadius="xl"
         overflow="hidden"
         position="relative"
         borderColor="white"
@@ -267,7 +266,7 @@ function StatCard({
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor="white"
       overflow="hidden"
@@ -344,7 +343,6 @@ function DetailCard({
   if (liquidGlassEnabled) {
     return (
       <LiquidGlassCard
-        borderRadius="xl"
         overflow="hidden"
         position="relative"
         borderColor="white"
@@ -359,7 +357,7 @@ function DetailCard({
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor="white"
       overflow="hidden"

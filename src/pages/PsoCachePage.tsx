@@ -1,11 +1,9 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Badge,
-  Button,
   Checkbox,
   Spinner,
   Divider,
@@ -18,7 +16,6 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  ArrowLeft,
   Trash2,
   RefreshCw,
   Search,
@@ -26,8 +23,8 @@ import {
   CheckCircle2,
   ShieldAlert,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 
 interface PsoScanResult {
   exists: boolean;
@@ -61,8 +58,6 @@ function formatSize(bytes: number): string {
 export default function PsoCachePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("layers");
-  const navigate = useNavigate();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -229,27 +224,9 @@ export default function PsoCachePage() {
 
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-          {t("psoCache.back")}
-        </Button>
-        <Heading
-          size="lg"
-          color={adaptiveTitle.text}
-          textShadow={adaptiveTitle.shadow}
-          fontWeight="700"
-        >
-          {t("psoCache.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
+      <PageHeader title={t("psoCache.title")} mb={6} />
 
-      <Text fontSize="sm" color={subTextColor} maxW="720px">
+        <Text fontSize="sm" color={subTextColor} maxW="720px">
         {t("psoCache.subtitle")}
       </Text>
 

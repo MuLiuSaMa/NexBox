@@ -81,7 +81,6 @@ export function CloseConfirmDialog({
           >
             <LiquidGlassCard
               p={6}
-              borderRadius="xl"
               maxW="360px"
               w="90%"
               position="relative"

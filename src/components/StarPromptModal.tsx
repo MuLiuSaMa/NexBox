@@ -103,7 +103,7 @@ export function StarPromptModal() {
       <ModalContent
         bg={modalBg}
         borderColor={modalBorderColor}
-        borderRadius="xl"
+        borderRadius="3xl"
         maxW="sm"
         overflow="hidden"
       >

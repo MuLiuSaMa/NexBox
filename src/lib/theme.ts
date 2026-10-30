@@ -82,14 +82,24 @@ const theme = extendTheme({
   components: {
     Button: {
       baseStyle: {
-        borderRadius: "lg",
+        borderRadius: "xl",
         fontWeight: "medium",
+      },
+    },
+    Menu: {
+      baseStyle: {
+        list: {
+          borderRadius: "2xl",
+        },
+        item: {
+          borderRadius: "xl",
+        },
       },
     },
     Card: {
       baseStyle: {
         container: {
-          borderRadius: "xl",
+          borderRadius: "3xl",
           bg: undefined,
           borderColor: undefined,
           borderWidth: undefined,

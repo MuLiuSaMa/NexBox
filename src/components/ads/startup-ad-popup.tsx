@@ -66,7 +66,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
         bg="transparent"
         boxShadow="none"
         border="none"
-        borderRadius="2xl"
+        borderRadius="3xl"
         overflow="hidden"
         position="relative"
         p={0}
@@ -82,7 +82,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
             align="center"
             justify="center"
             bg="blackAlpha.300"
-            borderRadius="2xl"
+            borderRadius="3xl"
             animation={`${fadeScale} 0.5s ease`}
           >
             <Spinner size="xl" color={activeColor} />
@@ -98,7 +98,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
             maxH="88vh"
             objectFit="contain"
             draggable={false}
-            borderRadius="2xl"
+            borderRadius="3xl"
             cursor={ad.link ? "pointer" : "default"}
             onClick={() => ad.link && openExternal(ad.link)}
             animation={`${fadeScale} 0.5s ease`}

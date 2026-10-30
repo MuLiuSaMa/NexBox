@@ -2,7 +2,6 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
   Badge,
@@ -23,13 +22,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import PowerAdvancedSettingsPanel from "@/components/power/power-advanced-settings-panel";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import {
   Zap,
-  ArrowLeft,
   RefreshCw,
   Battery,
   CheckCircle,
@@ -39,8 +36,8 @@ import {
   Cpu,
   Lock,
 } from "lucide-react";
-
-import { useNavigate } from "react-router-dom";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 
 interface BuiltinPowerPlan {
   id: string;
@@ -293,9 +290,7 @@ export default function PowerManagementPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("power");
 
-  const navigate = useNavigate();
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
@@ -553,25 +548,11 @@ export default function PowerManagementPage() {
 
   const hasUnimported = builtinPlans.some((p) => !p.is_imported);
 
-
   const content = (
     <VStack align="stretch" spacing={6} pt={8} w="full">
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-                        返回
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} fontWeight="700" textShadow={adaptiveTitle.shadow}>
-          {t("optimization.powerManagement.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
+      <PageHeader title={t("optimization.powerManagement.title")} mb={6} />
 
-      {isLoading ? (
+        {isLoading ? (
         <Flex justify="center" py={10}>
           <Spinner size="lg" color="#F6AD55" />
         </Flex>

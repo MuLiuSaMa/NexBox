@@ -1,11 +1,9 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Badge,
-  Button,
   IconButton,
   useColorModeValue,
   Spinner,
@@ -23,10 +21,9 @@ import {
   ChevronUp,
   Trash2,
   RefreshCw,
-  ArrowLeft,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 
 interface ShaderCacheDir {
   name: string;
@@ -214,9 +211,7 @@ function VendorCard({
 export default function ShaderCachePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("layers");
-  const navigate = useNavigate();
 
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tipBg = useColorModeValue(
@@ -333,25 +328,11 @@ export default function ShaderCachePage() {
     await doScan();
   };
 
-
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-                        返回
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("shaderCache.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
+      <PageHeader title={t("shaderCache.title")} mb={6} />
 
-      <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={3} alignItems="start">
+        <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={3} alignItems="start">
         {(scanResult?.groups ?? FALLBACK_VENDORS).map((group) => (
           <VendorCard
             key={group.vendor}

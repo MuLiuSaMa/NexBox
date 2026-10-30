@@ -172,7 +172,7 @@ function DesktopLyricsSettingsModalInner({
       <ModalContent
         bg={modalBg}
         borderColor={modalBorderColor}
-        borderRadius="xl"
+        borderRadius="3xl"
         maxWidth="860px"
         w="100%"
         maxHeight="70vh"

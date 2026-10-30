@@ -188,7 +188,7 @@ export default function RandomImageModal({ isOpen, onClose }: RandomImageModalPr
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
       <ModalOverlay />
-      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="xl">
+      <ModalContent bg={modalBg} borderColor={modalBorderColor} borderRadius="3xl">
         <ModalHeader color={labelColor} fontSize="lg" fontWeight="bold">
           {t("home.randomImage.modalTitle") || "随机图片"}
         </ModalHeader>

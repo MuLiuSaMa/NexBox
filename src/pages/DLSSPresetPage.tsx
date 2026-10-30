@@ -2,14 +2,12 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
   useColorModeValue,
   Button,
   Badge,
   Grid,
-  IconButton,
   Switch,
   Table,
   Thead,
@@ -30,14 +28,14 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Cpu, ArrowLeft, Zap, Eye, FileText, Settings, ChevronDown, Check, Monitor, Thermometer } from "lucide-react";
+import { Cpu, Eye, FileText, Settings, ChevronDown, Check, Monitor, Thermometer } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { useNavigate } from "react-router-dom";
 import { getHardwareInfo, GpuInfo, GpuVendor, type HardwareInfo } from "@/lib/hardware";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useAppStartup } from "@/contexts/app-startup-context";
 
 interface DLSSModelPreset {
@@ -174,7 +172,7 @@ function SectionCard({
   }
 
   return (
-    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+    <Box bg={cardBg} borderRadius="3xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
         {headerContent}
         {children}
@@ -621,25 +619,13 @@ function PresetReferenceTable() {
 export default function DLSSPresetPage() {
   const { t } = useTranslation();
   const { config: themeConfig } = useThemeColor();
-  const navigate = useNavigate();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
 
   return (
     <Box pt={8} pb={8}>
-      <HStack spacing={3} mb={6}>
-        <IconButton
-          aria-label="返回"
-          icon={<ArrowLeft size={20} />}
-          variant="ghost"
-          onClick={() => navigate("/builtin-tools")}
-          color={headingColor}
-        />
-        <Zap size={28} color={themeConfig.primaryColor} />
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("dlssPreset.title")}
-        </Heading>
-      </HStack>
+      <PageHeader
+        title={t("dlssPreset.title")}
+        mb={6}
+      />
 
       <Grid templateColumns={{ base: "1fr", lg: "1fr 1fr" }} gap={5} mb={5}>
         <Box position="relative" zIndex={10}>

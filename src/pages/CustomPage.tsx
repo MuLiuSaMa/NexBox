@@ -159,7 +159,7 @@ function AddToolModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="xl" scrollBehavior="inside">
       <ModalOverlay />
-      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="xl" maxH="70vh">
+      <ModalContent bg={modalBg} borderColor={borderColor} borderRadius="3xl" maxH="70vh">
         <ModalHeader color={textColor} fontSize="md">
           {t("customPage.addTool")}
         </ModalHeader>

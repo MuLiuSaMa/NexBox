@@ -1,13 +1,11 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   SimpleGrid,
   useColorModeValue,
   useColorMode,
-  IconButton,
   Button,
   Badge,
   Spinner,
@@ -18,12 +16,12 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, HardDrive, RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power } from "lucide-react";
+import { RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface PartitionInfo {
   drive_letter: string;
@@ -190,7 +188,7 @@ function SettingCard({ title, children }: { title: string; children: React.React
   }
 
   return (
-    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+    <Box bg={cardBg} borderRadius="3xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
         <Text fontWeight="medium" color={headerColor}>{title}</Text>
         {children}
@@ -247,7 +245,6 @@ function formatBytes(bytes: number | null): string {
 
 export default function DiskHealthPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled } = useBackground();
 
@@ -256,7 +253,6 @@ export default function DiskHealthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const headingColor = useColorModeValue("black", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
 
@@ -278,22 +274,7 @@ export default function DiskHealthPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            <HStack spacing={2}>
-              <HardDrive size={24} />
-              <Text>{t("diskHealth.title")}</Text>
-            </HStack>
-          </Heading>
-        </HStack>
+      <PageHeader title={t("diskHealth.title")} mb={6}>
         <Button
           leftIcon={<RefreshCw size={16} />}
           variant="outline"
@@ -301,10 +282,10 @@ export default function DiskHealthPage() {
           onClick={fetchHealth}
           isLoading={loading}
           loadingText={t("diskHealth.scanning")}
-        >
+      >
           {t("diskHealth.refresh")}
         </Button>
-      </HStack>
+      </PageHeader>
 
       {loading && !response && (
         <VStack py={20} spacing={4}>

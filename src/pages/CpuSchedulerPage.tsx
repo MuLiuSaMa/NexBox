@@ -1,6 +1,5 @@
 import {
   Box,
-  Heading,
   VStack,
   HStack,
   Text,
@@ -23,7 +22,6 @@ import {
   TabPanels,
   TabPanel,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useProcessIcons } from "@/hooks/use-process-icons";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -32,7 +30,6 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import CpuIsolationPanel from "@/pages/CpuIsolationPanel";
 import {
-  ArrowLeft,
   AlertTriangle,
   Cpu,
   Search,
@@ -42,9 +39,10 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
 // ── Types ──────────────────────────────────────────────────
@@ -94,12 +92,10 @@ type PresetType = "allPCores" | "allECores" | "allCores" | "custom";
 
 export default function CpuSchedulerPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("cpu");
   const { icons, ensureIcons } = useProcessIcons();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
@@ -379,19 +375,10 @@ export default function CpuSchedulerPage() {
 
   // ── Render ──────────────────────────────────────────────
 
+  const header = <PageHeader title={t("optimization.cpuScheduler.title")} mb={6} />;
+
   const content = (
     <VStack align="start" spacing={6}>
-      {/* Header */}
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button variant="ghost" leftIcon={<ArrowLeft size={18} />} onClick={() => navigate("/optimize")} color={headingColor}>
-          {t("optimization.cpuScheduler.back")}
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("optimization.cpuScheduler.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
-
       {/* ── 模式切换 Tab ── */}
       <Tabs variant="soft-rounded" defaultIndex={0} isLazy w="full">
         <TabList gap={2} mb={4}>
@@ -453,7 +440,7 @@ export default function CpuSchedulerPage() {
         {isLoadingTopology ? (
           <HStack justify="center" p={8}><Spinner color={themeColorHex} /><Text color={subTextColor}>{t("optimization.cpuScheduler.loading")}</Text></HStack>
         ) : topology ? (
-          <VStack align="start" spacing={3} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+          <VStack align="start" spacing={3} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
             <HStack justify="space-between" w="full">
               <HStack spacing={2}>
                 <Cpu size={18} color={themeColorHex} />
@@ -580,7 +567,7 @@ export default function CpuSchedulerPage() {
             w="full"
             maxH="280px"
             overflowY="auto"
-            borderRadius="xl"
+            borderRadius="3xl"
             border="1px solid"
             borderColor={cardBorder}
             bg={cardBg}
@@ -655,11 +642,11 @@ export default function CpuSchedulerPage() {
         </Text>
 
         {!selectedProcess ? (
-          <Box p={6} borderRadius="xl" border="1px solid" borderColor={cardBorder} bg={cardBg} textAlign="center">
+          <Box p={6} borderRadius="3xl" border="1px solid" borderColor={cardBorder} bg={cardBg} textAlign="center">
             <Text color={subTextColor} fontSize="sm">{t("optimization.cpuScheduler.noProcessSelected")}</Text>
           </Box>
         ) : (
-          <VStack align="start" spacing={4} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+          <VStack align="start" spacing={4} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
             {isLoadingAffinity ? (
               <HStack justify="center" w="full" p={4}><Spinner color={themeColorHex} /></HStack>
             ) : (
@@ -826,7 +813,7 @@ export default function CpuSchedulerPage() {
                     isLoading={isApplying}
                     loadingText={t("optimization.cpuScheduler.applying")}
                     leftIcon={<Cpu size={20} />}
-                    borderRadius="2xl"
+                    borderRadius="3xl"
                     fontWeight="700"
                     fontSize="md"
                     height="56px"
@@ -846,7 +833,7 @@ export default function CpuSchedulerPage() {
                     isLoading={isSavingRule}
                     loadingText={t("optimization.cpuScheduler.saving")}
                     leftIcon={<Save size={20} />}
-                    borderRadius="2xl"
+                    borderRadius="3xl"
                     fontWeight="700"
                     fontSize="md"
                     height="56px"
@@ -867,7 +854,7 @@ export default function CpuSchedulerPage() {
                     onClick={handleRestore}
                     isLoading={isApplying}
                     leftIcon={<AlertTriangle size={20} />}
-                    borderRadius="2xl"
+                    borderRadius="3xl"
                     fontWeight="700"
                     fontSize="md"
                     height="56px"
@@ -889,7 +876,7 @@ export default function CpuSchedulerPage() {
           <Text fontWeight="600" color={textColor} fontSize="md" mb={3}>
             {t("optimization.cpuScheduler.savedRules")}
           </Text>
-          <VStack align="start" spacing={2} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+          <VStack align="start" spacing={2} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
             {rules.map((rule) => (
               <HStack key={rule.process_name} w="full" justify="space-between" spacing={3}>
                 <HStack spacing={3} flex={1} minW={0}>
@@ -946,12 +933,13 @@ export default function CpuSchedulerPage() {
 
   return (
     <Box pt={8}>
+      {header}
       {liquidGlassEnabled ? (
         <LiquidGlassCard w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
           {content}
         </LiquidGlassCard>
       ) : (
-        <Box bg={cardBg} borderColor={cardBorder} borderWidth="1px" borderRadius="2xl" w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
+        <Box bg={cardBg} borderColor={cardBorder} borderWidth="1px" borderRadius="3xl" w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
           {content}
         </Box>
       )}

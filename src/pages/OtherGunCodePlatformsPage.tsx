@@ -3,17 +3,16 @@ import {
   Text,
   Heading,
   VStack,
-  HStack,
   SimpleGrid,
   useColorModeValue,
   Button,
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ExternalLink } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
@@ -34,7 +33,6 @@ export default function OtherGunCodePlatformsPage() {
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const platforms: PlatformInfo[] = [
     {
@@ -77,24 +75,9 @@ export default function OtherGunCodePlatformsPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack mb={6} spacing={4}>
-        <Link to="/delta-force">
-          <Button
-            size="sm"
-            variant="ghost"
-            leftIcon={<ArrowLeft size={16} />}
-            color={subTextColor}
-            _hover={{ color: primaryColor }}
-          >
-            {t("deltaForce.back", "返回")}
-          </Button>
-        </Link>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {t("deltaForce.otherPlatforms.title", "其他改枪码平台")}
-        </Heading>
-      </HStack>
+      <PageHeader title={t("deltaForce.otherPlatforms.title", "其他改枪码平台")} mb={6} />
 
-      <Text color={subTextColor} fontSize="sm" mb={6}>
+        <Text color={subTextColor} fontSize="sm" mb={6}>
         {t("deltaForce.otherPlatforms.description", "以下是一些其他改枪码平台，点击可在浏览器中打开")}
       </Text>
 
@@ -138,7 +121,7 @@ export default function OtherGunCodePlatformsPage() {
             <Box
               key={platform.id}
               bg={cardBg}
-              borderRadius="xl"
+              borderRadius="3xl"
               p={5}
               border="1px solid"
               borderColor={borderColor}

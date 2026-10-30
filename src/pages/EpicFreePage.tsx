@@ -41,7 +41,7 @@ function GameCard({ game, fillHeight }: { game: EpicGame; fillHeight?: boolean }
   return (
     <Box
       position="relative"
-      borderRadius="2xl"
+      borderRadius="3xl"
       overflow="hidden"
       cursor="pointer"
       onClick={handleClaim}

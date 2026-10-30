@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   SimpleGrid,
@@ -13,7 +12,6 @@ import {
 import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
   Dices,
   Map as MapIcon,
   User,
@@ -22,12 +20,12 @@ import {
   Shield,
   Target,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useRouletteImage } from "@/hooks/use-roulette-image";
 import { weapons, isPistol, RouletteWeapon } from "@/data/delta-roulette/weapons";
 import { armors } from "@/data/delta-roulette/armors";
@@ -130,7 +128,7 @@ function ResultCard({
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -311,7 +309,6 @@ function SlotScroller({
 }
   export default function DeltaForceRoulettePage() {
   const { t } = useTranslation();
-  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("#000000", "#ffffff");
   const textColor = useColorModeValue("#000000", "#ffffff");
   const { getActiveColor } = useThemeColor();
@@ -375,19 +372,10 @@ function SlotScroller({
 
   return (
     <Box pt={8} pb={8}>
-      <HStack mb={6} spacing={4}>
-        <Link to="/delta-force">
-          <LiquidGlassButton size="sm" variant="ghost" leftIcon={<ArrowLeft size={16} />}>
-            {t("deltaForce.back", "返回")}
-          </LiquidGlassButton>
-        </Link>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {t("deltaForce.roulette.title", "三角洲随机装备")}
-        </Heading>
-      </HStack>
+      <PageHeader title={t("deltaForce.roulette.title", "三角洲随机装备")} mb={6} />
 
-      {/* 控件区 */}
-      <LiquidGlassCard p={5} mb={6}>
+        {/* 控件区 */}
+        <LiquidGlassCard p={5} mb={6}>
         <VStack align="stretch" spacing={4}>
           <HStack spacing={6} wrap="wrap">
             {[
@@ -408,7 +396,7 @@ function SlotScroller({
                   ".chakra-checkbox__label": { color: primaryColor },
                 }}
                 iconColor="#fff"
-              >
+      >
                 {opt.label}
               </Checkbox>
             ))}

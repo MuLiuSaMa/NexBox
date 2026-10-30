@@ -22,7 +22,16 @@ export default defineConfig(async () => ({
     host: "127.0.0.1",
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**"],
+      // 这些目录是构建产物 / 其它 Rust 工程，不需要热更新监听。
+      // 尤其 dist 与临时构建目录：dev 期间往里写文件再删除，会让 chokidar
+      // 抛 EBUSY（resource busy or locked）并直接终止 tauri dev。
+      ignored: [
+        "**/src-tauri/**",
+        "**/dist/**",
+        "**/.verify-build*/**",
+        "**/installer/**",
+        "**/uninstaller/**",
+      ],
     },
   },
 }));

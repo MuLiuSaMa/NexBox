@@ -2,7 +2,6 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   HStack,
   VStack,
   Badge,
@@ -31,12 +30,10 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import mediaPlayerImg from "@/assets/windows-media-player.png";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { useNavigate } from "react-router-dom";
 import {
   Video,
   Film,
@@ -46,7 +43,6 @@ import {
   Trash2,
   AlertTriangle,
   Info,
-  ArrowLeft,
   X,
   Volume2,
   VolumeX,
@@ -55,6 +51,8 @@ import {
   Copy,
   Check,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 
 // ── MV 播放器样式辅助（与 MusicPage 一致） ──
 
@@ -539,10 +537,8 @@ const THUMB_BATCH = 12;
 
 export default function NvidiaRecordingPage() {
   const { t } = useTranslation();
-  const adaptiveTitle = useAdaptiveTextColor();
   const { config, getActiveColor, getHoverColor } = useThemeColor();
   const toast = useDynamicIsland("wrench");
-  const navigate = useNavigate();
 
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#cccccc");
@@ -848,25 +844,13 @@ export default function NvidiaRecordingPage() {
   return (
     <Box pt={8} flex={1} minH="0" display="flex" flexDirection="column">
       {/* 页头（含返回按钮） */}
-      <Flex w="full" justify="space-between" align="center" mb={6} flexShrink={0}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={adaptiveTitle.text}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("nvidiaRecording.title")}
-          </Heading>
-        </HStack>
+      <PageHeader title={t("nvidiaRecording.title")} mb={6}>
         <HStack spacing={3}>
           <LiquidGlassButton
             size="sm"
             leftIcon={<ListChecks size={16} />}
             onClick={batchMode ? exitBatchMode : enterBatchMode}
-          >
+      >
             {t("nvidiaRecording.batchAction")}
           </LiquidGlassButton>
           <LiquidGlassButton
@@ -881,7 +865,7 @@ export default function NvidiaRecordingPage() {
             {t("nvidiaRecording.addFolder")}
           </LiquidGlassButton>
         </HStack>
-      </Flex>
+      </PageHeader>
 
       {/* 目录 Tab：全部目录 + 各录制目录，点击直切；自定义目录可移除 */}
       {!scanning && folders.length > 0 && videos.length > 0 && (
@@ -1144,7 +1128,7 @@ export default function NvidiaRecordingPage() {
       >
         <ModalOverlay />
         {detailVideo && (
-          <ModalContent bg={useColorModeValue("white", "#141414")} borderRadius="2xl">
+          <ModalContent bg={useColorModeValue("white", "#141414")} borderRadius="3xl">
             <ModalHeader fontSize="md" color={textColor} pr={14}>
               <HStack spacing={2}>
                 <Info size={16} color={getActiveColor()} />
@@ -1214,7 +1198,7 @@ export default function NvidiaRecordingPage() {
         returnFocusOnClose={false}
       >
         <AlertDialogOverlay>
-          <AlertDialogContent bg={useColorModeValue("white", "#141414")} borderRadius="2xl">
+          <AlertDialogContent bg={useColorModeValue("white", "#141414")} borderRadius="3xl">
             <AlertDialogHeader fontSize="lg" fontWeight="bold" color={textColor}>
               <HStack spacing={2}>
                 <AlertTriangle size={18} color="red.400" />

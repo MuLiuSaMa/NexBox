@@ -1,5 +1,4 @@
 "use client";
-
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
@@ -12,6 +11,8 @@ interface LiquidGlassCardProps extends BoxProps {
   isDashed?: boolean;
   /** 强制启用液态玻璃效果（忽略全局开关） */
   forceGlass?: boolean;
+  /** 边缘折射条厚度（px）。矮卡片传小值，避免上下/左右折射条在中间重叠 */
+  edgeInset?: number;
 }
 
 export function LiquidGlassCard({
@@ -19,6 +20,7 @@ export function LiquidGlassCard({
   className,
   isDashed = false,
   forceGlass = false,
+  edgeInset = 10,
   ...props
 }: LiquidGlassCardProps) {
   const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode } = useBackground();
@@ -58,7 +60,7 @@ export function LiquidGlassCard({
   const cardStyles = useMemo(() => {
     const base: any = {
       bg: isReal ? "transparent" : (glassOn ? glassBgColor : defaultBg),
-      borderRadius: "xl" as const,
+      borderRadius: "3xl" as const,
       border: isDashed ? "1px dashed" : "1px solid",
       borderColor: isReal ? "rgba(255,255,255,0.06)" : (glassOn ? glassBorderColor : defaultBorder),
       backdropFilter,
@@ -81,16 +83,16 @@ export function LiquidGlassCard({
       {/* 边缘折射条 —— 独立叠加层，仅覆盖边缘 10px，卡片内部完全不受影响 */}
       {isReal && svgSupported && (
         <>
-          <Box position="absolute" top={0} left={0} w="100%" h="10px" zIndex={0}
+          <Box position="absolute" top={0} left={0} w="100%" h={`${edgeInset}px`} zIndex={0}
             backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
             bg="transparent" pointerEvents="none" />
-          <Box position="absolute" bottom={0} left={0} w="100%" h="10px" zIndex={0}
+          <Box position="absolute" bottom={0} left={0} w="100%" h={`${edgeInset}px`} zIndex={0}
             backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
             bg="transparent" pointerEvents="none" />
-          <Box position="absolute" left={0} top={0} w="10px" h="100%" zIndex={0}
+          <Box position="absolute" left={0} top={0} w={`${edgeInset}px`} h="100%" zIndex={0}
             backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
             bg="transparent" pointerEvents="none" />
-          <Box position="absolute" right={0} top={0} w="10px" h="100%" zIndex={0}
+          <Box position="absolute" right={0} top={0} w={`${edgeInset}px`} h="100%" zIndex={0}
             backdropFilter={edgeFilter} sx={{ WebkitBackdropFilter: edgeFilter }}
             bg="transparent" pointerEvents="none" />
         </>

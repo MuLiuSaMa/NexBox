@@ -19,6 +19,7 @@ const PAGE_PARENT: Record<string, string> = {
   "/crosshair": "/builtin-tools",
   "/overlay-panel": "/builtin-tools",
   "/gpu-rename": "/builtin-tools",
+  "/cpu-rename": "/builtin-tools",
   "/resolution-converter": "/builtin-tools",
   "/dlss-preset": "/builtin-tools",
   "/disk-health": "/builtin-tools",
@@ -34,22 +35,25 @@ const PAGE_PARENT: Record<string, string> = {
   "/download-accelerator": "/builtin-tools",
   "/nvidia-recording": "/builtin-tools",
   "/bsod-log": "/builtin-tools",
+  "/vac-repair": "/builtin-tools",
+  "/app-manager": "/builtin-tools",
+  "/time-sync": "/builtin-tools",
   // NVIDIA 驱动页内打开的下载页（层级上属于驱动页子页）
   "/nvidia-driver-download": "/nvidia-driver",
   // 优化页子页
-  "/optimize/storage-clean": "/optimize",
-  "/optimize/memory-cleanup": "/optimize",
-  "/optimize/ace-optimize": "/optimize",
-  "/optimize/memory-limit": "/optimize",
-  "/optimize/shader-cache": "/optimize",
-  "/optimize/pso-cache": "/optimize",
-  "/optimize/power-management": "/optimize",
-  "/optimize/startup-manager": "/optimize",
-  "/optimize/network-optimizer": "/optimize",
-  "/optimize/peripheral-optimize": "/optimize",
-  "/optimize/windows-update": "/optimize",
-  "/optimize/cpu-scheduler": "/optimize",
-  "/optimize/game-process-optimize": "/optimize",
+  "/optimize/storage-clean": "/optimization",
+  "/optimize/memory-cleanup": "/optimization",
+  "/optimize/ace-optimize": "/optimization",
+  "/optimize/memory-limit": "/optimization",
+  "/optimize/shader-cache": "/optimization",
+  "/optimize/pso-cache": "/optimization",
+  "/optimize/power-management": "/optimization",
+  "/optimize/startup-manager": "/optimization",
+  "/optimize/network-optimizer": "/optimization",
+  "/optimize/peripheral-optimize": "/optimization",
+  "/optimize/windows-update": "/optimization",
+  "/optimize/cpu-scheduler": "/optimization",
+  "/optimize/game-process-optimize": "/optimization",
   // 三角洲行动子页
   "/delta-force/other-platforms": "/delta-force",
   "/delta-force/random-equipment": "/delta-force",
@@ -65,7 +69,7 @@ const PAGE_PARENT_PREFIX: Array<[string, string]> = [
   ["/delta-force/streamers/", "/delta-force/streamers"],
 ];
 
-function resolveParent(pathname: string): string | undefined {
+export function resolveParent(pathname: string): string | undefined {
   let best: [string, string] | undefined;
   for (const rule of PAGE_PARENT_PREFIX) {
     if (pathname.startsWith(rule[0]) && (!best || rule[0].length > best[0].length)) {

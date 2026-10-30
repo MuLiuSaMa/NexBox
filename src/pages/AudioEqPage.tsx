@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   useColorModeValue,
@@ -30,9 +29,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Volume2,
   Trash2,
   Download,
@@ -50,11 +47,12 @@ import {
   Upload,
   Save,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { fitEngineGains, interpolateCurveToLayout } from "@/lib/eq-curve";
 
 // ===== 类型定义 =====
@@ -467,11 +465,9 @@ function EqBandSlider({
 // ===== 主页面组件 =====
 export default function AudioEqPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("audio");
 
   const headingColor = useColorModeValue("#1A202C", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const presetIconColor = useColorModeValue("#4A5568", "#aaaaaa");
@@ -1081,19 +1077,10 @@ ${bandsStr}`;
   return (
     <Box pt={8} pb={8}>
       {/* 顶部导航 */}
-      <HStack mb={6} spacing={3}>
-        <IconButton
-          aria-label={t("common.back")}
-          icon={<ArrowLeft size={20} />}
-          variant="ghost"
-          onClick={() => navigate("/builtin-tools")}
-          color={headingColor}
-        />
-        <Volume2 size={24} color={headingColor} />
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {t("audioEq.title")}
-        </Heading>
-      </HStack>
+      <PageHeader
+        title={t("audioEq.title")}
+        mb={6}
+      />
 
       <VStack spacing={4} align="stretch">
         {/* 虚拟声卡 & EQ引擎 合并顶部卡片 */}

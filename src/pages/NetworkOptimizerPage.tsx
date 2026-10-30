@@ -15,14 +15,14 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { ArrowLeft, Copy, Globe, RefreshCw } from "lucide-react";
+import { Copy, Globe, RefreshCw } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { store } from "@/lib/store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
@@ -117,7 +117,7 @@ const OptimizeCard = memo(function OptimizeCard({
     <Box
       w="full"
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor={cardBorder}
       p={4}
@@ -299,7 +299,7 @@ const DnsCard = memo(function DnsCard({
     <Box
       w="full"
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor={isApplied ? activeColor : cardBorder}
       p={4}
@@ -316,11 +316,9 @@ const DnsCard = memo(function DnsCard({
 
 export default function NetworkOptimizerPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { liquidGlassEnabled } = useBackground();
   const toast = useDynamicIsland("network");
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [scannedStates, setScannedStates] = useState<Record<string, boolean>>({});
   const [savedStates, setSavedStates] = useState<Record<string, boolean>>({});
@@ -869,7 +867,7 @@ export default function NetworkOptimizerPage() {
             </Flex>
           </LiquidGlassCard>
         ) : (
-          <Box bg={cardBg} borderRadius="xl" borderWidth="1px" borderColor={cardBorder} w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
+          <Box bg={cardBg} borderRadius="3xl" borderWidth="1px" borderColor={cardBorder} w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
             <Flex w="full" minH="360px" align="center" justify="center" direction="column" gap={4}>
               <Spinner size="xl" color={activeColor} thickness="3px" />
               <Text color={subTextColor} fontSize="sm">
@@ -882,68 +880,51 @@ export default function NetworkOptimizerPage() {
     );
   }
 
+  const header = (
+    <PageHeader title={t("networkOptimize.pageTitle")} mb={6}>
+      <HStack spacing={2}>
+        <Button
+          size="sm"
+          leftIcon={<RefreshCw size={14} />}
+          onClick={doRescan}
+          isLoading={isRescanning}
+          variant="ghost"
+          color={subTextColor}
+    >
+          {t("networkOptimize.rescan")}
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleBatchEnable}
+          isLoading={isBatchOptimizing}
+          loadingText={t("networkOptimize.optimizing")}
+          bg={activeColor}
+          color={contrastText}
+          _hover={{ opacity: 0.9 }}
+          _active={{ transform: "scale(0.97)" }}
+        >
+          {t("networkOptimize.batch.enable")}
+        </Button>
+        <Button
+          size="sm"
+          onClick={handleBatchDisable}
+          isLoading={isBatchOptimizing}
+          loadingText={t("networkOptimize.optimizing")}
+          variant="outline"
+          sx={{
+            borderColor: activeColor,
+            color: activeColor,
+            _hover: { bg: hoverBg },
+          }}
+        >
+          {t("networkOptimize.batch.disable")}
+        </Button>
+      </HStack>
+    </PageHeader>
+  );
+
   const content = (
     <VStack align="start" spacing={6}>
-      {/* 标题 */}
-      <Flex
-        w="full"
-        justify="space-between"
-        align={{ base: "start", md: "center" }}
-        direction={{ base: "column", md: "row" }}
-        gap={3}
-      >
-        <HStack spacing={3}>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/optimize")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("networkOptimize.pageTitle")}
-          </Heading>
-        </HStack>
-        <HStack spacing={2}>
-          <Button
-            size="sm"
-            leftIcon={<RefreshCw size={14} />}
-            onClick={doRescan}
-            isLoading={isRescanning}
-            variant="ghost"
-            color={subTextColor}
-          >
-            {t("networkOptimize.rescan")}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleBatchEnable}
-            isLoading={isBatchOptimizing}
-            loadingText={t("networkOptimize.optimizing")}
-            bg={activeColor}
-            color={contrastText}
-            _hover={{ opacity: 0.9 }}
-            _active={{ transform: "scale(0.97)" }}
-          >
-            {t("networkOptimize.batch.enable")}
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleBatchDisable}
-            isLoading={isBatchOptimizing}
-            loadingText={t("networkOptimize.optimizing")}
-            variant="outline"
-            sx={{
-              borderColor: activeColor,
-              color: activeColor,
-              _hover: { bg: hoverBg },
-            }}
-          >
-            {t("networkOptimize.batch.disable")}
-          </Button>
-        </HStack>
-      </Flex>
-
       {/* Section 0: 公网 IP */}
       <Box w="full">
         <Heading
@@ -1030,7 +1011,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4}>{ipCardContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4}>
               {ipCardContent}
             </Box>
           );
@@ -1101,7 +1082,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4} mb={3}>{dnsContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4} mb={3}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4} mb={3}>
               {dnsContent}
             </Box>
           );
@@ -1174,7 +1155,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4}>{customDnsContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4}>
               {customDnsContent}
             </Box>
           );
@@ -1211,7 +1192,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4} mt={3}>{clearDnsContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
               {clearDnsContent}
             </Box>
           );
@@ -1320,7 +1301,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4}>{resetContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4}>
               {resetContent}
             </Box>
           );
@@ -1357,7 +1338,7 @@ export default function NetworkOptimizerPage() {
             return <LiquidGlassCard w="full" p={4} mt={3}>{fixDhcpContent}</LiquidGlassCard>;
           }
           return (
-            <Box w="full" bg={cardBg} borderRadius="xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
+            <Box w="full" bg={cardBg} borderRadius="3xl" border="1px solid" borderColor={cardBorder} p={4} mt={3}>
               {fixDhcpContent}
             </Box>
           );
@@ -1369,6 +1350,7 @@ export default function NetworkOptimizerPage() {
   if (liquidGlassEnabled) {
     return (
       <Box pt={8}>
+        {header}
         <LiquidGlassCard w="full" boxShadow="2xl" overflow="hidden" position="relative" p={6}>
           {content}
         </LiquidGlassCard>
@@ -1378,9 +1360,10 @@ export default function NetworkOptimizerPage() {
 
   return (
     <Box pt={8}>
+      {header}
       <Box
         bg={cardBg}
-        borderRadius="xl"
+        borderRadius="3xl"
         borderWidth="1px"
         borderColor={cardBorder}
         w="full"

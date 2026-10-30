@@ -1,12 +1,10 @@
 import {
   Box,
   Text,
-  Heading,
   HStack,
   VStack,
   SimpleGrid,
   Badge,
-  IconButton,
   useColorModeValue,
   NumberInput,
   NumberInputField,
@@ -20,13 +18,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, MousePointerClick, Keyboard, Zap } from "lucide-react";
+import { Keyboard, Zap } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
 import { MouseHotkeyRecorder } from "@/components/mouse-hotkey-recorder";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 
@@ -74,7 +72,7 @@ function BlockCard({ children }: { children: React.ReactNode }) {
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       border="1px solid"
       borderColor={borderColor}
       w="full"
@@ -115,7 +113,6 @@ function SectionHeader({ icon, title, desc }: { icon: React.ReactNode; title: st
 export default function AutoClickerPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("mouse");
-  const navigate = useNavigate();
   const { getActiveColor, getHoverColor, getBorderColor } = useThemeColor();
   const { autoclickerHotkeyEnabled, saveAutoclickerHotkeyEnabled } = useAppStartup();
 
@@ -124,8 +121,6 @@ export default function AutoClickerPage() {
   const [intervalMs, setIntervalMs] = useState(100);
   const [hotkey, setHotkey] = useState(DEFAULT_HOTKEY);
 
-  const headingColor = useColorModeValue("black", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const themeColor = getActiveColor();
@@ -225,22 +220,10 @@ export default function AutoClickerPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            <HStack spacing={2}>
-              <MousePointerClick size={24} color={themeColor} />
-              <Text>{t("autoclicker.title")}</Text>
-            </HStack>
-          </Heading>
-        </HStack>
+      <PageHeader
+        title={t("autoclicker.title")}
+        mb={6}
+      >
         <Badge
           bg={running ? themeColor : undefined}
           color={running ? themeContrastText : subTextColor}
@@ -251,7 +234,7 @@ export default function AutoClickerPage() {
         >
           {running ? t("autoclicker.running") : t("autoclicker.stopped")}
         </Badge>
-      </HStack>
+      </PageHeader>
 
       <VStack align="stretch" spacing={6}>
         {/* 卡片1：连点器热键开关 + 快捷键选择 */}

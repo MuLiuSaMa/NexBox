@@ -2,11 +2,9 @@ import {
   Box,
   Flex,
   Text,
-  Heading,
   VStack,
   HStack,
   Input,
-  Button,
   Tab,
   TabList,
   TabPanel,
@@ -31,17 +29,11 @@ import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import {
-  Ban,
-  RotateCcw,
-  RefreshCw,
-  ArrowLeft,
-  HardDrive,
-} from "lucide-react";
+import { Ban, RotateCcw, RefreshCw, HardDrive } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface ContextMenuItem {
   name: string;
@@ -104,7 +96,6 @@ export default function ContextMenuManagerPage() {
   const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const tabTextColor = getContrastTextColor();
-  const navigate = useNavigate();
 
   // 将系统报错翻译为面向用户的可读信息；权限不足时给出管理员提示
   const localErr = useCallback(
@@ -133,7 +124,6 @@ export default function ContextMenuManagerPage() {
   }, []);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tableBg = liquidGlassEnabled
     ? "rgba(255,255,255,0.7)"
@@ -392,21 +382,9 @@ export default function ContextMenuManagerPage() {
     );
   }, [pcRows, pcQuery]);
 
-
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/builtin-tools")}
-          color={headingColor}
-        >
-          {t("builtinTools.back")}
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("contextMenu.title")}
-        </Heading>
+      <PageHeader title={t("contextMenu.title")} mb={6}>
         <LiquidGlassButton
           leftIcon={<RefreshCw size={16} />}
           onClick={() => {
@@ -418,10 +396,10 @@ export default function ContextMenuManagerPage() {
           size="sm"
           variant="outline"
           colorScheme="gray"
-        >
+      >
           {t("contextMenu.refresh")}
         </LiquidGlassButton>
-      </HStack>
+      </PageHeader>
 
       <Tabs variant="soft-rounded" isLazy>
         <TabList>
@@ -618,7 +596,6 @@ export default function ContextMenuManagerPage() {
                       <LiquidGlassCard
                         key={d.letter}
                         p={2}
-                        borderRadius="lg"
                         boxShadow="sm"
                         _hover={{ borderColor: themeConfig.primaryColor }}
                       >

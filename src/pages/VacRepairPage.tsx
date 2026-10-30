@@ -6,9 +6,7 @@ import {
   Box,
   Button,
   Flex,
-  Heading,
   HStack,
-  IconButton,
   SimpleGrid,
   Spinner,
   Text,
@@ -20,7 +18,6 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-  ArrowLeft,
   RefreshCw,
   Swords,
   ShieldCheck,
@@ -31,12 +28,12 @@ import {
   Gamepad2,
   TerminalSquare,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
 interface VacRepairStatus {
   steam_installed: boolean;
@@ -51,7 +48,6 @@ const MAX_CONSOLE_LINES = 500;
 
 export default function VacRepairPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
@@ -63,8 +59,6 @@ export default function VacRepairPage() {
   const [output, setOutput] = useState<string[]>([]);
   const consoleRef = useRef<HTMLDivElement>(null);
 
-  const adaptiveTitle = useAdaptiveTextColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#969696");
   const borderColor = useColorModeValue("gray.200", "rgba(255,255,255,0.16)");
@@ -193,31 +187,7 @@ export default function VacRepairPage() {
   return (
     <Box pt={8} w="full">
       <VStack align="stretch" spacing={5} w="full">
-        <Flex
-          direction={{ base: "column", md: "row" }}
-          justify="space-between"
-          align={{ base: "stretch", md: "center" }}
-          gap={4}
-          wrap="wrap"
-        >
-          <HStack spacing={3} minW={0}>
-            <IconButton
-              aria-label={t("builtinTools.back")}
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate("/builtin-tools")}
-              color={headingColor}
-              flexShrink={0}
-            />
-            <Box minW={0}>
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
-                {t("vacRepair.title")}
-              </Heading>
-              <Text mt={1} fontSize="sm" color={subLabelColor} noOfLines={2}>
-                {t("vacRepair.subtitle")}
-              </Text>
-            </Box>
-          </HStack>
+        <PageHeader title={t("vacRepair.title")} mb={0}>
           <Button
             size="sm"
             variant="outline"
@@ -227,10 +197,10 @@ export default function VacRepairPage() {
             isDisabled={isRepairing}
             alignSelf={{ base: "flex-start", md: "auto" }}
             flexShrink={0}
-          >
+        >
             {t("vacRepair.refresh")}
           </Button>
-        </Flex>
+        </PageHeader>
 
         {!status && isChecking && (
           <LiquidGlassCard p={6} boxShadow="sm" w="full">

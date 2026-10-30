@@ -559,7 +559,7 @@ export default function CpuIsolationPanel({
             w="full"
             maxH="220px"
             overflowY="auto"
-            borderRadius="xl"
+            borderRadius="3xl"
             border="1px solid"
             borderColor={cardBorder}
             bg={cardBg}
@@ -643,7 +643,7 @@ export default function CpuIsolationPanel({
         {!topology ? (
           <Text color={subTextColor} fontSize="sm" p={4}>{t("optimization.cpuScheduler.loading")}</Text>
         ) : (
-          <VStack align="start" spacing={4} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+          <VStack align="start" spacing={4} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
             <HStack spacing={2} w="full" wrap="wrap">
               <Text color={subTextColor} fontSize="sm" fontWeight="600" mr={2}>
                 {t("optimization.cpuScheduler.quickPreset")}:
@@ -804,7 +804,7 @@ export default function CpuIsolationPanel({
           isLoading={isApplying}
           loadingText={t(`${k}.applying`)}
           leftIcon={<ShieldCheck size={20} />}
-          borderRadius="2xl"
+          borderRadius="3xl"
           fontWeight="700"
           fontSize="md"
           height="56px"
@@ -827,7 +827,7 @@ export default function CpuIsolationPanel({
           isLoading={isRestoring}
           loadingText={t(`${k}.restoring`)}
           leftIcon={<AlertTriangle size={20} />}
-          borderRadius="2xl"
+          borderRadius="3xl"
           fontWeight="700"
           fontSize="md"
           height="56px"
@@ -874,7 +874,7 @@ export default function CpuIsolationPanel({
         <Text fontWeight="600" color={textColor} fontSize="md" mb={2}>
           {t(`${k}.saveRule`)}
         </Text>
-        <VStack align="start" spacing={3} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+        <VStack align="start" spacing={3} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
           <HStack w="full" spacing={3}>
             <Input
               value={ruleName}
@@ -920,7 +920,7 @@ export default function CpuIsolationPanel({
           <Text fontWeight="600" color={textColor} fontSize="md" mb={3}>
             {t(`${k}.rulesTitle`)}
           </Text>
-          <VStack align="start" spacing={2} p={4} borderRadius="xl" border="1px solid" borderColor={cardBorder} w="full">
+          <VStack align="start" spacing={2} p={4} borderRadius="3xl" border="1px solid" borderColor={cardBorder} w="full">
             {rules.map((rule) => (
               <HStack key={rule.name} w="full" justify="space-between" spacing={3}>
                 <HStack spacing={3} flex={1} minW={0}>

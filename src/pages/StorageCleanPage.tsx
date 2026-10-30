@@ -41,6 +41,7 @@ import {
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { localizeWinapp2Name } from "@/config/winapp2-names";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -48,7 +49,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   Trash2,
   RefreshCw,
-  ArrowLeft,
   HardDrive,
   FileText,
   Image,
@@ -69,9 +69,9 @@ import {
   Trash,
   Download,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
 import { hexToRgba } from "@/lib/color-utils";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
@@ -310,7 +310,6 @@ const CleanItemCard = memo(function CleanItemCard({
 
   return (
     <LiquidGlassCard
-      borderRadius="lg"
       p={4}
       cursor={hasContent ? "pointer" : "not-allowed"}
       onClick={hasContent ? () => onToggleSelect(item.id) : undefined}
@@ -414,7 +413,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   onToggleExpand,
   primaryColor,
 }: JunkCategoryCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const headingColor = useColorModeValue("gray.800", "#ffffff");
   const descColor = useColorModeValue("gray.500", "#ffffff");
   const pathColor = useColorModeValue("gray.400", "#666666");
@@ -443,7 +442,6 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
 
   return (
     <LiquidGlassCard
-      borderRadius="lg"
       overflow="hidden"
       transition="all 0.2s ease"
       {...(isSelected ? { borderColor: primaryColor } : {})}
@@ -472,7 +470,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
           <VStack align="start" spacing={1}>
             <HStack spacing={2}>
               <Text fontSize="md" fontWeight="semibold" color={headingColor}>
-                {category.display_name}
+                {localizeWinapp2Name(category.display_name, i18n.language)}
               </Text>
               <Badge
                 size="sm"
@@ -608,7 +606,7 @@ const BigFilesTable = memo(function BigFilesTable({
   }, [files, sortDesc]);
 
   return (
-    <LiquidGlassCard borderRadius="xl" overflow="hidden">
+    <LiquidGlassCard overflow="hidden">
       <HStack justify="space-between" px={4} py={3}>
         <Text fontSize="sm" fontWeight="bold" color={headingColor}>
           {t("storageClean.bigResults")}
@@ -714,7 +712,6 @@ export default function StorageCleanPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("disk");
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
-  const navigate = useNavigate();
 
   const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("gray.900", "#ffffff");
@@ -1261,18 +1258,10 @@ export default function StorageCleanPage() {
         .reduce((sum, c) => sum + c.total_size, 0)
     : 0;
 
-
   const content = (
     <VStack align="stretch" spacing={6} pt={8}>
       <HStack justifyContent="space-between" alignItems="center" w="full" position="relative">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimization")}
-          color={headingColor}
-        >
-          返回
-        </Button>
+        <PageBackButton />
         <Heading
           position="absolute"
           left="50%"
@@ -1411,8 +1400,7 @@ export default function StorageCleanPage() {
             <VStack align="stretch" spacing={6}>
               {scanResult && (
                 <LiquidGlassCard
-                  p={4}
-                  borderRadius="xl">
+                  p={4}>
                   <SimpleGrid columns={3} spacing={4}>
                     <VStack align="center">
                       <Icon as={HardDrive} color={themeConfig.primaryColor} boxSize={6} />
@@ -1503,8 +1491,7 @@ export default function StorageCleanPage() {
             <VStack align="stretch" spacing={6}>
               {junkResult && (
                 <LiquidGlassCard
-                  p={4}
-                  borderRadius="xl">
+                  p={4}>
                   <SimpleGrid columns={3} spacing={4}>
                     <VStack align="center">
                       <Icon as={Trash2} color={themeConfig.primaryColor} boxSize={6} />
@@ -1631,8 +1618,7 @@ export default function StorageCleanPage() {
           <TabPanel px={0} pt={0}>
             <VStack align="stretch" spacing={6}>
               <LiquidGlassCard
-                p={4}
-                borderRadius="xl">
+                p={4}>
                 {/* 磁盘选择 + 开始扫描 同一行,按钮紧贴选择框右侧 */}
                 <HStack spacing={3} alignItems="end" flexWrap="wrap">
                   <VStack align="start" spacing={2}>
@@ -1844,7 +1830,7 @@ export default function StorageCleanPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <LiquidGlassCard p={5} borderRadius="xl">
+      <LiquidGlassCard p={5}>
         <HStack mb={3}>
           <Text fontSize="sm" fontWeight="bold" color={tipTitleColor}>
             {t("storageClean.tip.title")}

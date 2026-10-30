@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   useColorModeValue,
@@ -18,14 +17,11 @@ import {
   InputGroup,
   InputLeftElement,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Search,
   Monitor,
   Laptop,
@@ -33,6 +29,8 @@ import {
   Cpu,
   AlertTriangle,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import nvidiaLogo from "@/assets/nvidia.png";
 import { useBackground } from "@/contexts/background-context";
@@ -66,10 +64,8 @@ interface GpuDetection {
 
 export default function NvidiaDriverDownloadPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("download");
   const { liquidGlassEnabled } = useBackground();
-  const adaptiveTitle = useAdaptiveTextColor();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
   const isDark = useColorModeValue(false, true);
 
@@ -190,35 +186,15 @@ export default function NvidiaDriverDownloadPage() {
     <Box pt={8} pb={8}>
       <VStack spacing={6} align="start">
         {/* 标题栏 */}
-        <HStack w="full" justify="space-between">
-          <HStack>
-            <Box
-              as="button"
-              onClick={() => navigate(-1)}
-              p={1}
-              borderRadius="md"
-              _hover={{ bg: useColorModeValue("gray.100", "gray.700") }}
-            >
-              <ArrowLeft size={20} />
-            </Box>
-            <img
-              src={nvidiaLogo}
-              width={28}
-              height={28}
-              style={{ objectFit: "contain" }}
-              alt="NVIDIA"
-            />
-            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-              {t("nvidiaDriverDownload.title")}
-            </Heading>
-          </HStack>
-        </HStack>
+        <PageHeader
+          title={t("nvidiaDriverDownload.title")}
+          mb={0}
+        />
 
         {/* 检测信息区域 */}
         <LiquidGlassCard
           forceGlass
           p={5}
-          borderRadius="xl"
           w="full"
           borderLeft="4px solid"
           borderLeftColor={getActiveColor()}
@@ -307,7 +283,7 @@ export default function NvidiaDriverDownloadPage() {
 
         {/* 驱动列表区域 */}
         {!error && (
-          <LiquidGlassCard forceGlass p={5} borderRadius="xl" w="full">
+          <LiquidGlassCard forceGlass p={5} w="full">
             <VStack spacing={4} align="start" w="full">
               {/* 搜索栏 + 计数 */}
               <HStack w="full" justify="space-between">

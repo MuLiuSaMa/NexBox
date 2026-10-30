@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   SimpleGrid,
@@ -13,9 +12,10 @@ import {
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, RefreshCw, ChevronRight, Gamepad2 } from "lucide-react";
+import { RefreshCw, ChevronRight, Gamepad2 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { Surface } from "@/components/df/surface";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import {
@@ -146,9 +146,7 @@ export default function StreamerDirectoryPage() {
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.600", "#a0a0a0");
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [entries, setEntries] = useState<StreamerEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -179,22 +177,9 @@ export default function StreamerDirectoryPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack mb={2} spacing={4}>
-        <Button
-          size="sm"
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          color={headingColor}
-          onClick={() => navigate("/delta-force")}
-        >
-          {t("deltaForce.back", "返回")}
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-          {t("streamerSettings.title", "主播设置")}
-        </Heading>
-      </HStack>
+      <PageHeader title={t("streamerSettings.title", "主播设置")} mb={2} />
 
-      <HStack mb={6} align="flex-end" spacing={4}>
+        <HStack mb={6} align="flex-end" spacing={4}>
         <Text fontSize="sm" color={subTextColor} ml={{ base: 0, md: "92px" }}>
           {t("streamerSettings.directoryDesc", "收录 {{count}} 位主播的实机游戏设置与电脑外设配置", {
             count: entries?.length ?? 16,

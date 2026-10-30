@@ -22,6 +22,7 @@ import StreamerProfilePage from "./pages/StreamerProfilePage";
 import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
+import CpuRenamePage from "./pages/CpuRenamePage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
 import ShaderCachePage from "./pages/ShaderCachePage";
 import PsoCachePage from "./pages/PsoCachePage";
@@ -58,9 +59,12 @@ import VacRepairPage from "./pages/VacRepairPage";
 import TimeSyncPage from "./pages/TimeSyncPage";
 import ScreenTestPage from "./pages/ScreenTestPage";
 import BsodLogPage from "./pages/BsodLogPage";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useNavigate } from "react-router-dom";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
+import { store } from "@/lib/store";
+import { STARTUP_PAGE_STORE_KEY, STARTUP_PAGE_VALUES } from "@/config/startup-pages";
 
 import { UpdateModal } from "./components/UpdateModal";
 import { SplashScreen } from "./components/SplashScreen";
@@ -79,6 +83,55 @@ import { IslandRemoteBridge } from "./components/ui/island-remote-bridge";
 function StartupAdHost() {
   const { splash } = useAds();
   return <StartupAdModal ads={splash} />;
+}
+
+/**
+ * 启动页跳转：应用启动时如果用户设置了「默认启动页面」，直接落到该页面。
+ * - 只在主窗口首次进入 "/" 时执行一次，不会影响独立窗口（灵动岛/歌词/悬浮窗等）
+ * - 先读 localStorage 首帧缓存避免闪一下主页，缓存缺失时再读 settings.json 的权威值
+ */
+function StartupPageRedirect() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const done = useRef(false);
+
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    if (location.pathname !== "/") return;
+
+    const apply = (target: string | null | undefined) => {
+      if (!target || target === "/") return;
+      if (!STARTUP_PAGE_VALUES.includes(target)) return;
+      navigate(target, { replace: true });
+    };
+
+    let cached: string | null = null;
+    try {
+      cached = localStorage.getItem(STARTUP_PAGE_STORE_KEY);
+    } catch {
+      cached = null;
+    }
+    if (cached) {
+      apply(cached);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await store.get<string>(STARTUP_PAGE_STORE_KEY);
+        if (!cancelled) apply(saved);
+      } catch {
+        /* 读取失败就用默认首页 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, location.pathname]);
+
+  return null;
 }
 
 function App() {
@@ -128,6 +181,7 @@ function App() {
   return (
     <MusicProvider>
       <>
+        <StartupPageRedirect />
         {!isStartupComplete && <SplashScreen />}
         {isStartupComplete && <StartupAdHost />}
         {/* <MiniMusicPlayer /> */}
@@ -266,6 +320,12 @@ function App() {
                     path="/gpu-rename"
                     element={
                       <GpuRenamePage />
+                    }
+                  />
+                  <Route
+                    path="/cpu-rename"
+                    element={
+                      <CpuRenamePage />
                     }
                   />
                   <Route

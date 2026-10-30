@@ -28,13 +28,13 @@ import {
   Trash2,
   ShieldCheck,
   X,
-  ArrowLeft,
   ArrowLeftRight,
   ClipboardList,
   Plus,
   Save,
   FolderOpen,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
 import { QRCodeSVG } from "qrcode.react";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
@@ -603,17 +603,11 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   return (
     <Modal isOpen={isOpen} onClose={onClose} isCentered size="lg">
       <ModalOverlay />
-      <ModalContent bg={modalBg} color={contentColor} border="1px solid" borderColor={modalBorderColor} borderRadius="xl">
+      <ModalContent bg={modalBg} color={contentColor} border="1px solid" borderColor={modalBorderColor} borderRadius="3xl">
         <ModalHeader>
           <HStack spacing={2}>
             {view === "files" && (
-              <IconButton
-                aria-label="back"
-                icon={<ArrowLeft size={16} />}
-                size="xs"
-                variant="ghost"
-                onClick={backToMain}
-              />
+              <PageBackButton size="sm" onClick={backToMain} />
             )}
             <Text>
               {view === "main"
@@ -665,7 +659,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                     以下设备正在请求连接本机，确认是你本人在操作后再点「允许」。
                   </Text>
                   {pairRequests.map((r) => (
-                    <Box key={r.id} bg={boxBg} borderRadius="lg" p={3}>
+                    <Box key={r.id} bg={boxBg} borderRadius="2xl" p={3}>
                       <HStack justify="space-between" align="center">
                         <VStack align="start" spacing={0}>
                           <Text fontSize="sm" fontWeight="medium">
@@ -790,7 +784,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                         progFresh && (f.direction === "from_device" ? !f.saved_path : !f.acked);
                       const pct = prog && prog.total > 0 ? Math.min(100, (prog.done / prog.total) * 100) : null;
                       return (
-                        <Box key={f.id} bg={boxBg} borderRadius="lg" p={3}>
+                        <Box key={f.id} bg={boxBg} borderRadius="2xl" p={3}>
                           <HStack justify="space-between" align="center">
                             <HStack spacing={2} flex={1} minW={0}>
                               <Text

@@ -3,9 +3,7 @@ import {
   Box,
   Button,
   Flex,
-  Heading,
   HStack,
-  IconButton,
   Image,
   Progress,
   Text,
@@ -16,13 +14,13 @@ import {
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowLeft, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import dotnetLogo from "@/assets/dotnet-framework.webp";
 import directxLogo from "@/assets/directx.webp";
 import visualStudioLogo from "@/assets/visual-studio.webp";
@@ -85,17 +83,14 @@ const phaseLabel: Record<RepairProgress["phase"], string> = {
 
 export default function RuntimeRepairPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
   const toast = useDynamicIsland("wrench");
-  const adaptiveTitle = useAdaptiveTextColor();
   const [activeId, setActiveId] = useState<RuntimeId | null>(null);
   const [progress, setProgress] = useState<RepairProgress | null>(null);
   const [statuses, setStatuses] = useState<Record<string, RuntimeStatus>>({});
   const [isChecking, setIsChecking] = useState(true);
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#969696");
   const borderColor = useColorModeValue("gray.200", "rgba(255,255,255,0.16)");
@@ -141,27 +136,10 @@ export default function RuntimeRepairPage() {
   return (
     <Box pt={8} w="full">
       <VStack align="stretch" spacing={5} w="full">
-        <Flex
-          direction={{ base: "column", md: "row" }}
-          justify="space-between"
-          align={{ base: "stretch", md: "center" }}
-          gap={4}
-          wrap="wrap"
+        <PageHeader
+          title="运行库修复"
+          mb={0}
         >
-          <HStack spacing={3} minW={0}>
-            <IconButton
-              aria-label={t("builtinTools.back")}
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate("/builtin-tools")}
-              color={headingColor}
-              flexShrink={0}
-            />
-            <Box minW={0}>
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>运行库修复</Heading>
-              <Text mt={1} fontSize="sm" color={subLabelColor}>先检测系统运行库与游戏常用 DLL，仅修复缺失或不完整的项目。</Text>
-            </Box>
-          </HStack>
           <Button
             size="sm"
             variant="outline"
@@ -174,7 +152,7 @@ export default function RuntimeRepairPage() {
           >
             重新检测
           </Button>
-        </Flex>
+        </PageHeader>
 
         <VStack align="stretch" spacing={3} w="full">
           {runtimes.map((runtime) => {

@@ -1,11 +1,9 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   useColorModeValue,
-  IconButton,
   Button,
   Badge,
   Tooltip,
@@ -15,7 +13,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import {
-  ArrowLeft,
   Gauge,
   Download,
   Upload,
@@ -25,12 +22,12 @@ import {
   Network,
   Server,
 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useNavigate } from "react-router-dom";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useNavPosition } from "@/components/ui/main-layout";
 
 interface SpeedTestProgress {
@@ -325,7 +322,6 @@ function MetricRow({
 
 export default function SpeedTestPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
 
   const [stage, setStage] = useState<Stage>("idle");
@@ -448,7 +444,6 @@ export default function SpeedTestPage() {
     }
   }, []);
 
-  const adaptiveTitle = useAdaptiveTextColor();
   const headingColor = useColorModeValue("#000000", "#ffffff");
   const subColor = useColorModeValue("gray.500", "#888888");
 
@@ -462,25 +457,12 @@ export default function SpeedTestPage() {
   return (
     <Box pt={2} minH={fillMinH} display="flex" flexDirection="column">
       <VStack align="stretch" spacing={5} flex={1}>
-        <HStack justify="space-between" align="center" flexWrap="wrap">
-          <HStack spacing={3}>
-            <IconButton
-              aria-label="back"
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate(-1)}
-            />
-            <HStack spacing={2}>
-              <Gauge color={activeColor} />
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-                {t("speedtest.title")}
-              </Heading>
-            </HStack>
-          </HStack>
-          <HStack spacing={3}>
-            <StageBadge stage={stage} />
-          </HStack>
-        </HStack>
+        <PageHeader
+          title={t("speedtest.title")}
+          mb={0}
+        >
+          <StageBadge stage={stage} />
+        </PageHeader>
 
         {/* 主测速卡片：液态玻璃效果（跟随全局开关）。网格布局：
             桌面端 = 左列(下载/上传大数字 + 折线图)，右列(开始按钮 + 测速服务器 + 延迟/抖动/丢包，

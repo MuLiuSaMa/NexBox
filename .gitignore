@@ -207,3 +207,6 @@ doralite_lite-main/
 
 # 主播档案抓取工作区（gjts.cn 抓取/打包脚本与原始数据，仅本地保留；运行时数据在 public/streamer-data）
 主播/
+
+# 临时构建产物（验证构建用，勿提交）
+.verify-build*/

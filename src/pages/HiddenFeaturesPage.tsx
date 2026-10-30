@@ -14,7 +14,6 @@ import {
   Box,
   Button,
   Flex,
-  Heading,
   HStack,
   IconButton,
   Input,
@@ -34,11 +33,9 @@ import {
   VStack,
   useColorModeValue,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import {
-  ArrowLeft,
   Ban,
   CheckCircle2,
   CircleDot,
@@ -48,7 +45,8 @@ import {
   Search,
   AlertTriangle,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
@@ -215,13 +213,10 @@ const EntryRow = memo(function EntryRow({
 
 export default function HiddenFeaturesPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
   const toast = useDynamicIsland();
-
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const [status, setStatus] = useState<FeatureFlagsStatus | null>(null);
   const [store, setStore] = useState<StoreKind>("runtime");
@@ -244,7 +239,6 @@ export default function HiddenFeaturesPage() {
   });
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#e0e0e0");
   const subLabelColor = useColorModeValue("gray.500", "#969696");
   const borderColor = useColorModeValue("gray.200", "rgba(255,255,255,0.16)");
@@ -351,43 +345,26 @@ export default function HiddenFeaturesPage() {
     <Box pt={8} w="full">
       <VStack align="stretch" spacing={5} w="full">
         {/* 标题栏 */}
-        <Flex
-          direction={{ base: "column", md: "row" }}
-          justify="space-between"
-          align={{ base: "stretch", md: "center" }}
-          gap={4}
-          wrap="wrap"
+        <PageHeader
+          title={
+            <HStack spacing={2} justify="center">
+              <Text as="span">{t("hiddenFeatures.title")}</Text>
+              <Badge
+                borderRadius="full"
+                px={2}
+                py={0.5}
+                fontSize="xs"
+                fontWeight={700}
+                color="#E5A50A"
+                bg={hexToRgba("#E5A50A", 0.14)}
+                flexShrink={0}
         >
-          <HStack spacing={3} minW={0}>
-            <IconButton
-              aria-label={t("builtinTools.back")}
-              icon={<ArrowLeft size={20} />}
-              variant="ghost"
-              onClick={() => navigate("/builtin-tools")}
-              color={headingColor}
-              flexShrink={0}
-            />
-            <Box minW={0}>
-              <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} noOfLines={1}>
-                {t("hiddenFeatures.title")}
-              </Heading>
-              <Text mt={1} fontSize="sm" color={subLabelColor} noOfLines={2}>
-                {t("hiddenFeatures.subtitle")}
-              </Text>
-            </Box>
-            <Badge
-              borderRadius="full"
-              px={2}
-              py={0.5}
-              fontSize="xs"
-              fontWeight={700}
-              color="#E5A50A"
-              bg={hexToRgba("#E5A50A", 0.14)}
-              flexShrink={0}
-            >
-              BETA
-            </Badge>
-          </HStack>
+                BETA
+              </Badge>
+            </HStack>
+          }
+          mb={0}
+        >
           <Button
             size="sm"
             variant="outline"
@@ -399,7 +376,7 @@ export default function HiddenFeaturesPage() {
           >
             {t("hiddenFeatures.refresh")}
           </Button>
-        </Flex>
+        </PageHeader>
 
         {/* 风险提示 */}
         <LiquidGlassCard p={5} boxShadow="sm" w="full">

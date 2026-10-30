@@ -178,7 +178,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
             left={`${popoverPos.left}px`}
             zIndex={9999}
             bg={panelBg}
-            borderRadius="xl"
+            borderRadius="3xl"
             boxShadow={panelShadow}
             border="1px solid"
             borderColor={cardBorder}

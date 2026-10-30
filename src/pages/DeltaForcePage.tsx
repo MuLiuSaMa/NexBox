@@ -300,7 +300,7 @@ function MoreGunCodesCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -354,7 +354,7 @@ function RouletteCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -432,7 +432,7 @@ function OfficialMapCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -505,7 +505,7 @@ function OfficialWallpaperCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -649,7 +649,7 @@ const LoadoutCard = memo(function LoadoutCard({
   return (
     <Box
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -1287,7 +1287,7 @@ function StatsAnalysisCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}
@@ -1341,7 +1341,7 @@ function StreamerSettingsCard() {
     <Box
       flex={1}
       bg={cardBg}
-      borderRadius="xl"
+      borderRadius="3xl"
       p={4}
       border="1px solid"
       borderColor={borderColor}

@@ -30,6 +30,34 @@ pub struct SensorsResponse {
     pub sensors: Vec<SensorReading>,
 }
 
+/// 修正 LHML 在 SVI3 平台（AMD Zen4/Zen5，如 Ryzen 7 8840HS）上 CPU VID 取值错误的问题。
+///
+/// 成因：`Amd17Cpu.cs` 的每核电压固定按 SVI2 公式算 `Vcore = 1.550 - 0.00625 × CurCpuVid`，
+/// 而 SVI3 平台的 VID 编码语义不同（数值本身就代表电压）。于是上报值恰好等于 `1.550 - 真实电压`：
+/// 真实 1.28V 会被报成 0.27V，表现为传感器页里所有核心电压都卡在 0.25V 左右。
+///
+/// 所以正确还原式是 `真实 = 1.550 - 上报值`，不是乘系数。
+/// 用截图实测三组值验证：0.256→1.294、0.269→1.281、0.265→1.285，与 HWiNFO 的 1.280V 吻合。
+///
+/// 只在「电压 + CPU + 名字含 VID + 值 < 0.5」这个物理上不可能成立的区间内还原
+/// （真实 CPU 的 Core VID 不会低于 0.5V），正常机器（>0.5V）与其它厂商的电压传感器不受影响。
+fn normalize_sensor_values(response: &mut SensorsResponse) {
+    for s in response.sensors.iter_mut() {
+        if !s.sensor_type.eq_ignore_ascii_case("Voltage") {
+            continue;
+        }
+        if !s.hardware_type.eq_ignore_ascii_case("Cpu") {
+            continue;
+        }
+        if !s.name.to_uppercase().contains("VID") {
+            continue;
+        }
+        if s.value > 0.05 && s.value < 0.5 {
+            s.value = 1.550 - s.value;
+        }
+    }
+}
+
 /// 管道桥接：管理 NexBoxMonitor 子进程的 stdin/stdout
 pub struct SensorBridge {
     child: Child,
@@ -103,7 +131,10 @@ impl SensorBridge {
 
         // 先尝试解析为 SensorsResponse
         match serde_json::from_str::<SensorsResponse>(line) {
-            Ok(response) => Ok(response),
+            Ok(mut response) => {
+                normalize_sensor_values(&mut response);
+                Ok(response)
+            }
             Err(_) => {
                 // 如果失败，检查是否是子进程报错 JSON（{"error":"..."}）
                 if let Ok(err_obj) = serde_json::from_str::<serde_json::Value>(line) {

@@ -1,7 +1,6 @@
 import {
   Box,
   Text,
-  Heading,
   VStack,
   HStack,
   Switch,
@@ -37,18 +36,18 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, ArrowLeft, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus, Save, Trash2 } from "lucide-react";
+import { Eye, EyeOff, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus, Save, Trash2 } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
-import { useNavigate } from "react-router-dom";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
 import { HoldKeyRecorder } from "@/components/hold-key-recorder";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { hexToRgba } from "@/lib/color-utils";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import CrosshairPreview from "@/components/crosshair-preview";
 
 export interface CrosshairSettings {
@@ -176,7 +175,7 @@ function SettingCard({
   }
 
   return (
-    <Box bg={cardBg} borderRadius="xl" p={5} border="1px solid" borderColor={borderColor}>
+    <Box bg={cardBg} borderRadius="3xl" p={5} border="1px solid" borderColor={borderColor}>
       <VStack align="stretch" spacing={4}>
         <HStack justify="space-between" align="center" w="full">
           <Text fontWeight="medium" color={headerColor}>{title}</Text>
@@ -191,7 +190,6 @@ function SettingCard({
 export default function CrosshairPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("target");
-  const navigate = useNavigate();
   const { crosshairHotkey, saveCrosshairHotkey } = useAppStartup();
   const { getActiveColor, getHoverColor, getBorderColor, getContrastTextColor } = useThemeColor();
 
@@ -236,7 +234,6 @@ export default function CrosshairPage() {
   }, [saveModalOpen]);
 
   const headingColor = useColorModeValue("black", "#ffffff");
-  const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
@@ -611,22 +608,9 @@ export default function CrosshairPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <HStack justify="space-between" mb={6}>
-        <HStack>
-          <IconButton
-            aria-label={t("builtinTools.back")}
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate("/builtin-tools")}
-            color={headingColor}
-          />
-          <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-            {t("crosshair.title")}
-          </Heading>
-        </HStack>
-      </HStack>
+      <PageHeader title={t("crosshair.title")} mb={6} />
 
-      <SimpleGrid columns={2} spacing={5}>
+        <SimpleGrid columns={2} spacing={5}>
         <VStack align="stretch" spacing={5}>
           <SettingCard title={t("crosshair.enableCrosshair")}>
             <VStack align="stretch" spacing={3}>

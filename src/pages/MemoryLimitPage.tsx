@@ -1,6 +1,5 @@
 import {
   Box,
-  Heading,
   VStack,
   Text,
   HStack,
@@ -17,17 +16,17 @@ import {
   TabPanel,
   Input,
 } from "@chakra-ui/react";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
-import { ArrowLeft, AlertTriangle, Cpu } from "lucide-react";
+import { AlertTriangle, Cpu } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 
 interface MemoryLimitOption {
@@ -61,9 +60,7 @@ export default function MemoryLimitPage() {
   const [customError, setCustomError] = useState<string>("");
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const navigate = useNavigate();
   const toast = useDynamicIsland("memory");
-  const adaptiveTitle = useAdaptiveTextColor();
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
@@ -254,23 +251,10 @@ export default function MemoryLimitPage() {
     label: t(`optimization.memoryLimit.options.${opt.id}`),
   }));
 
+  const header = <PageHeader title={t("optimization.memoryLimit.title")} mb={6} />;
+
   const content = (
     <VStack align="start" spacing={6}>
-      <HStack justifyContent="space-between" alignItems="center" w="full">
-        <Button
-          variant="ghost"
-          leftIcon={<ArrowLeft size={18} />}
-          onClick={() => navigate("/optimize")}
-          color={headingColor}
-        >
-                        返回
-        </Button>
-        <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow} fontWeight="700">
-          {t("optimization.memoryLimit.title")}
-        </Heading>
-        <Box w="100px" />
-      </HStack>
-
       {isLoading ? (
         <Text color={subTextColor}>{t("optimization.starting")}</Text>
       ) : (
@@ -284,7 +268,7 @@ export default function MemoryLimitPage() {
               align="start"
               spacing={2}
               p={4}
-              borderRadius="xl"
+              borderRadius="3xl"
               border="1px solid"
               borderColor={cardBorder}
               w="full"
@@ -406,7 +390,7 @@ export default function MemoryLimitPage() {
               isLoading={isApplying}
               loadingText={t("optimization.optimizing")}
               leftIcon={<Cpu size={20} />}
-              borderRadius="2xl"
+              borderRadius="3xl"
               fontWeight="700"
               fontSize="md"
               height="56px"
@@ -435,7 +419,7 @@ export default function MemoryLimitPage() {
               isLoading={isApplying}
               loadingText={t("optimization.optimizing")}
               leftIcon={<AlertTriangle size={20} />}
-              borderRadius="2xl"
+              borderRadius="3xl"
               fontWeight="700"
               fontSize="md"
               height="56px"
@@ -455,6 +439,7 @@ export default function MemoryLimitPage() {
 
   return (
     <Box pt={8}>
+      {header}
       {liquidGlassEnabled ? (
         <LiquidGlassCard
           w="full"
@@ -470,7 +455,7 @@ export default function MemoryLimitPage() {
           bg={cardBg}
           borderColor={cardBorder}
           borderWidth="1px"
-          borderRadius="2xl"
+          borderRadius="3xl"
           w="full"
           boxShadow="2xl"
           overflow="hidden"

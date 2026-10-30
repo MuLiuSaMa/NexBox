@@ -174,7 +174,7 @@ export function CustomSelect({
             bg={dropdownBg}
             border="1px solid"
             borderColor={getBorderColor()}
-            borderRadius="lg"
+            borderRadius="2xl"
             boxShadow="2xl"
             zIndex={99999}
             maxH="280px"

@@ -39,7 +39,7 @@ export function LiquidGlassToolCard({
   // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const padding = size === "sm" ? 3 : size === "md" ? 4 : 5;
-  const borderRadius = size === "sm" ? "lg" : "xl";
+  const borderRadius = size === "sm" ? "2xl" : "3xl";
   const isReal = liquidGlassEnabled && liquidGlassMode === "real" && !isDashed;
 
   const backdropFilter = isReal

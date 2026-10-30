@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
-  Heading,
   HStack,
-  IconButton,
   Slider,
   SliderFilledTrack,
   SliderThumb,
@@ -20,11 +18,11 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { ArrowLeft, Blend, Contrast, Expand, Eye, Gauge, Grid3x3, LayoutGrid, Moon, RefreshCw, Ruler, ScanLine, Shrink, SquareStack, Type, Waves } from "lucide-react";
+import { Blend, Contrast, Expand, Eye, Gauge, Grid3x3, LayoutGrid, Moon, RefreshCw, Ruler, Shrink, SquareStack, Type, Waves } from "lucide-react";
+import { PageBackButton } from "@/components/special/page-back-button";
+import { PageHeader } from "@/components/special/page-header";
 import { useThemeColor } from "@/contexts/theme-color-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { useNavPosition } from "@/components/ui/main-layout";
 import { hexToRgba } from "@/lib/color-utils";
 
@@ -847,12 +845,10 @@ function TestLayout({
 
 export default function ScreenTestPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { config: themeConfig, getActiveColor, getContrastTextColor } = useThemeColor();
   const activeColor = getActiveColor();
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
-  const adaptiveTitle = useAdaptiveTextColor();
   const subColor = useColorModeValue("gray.500", "#888888");
   const navPosition = useNavPosition();
   const fillMinH = navPosition === "top" ? "calc(100vh - 152px)" : "calc(100vh - 88px)";
@@ -877,20 +873,10 @@ export default function ScreenTestPage() {
   return (
     <Box pt={2} minH={fillMinH} display="flex" flexDirection="column">
       <VStack align="stretch" spacing={4} flex={1}>
-        <HStack spacing={3}>
-          <IconButton
-            aria-label="back"
-            icon={<ArrowLeft size={20} />}
-            variant="ghost"
-            onClick={() => navigate(-1)}
-          />
-          <HStack spacing={2}>
-            <ScanLine color={activeColor} />
-            <Heading size="lg" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
-              {t("screenTest.title")}
-            </Heading>
-          </HStack>
-        </HStack>
+        <PageHeader
+          title={t("screenTest.title")}
+          mb={0}
+        />
         <Text fontSize="sm" color={subColor}>
           {t("screenTest.desc")}
         </Text>
