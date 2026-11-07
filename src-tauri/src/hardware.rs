@@ -1759,7 +1759,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
             Ok(results) => {
                 let sound_filter_keywords = [
                     "Virtual", "VB-Audio", "Voicemeeter", "CABLE", "Sonic Studio",
-                    "NVIDIA Virtual", "Steam Streaming", "Oculus", "Wave Link",
+                    "NVIDIA", "FxSound", "Steam Streaming", "Oculus", "Wave Link",
                     "Elgato Sound Capture", "Nahimic", "DTS", "Dolby",
                     "Bluetooth", "Hands-Free", "S/PDIF",
                 ];

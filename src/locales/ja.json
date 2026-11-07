@@ -9,6 +9,7 @@
   },
   "view": {
     "grid": "グリッド表示",
+    "compact": "小カード表示",
     "list": "リスト表示"
   },
   "onboarding": {
@@ -50,6 +51,7 @@
     "settings": "設定",
     "gpuRename": "GPU名前変更",
     "cpuRename": "CPU 名前変更",
+    "mousePolling": "マウスポーリングレート測定",
     "resolutionConverter": "解像度変換",
     "dlssPreset": "デルタフォースDLSS設定",
     "epicFree": "Epic 無料ゲーム",
@@ -788,6 +790,7 @@
     "optimization": "最適化",
     "builtinTools": "内蔵ツール",
     "thirdpartyTools": "サードパーティツール",
+    "officialProducts": "公式製品",
     "officialTools": "公式おすすめ",
     "recommended": "推奨",
     "tools": {
@@ -1063,17 +1066,6 @@
     "recorderNotStarted": "レコーダーが起動していません。後でもう一度お試しください"
   },
   "overlayPanel": {
-    "remoteMonitor": {
-      "title": "スマホ遠隔モニター",
-      "description": "有効にすると、同一Wi-Fi上のスマホブラウザでハードウェア情報をリアルタイム表示できます",
-      "scanHint": "スマホでスキャン、または下記のアドレスを入力",
-      "copy": "アドレスをコピー",
-      "pin": "アクセスコード",
-      "enable": "リモート監視を有効化",
-      "style": "スマホのレイアウト",
-      "firewallHint": "スマホで開けない場合、Windows ファイアウォールで NexBox を許可するか、一時的に無効化して確認してください",
-      "noIp": "LAN IP を検出できません。PC が WiFi / LAN ケーブルに接続されているか確認してください"
-    },
     "title": "オーバーレイパネル",
     "enableOverlay": "オーバーレイパネルを有効化",
     "statusEnabled": "有効化",
@@ -1359,6 +1351,7 @@
     "overlayPanelDesc": "システムハードウェア状態を表示するフローティングパネル",
     "gpuRenameDesc": "ゲームパフォーマンスを最適化するためにGPU名を変更",
     "cpuRenameDesc": "タスクマネージャーに表示される CPU 名を任意の文字に変更します（お遊び用）",
+    "mousePollingDesc": "マウスの実際のポーリングレート（報告率）を測定し、間隔・ジッター・スパイクの統計を表示",
     "resolutionConverterDesc": "様々な解像度で画面アスペクト比を変換",
     "shaderCacheDesc": "NVIDIA/AMD/Intel/DirectXのシェーダーキャッシュをクリーンアップしてディスクスペースを解放",
     "psoCacheDesc": "『デルタフォース』のPSOシェーダーキャッシュをクリーンアップ（既定でゴミ箱へ）",
@@ -1516,6 +1509,10 @@
       "priority": "プロセス自動最適化",
       "affinity": "コア自動最適化",
       "ifeo": "IFEO 優先度強制最適化",
+      "io": "ディスク IO",
+      "gpu": "GPU スケジューリング優先度",
+      "memory": "メモリ優先度",
+      "gpuPref": "GPU 高パフォーマンス",
       "enabled": "自動最適化が有効",
       "disabled": "自動最適化が無効"
     },
@@ -2111,6 +2108,28 @@
     "scanError": "スキャンに失敗しました",
     "noVendorSelected": "少なくとも1つのGPUベンダーを選択してください"
   },
+  "mousePolling": {
+    "testing": "テスト中",
+    "stopped": "停止中",
+    "title": "マウスポーリングレート測定",
+    "realtimeHz": "リアルタイムポーリングレート",
+    "start": "テスト開始",
+    "stop": "テスト停止",
+    "startHint": "「テスト開始」を押してマウスを動かし続けてください",
+    "moveHint": "マウスを動かしてポーリングレートを測定してください",
+    "deviation": "偏差",
+    "statsTitle": "統計",
+    "avgInterval": "平均間隔",
+    "medianInterval": "中央間隔",
+    "minInterval": "最小間隔",
+    "maxInterval": "最大間隔",
+    "jitter": "ジッター（標準偏差）",
+    "spikes": "ドロップ/スパイク",
+    "totalSamples": "総サンプル数",
+    "hint": "システムが受信したマウス移動ストリームを測定します。システム負荷や他のプログラムの影響を受けます。中央値を大きく上回る間隔（1.5倍超）はスパイクとして記録され、移動をやめた間隔は統計に含まれません。テスト中はマウスを動かし続けてください。",
+    "startFailed": "テスト開始に失敗しました",
+    "stopFailed": "テスト停止に失敗しました"
+  },
   "cpuRename": {
     "title": "CPU 名前変更",
     "funOnly": "お遊び用",
@@ -2291,11 +2310,6 @@
       "liquidGlassLabel": "リキッドガラス",
       "liquidGlassDesc": "有効にすると、一部のインターフェースで「リキッドガラス」効果を使用します。これによりパフォーマンスに影響する可能性があります",
       "liquidGlassBlurLabel": "ぼかし強度",
-      "liquidGlassModeLabel": "ガラスモード",
-      "liquidGlassModeFrosted": "すりガラス",
-      "liquidGlassModeReal": "透明リキッドガラス",
-      "liquidGlassModeFrostedDesc": "ぼかしのすりガラス質感、ぼかし強度を調整可能",
-      "liquidGlassModeRealDesc": "SVG屈折フィルターでエッジ屈折と色差効果を実現、より透明だがGPU負荷大",
       "islandLiquidGlassLabel": "ダイナミックアイランドリキッドガラス",
       "islandLiquidGlassDesc": "オンにするとダイナミックアイランド通知にガラス質感を適用します（スタイルは下で選択）",
       "islandGlassModeLabel": "ガラススタイル",
@@ -2353,7 +2367,7 @@
       "thankYou": "ご支援ありがとうございます！",
       "placeholder": "QRコード画像を追加してください",
       "sponsorList": {
-        "title": "スポンサー一覧",
+        "title": "スポンサー一覧（NexBox、MeowCode、OpenMD、LingTab）",
         "loading": "読み込み中...",
         "error": "読み込み失敗",
         "empty": "スポンサーはいません"
@@ -2492,6 +2506,27 @@
     "masterToggleDesc": "オフにするとすべてのグローバルホットキーが無効になります"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "ベンチマーク",
+    "drive": "対象ディスク",
+    "start": "開始",
+    "stop": "停止",
+    "testing": "測定中…",
+    "noDrive": "利用可能なディスクがありません",
+    "noPartition": "このディスクに書き込み可能なパーティションがありません",
+    "stagePrepare": "準備中",
+    "stageSeqWrite": "シーケンシャル書き込み中",
+    "stageSeqRead": "シーケンシャル読み取り中",
+    "stageRndWrite": "ランダム書き込み中",
+    "stageRndRead": "ランダム読み取り中"
+    ,
+    "seqWrite": "シーケンシャル書き込み",
+    "seqRead": "シーケンシャル読み取り",
+    "rndWrite": "ランダム 4K 書き込み",
+    "rndRead": "ランダム 4K 読み取り",
+    "latWrite": "書き込みアクセス時間",
+    "latRead": "読み取りアクセス時間"
+    },
     "title": "ディスク健全性",
     "refresh": "更新",
     "scanning": "スキャン中...",
@@ -2758,6 +2793,9 @@
     "junkScanning": "不要ファイルをスキャン中..."
   },
   "downloadAccel": {
+    "saveDirLabel": "保存先",
+    "saveDirBrowse": "参照",
+    "saveDirReset": "リセット",
     "urlLabel": "ダウンロードURL",
     "fileNamePlaceholder": "ファイル名（任意、空欄で自動判定）",
     "segmentsLabel": "最大接続数",

@@ -9,6 +9,7 @@
   },
   "view": {
     "grid": "網格視圖",
+    "compact": "小卡片視圖",
     "list": "列表視圖"
   },
   "onboarding": {
@@ -50,6 +51,7 @@
     "settings": "設定",
     "gpuRename": "顯卡改寫",
     "cpuRename": "CPU 改名",
+    "mousePolling": "滑鼠輪詢率測試",
     "resolutionConverter": "解析度換算",
     "dlssPreset": "三角洲DLSS設定",
     "epicFree": "喜加一",
@@ -727,6 +729,7 @@
     "optimization": "優化",
     "builtinTools": "內建工具",
     "thirdpartyTools": "第三方工具",
+    "officialProducts": "官方產品",
     "officialTools": "官方推薦",
     "recommended": "推薦",
     "tools": {
@@ -1002,15 +1005,6 @@
     "recorderNotStarted": "記錄器未啟動，請稍後重試"
   },
   "overlayPanel": {
-    "remoteMonitor": {
-      "title": "手機遠端監控",
-      "description": "開啟後可用手機瀏覽器在同一 WiFi 下即時檢視硬體監控資料",
-      "scanHint": "手機掃碼或輸入以下網址",
-      "copy": "複製網址",
-      "pin": "存取碼",
-      "firewallHint": "手機無法連線？請在 Windows 防火牆中放行新境盒，或暫時關閉防火牆測試",
-      "noIp": "未偵測到區域網路 IP，請確認電腦已連線 WiFi / 網路線"
-    },
     "title": "懸浮框",
     "enableOverlay": "啟用懸浮框",
     "statusEnabled": "已啟用",
@@ -1297,6 +1291,7 @@
     "overlayPanelDesc": "顯示系統硬體狀態的懸浮框",
     "gpuRenameDesc": "改寫顯卡名稱以優化遊戲效能",
     "cpuRenameDesc": "把工作管理員裡顯示的 CPU 名稱改成任意文字（僅供娛樂）",
+    "mousePollingDesc": "測量滑鼠的真實輪詢率（回報率），查看間隔、抖動與丟幀尖峰統計",
     "resolutionConverterDesc": "換算不同解析度下的畫面比例",
     "shaderCacheDesc": "清理 NVIDIA/AMD/Intel/DirectX 著色器快取釋放磁碟空間",
     "psoCacheDesc": "清理《三角洲行動》PSO 著色器快取（預設移入資源回收筒）",
@@ -1368,6 +1363,10 @@
       "priority": "進程自動最佳化",
       "affinity": "核心自動最佳化",
       "ifeo": "IFEO 優先級強制最佳化",
+      "io": "磁碟 IO",
+      "gpu": "GPU 排程優先級",
+      "memory": "記憶體優先級",
+      "gpuPref": "GPU 高效能",
       "enabled": "自動最佳化已開啟",
       "disabled": "自動最佳化已關閉"
     },
@@ -1495,6 +1494,28 @@
     "cleanError": "清理失敗",
     "scanError": "掃描失敗",
     "noVendorSelected": "請至少選擇一個顯卡廠商"
+  },
+  "mousePolling": {
+    "testing": "測試中",
+    "stopped": "已停止",
+    "title": "滑鼠輪詢率測試",
+    "realtimeHz": "即時輪詢率",
+    "start": "開始測試",
+    "stop": "停止測試",
+    "startHint": "點擊「開始測試」後持續移動滑鼠",
+    "moveHint": "請移動滑鼠以測量輪詢率",
+    "deviation": "偏差",
+    "statsTitle": "統計",
+    "avgInterval": "平均間隔",
+    "medianInterval": "中位間隔",
+    "minInterval": "最小間隔",
+    "maxInterval": "最大間隔",
+    "jitter": "抖動（標準差）",
+    "spikes": "丟幀/尖峰",
+    "totalSamples": "總樣本數",
+    "hint": "測量的是系統級接收到的滑鼠移動上報流，受系統負載與其他程式影響。間隔顯著高於中位數（>1.5 倍）會被記為一次尖峰；暫停移動的間隙不計入統計。測試時請持續移動滑鼠。",
+    "startFailed": "開始測試失敗",
+    "stopFailed": "停止測試失敗"
   },
   "cpuRename": {
     "title": "CPU 改名",
@@ -1676,11 +1697,6 @@
       "liquidGlassLabel": "液態玻璃",
       "liquidGlassDesc": "啟用後，部分介面將使用「液態玻璃」效果，這可能會影響效能",
       "liquidGlassBlurLabel": "模糊程度",
-      "liquidGlassModeLabel": "玻璃模式",
-      "liquidGlassModeFrosted": "毛玻璃",
-      "liquidGlassModeReal": "透明液態玻璃",
-      "liquidGlassModeFrostedDesc": "模糊磨砂質感，可調節模糊程度",
-      "liquidGlassModeRealDesc": "使用 SVG 折射濾鏡實現邊緣折射和色差效果，更透明但需要更多 GPU 開銷",
       "islandLiquidGlassLabel": "動態島液態玻璃",
       "islandLiquidGlassDesc": "開啟後動態島提示使用玻璃質感，樣式可在下方選擇",
       "islandGlassModeLabel": "玻璃樣式",
@@ -1738,7 +1754,7 @@
       "thankYou": "感謝您的支持！",
       "placeholder": "請新增收款碼圖片",
       "sponsorList": {
-        "title": "贊助者名單",
+        "title": "贊助者名單（新境盒、MeowCode、OpenMD、LingTab）",
         "loading": "載入中...",
         "error": "載入失敗",
         "empty": "暫無贊助者"
@@ -1877,6 +1893,27 @@
     "masterToggleDesc": "關閉後所有全域熱鍵將不生效"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "測速",
+    "drive": "目標硬碟",
+    "start": "開始測速",
+    "stop": "停止",
+    "testing": "測速中…",
+    "noDrive": "未偵測到可用硬碟",
+    "noPartition": "該硬碟沒有可寫分割區",
+    "stagePrepare": "準備中",
+    "stageSeqWrite": "循序寫入中",
+    "stageSeqRead": "循序讀取中",
+    "stageRndWrite": "隨機寫入中",
+    "stageRndRead": "隨機讀取中"
+    ,
+    "seqWrite": "循序寫入",
+    "seqRead": "循序讀取",
+    "rndWrite": "隨機 4K 寫入",
+    "rndRead": "隨機 4K 讀取",
+    "latWrite": "寫入存取時間",
+    "latRead": "讀取存取時間"
+    },
     "title": "磁碟健康檢測",
     "refresh": "重新整理",
     "scanning": "檢測中...",
@@ -2056,6 +2093,9 @@
     "loading": "正在載入功能設定..."
   },
   "downloadAccel": {
+    "saveDirLabel": "下載到",
+    "saveDirBrowse": "瀏覽",
+    "saveDirReset": "恢復預設",
     "urlLabel": "下載連結",
     "fileNamePlaceholder": "檔案名稱（可選，留空自動識別）",
     "segmentsLabel": "最大連線數",

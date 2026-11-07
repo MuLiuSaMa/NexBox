@@ -43,7 +43,6 @@ import { useHardwareReportExport } from "@/lib/use-hardware-report-export";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { BrandLogo } from "@/components/hardware-brand-logo";
-import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 
 interface DisplayInfo {
   name: string;
@@ -812,7 +811,6 @@ export default function HardwarePage() {
           {t("hardware.title")}
         </Heading>
         <HStack gap={2}>
-          <RemoteMonitorDialog />
           <Button
             size="sm"
             variant="outline"

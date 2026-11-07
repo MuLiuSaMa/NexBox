@@ -5,7 +5,6 @@ import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { getBorderGlowStyle } from "@/hooks/use-glow-effect";
-import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 import { store } from "@/lib/store";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 import deltaForceIconLight from "@/assets/deltaforce-light.webp";
@@ -201,9 +200,8 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, jellyBounceEnabled } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur, jellyBounceEnabled } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
-  const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
   // 默认显示文字标签（未配置过时为开；显式存过 "false" 的用户保持关闭）
   const [showLabel, setShowLabel] = useState(() => localStorage.getItem("nexbox_sidebar_show_label") !== "false");
   const [navPosition, setNavPosition] = useState<"left" | "top">("left");
@@ -373,12 +371,7 @@ export function Sidebar() {
 
   // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
-  const isReal = liquidGlassEnabled && liquidGlassMode === "real";
-  const backdropFilter = isReal
-    ? (svgSupported
-        ? `url(#nexbox-liquid-glass-filter) saturate(1.4)`
-        : `saturate(1.4) brightness(1.05)`)
-    : `blur(${effectiveBlur}px)`;
+  const backdropFilter = `blur(${effectiveBlur}px)`;
 
   const defaultBgColor = useColorModeValue("rgba(255,255,255,1)", "rgba(17,17,17,1)");
   const glassBgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
@@ -735,7 +728,7 @@ export function Sidebar() {
     <ChakraBox
       ref={sidebarContainerRef}
       id="main-sidebar"
-      className={`${isTop ? "jelly-bounce-sidebar-top" : "jelly-bounce-sidebar-left"}${isReal ? " real-liquid-glass" : ""}`}
+      className={isTop ? "jelly-bounce-sidebar-top" : "jelly-bounce-sidebar-left"}
       {...containerStyles}
       bg={liquidGlassEnabled ? glassBgColor : defaultBgColor}
       border="1px solid"
@@ -753,13 +746,11 @@ export function Sidebar() {
         }
       }}
     >
-      {!isReal && (
-        <ChakraBox
-          style={getBorderGlowStyle(glowColor)}
-          opacity={liquidGlassEnabled ? 1 : 0}
-          transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-        />
-      )}
+      <ChakraBox
+        style={getBorderGlowStyle(glowColor)}
+        opacity={liquidGlassEnabled ? 1 : 0}
+        transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+      />
       {sidebarContent}
     </ChakraBox>
   );

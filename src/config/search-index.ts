@@ -208,6 +208,14 @@ export const searchIndex: SearchItem[] = [
     keywords: ["cpu", "处理器", "改名", "改名卡", "娱乐", "rename"],
   },
   {
+    id: "mouse-polling",
+    nameKey: "sidebar.mousePolling",
+    path: "/mouse-polling",
+    icon: Activity,
+    category: "builtin-tool",
+    keywords: ["鼠标", "轮询率", "回报率", "polling", "rate", "hz", "抖动", "外设"],
+  },
+  {
     id: "nvidia-driver",
     nameKey: "sidebar.nvidiaDriver",
     path: "/nvidia-driver",

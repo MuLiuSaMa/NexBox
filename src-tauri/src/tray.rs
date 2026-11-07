@@ -74,7 +74,11 @@ pub(crate) fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
         let _ = window.unminimize();
         let _ = window.set_focus();
         crate::emit_main_visibility(app, true);
+        return;
     }
+    // 主窗口不存在（节约内存模式下已销毁）→ 重建，等待前端就绪后自动显示。
+    // 覆盖全部恢复入口：托盘左键 / 托盘菜单 / 单实例二次启动 / show_window 命令 / 检查更新
+    crate::main_window::rebuild_main_window(app);
 }
 
 pub fn init_tray(app: &AppHandle) -> Result<TrayIcon, Box<dyn std::error::Error>> {
@@ -393,6 +397,12 @@ pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), Strin
     crate::AUTOSTART_FRONTEND_READY.store(true, std::sync::atomic::Ordering::SeqCst);
     if crate::AUTOSTART_MODE.load(std::sync::atomic::Ordering::SeqCst) {
         log::info!("[autostart] 前端已就绪，正常进入最小化启动");
+    }
+    // 节约内存(实验性)：销毁主窗口释放内存；被守卫拦下（音乐播放中）则回退为仅隐藏
+    if crate::main_window::memory_saving_enabled()
+        && crate::main_window::destroy_main_window(window.app_handle())
+    {
+        return Ok(());
     }
     window.hide().map_err(|e| e.to_string())?;
     crate::emit_main_visibility(&window.app_handle(), false);

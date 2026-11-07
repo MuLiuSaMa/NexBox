@@ -2490,6 +2490,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
         if (visible) {
           await win.show();
           await win.setFocus();
+          // 显示时恢复 WebView 内存目标为 Normal（隐藏期间曾切 Low 换出缓存）
+          invoke("set_lyrics_webview_memory_level", { low: false }).catch(() => {});
           startTimeSync();
           // 发送当前歌曲数据（此时新窗口可能还没挂载，listener 尚未注册）
           get().emitDesktopLyricsData();
@@ -2515,6 +2517,8 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           });
         } else {
           await win.hide();
+          // 窗口常驻仅隐藏：切 MemoryUsageTargetLevel=Low 让 Chromium 丢弃缓存/换页
+          invoke("set_lyrics_webview_memory_level", { low: true }).catch(() => {});
           stopTimeSync();
           // 关闭桌面歌词时同时重置锁定状态，防止重启后残留锁定状态
           await get().setDesktopLyricsLocked(false);

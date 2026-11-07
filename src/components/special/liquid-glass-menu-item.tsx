@@ -4,7 +4,6 @@ import { Box, HStack, Text, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
-import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 
 interface LiquidGlassMenuItemProps {
   children: React.ReactNode;
@@ -19,10 +18,9 @@ export function LiquidGlassMenuItem({
   onClick,
   icon: Icon
 }: LiquidGlassMenuItemProps) {
-  const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getBorderColor, getContrastTextColor } = useThemeColor();
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
-  const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
 
   const activeBg = getActiveColor();
   const activeTextFinal = getContrastTextColor();
@@ -42,17 +40,11 @@ export function LiquidGlassMenuItem({
   // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const transition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
-  const isReal = liquidGlassEnabled && liquidGlassMode === "real";
-
-  const backdropFilter = isReal
-    ? (svgSupported
-        ? `url(#nexbox-liquid-glass-filter) saturate(1.4)`
-        : `saturate(1.4) brightness(1.05)`)
-    : `blur(${effectiveBlur}px)`;
+  const backdropFilter = `blur(${effectiveBlur}px)`;
 
   return (
     <Box
-      className={`jelly-bounce-menu-item${isReal ? " real-liquid-glass" : ""}`}
+      className="jelly-bounce-menu-item"
       onClick={onClick}
       cursor="pointer"
       borderRadius="2xl"
@@ -82,13 +74,11 @@ export function LiquidGlassMenuItem({
         outlineOffset: "2px"
       }}
     >
-      {!isReal && (
-        <Box
-          style={getBorderGlowStyle(glowColor)}
-          opacity={liquidGlassEnabled ? 1 : 0}
-          transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
-        />
-      )}
+      <Box
+        style={getBorderGlowStyle(glowColor)}
+        opacity={liquidGlassEnabled ? 1 : 0}
+        transition="opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1)"
+      />
       <HStack position="relative" zIndex={1}>
         {Icon && <Icon size={18} />}
         <Text fontSize="sm" fontWeight={isActive ? "semibold" : "normal"}>

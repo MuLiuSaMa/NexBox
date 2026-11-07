@@ -23,6 +23,7 @@ import MoodPage from "./pages/MoodPage";
 import BuiltinToolsPage from "./pages/BuiltinToolsPage";
 import GpuRenamePage from "./pages/GpuRenamePage";
 import CpuRenamePage from "./pages/CpuRenamePage";
+import MousePollingPage from "./pages/MousePollingPage";
 import ResolutionConverterPage from "./pages/ResolutionConverterPage";
 import ShaderCachePage from "./pages/ShaderCachePage";
 import PsoCachePage from "./pages/PsoCachePage";
@@ -178,6 +179,12 @@ function App() {
     })();
   }, []);
 
+  // 节约内存(实验性)模式：主窗口销毁后重建时以不可见方式创建，
+  // 前端挂载即回报就绪，由后端完成显示握手（正常启动该命令为 no-op）
+  useEffect(() => {
+    invoke("main_window_ready").catch(() => {});
+  }, []);
+
   return (
     <MusicProvider>
       <>
@@ -326,6 +333,12 @@ function App() {
                     path="/cpu-rename"
                     element={
                       <CpuRenamePage />
+                    }
+                  />
+                  <Route
+                    path="/mouse-polling"
+                    element={
+                      <MousePollingPage />
                     }
                   />
                   <Route

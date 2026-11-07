@@ -52,6 +52,7 @@ import {
   LineChart,
   Gamepad2,
   MousePointer,
+  BookOpen,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
@@ -684,8 +685,104 @@ function OfficialToolSection({
     });
   };
 
+  const handleOpenMeowCode = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://meowcode.cn/");
+    }).catch(() => {
+      window.open("https://meowcode.cn/", "_blank");
+    });
+  };
+
+  const handleOpenOpenMD = () => {
+    import("@tauri-apps/plugin-shell").then(({ open }) => {
+      open("https://openmd.nexbox.cn/");
+    }).catch(() => {
+      window.open("https://openmd.nexbox.cn/", "_blank");
+    });
+  };
+
   return (
     <Box mb={8}>
+      <HStack mb={4} spacing={3}>
+        <Text fontSize={"lg"} fontWeight={"bold"} color={sectionTitleColor}>
+          {t("tools.officialProducts")}
+        </Text>
+      </HStack>
+      <Divider borderColor={dividerColor} mb={4} />
+      <Grid
+        templateColumns="repeat(auto-fill, minmax(240px, 1fr))"
+        gap={4}
+        alignItems="stretch"
+        mb={8}
+      >
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenMeowCode}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("meowcode") || ""}
+                alt={"MeowCode"}
+                w={"32px"}
+                h={"32px"}
+                borderRadius={"6px"}
+                objectFit={"contain"}
+                fallback={<Bot size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  MeowCode
+                </Text>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                开源的可自主修改架构的Agent。对Token用量和缓存命中率进行大幅优化。
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+
+        <LiquidGlassToolCard size={"md"} onClick={handleOpenOpenMD}>
+          <VStack align={"start"} spacing={3} h="full">
+            <Flex
+              h={12}
+              w={12}
+              align={"center"}
+              justify={"center"}
+              borderRadius={"lg"}
+              bg={useColorModeValue("gray.100", "#222222")}
+              overflow={"hidden"}
+            >
+              <Image
+                src={getToolIconImage("openmd") || ""}
+                alt={"OpenMD"}
+                w={"32px"}
+                h={"32px"}
+                borderRadius={"6px"}
+                objectFit={"contain"}
+                fallback={<BookOpen size={24} color={iconColor} />}
+              />
+            </Flex>
+            <Box flex={1} w={"full"}>
+              <HStack justify={"space-between"} align={"start"} mb={1}>
+                <Text fontSize={"sm"} fontWeight={"semibold"} color={titleColor}>
+                  OpenMD
+                </Text>
+              </HStack>
+              <Text fontSize={"xs"} color={descColor} lineHeight={"short"}>
+                开源的Markdown阅读器。任何内容都可完美显示，UI美观，快速。
+              </Text>
+            </Box>
+          </VStack>
+        </LiquidGlassToolCard>
+      </Grid>
       <HStack mb={4} spacing={3}>
         <Text fontSize={"lg"} fontWeight={"bold"} color={sectionTitleColor}>
           {t("tools.officialTools")}

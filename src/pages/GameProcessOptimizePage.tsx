@@ -40,13 +40,17 @@ import {
   ShieldAlert,
   ShieldCheck,
   Search,
-  Play,
+  HardDrive,
+  Gauge,
+  MemoryStick,
+  Rocket,
 } from "lucide-react";
 import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
+import deltaforceIcon from "@/assets/deltaforce.png";
 
 interface GameOptimizeConfig {
   id: string;
@@ -57,6 +61,12 @@ interface GameOptimizeConfig {
   auto_optimize_priority: boolean;
   auto_optimize_affinity: boolean;
   auto_optimize_ifeo: boolean;
+  auto_optimize_io: boolean;
+  auto_optimize_memory: boolean;
+  auto_optimize_gpu: boolean;
+  auto_optimize_gpu_pref: boolean;
+  /** 游戏图标（exe 提取的 64px PNG data URI；空 = 无图标走兜底） */
+  icon: string;
 }
 
 interface GameAutoStatus {
@@ -66,6 +76,10 @@ interface GameAutoStatus {
   priority_applied: boolean;
   affinity_applied: boolean;
   ifeo_applied: boolean;
+  io_applied: boolean;
+  memory_applied: boolean;
+  gpu_applied: boolean;
+  gpu_pref_applied: boolean;
   last_apply: string | null;
 }
 
@@ -80,6 +94,7 @@ interface GameExecutableInfo {
   path: string;
   process_name: string;
   game_name: string;
+  icon: string;
 }
 
 interface FilterGameEntry {
@@ -94,7 +109,20 @@ interface FilterStatus {
   games: FilterGameEntry[];
 }
 
-type AutoKind = "priority" | "affinity" | "ifeo";
+type AutoKind = "priority" | "affinity" | "ifeo" | "io" | "memory" | "gpu" | "gpu_pref";
+
+/** AutoKind → GameOptimizeConfig 对应开关字段 */
+const AUTO_KIND_FIELD: Record<
+  Exclude<AutoKind, "ifeo">,
+  "auto_optimize_priority" | "auto_optimize_affinity" | "auto_optimize_io" | "auto_optimize_memory" | "auto_optimize_gpu" | "auto_optimize_gpu_pref"
+> = {
+  priority: "auto_optimize_priority",
+  affinity: "auto_optimize_affinity",
+  io: "auto_optimize_io",
+  memory: "auto_optimize_memory",
+  gpu: "auto_optimize_gpu",
+  gpu_pref: "auto_optimize_gpu_pref",
+};
 
 const EMPTY_CONFIG = (id: string, name: string, process_names: string[]): GameOptimizeConfig => ({
   id,
@@ -105,7 +133,17 @@ const EMPTY_CONFIG = (id: string, name: string, process_names: string[]): GameOp
   auto_optimize_priority: false,
   auto_optimize_affinity: false,
   auto_optimize_ifeo: false,
+  auto_optimize_io: false,
+  auto_optimize_memory: false,
+  auto_optimize_gpu: false,
+  auto_optimize_gpu_pref: false,
+  icon: "",
 });
+
+/** 内置图标资产的进程名映射（小写去 .exe）：滤镜名单添加的游戏没有 exe 可提取，命中即用资产 */
+const BUILTIN_GAME_ICON_ASSETS: Record<string, string> = {
+  "deltaforceclient-win64-shipping": deltaforceIcon,
+};
 
 // 核心选择弹窗：显示所有逻辑核心的复选框网格
 function CoreSelectionModal({
@@ -447,28 +485,20 @@ function GameCard({
   game,
   status,
   isAdmin,
-  onApplyPriority,
   onApplyAffinity,
-  onApplyIfeo,
-  onRestoreIfeo,
   onOpenCoreSettings,
   onToggleAuto,
   onDelete,
-  onOptimizeAll,
   busy,
 }: {
   game: GameOptimizeConfig;
   status: GameAutoStatus | undefined;
   isAdmin: boolean;
-  onApplyPriority: (id: string) => void;
   onApplyAffinity: (id: string) => void;
-  onApplyIfeo: (id: string) => void;
-  onRestoreIfeo: (id: string) => void;
   onOpenCoreSettings: (id: string) => void;
   onToggleAuto: (id: string, kind: AutoKind, checked: boolean) => void;
   onDelete: (id: string) => void;
-  onOptimizeAll: (id: string) => void;
-  busy: { priority: boolean; affinity: boolean; ifeo: boolean; ifeoRestore: boolean; all: boolean };
+  busy: { affinity: boolean };
 }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
@@ -481,64 +511,86 @@ function GameCard({
   const running = status?.running ?? false;
   const priorityApplied = status?.priority_applied ?? false;
   const affinityApplied = status?.affinity_applied ?? false;
+  const ioApplied = status?.io_applied ?? false;
+  const gpuApplied = status?.gpu_applied ?? false;
+  const memoryApplied = status?.memory_applied ?? false;
+  const gpuPrefApplied = status?.gpu_pref_applied ?? false;
   const ifeoApplied = status?.ifeo_applied ?? false;
 
-  const row = (icon: React.ReactNode, title: React.ReactNode, desc: React.ReactNode, action: React.ReactNode) => (
-    <HStack align="center" spacing={3} p={3} borderRadius="lg" bg={rowBg} border="1px solid" borderColor={borderColor} flexWrap="wrap">
-      <Box w={8} h={8} borderRadius="md" bg={`${getActiveColor()}15`} display="flex" alignItems="center" justifyContent="center" color={getActiveColor()} flexShrink={0}>
-        {icon}
-      </Box>
-      <VStack align="flex-start" spacing={0} flex={1} minW="160px">
-        <Text fontSize="sm" fontWeight="bold" color={textColor}>
-          {title}
-        </Text>
-        <Text fontSize="xs" color={subTextColor}>
-          {desc}
-        </Text>
-      </VStack>
-      {action}
-    </HStack>
-  );
+  // 头像：添加时提取的 exe 图标优先，其次内置资产映射（如预置三角洲），最后通用手柄兜底
+  const builtinIcon = game.process_names
+    .map(n => BUILTIN_GAME_ICON_ASSETS[n.toLowerCase().replace(/\.exe$/i, "")])
+    .find(Boolean);
+  const displayIcon = game.icon || builtinIcon;
 
+  // 内嵌小卡片：液态玻璃开启时用嵌套玻璃卡（圆角比外层卡小一档：2xl），关闭时用实底色（DiskHealthPage 模式）
+  const cell = (children: React.ReactNode) =>
+    liquidGlassEnabled ? (
+      <LiquidGlassCard w="full" p={2.5} borderRadius="2xl" className="no-bounce">{children}</LiquidGlassCard>
+    ) : (
+      <Box w="full" p={2.5} borderRadius="lg" bg={rowBg} border="1px solid" borderColor={borderColor}>
+        {children}
+      </Box>
+    );
+
+  const row = (icon: React.ReactNode, title: React.ReactNode, desc: React.ReactNode, action: React.ReactNode) =>
+    cell(
+      <HStack align="center" spacing={3} flexWrap="wrap">
+        <Box w={8} h={8} borderRadius="md" bg={`${getActiveColor()}15`} display="flex" alignItems="center" justifyContent="center" color={getActiveColor()} flexShrink={0}>
+          {icon}
+        </Box>
+        <VStack align="flex-start" spacing={0} flex={1} minW="160px">
+          <Text fontSize="sm" fontWeight="bold" color={textColor}>
+            {title}
+          </Text>
+          <Text fontSize="xs" color={subTextColor}>
+            {desc}
+          </Text>
+        </VStack>
+        {action}
+      </HStack>
+    );
+
+  // 自动优化开关：小卡片（图标 + 标题 + 已应用徽章 + 开关），两列网格
   const autoSwitchRow = (
     icon: React.ReactNode,
     title: string,
     checked: boolean,
     applied: boolean,
     kind: AutoKind,
-  ) => (
-    <HStack justify="space-between" align="center" spacing={2} w="full">
-      <HStack spacing={2} flex={1} minW="0">
-        <Box w={7} h={7} borderRadius="md" bg={`${getActiveColor()}15`} display="flex" alignItems="center" justifyContent="center" color={getActiveColor()} flexShrink={0}>
-          {icon}
-        </Box>
-        <VStack align="flex-start" spacing={0} flex={1} minW="0">
-          <HStack spacing={1} flexWrap="wrap">
-            <Text fontWeight="bold" fontSize="xs" color={textColor} whiteSpace="nowrap">
+    disabled: boolean,
+  ) =>
+    cell(
+      <HStack justify="space-between" align="center" spacing={2} w="full">
+        <HStack spacing={2} flex={1} minW="0">
+          <Box w={6} h={6} borderRadius="md" bg={`${getActiveColor()}15`} display="flex" alignItems="center" justifyContent="center" color={getActiveColor()} flexShrink={0}>
+            {icon}
+          </Box>
+          <HStack spacing={1} flex={1} minW="0">
+            <Text fontSize="xs" fontWeight="bold" color={textColor} isTruncated>
               {title}
             </Text>
             {applied && (
-              <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={1.5} py={0} borderRadius="full" whiteSpace="nowrap">
+              <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={1.5} py={0} borderRadius="full" whiteSpace="nowrap" flexShrink={0}>
                 {t("gameProcessOptimize.status.applied")}
               </Badge>
             )}
           </HStack>
-        </VStack>
+        </HStack>
+        <Switch
+          isChecked={checked}
+          onChange={e => onToggleAuto(game.id, kind, e.target.checked)}
+          isDisabled={disabled}
+          size="sm"
+          sx={{
+            "& > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
+            "& > span > span": { bg: "white" },
+            "&:hover > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
+          }}
+          aria-label={title}
+        />
       </HStack>
-      <Switch
-        isChecked={checked}
-        onChange={e => onToggleAuto(game.id, kind, e.target.checked)}
-        isDisabled={!isAdmin}
-        size="sm"
-        sx={{
-          "& > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
-          "& > span > span": { bg: "white" },
-          "&:hover > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
-        }}
-        aria-label={title}
-      />
-    </HStack>
-  );
+    );
 
   const content = (
     <VStack align="stretch" spacing={4}>
@@ -553,8 +605,18 @@ function GameCard({
             justifyContent="center"
             color={getActiveColor()}
             flexShrink={0}
+            overflow="hidden"
           >
-            <Gamepad2 size={20} />
+            {displayIcon ? (
+              <img
+                src={displayIcon}
+                alt={game.name}
+                draggable={false}
+                style={{ width: 26, height: 26, objectFit: "contain" }}
+              />
+            ) : (
+              <Gamepad2 size={20} />
+            )}
           </Box>
           <VStack align="flex-start" spacing={1} minW="0">
             <HStack spacing={2} flexWrap="wrap">
@@ -566,7 +628,7 @@ function GameCard({
                   {t("gameProcessOptimize.status.running")}
                 </Badge>
               )}
-              {(priorityApplied || affinityApplied || ifeoApplied) && (
+              {(priorityApplied || affinityApplied || ioApplied || gpuApplied || memoryApplied || gpuPrefApplied) && (
                 <Badge colorScheme="blue" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full">
                   {t("gameProcessOptimize.status.optimized")}
                 </Badge>
@@ -592,25 +654,6 @@ function GameCard({
       </HStack>
 
       <VStack align="stretch" spacing={2}>
-        {row(
-          <Zap size={16} />,
-          t("gameProcessOptimize.processOptimize.title"),
-          t("gameProcessOptimize.processOptimize.description"),
-          <Button
-            size="sm"
-            bg={getActiveColor()}
-            color="white"
-            _hover={{ bg: getActiveColor(), opacity: 0.9 }}
-            onClick={() => onApplyPriority(game.id)}
-            isLoading={busy.priority}
-            loadingText=""
-            px={4}
-            borderRadius="lg"
-            minW="72px"
-          >
-            {t("gameProcessOptimize.apply")}
-          </Button>
-        )}
         {row(
           <Cpu size={16} />,
           t("gameProcessOptimize.affinityOptimize.title"),
@@ -645,102 +688,74 @@ function GameCard({
             </Button>
           </HStack>
         )}
-        {row(
-          <ShieldCheck size={16} />,
-          t("gameProcessOptimize.ifeoOptimize.title"),
-          t("gameProcessOptimize.ifeoOptimize.description"),
-          <HStack spacing={2}>
-            <Button
-              size="sm"
-              variant="outline"
-              color={getActiveColor()}
-              borderColor={getActiveColor()}
-              _hover={{ bg: getActiveColor(), color: "white", opacity: 0.9 }}
-              onClick={() => onApplyIfeo(game.id)}
-              isLoading={busy.ifeo}
-              loadingText=""
-              px={4}
-              borderRadius="lg"
-              minW="72px"
-              disabled={!isAdmin}
-            >
-              {t("gameProcessOptimize.apply")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              colorScheme="red"
-              onClick={() => onRestoreIfeo(game.id)}
-              isLoading={busy.ifeoRestore}
-              loadingText=""
-              px={4}
-              borderRadius="lg"
-              minW="72px"
-              disabled={!isAdmin}
-            >
-              {t("gameProcessOptimize.restore")}
-            </Button>
-          </HStack>
-        )}
       </VStack>
 
-      <VStack
-        align="stretch"
-        spacing={3}
-        p={3}
-        borderRadius="lg"
-        border="1px solid"
-        borderColor={borderColor}
-      >
-        <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
-          <VStack align="flex-start" spacing={0}>
-            <Text fontWeight="bold" fontSize="sm" color={textColor}>
-              {t("gameProcessOptimize.autoOptimize.title")}
-            </Text>
-            <Text fontSize="xs" color={subTextColor}>
-              {t("gameProcessOptimize.autoOptimize.description")}
-            </Text>
-          </VStack>
-          <Button
-            size="sm"
-            variant="outline"
-            color={getActiveColor()}
-            borderColor={getActiveColor()}
-            _hover={{ bg: getActiveColor(), color: "white", opacity: 0.9 }}
-            onClick={() => onOptimizeAll(game.id)}
-            isLoading={busy.all}
-            loadingText=""
-            px={3}
-            borderRadius="lg"
-            leftIcon={<Play size={12} />}
-          >
-            {t("gameProcessOptimize.optimizeNow")}
-          </Button>
-        </HStack>
-        <Box borderTop="1px solid" borderColor={borderColor} pt={3}>
-          <VStack align="stretch" spacing={2}>
-            {autoSwitchRow(
-              <Zap size={14} />,
-              t("gameProcessOptimize.autoOptimize.priority"),
-              game.auto_optimize_priority,
-              priorityApplied,
-              "priority",
-            )}
-            {autoSwitchRow(
-              <Cpu size={14} />,
-              t("gameProcessOptimize.autoOptimize.affinity"),
-              game.auto_optimize_affinity,
-              affinityApplied,
-              "affinity",
-            )}
-          </VStack>
-        </Box>
-      </VStack>
+      {/* 自动优化开关：每项一张小卡片，两列网格（IFEO 开启即写注册表、关闭即清除，无需手动应用/恢复） */}
+      <SimpleGrid columns={2} spacing={2}>
+        {autoSwitchRow(
+          <Zap size={13} />,
+          t("gameProcessOptimize.autoOptimize.priority"),
+          game.auto_optimize_priority,
+          priorityApplied,
+          "priority",
+          !isAdmin,
+        )}
+        {autoSwitchRow(
+          <Cpu size={13} />,
+          t("gameProcessOptimize.autoOptimize.affinity"),
+          game.auto_optimize_affinity,
+          affinityApplied,
+          "affinity",
+          !isAdmin,
+        )}
+        {autoSwitchRow(
+          <HardDrive size={13} />,
+          t("gameProcessOptimize.autoOptimize.io"),
+          game.auto_optimize_io,
+          ioApplied,
+          "io",
+          !isAdmin,
+        )}
+        {autoSwitchRow(
+          <Gauge size={13} />,
+          t("gameProcessOptimize.autoOptimize.gpu"),
+          game.auto_optimize_gpu,
+          gpuApplied,
+          "gpu",
+          !isAdmin,
+        )}
+        {autoSwitchRow(
+          <MemoryStick size={13} />,
+          t("gameProcessOptimize.autoOptimize.memory"),
+          game.auto_optimize_memory,
+          memoryApplied,
+          "memory",
+          !isAdmin,
+        )}
+        {/* GPU 高性能走 HKCU 图形偏好注册表，无需管理员，不随权限禁用 */}
+        {autoSwitchRow(
+          <Rocket size={13} />,
+          t("gameProcessOptimize.autoOptimize.gpuPref"),
+          game.auto_optimize_gpu_pref,
+          gpuPrefApplied,
+          "gpu_pref",
+          false,
+        )}
+        {/* IFEO 写 HKLM 注册表，需要管理员；开启即应用、关闭即恢复 */}
+        {autoSwitchRow(
+          <ShieldCheck size={13} />,
+          t("gameProcessOptimize.autoOptimize.ifeo"),
+          game.auto_optimize_ifeo,
+          ifeoApplied,
+          "ifeo",
+          !isAdmin,
+        )}
+      </SimpleGrid>
     </VStack>
   );
 
   if (liquidGlassEnabled) {
-    return <LiquidGlassCard p={4}>{content}</LiquidGlassCard>;
+    return <LiquidGlassCard p={4} className="no-bounce">{content}</LiquidGlassCard>;
   }
   return (
     <Box p={4} borderRadius="xl" bg={rowBg} border="1px solid" borderColor={borderColor}>
@@ -764,7 +779,7 @@ export default function GameProcessOptimizePage() {
   const [autoStatuses, setAutoStatuses] = useState<Record<string, GameAutoStatus>>({});
   const [isAdmin, setIsAdmin] = useState(true);
   const [coreCount, setCoreCount] = useState(4);
-  const [busy, setBusy] = useState<Record<string, { priority: boolean; affinity: boolean; ifeo: boolean; ifeoRestore: boolean; all: boolean }>>({});
+  const [busy, setBusy] = useState<Record<string, { affinity: boolean }>>({});
   // 大小核拓扑：是否有 E 核 + 后端实际使用的默认掩码
   const [topology, setTopology] = useState<{ has_e_cores: boolean; default_mask: number }>({ has_e_cores: false, default_mask: 0 });
 
@@ -822,21 +837,9 @@ export default function GameProcessOptimizePage() {
     await invoke("save_game_optimize_configs", { configs: next });
   }, []);
 
-  const runBusy = useCallback((id: string, key: "priority" | "affinity" | "ifeo" | "ifeoRestore" | "all", val: boolean) => {
+  const runBusy = useCallback((id: string, key: "affinity", val: boolean) => {
     setBusy(prev => ({ ...prev, [id]: { ...prev[id], [key]: val } }));
   }, []);
-
-  const handleApplyPriority = useCallback(async (id: string) => {
-    runBusy(id, "priority", true);
-    try {
-      const result = await invoke<{ success: boolean; message: string }>("optimize_game_priority", { gameId: id });
-      toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
-    } catch (e: any) {
-      toast({ title: String(e), status: "error", duration: 2000 });
-    } finally {
-      runBusy(id, "priority", false);
-    }
-  }, [toast, runBusy]);
 
   const handleApplyAffinity = useCallback(async (id: string) => {
     runBusy(id, "affinity", true);
@@ -849,47 +852,6 @@ export default function GameProcessOptimizePage() {
       runBusy(id, "affinity", false);
     }
   }, [toast, runBusy]);
-
-  const handleApplyIfeo = useCallback(async (id: string) => {
-    runBusy(id, "ifeo", true);
-    try {
-      const result = await invoke<{ success: boolean; message: string }>("apply_game_ifeo", { gameId: id });
-      toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
-    } catch (e: any) {
-      toast({ title: String(e), status: "error", duration: 2000 });
-    } finally {
-      runBusy(id, "ifeo", false);
-    }
-  }, [toast, runBusy]);
-
-  const handleRestoreIfeo = useCallback(async (id: string) => {
-    runBusy(id, "ifeoRestore", true);
-    try {
-      const result = await invoke<{ success: boolean; message: string }>("restore_game_ifeo", { gameId: id });
-      toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
-    } catch (e: any) {
-      toast({ title: String(e), status: "error", duration: 2000 });
-    } finally {
-      runBusy(id, "ifeoRestore", false);
-    }
-  }, [toast, runBusy]);
-
-  const handleOptimizeAll = useCallback(async (id: string) => {
-    runBusy(id, "all", true);
-    try {
-      const pr = await invoke<{ success: boolean; message: string }>("optimize_game_priority", { gameId: id });
-      const ar = await invoke<{ success: boolean; message: string }>("optimize_game_affinity", { gameId: id, mask: null });
-      toast({
-        title: pr.success || ar.success ? t("gameProcessOptimize.optimizeNowDone") : "优化失败",
-        status: (pr.success || ar.success) ? "success" : "info",
-        duration: 2500,
-      });
-    } catch (e: any) {
-      toast({ title: String(e), status: "error", duration: 2000 });
-    } finally {
-      runBusy(id, "all", false);
-    }
-  }, [toast, runBusy, t]);
 
   const handleOpenCoreSettings = useCallback((id: string) => {
     setCoreTarget(id);
@@ -907,7 +869,7 @@ export default function GameProcessOptimizePage() {
     toast({ title: t("gameProcessOptimize.affinitySettings.configSaved"), status: "success", duration: 1500 });
   }, [configs, coreTarget, persist, getDefaultMask, coreCount, toast, t, topology]);
 
-  // 独立开关：进程自动优化 / 核心自动优化
+  // 独立开关：进程/核心/IO/内存/GPU 调度/GPU 高性能
   const handleToggleAuto = useCallback(async (id: string, kind: AutoKind, checked: boolean) => {
     const key = `${id}:${kind}`;
     if (lastAutoRef.current[key] === checked) return;
@@ -916,11 +878,9 @@ export default function GameProcessOptimizePage() {
       await invoke("set_game_auto_optimize", { gameId: id, kind, enabled: checked });
       setConfigs(prev => prev.map(c =>
         c.id === id
-          ? kind === "priority"
-            ? { ...c, auto_optimize_priority: checked }
-            : kind === "affinity"
-              ? { ...c, auto_optimize_affinity: checked }
-              : { ...c, auto_optimize_ifeo: checked }
+          ? kind === "ifeo"
+            ? { ...c, auto_optimize_ifeo: checked }
+            : { ...c, [AUTO_KIND_FIELD[kind]]: checked }
           : c
       ));
       toast({
@@ -939,7 +899,7 @@ export default function GameProcessOptimizePage() {
   const handleDelete = useCallback(async (id: string) => {
     const game = configs.find(c => c.id === id);
     if (!game) return;
-    if (!window.confirm(t("gameProcessOptimize.deleteConfirm", { name: game.name }))) return;
+    // 不弹确认框（用户要求）：误删代价低，重新添加即可
     await persist(configs.filter(c => c.id !== id));
     toast({ title: t("gameProcessOptimize.gameDeleted"), status: "success", duration: 1500 });
   }, [configs, persist, toast, t]);
@@ -962,7 +922,7 @@ export default function GameProcessOptimizePage() {
       }
       await persist([
         ...configs,
-        EMPTY_CONFIG(`game_${Date.now()}`, info.game_name, [info.process_name]),
+        { ...EMPTY_CONFIG(`game_${Date.now()}`, info.game_name, [info.process_name]), icon: info.icon },
       ]);
       toast({ title: t("gameProcessOptimize.gameAdded"), status: "success", duration: 1500 });
     } catch (e: any) {
@@ -988,10 +948,11 @@ export default function GameProcessOptimizePage() {
     }
     await persist([
       ...configs,
-      EMPTY_CONFIG(`game_${Date.now()}`, p.name, [p.name]),
+      // 进程弹窗打开时已批量提取图标，直接复用（取不到留空走兜底）
+      { ...EMPTY_CONFIG(`game_${Date.now()}`, p.name, [p.name]), icon: icons[p.exe_path] ?? "" },
     ]);
     toast({ title: t("gameProcessOptimize.gameAdded"), status: "success", duration: 1500 });
-  }, [configs, persist, toast, t, isDuplicateGame]);
+  }, [configs, persist, toast, t, isDuplicateGame, icons]);
 
   const handleOpenFilterPicker = useCallback(async () => {
     try {
@@ -1038,10 +999,11 @@ export default function GameProcessOptimizePage() {
       </HStack>
     );
     if (liquidGlassEnabled) {
-      return <LiquidGlassCard p={4} _hover={{ transform: "translateY(-2px)" }} transition="transform 0.2s">{content}</LiquidGlassCard>;
+      // no-bounce：跳过路由切换时的卡片弹跳动画；不加 hover 位移（用户不要上浮效果）
+      return <LiquidGlassCard p={4} className="no-bounce">{content}</LiquidGlassCard>;
     }
     return (
-      <Box p={4} borderRadius="3xl" bg={cardBg} border="1px solid" borderColor={borderColorVal} _hover={{ transform: "translateY(-2px)" }} transition="transform 0.2s">
+      <Box p={4} borderRadius="3xl" bg={cardBg} border="1px solid" borderColor={borderColorVal}>
         {content}
       </Box>
     );
@@ -1084,7 +1046,7 @@ export default function GameProcessOptimizePage() {
 
       {/* 游戏列表 */}
       {configs.length === 0 ? (
-        <LiquidGlassCard p={10} isDashed>
+        <LiquidGlassCard p={10} isDashed className="no-bounce">
           <VStack align="center" spacing={2}>
             <Gamepad2 size={32} color="gray.500" />
             <Text fontWeight="bold" color={headingColor}>
@@ -1103,15 +1065,11 @@ export default function GameProcessOptimizePage() {
               game={game}
               status={autoStatuses[game.id]}
               isAdmin={isAdmin}
-              onApplyPriority={handleApplyPriority}
               onApplyAffinity={handleApplyAffinity}
-              onApplyIfeo={handleApplyIfeo}
-              onRestoreIfeo={handleRestoreIfeo}
               onOpenCoreSettings={handleOpenCoreSettings}
               onToggleAuto={handleToggleAuto}
               onDelete={handleDelete}
-              onOptimizeAll={handleOptimizeAll}
-              busy={busy[game.id] ?? { priority: false, affinity: false, ifeo: false, ifeoRestore: false, all: false }}
+              busy={busy[game.id] ?? { affinity: false }}
             />
           ))}
         </SimpleGrid>

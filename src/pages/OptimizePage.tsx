@@ -202,10 +202,10 @@ export default function OptimizePage() {
           <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
         </LiquidGlassCard>
       </Flex>
-      {layoutMode === "grid" ? (
-        <ViewGrid tools={tools} onReorder={handleReorder} />
-      ) : (
+      {layoutMode === "list" ? (
         <ViewList tools={tools} onReorder={handleReorder} />
+      ) : (
+        <ViewGrid tools={tools} onReorder={handleReorder} compact={layoutMode === "compact"} />
       )}
     </VStack>
   );

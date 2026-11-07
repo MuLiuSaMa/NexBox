@@ -15,6 +15,7 @@ mod dattorro;
 mod delta_force;
 mod df_stats;
 mod disk_optimize;
+mod disk_speed_test;
 mod external_player;
 mod spectrum;
 mod display_cache;
@@ -41,6 +42,7 @@ mod feature_flags;
 mod hotkey;
 mod main_window;
 mod media_keys;
+mod mouse_poll;
 mod music;
 mod network_optimize;
 #[allow(dead_code, unused_imports)]
@@ -51,7 +53,6 @@ mod nvidia_recording;
 mod runtime_repair;
 mod optimization;
 mod overlay_panel;
-mod remote_monitor;
 mod remote_access;
 mod power_settings;
 mod vertical_overlay;
@@ -99,6 +100,20 @@ static AUTOSTART_MODE: AtomicBool = AtomicBool::new(false);
 /// 由 tray::minimize_to_tray（前端 App.tsx 挂载后必然调用）置位，
 /// 供启动诊断判断“是否只启动后端、前端未起来”。
 pub(crate) static AUTOSTART_FRONTEND_READY: AtomicBool = AtomicBool::new(false);
+
+/// 全窗口统一的 WebView2 启动参数：禁用 Chromium 自动媒体会话（避免与 smtc.rs
+/// 注册的「新境盒」媒体会话重复）。**所有窗口必须逐字一致**，否则 WebView2
+/// 环境冲突导致新窗口创建失败（节约内存模式重建主窗口也必须用它）。
+///
+/// 内存相关说明（勿按"通用优化建议"盲删）：
+/// - `--disable-background-timer-throttling` 等三个 background flag：托盘音乐
+///   后台播放（歌词推进/状态推送/轮询）依赖；wry 0.57 的 backgroundThrottling
+///   policy 只在 macOS/iOS 实现，Windows 上 flag 是唯一手段。
+/// - `--js-flags=--scavenger_max_new_space_capacity_mb=8`：V8 新生代堆上限
+///   （微软官方示例值），压低常驻堆；如音乐页大列表出现 GC 卡顿再调大。
+/// - `--disk-cache-size=67108864`：HTTP 磁盘缓存上限 64MB，限制封面等资源
+///   缓存对 UDF 的膨胀。
+pub(crate) const MAIN_BROWSER_ARGS: &str = "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --js-flags=--scavenger_max_new_space_capacity_mb=8 --disk-cache-size=67108864";
 
 /// 按需创建竖排悬浮框窗口（不常驻，启用时创建、关闭时销毁）。
 /// 创建后 visible(false)，前端渲染完成后调用 `vertical_overlay_ready` 命令 show，避免白屏闪烁。
@@ -233,6 +248,37 @@ fn set_efficiency_mode(enable: bool) {
     }
 }
 
+/// 挂载主窗口生命周期事件处理（关闭→托盘、最小化可见性推送）。
+/// 启动 setup 与「节约内存」模式重建主窗口后都必须调用（事件闭包不会跨重建自动保留）。
+pub fn attach_main_window_handlers<R: tauri::Runtime>(main_window: &tauri::WebviewWindow<R>) {
+    let main_clone = main_window.clone();
+    main_window.on_window_event(move |event| {
+        match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                // 「节约内存」销毁流程中的 WM_CLOSE：放行，勿 prevent（否则销毁被卡住）
+                if crate::main_window::is_main_being_destroyed() {
+                    return;
+                }
+                // 节约内存模式：关闭 = 销毁主窗口释放内存；被守卫拦下（音乐播放中）则回退为隐藏
+                if crate::main_window::memory_saving_enabled()
+                    && crate::main_window::destroy_main_window(&main_clone.app_handle())
+                {
+                    return;
+                }
+                api.prevent_close();
+                main_window::save_current_position(&main_clone.app_handle());
+                let _ = main_clone.hide();
+                emit_main_visibility(&main_clone.app_handle(), false);
+            }
+            tauri::WindowEvent::Resized(_) => {
+                let minimized = main_clone.is_minimized().unwrap_or(false);
+                emit_main_visibility(&main_clone.app_handle(), !minimized);
+            }
+            _ => {}
+        }
+    });
+}
+
 /// 通知前端主窗口可见性变化。仅在状态切换时发送，避免重复事件刷屏。
 /// 同时自动切换系统效能模式：隐藏时开启 EcoQoS 降功耗，恢复时关闭。
 pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visible: bool) {
@@ -265,6 +311,12 @@ pub fn emit_main_visibility<R: tauri::Runtime>(app: &tauri::AppHandle<R>, visibl
 /// Low：允许 Chromium 丢弃缓存数据、将内存页换出到 pagefile（隐藏/最小化时）；
 /// Normal：恢复完整性能。对应 MemoryUsageTargetLevel 的 1 / 0。
 fn set_main_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, low: bool) {
+    set_webview_memory_level(app, "main", low);
+}
+
+/// 按窗口 label 设置 WebView 内存目标级别（同 `set_main_webview_memory_level`，泛化给
+/// 桌面歌词等常驻隐藏窗口复用；非 Windows / 窗口不存在时为空操作）。
+fn set_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, label: &str, low: bool) {
     use tauri::Manager;
     #[cfg(windows)]
     {
@@ -275,7 +327,7 @@ fn set_main_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, l
         };
         use windows_core::Interface;
 
-        if let Some(win) = app.get_webview_window("main") {
+        if let Some(win) = app.get_webview_window(label) {
             let _ = win.with_webview(move |webview| unsafe {
                 let controller = webview.controller();
                 if let Some(core) = controller.CoreWebView2().ok() {
@@ -293,8 +345,15 @@ fn set_main_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, l
     }
     #[cfg(not(windows))]
     {
-        let _ = (app, low);
+        let _ = (app, label, low);
     }
+}
+
+/// 桌面歌词窗口的 WebView 内存目标：窗口常驻（隐藏仅 hide），隐藏时切 Low 让
+/// Chromium 丢弃缓存/换页，显示时切回 Normal。由前端在歌词显示/隐藏时调用。
+#[tauri::command]
+async fn set_lyrics_webview_memory_level(app: tauri::AppHandle, low: bool) {
+    set_webview_memory_level(&app, "desktop-lyrics", low);
 }
 
 /// 当前是否处于开机自启(--autostart)模式。
@@ -364,9 +423,6 @@ pub fn run() {
                     Err(e) => log::error!("[MusicAPI] failed to start audio proxy: {e}"),
                 }
             });
-
-            // 手机远程监控：若上次开启则自动重开局域网 HTTP 服务
-            remote_monitor::restore_on_startup(app.handle());
 
             // NVIDIA 驱动列表缓存预热：启动后台静默刷新，进入驱动下载页秒开
             nvidia_driver_download::warm_cache_on_startup(app.handle());
@@ -476,23 +532,11 @@ pub fn run() {
             // Main window: intercept taskbar Close / Alt+F4 → hide instead of destroy，
             // 并通知前端窗口可见性变化（最小化/隐藏到托盘时暂停动态背景视频，降低 CPU 占用）
             if let Some(main_window) = app.get_webview_window("main") {
-                let main_clone = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    match event {
-                        tauri::WindowEvent::CloseRequested { api, .. } => {
-                            api.prevent_close();
-                            main_window::save_current_position(&main_clone.app_handle());
-                            let _ = main_clone.hide();
-                            emit_main_visibility(&main_clone.app_handle(), false);
-                        }
-                        tauri::WindowEvent::Resized(_) => {
-                            let minimized = main_clone.is_minimized().unwrap_or(false);
-                            emit_main_visibility(&main_clone.app_handle(), !minimized);
-                        }
-                        _ => {}
-                    }
-                });
+                attach_main_window_handlers(&main_window);
             }
+
+            // 节约内存(实验性)开关恢复：启用后缩小到托盘销毁主窗口、恢复时重建
+            main_window::load_memory_saving_mode(app.handle());
 
             // 显示器信息改为前端按需加载 (get_displays 内部已有缓存逻辑)，
             // 不在启动阶段预填，避免阻塞 WebView 加载导致白屏。
@@ -615,6 +659,9 @@ pub fn run() {
         hardware::get_os_version,
         hardware::get_disk_health_info,
         disk_optimize::optimize_disk,
+        disk_speed_test::disk_speed_test_start,
+        disk_speed_test::disk_speed_test_stop,
+        disk_speed_test::disk_speed_test_running,
         music::get_music_files,
         music::import_local_music,
         music::import_local_music_folder,
@@ -642,6 +689,9 @@ pub fn run() {
         external_player::external_control,
         smtc::smtc_update_state,
         smtc::smtc_clear,
+        main_window::set_memory_saving_mode,
+        main_window::get_memory_saving_mode,
+        main_window::main_window_ready,
         media_keys::set_media_keys_enabled,
         music_api::music_lyric,
         music_api::music_song_comments,
@@ -734,11 +784,6 @@ pub fn run() {
         music_api::music_switch_provider,
         music_api::music_get_playback_source,
         music_api::audio_proxy::cmd_get_proxy_port,
-        // === 手机远程监控（局域网） ===
-        remote_monitor::cmd_get_remote_monitor,
-        remote_monitor::cmd_enable_remote_monitor,
-        remote_monitor::cmd_disable_remote_monitor,
-        remote_monitor::cmd_set_remote_style,
         // === 远程接入网关（安卓控制 · 局域网） ===
         remote_access::cmd_get_remote_access,
         remote_access::cmd_enable_remote_access,
@@ -776,6 +821,8 @@ pub fn run() {
         download_accelerator::accel_clear_learned,
         download_accelerator::accel_set_speed_limit,
         download_accelerator::accel_scan_unfinished,
+        download_accelerator::accel_get_save_dir,
+        download_accelerator::accel_set_save_dir,
         download_accelerator::accel_open_file,
         download_accelerator::accel_reveal_file,
         optimization::optimize_memory,
@@ -1088,6 +1135,9 @@ pub fn run() {
         crosshair_hold::get_crosshair_hold_delay,
         crosshair_hold::set_crosshair_hold_delay,
 
+        mouse_poll::mouse_poll_start,
+        mouse_poll::mouse_poll_stop,
+
         delta_force::get_delta_passwords,
         delta_force::cache_delta_image,
         delta_force::get_weapon_codes,
@@ -1205,6 +1255,7 @@ pub fn run() {
             tray::exit_app,
             tray::check_update_and_show,
             is_autostart_mode,
+            set_lyrics_webview_memory_level,
             // === MCTier 命令 ===
             utils::cursor::get_cursor_position,
             utils::cursor::set_desktop_lyrics_click_through,
@@ -1321,13 +1372,14 @@ pub fn run() {
                 vertical_overlay::cleanup(app_handle);
                 crosshair::cleanup();
                 crosshair_hold::cleanup();
+                mouse_poll::cleanup(); // 卸载轮询率测试鼠标钩子，结束钩子线程
+                disk_speed_test::cleanup(); // 停止磁盘测速并删除测试临时文件
                 autoclicker::cleanup();
                 audio_eq::cleanup();
                 tray::cleanup();
                 hotkey::cleanup(app_handle);
                 nvapi::cleanup();
                 hardware_report::stop_recording();
-                remote_monitor::shutdown(); // 关掉局域网 HTTP 服务并释放端口，下次启动只能手动开启
                 remote_access::shutdown(); // 关掉远程控制服务与发现应答器
             }
             _ => {}

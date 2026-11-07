@@ -368,7 +368,7 @@ pub fn extract_icon_data_uri_with_index(file_path: &str, icon_index: i32) -> Opt
 }
 
 /// 按指定尺寸提取图标 data URI（批量进程图标等场景使用小尺寸以提升效率）
-fn extract_icon_data_uri_at_size(file_path: &str, size: i32, icon_index: i32) -> Option<String> {
+pub(crate) fn extract_icon_data_uri_at_size(file_path: &str, size: i32, icon_index: i32) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         use windows_sys::Win32::UI::Shell::SHDefExtractIconW;

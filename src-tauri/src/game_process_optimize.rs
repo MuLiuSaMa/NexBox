@@ -68,6 +68,21 @@ pub struct GameOptimizeConfig {
     /// IFEO 优先级优化（通过注册表 IFEO PerfOptions 在进程启动时由系统强制应用优先级，持久且对受保护进程生效）
     #[serde(default)]
     pub auto_optimize_ifeo: bool,
+    /// 磁盘 IO 优先级自动优化（游戏启动时 IO 优先级提到 High=3）
+    #[serde(default)]
+    pub auto_optimize_io: bool,
+    /// 内存优先级自动优化（游戏启动时内存页优先级提到 High=4）
+    #[serde(default)]
+    pub auto_optimize_memory: bool,
+    /// GPU 调度优先级自动优化（游戏启动时 GPU 调度优先级提到 High=4）
+    #[serde(default)]
+    pub auto_optimize_gpu: bool,
+    /// GPU 高性能（Windows 图形偏好注册表 GpuPreference=2，系统在游戏下次启动时应用；N/A/Intel 通用，无需管理员）
+    #[serde(default)]
+    pub auto_optimize_gpu_pref: bool,
+    /// 游戏图标（exe 提取的 64px PNG data URI，添加时识别；空 = 无图标走兜底渲染）
+    #[serde(default)]
+    pub icon: String,
     /// 兼容旧版单一开关 `auto_optimize`（仅反序列化迁移用，不参与序列化）
     #[serde(default, rename = "auto_optimize", skip_serializing)]
     pub legacy_auto_optimize: Option<bool>,
@@ -94,6 +109,14 @@ pub struct GameAutoStatus {
     pub affinity_applied: bool,
     /// IFEO 优先级是否已通过注册表应用（持久）
     pub ifeo_applied: bool,
+    /// 磁盘 IO 优先级是否已应用（High）
+    pub io_applied: bool,
+    /// 内存优先级是否已应用（High）
+    pub memory_applied: bool,
+    /// GPU 调度优先级是否已应用（High）
+    pub gpu_applied: bool,
+    /// GPU 高性能是否已写入图形偏好注册表（持久）
+    pub gpu_pref_applied: bool,
     pub last_apply: Option<String>,
 }
 
@@ -103,6 +126,8 @@ pub struct GameExecutableInfo {
     pub path: String,
     pub process_name: String,
     pub game_name: String,
+    /// exe 内嵌图标（64px PNG data URI；提取失败为空串）
+    pub icon: String,
 }
 
 /// 运行中进程信息（去重后的进程名列表）
@@ -199,6 +224,11 @@ fn default_configs() -> Vec<GameOptimizeConfig> {
         auto_optimize_priority: false,
         auto_optimize_affinity: false,
         auto_optimize_ifeo: false,
+        auto_optimize_io: false,
+        auto_optimize_memory: false,
+        auto_optimize_gpu: false,
+        auto_optimize_gpu_pref: false,
+        icon: String::new(),
         legacy_auto_optimize: None,
     }]
 }
@@ -411,24 +441,174 @@ fn sync_ifeo_registry(
     }
 }
 
+// ─── GPU 高性能（Windows 图形偏好注册表）───
+// 原理：HKCU\Software\Microsoft\DirectX\UserGpuPreferences 写 "GpuPreference=2;"（高性能），
+// 即系统「设置 → 显示 → 图形设置」按应用指定的 GPU 偏好，NVIDIA/AMD/Intel 通用，
+// 由系统在游戏下次启动时应用。HKCU 无需管理员权限；与 IFEO 同口径按 exe 文件名登记。
+
+const GPU_PREF_VALUE: &str = "GpuPreference=2;";
+
+/// 补全 .exe 后缀（图形偏好注册表值名口径）
+fn gpu_pref_value_name(process_name: &str) -> String {
+    if process_name.to_ascii_lowercase().ends_with(".exe") {
+        process_name.to_string()
+    } else {
+        format!("{}.exe", process_name)
+    }
+}
+
+/// 为单个进程写入 GPU 高性能图形偏好（HKCU，无需管理员）
+fn apply_game_gpu_pref_registry(process_name: &str) -> Result<(), String> {
+    let key = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(r"Software\Microsoft\DirectX\UserGpuPreferences", KEY_SET_VALUE)
+        .map_err(|e| format!("打开 UserGpuPreferences 失败 ({}): {}", process_name, e))?;
+    key.set_value(gpu_pref_value_name(process_name), &GPU_PREF_VALUE)
+        .map_err(|e| format!("写入 GpuPreference 失败 ({}): {}", process_name, e))?;
+    Ok(())
+}
+
+/// 删除单个进程的 GPU 高性能图形偏好
+fn remove_game_gpu_pref_registry(process_name: &str) -> Result<(), String> {
+    match RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(r"Software\Microsoft\DirectX\UserGpuPreferences", KEY_SET_VALUE)
+    {
+        Ok(key) => {
+            let _ = key.delete_value(gpu_pref_value_name(process_name));
+            Ok(())
+        }
+        Err(_) => Ok(()), // 键不存在视为已清除
+    }
+}
+
+/// 查询某个进程的 GPU 高性能图形偏好是否已写入（只读）
+fn gpu_pref_is_applied(process_name: &str) -> bool {
+    if let Ok(key) = RegKey::predef(HKEY_CURRENT_USER)
+        .open_subkey_with_flags(r"Software\Microsoft\DirectX\UserGpuPreferences", KEY_QUERY_VALUE)
+    {
+        if let Ok(v) = key.get_value::<String, _>(gpu_pref_value_name(process_name)) {
+            return v == GPU_PREF_VALUE;
+        }
+    }
+    false
+}
+
+/// 同步 GPU 图形偏好注册表与配置：为「已开启」的进程写入，为「已关闭或已删除」的进程清除。
+/// HKCU 无需管理员权限。
+fn sync_gpu_pref_registry(new_configs: &[GameOptimizeConfig], old_configs: &[GameOptimizeConfig]) {
+    let enabled = |cfgs: &[GameOptimizeConfig]| -> std::collections::HashSet<String> {
+        cfgs.iter()
+            .filter(|c| c.auto_optimize_gpu_pref)
+            .flat_map(|c| c.process_names.iter().map(|n| n.to_lowercase()))
+            .collect()
+    };
+    let old = enabled(old_configs);
+    let new = enabled(new_configs);
+
+    // 关闭/删除的 → 清除
+    for name in old.iter() {
+        if !new.contains(name) {
+            let _ = remove_game_gpu_pref_registry(name);
+            log::info!("[游戏进程优化] 已清除 GPU 高性能图形偏好: {}", name);
+        }
+    }
+    // 新增的 → 写入
+    for name in new.iter() {
+        if !old.contains(name) {
+            match apply_game_gpu_pref_registry(name) {
+                Ok(()) => log::info!("[游戏进程优化] 已应用 GPU 高性能图形偏好: {}", name),
+                Err(e) => log::warn!("[游戏进程优化] 应用 GPU 高性能失败 ({}): {}", name, e),
+            }
+        }
+    }
+}
+
 // ─── 自动优化线程 ───
 
-fn update_game_status(
-    game_id: &str,
-    running: bool,
-    optimized: bool,
-    priority_applied: bool,
-    affinity_applied: bool,
-) {
+/// 运行时优先级提升目标值：IO High / 内存页 High / GPU 调度 High。
+/// 与游戏模式压制后台用的是同一批原语（optimization.rs），此处反向取值用于提升游戏进程。
+const IO_PRIORITY_HIGH: i32 = 3; // 0=VeryLow, 1=Low, 2=Normal, 3=High
+const MEMORY_PRIORITY_HIGH: i32 = 4; // 1=VeryLow .. 4=High, 5=RealTime
+const GPU_PRIORITY_HIGH: i32 = 4; // 0=Idle, 1=BelowNormal, 2=Normal, 4=High
+
+/// 一次运行时优化的应用结果（五项各自成功与否）
+#[derive(Default, Clone, Copy)]
+struct RuntimeApplyResult {
+    priority: bool,
+    affinity: bool,
+    io: bool,
+    memory: bool,
+    gpu: bool,
+}
+
+impl RuntimeApplyResult {
+    fn any(&self) -> bool {
+        self.priority || self.affinity || self.io || self.memory || self.gpu
+    }
+}
+
+/// 按游戏配置对单个进程应用各项运行时优化（进程/核心/IO/内存/GPU 调度），
+/// 成功项写入 result。关闭的开关对应项跳过。
+fn apply_runtime_to_pid(game: &GameOptimizeConfig, pid: u32, result: &mut RuntimeApplyResult) {
+    if game.auto_optimize_priority && set_process_priority(pid, game.priority) {
+        result.priority = true;
+    }
+    if game.auto_optimize_affinity
+        && optimization::set_process_affinity(pid, resolve_affinity_mask(game.affinity_mask))
+    {
+        result.affinity = true;
+    }
+    if game.auto_optimize_io && optimization::set_process_io_priority(pid, IO_PRIORITY_HIGH) {
+        result.io = true;
+    }
+    if game.auto_optimize_memory
+        && optimization::set_process_memory_priority(pid, MEMORY_PRIORITY_HIGH)
+    {
+        result.memory = true;
+    }
+    if game.auto_optimize_gpu && optimization::set_process_gpu_priority(pid, GPU_PRIORITY_HIGH) {
+        result.gpu = true;
+    }
+}
+
+/// 对运行中进程按当前已开启的运行时开关立即应用一次（开关开启时即时生效用）。
+/// 无运行中进程时不更新状态。返回应用结果。
+fn apply_runtime_for_running(game: &GameOptimizeConfig) -> RuntimeApplyResult {
+    let mut system = System::new();
+    system.refresh_processes();
+    let pids = find_pids_by_name(&system, &game.process_names);
+    let mut result = RuntimeApplyResult::default();
+    for pid in &pids {
+        apply_runtime_to_pid(game, *pid, &mut result);
+    }
+    if !pids.is_empty() {
+        update_game_status(&game.id, true, result);
+        log::info!(
+            "[游戏进程优化] 「{}」开关即时应用至 {} 个运行中进程（进程:{}, 核心:{}, IO:{}, 内存:{}, GPU:{}）",
+            game.name,
+            pids.len(),
+            if result.priority { "✓" } else { "-" },
+            if result.affinity { "✓" } else { "-" },
+            if result.io { "✓" } else { "-" },
+            if result.memory { "✓" } else { "-" },
+            if result.gpu { "✓" } else { "-" },
+        );
+    }
+    result
+}
+
+fn update_game_status(game_id: &str, running: bool, applied: RuntimeApplyResult) {
     let mut guard = GAME_STATUS.lock().unwrap_or_else(|e| e.into_inner());
     let map = guard.get_or_insert_with(HashMap::new);
     let entry = map.entry(game_id.to_string()).or_default();
     entry.game_id = game_id.to_string();
     entry.running = running;
-    entry.optimized = optimized;
-    entry.priority_applied = priority_applied;
-    entry.affinity_applied = affinity_applied;
-    if running && optimized {
+    entry.optimized = applied.any();
+    entry.priority_applied = applied.priority;
+    entry.affinity_applied = applied.affinity;
+    entry.io_applied = applied.io;
+    entry.memory_applied = applied.memory;
+    entry.gpu_applied = applied.gpu;
+    if running && applied.any() {
         entry.last_apply = Some(chrono::Local::now().to_rfc3339());
     }
 }
@@ -449,7 +629,13 @@ fn auto_optimize_loop(generation: u64) {
         let configs = get_configs();
         let auto_games: Vec<GameOptimizeConfig> = configs
             .iter()
-            .filter(|c| c.auto_optimize_priority || c.auto_optimize_affinity)
+            .filter(|c| {
+                c.auto_optimize_priority
+                    || c.auto_optimize_affinity
+                    || c.auto_optimize_io
+                    || c.auto_optimize_memory
+                    || c.auto_optimize_gpu
+            })
             .cloned()
             .collect();
         if auto_games.is_empty() {
@@ -465,31 +651,23 @@ fn auto_optimize_loop(generation: u64) {
 
             if is_running && !was_running {
                 // 游戏刚启动 → 按该游戏独立开启的开关分别应用
-                let mut priority_applied = false;
-                let mut affinity_applied = false;
+                let mut result = RuntimeApplyResult::default();
                 for pid in &pids {
-                    if game.auto_optimize_priority
-                        && set_process_priority(*pid, game.priority)
-                    {
-                        priority_applied = true;
-                    }
-                    if game.auto_optimize_affinity
-                        && optimization::set_process_affinity(*pid, resolve_affinity_mask(game.affinity_mask))
-                    {
-                        affinity_applied = true;
-                    }
+                    apply_runtime_to_pid(game, *pid, &mut result);
                 }
-                let optimized = priority_applied || affinity_applied;
-                update_game_status(&game.id, true, optimized, priority_applied, affinity_applied);
+                update_game_status(&game.id, true, result);
                 log::info!(
-                    "[游戏进程优化] {} 已自动应用优化（进程: {}, 核心: {}）",
+                    "[游戏进程优化] {} 已自动应用优化（进程: {}, 核心: {}, IO: {}, 内存: {}, GPU: {}）",
                     game.name,
-                    if priority_applied { "✓" } else { "-" },
-                    if affinity_applied { "✓" } else { "-" },
+                    if result.priority { "✓" } else { "-" },
+                    if result.affinity { "✓" } else { "-" },
+                    if result.io { "✓" } else { "-" },
+                    if result.memory { "✓" } else { "-" },
+                    if result.gpu { "✓" } else { "-" },
                 );
             } else if !is_running && was_running {
                 // 游戏已退出 → 重置状态
-                update_game_status(&game.id, false, false, false, false);
+                update_game_status(&game.id, false, RuntimeApplyResult::default());
                 log::info!("[游戏进程优化] {} 已退出，重置自动优化状态", game.name);
             }
 
@@ -500,9 +678,13 @@ fn auto_optimize_loop(generation: u64) {
 
 /// 确保自动优化线程与当前配置一致：有开启任一类自动优化的游戏则启动，否则停止
 fn ensure_auto_thread() {
-    let has_auto = get_configs()
-        .iter()
-        .any(|c| c.auto_optimize_priority || c.auto_optimize_affinity);
+    let has_auto = get_configs().iter().any(|c| {
+        c.auto_optimize_priority
+            || c.auto_optimize_affinity
+            || c.auto_optimize_io
+            || c.auto_optimize_memory
+            || c.auto_optimize_gpu
+    });
     let running = AUTO_RUNNING.load(Ordering::Relaxed);
     if has_auto == running {
         return; // 状态一致，无需操作
@@ -541,9 +723,10 @@ pub async fn init(app: tauri::AppHandle) -> Result<(), String> {
         log::info!("[游戏进程优化] 首次运行，已预置默认游戏：三角洲行动");
     }
 
-    // 启动时同步一次 IFEO 注册表，确保与持久化配置一致
+    // 启动时同步一次 IFEO 与 GPU 图形偏好注册表，确保与持久化配置一致
     let current = get_configs();
     sync_ifeo_registry(&current, &[]);
+    sync_gpu_pref_registry(&current, &[]);
 
     ensure_auto_thread();
     Ok(())
@@ -593,8 +776,9 @@ pub async fn save_game_optimize_configs(
     }
 
     save_persisted_configs(&app, &cleaned).await;
-    // 同步 IFEO 注册表（新增/删除/改名/关闭都会据此写入或清除）
+    // 同步 IFEO / GPU 图形偏好注册表（新增/删除/改名/关闭都会据此写入或清除）
     sync_ifeo_registry(&cleaned, &old_configs);
+    sync_gpu_pref_registry(&cleaned, &old_configs);
     ensure_auto_thread();
     Ok(())
 }
@@ -788,6 +972,11 @@ pub async fn set_game_auto_optimize(
         "priority" => game.auto_optimize_priority = enabled,
         "affinity" => game.auto_optimize_affinity = enabled,
         "ifeo" => game.auto_optimize_ifeo = enabled,
+        "io" => game.auto_optimize_io = enabled,
+        "memory" => game.auto_optimize_memory = enabled,
+        "gpu" => game.auto_optimize_gpu = enabled,
+        // GPU 高性能走 HKCU 注册表，无需管理员权限（区别于 IFEO 的 HKLM）
+        "gpu_pref" => game.auto_optimize_gpu_pref = enabled,
         _ => return Err(format!("未知的自动优化类型: {}", kind)),
     }
 
@@ -800,13 +989,33 @@ pub async fn set_game_auto_optimize(
     if kind == "ifeo" {
         sync_ifeo_registry(&updated, &old_configs);
     }
+    if kind == "gpu_pref" {
+        sync_gpu_pref_registry(&updated, &old_configs);
+    }
     ensure_auto_thread();
+
+    // 运行时类开关开启 → 立即对运行中进程应用一次（游戏开着时打开开关即时生效，不等重启游戏）
+    if enabled
+        && matches!(
+            kind.as_str(),
+            "priority" | "affinity" | "io" | "memory" | "gpu"
+        )
+    {
+        if let Some(game) = updated.iter().find(|c| c.id == game_id) {
+            apply_runtime_for_running(game);
+        }
+    }
+
     log::info!(
         "[游戏进程优化] 游戏 {} 的「{}」自动优化已{}",
         game_id,
         match kind.as_str() {
             "priority" => "进程",
             "affinity" => "核心",
+            "io" => "磁盘IO",
+            "memory" => "内存",
+            "gpu" => "GPU调度",
+            "gpu_pref" => "GPU高性能",
             _ => "IFEO",
         },
         if enabled { "开启" } else { "关闭" }
@@ -837,6 +1046,15 @@ pub async fn get_game_auto_optimize_status(
                     .any(|n| ifeo_is_applied(n));
             } else {
                 status.ifeo_applied = false;
+            }
+            // GPU 高性能同为注册表持久状态，按注册表实际值报告
+            if c.auto_optimize_gpu_pref {
+                status.gpu_pref_applied = c
+                    .process_names
+                    .iter()
+                    .any(|n| gpu_pref_is_applied(n));
+            } else {
+                status.gpu_pref_applied = false;
             }
             status
         })
@@ -956,6 +1174,19 @@ fn resolve_shortcut_target(lnk_path: &str) -> Option<String> {
     None
 }
 
+/// 从 exe 提取 64px 图标 data URI（非 Windows 或提取失败时返回空串）
+fn extract_exe_icon(path: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        crate::startup_manager::extract_icon_data_uri_at_size(path, 64, 0).unwrap_or_default()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = path;
+        String::new()
+    }
+}
+
 /// 选择游戏可执行文件（.exe/.lnk）。
 /// 若选择的是 .lnk 快捷方式，则解析其指向的目标 exe，使用目标程序名作为进程名。
 #[tauri::command]
@@ -987,6 +1218,7 @@ pub async fn select_game_executable() -> Option<GameExecutableInfo> {
                 process_name.clone()
             };
             return Some(GameExecutableInfo {
+                icon: extract_exe_icon(&target),
                 path: target,
                 process_name,
                 game_name,
@@ -995,6 +1227,7 @@ pub async fn select_game_executable() -> Option<GameExecutableInfo> {
         // 解析失败时回退：去掉 .lnk 后缀作为进程名
         let game_name = strip_exe_suffix(&file_name).to_string();
         return Some(GameExecutableInfo {
+            icon: extract_exe_icon(&path),
             path: path.clone(),
             process_name: game_name.clone(),
             game_name,
@@ -1009,6 +1242,7 @@ pub async fn select_game_executable() -> Option<GameExecutableInfo> {
     };
 
     Some(GameExecutableInfo {
+        icon: extract_exe_icon(&path),
         path,
         process_name,
         game_name,

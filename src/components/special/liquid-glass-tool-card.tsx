@@ -3,7 +3,6 @@
 import { Box, BoxProps, useColorModeValue } from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useGlowEffect, getBorderGlowStyle } from "@/hooks/use-glow-effect";
-import { useLiquidGlassRefraction } from "@/components/special/liquid-glass-svg-filter";
 
 interface LiquidGlassToolCardProps extends BoxProps {
   children: React.ReactNode;
@@ -23,9 +22,8 @@ export function LiquidGlassToolCard({
   size = "sm",
   ...props
 }: LiquidGlassToolCardProps) {
-  const { liquidGlassEnabled, liquidGlassBlur, liquidGlassMode } = useBackground();
+  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
-  const { svgSupported } = useLiquidGlassRefraction(liquidGlassEnabled && liquidGlassMode === "real");
 
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultHoverBg = useColorModeValue("gray.100", "#222222");
@@ -40,13 +38,7 @@ export function LiquidGlassToolCard({
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const padding = size === "sm" ? 3 : size === "md" ? 4 : 5;
   const borderRadius = size === "sm" ? "2xl" : "3xl";
-  const isReal = liquidGlassEnabled && liquidGlassMode === "real" && !isDashed;
-
-  const backdropFilter = isReal
-    ? (svgSupported
-        ? `url(#nexbox-liquid-glass-filter) saturate(1.4)`
-        : `saturate(1.4) brightness(1.05)`)
-    : `blur(${effectiveBlur}px)`;
+  const backdropFilter = `blur(${effectiveBlur}px)`;
 
   if (!liquidGlassEnabled) {
     return (
@@ -77,7 +69,7 @@ export function LiquidGlassToolCard({
 
   return (
     <Box
-      className={`jelly-bounce-tool-card${isReal ? " real-liquid-glass" : ""}${className ? ` ${className}` : ""}`}
+      className={`jelly-bounce-tool-card${className ? ` ${className}` : ""}`}
       onClick={onClick}
       cursor={cursor}
       bg={isHovering ? glassHoverBg : glassBg}
@@ -101,7 +93,7 @@ export function LiquidGlassToolCard({
       }}
       {...props}
     >
-      {!isReal && <Box style={getBorderGlowStyle(glowColor)} />}
+      <Box style={getBorderGlowStyle(glowColor)} />
       {children}
     </Box>
   );

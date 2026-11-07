@@ -7,9 +7,13 @@
 //! 3. 完整移植参考实现的「同帧去重 + 信源优先级」逻辑：
 //!    PresentHistory(0xAB/0xD7) ＞ Win32k 合成(0xC9) ＞ 传统/MPO 事件，
 //!    每帧只计入一次，防止 MPO/Win32k 双源导致 FPS 翻倍
-//! 4. 显示 FPS 采用 500ms 时间窗口帧计数 + 自适应 EMA 平滑（帧率骤变 1s 内收敛）
-//! 5. 1%/0.1% Low 按短滑动时间窗口（1.5s / 5s）每 300ms 重算，骤降快跟、回升缓动，
+//! 4. 显示 FPS 采用 500ms 时间窗口帧计数 + 自适应 EMA 平滑；连续 2 窗差距 >30%
+//!    判定为真实帧率跃变、直接贴住 raw（真实跃变 ~1.5s 收敛，毛刺仍被平滑）
+//! 5. 1%/0.1% Low 按短滑动时间窗口（1.5s / 5s）每 300ms 重算，骤降快跟；
+//!    连续 2 次重算回升 → 判定真实恢复、快速贴住 raw，单次回弹仍缓动，
 //!    不再受 3000 帧大缓冲的数十秒拖尾影响，前台目标消费端过滤不变，公共 API 全兼容
+//! 6. ETW 会话缓冲 256KB×32~256（对齐 PresentMon 量级）+ 消费线程高优先级，
+//!    追踪线程每 5s 输出诊断日志（各事件 ID 计入数 / 到达总数 / 内核丢事件数）
 //!
 //! 架构说明：
 //! - etw::fps_monitor_main 线程：管理 ETW 会话生命周期，会话中断自动重连（上限 5 次）
@@ -327,7 +331,8 @@ mod etw {
     use windows_sys::Win32::Foundation::CloseHandle;
     use windows_sys::Win32::System::Diagnostics::Etw::*;
     use windows_sys::Win32::System::Threading::{
-        OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
+        GetCurrentThread, OpenProcess, QueryFullProcessImageNameW, SetThreadPriority,
+        PROCESS_QUERY_LIMITED_INFORMATION, THREAD_PRIORITY_HIGHEST,
     };
 
     // ---- Provider GUID（与图吧工具箱 FpsService.cs 完全一致） ----
@@ -369,6 +374,54 @@ mod etw {
     const FLIP_MPO: u16 = 0x00FC; // FlipMultiPlaneOverlay_Info
     const INDEPENDENT_FLIP: u16 = 0x010A; // IndependentFlip_Info
 
+    // ---- 诊断：各 Present 事件 ID 的到达/计入计数（回调线程 +1，追踪线程每 5s 读取清零） ----
+    /// (短标签, EventDescriptor.Id)，数组下标即诊断计数槽位
+    const DIAG_IDS: [(&str, u16); 11] = [
+        ("AB", PRESENT_HISTORY_START),
+        ("D7", PRESENT_HISTORY_DETAILED),
+        ("B8", PRESENT),
+        ("C9", WIN32K_PRESENT),
+        ("A6", BLT),
+        ("74", MMIO_FLIP),
+        ("103", MMIO_FLIP_MPO),
+        ("182", MMIO_FLIP_MPO3),
+        ("A8", FLIP),
+        ("FC", FLIP_MPO),
+        ("10A", INDEPENDENT_FLIP),
+    ];
+    /// 到达计数：排除名单过滤后、去重前（全进程）
+    static DIAG_ARRIVED: [AtomicU64; 11] = [
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0),
+    ];
+    /// 计入计数：去重 + 信源优先级 + 目标过滤后，真正进入统计的帧（仅目标进程）
+    static DIAG_COUNTED: [AtomicU64; 11] = [
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0),
+    ];
+
+    #[inline]
+    fn diag_index_of(id: u16) -> usize {
+        match id {
+            PRESENT_HISTORY_START => 0,
+            PRESENT_HISTORY_DETAILED => 1,
+            PRESENT => 2,
+            WIN32K_PRESENT => 3,
+            BLT => 4,
+            MMIO_FLIP => 5,
+            MMIO_FLIP_MPO => 6,
+            MMIO_FLIP_MPO3 => 7,
+            FLIP => 8,
+            FLIP_MPO => 9,
+            INDEPENDENT_FLIP => 10,
+            _ => usize::MAX,
+        }
+    }
+
     // ---- 时间窗口（EventHeader.TimeStamp 单位为 100ns；差值计算与时钟源无关） ----
     /// 0.1ms：同一帧去重窗口。参考实现用 1ms（口径 FPS≤1000），但超高帧率场景
     /// （MC 高配 2000+ FPS，帧间隔 ~0.5ms）真实帧会被误判为同帧重复、帧率被腰斩。
@@ -394,18 +447,26 @@ mod etw {
     /// 窗口内至少这么多样本才发布读数（避免刚切目标时 1~2 帧就报出极低值）
     const LOW_MIN_SAMPLES: usize = 12;
 
-    /// Low 值平滑：骤降快速跟随(α=0.6)、回升缓动(α=0.2)。
-    /// 短窗口使读数更灵敏，但单次卡顿会让数字跳变，因而是“掉帧立即看得到、恢复缓慢上行”
+    /// Low 值平滑：骤降快速跟随(α=0.6)；回升时若连续 2 次重算仍在涨，
+    /// 判定为帧率真实恢复 → 直接贴住 raw，避免"游戏已恢复、Low 值爬几秒才跟上"。
+    /// 单次回升仍走缓动(α=0.45)，防止偶尔回弹造成读数反复横跳。
     #[inline]
-    fn smooth_low(prev: f64, raw: f64) -> f64 {
+    fn smooth_low(prev: f64, raw: f64, rise_streak: &mut u32) -> f64 {
         if raw <= 0.0 {
             return prev;
         }
         if prev <= 0.0 {
+            *rise_streak = 0;
             return raw;
         }
-        let alpha = if raw < prev { 0.6 } else { 0.2 };
-        alpha * raw + (1.0 - alpha) * prev
+        if raw < prev {
+            *rise_streak = 0;
+            0.6 * raw + 0.4 * prev
+        } else {
+            *rise_streak = rise_streak.saturating_add(1);
+            let alpha = if *rise_streak >= 2 { 1.0 } else { 0.45 };
+            alpha * raw + (1.0 - alpha) * prev
+        }
     }
 
     /// ETW 线程句柄（stop 时 join，确保会话清理完成）
@@ -448,12 +509,18 @@ mod etw {
         /// EMA 平滑状态
         smoothed_fps: f64,
         first_frame: bool,
+        /// 连续快速追赶窗口数（≥2 判定为真实帧率跃变，直接贴住 raw）
+        fps_fast_streak: u32,
         /// 1% Low / 0.1% Low 计算计时器
         last_low_calc: Instant,
-        /// 1% Low 平滑状态（快跌慢涨：掉帧立即跟随，回升缓动）
+        /// 1% Low 平滑状态（快跌快恢复：掉帧立即跟随，持续回升也快速贴住）
         smoothed_1low: f64,
+        /// 1% Low 连续回升的重算次数
+        rise_streak_1low: u32,
         /// 0.1% Low 平滑状态
         smoothed_01low: f64,
+        /// 0.1% Low 连续回升的重算次数
+        rise_streak_01low: u32,
         /// 陈旧进程状态清理计时器（保持 1s 一次，与 Low 计算解耦）
         last_prune: Instant,
         /// 目标进程最近一次被计数的 Present tick（帧间隔基准）
@@ -472,9 +539,12 @@ mod etw {
                 display_window_start: Instant::now(),
                 smoothed_fps: 0.0,
                 first_frame: true,
+                fps_fast_streak: 0,
                 last_low_calc: Instant::now(),
                 smoothed_1low: 0.0,
+                rise_streak_1low: 0,
                 smoothed_01low: 0.0,
+                rise_streak_01low: 0,
                 last_prune: Instant::now(),
                 last_target_ticks: None,
                 last_gen: 0,
@@ -494,9 +564,12 @@ mod etw {
             let mut b: TracePropsBuffer = unsafe { std::mem::zeroed() };
             b.props.Wnode.BufferSize = size_of::<TracePropsBuffer>() as u32;
             b.props.Wnode.Guid = windows_sys::core::GUID::from_u128(0);
-            b.props.BufferSize = 64; // KB/缓冲
-            b.props.MinimumBuffers = 8;
-            b.props.MaximumBuffers = 64;
+            // DxgKrnl+Win32k 内核 Provider 开在 VERBOSE 级，全系统图形事件都流经本会话，
+            // 实时模式下消费端瞬时跟不上即静默丢事件（表现为帧率偏低、1% Low 崩塌），
+            // 缓冲对齐 PresentMon 类工具量级：256KB×32 起步（8MB），上限 256 个（64MB）
+            b.props.BufferSize = 256; // KB/缓冲
+            b.props.MinimumBuffers = 32;
+            b.props.MaximumBuffers = 256;
             b.props.LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
             b.props.LoggerNameOffset = size_of::<EVENT_TRACE_PROPERTIES>() as u32;
             b.props.LogFileNameOffset = 0; // 无日志文件，纯实时
@@ -518,6 +591,52 @@ mod etw {
                 EVENT_TRACE_CONTROL_STOP,
             );
         }
+    }
+
+    /// 查询当前会话的累计丢事件数（诊断用，事件在消费端读取清零前由内核累计）
+    /// 返回 (events_lost, real_time_buffers_lost)；会话不存在时返回 (0, 0)
+    fn query_dropped() -> (u32, u32) {
+        let name = session_name();
+        let mut buf = TracePropsBuffer::new(&name);
+        let status = unsafe {
+            ControlTraceW(
+                CONTROLTRACE_HANDLE { Value: 0 },
+                name.as_ptr(),
+                &mut buf.props,
+                EVENT_TRACE_CONTROL_QUERY,
+            )
+        };
+        if status != 0 {
+            return (0, 0);
+        }
+        (buf.props.EventsLost, buf.props.RealTimeBuffersLost)
+    }
+
+    /// 诊断日志（追踪线程每 5s 调用）：各事件 ID 计入数 / 到达总数 / 内核丢事件数。
+    /// 一行即可实锤「哪个信源在计数、速率是否合理、实时会话是否在丢事件」。
+    pub fn diag_tick() {
+        let arrived_total: u64 = DIAG_ARRIVED
+            .iter()
+            .map(|c| c.swap(0, Ordering::Relaxed))
+            .sum();
+        let fps = SMOOTHED_FPS.load(Ordering::Relaxed);
+        if arrived_total == 0 && fps == 0 {
+            return; // 无活动不刷屏
+        }
+        let counted: Vec<String> = DIAG_IDS
+            .iter()
+            .zip(DIAG_COUNTED.iter())
+            .map(|((label, _), c)| format!("{}:{}", label, c.swap(0, Ordering::Relaxed)))
+            .collect();
+        let (events_lost, rt_lost) = query_dropped();
+        log::info!(
+            "FPS诊断: fps={} 计入{{{}}} 到达={} EventsLost={} RTBuffersLost={}",
+            fps,
+            counted.join(","),
+            arrived_total,
+            events_lost,
+            rt_lost
+        );
     }
 
     /// 同帧去重 + 信源优先级（逐行移植图吧工具箱 FpsService.TryRecordPresent）
@@ -669,6 +788,12 @@ mod etw {
             return;
         }
 
+        // 诊断计数：到达（排除名单后、去重前）
+        let diag_idx = diag_index_of(id);
+        if diag_idx != usize::MAX {
+            DIAG_ARRIVED[diag_idx].fetch_add(1, Ordering::Relaxed);
+        }
+
         // 同帧去重 + 信源优先级 → 决定本帧是否计入
         let st = rt.procs.entry(pid).or_default();
         if !record_present(st, id, ticks) {
@@ -683,6 +808,10 @@ mod etw {
             }
         }
         LAST_FRAME_TIME.store(now_unix_ms(), Ordering::Relaxed);
+        // 诊断计数：计入（去重 + 信源优先级 + 目标过滤后）
+        if diag_idx != usize::MAX {
+            DIAG_COUNTED[diag_idx].fetch_add(1, Ordering::Relaxed);
+        }
 
         // 目标切换 → 清空统计（原 CSV reader 的 generation 检测逻辑）
         let gen = TARGET_GENERATION.load(Ordering::Relaxed);
@@ -690,12 +819,17 @@ mod etw {
             rt.buffer.clear();
             rt.smoothed_fps = 0.0;
             rt.first_frame = true;
+            rt.fps_fast_streak = 0;
             rt.last_target_ticks = None;
             rt.last_gen = gen;
             rt.display_frame_count = 0;
             rt.display_window_start = Instant::now();
             rt.smoothed_1low = 0.0;
+            rt.rise_streak_1low = 0;
             rt.smoothed_01low = 0.0;
+            rt.rise_streak_01low = 0;
+            // 主值一并归零：切换目标后不再短暂显示旧游戏的帧率
+            SMOOTHED_FPS.store(0, Ordering::Relaxed);
             ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
             ZERO_DOT_ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
         }
@@ -724,12 +858,21 @@ mod etw {
                         if rt.first_frame {
                             rt.smoothed_fps = raw_fps;
                             rt.first_frame = false;
+                            rt.fps_fast_streak = 0;
                         } else {
-                            // 自适应 EMA：与当前值差距 >30% 时快速追赶(α=0.6)，
-                            // 否则轻度平滑防抖动(α=0.25)
+                            // 自适应 EMA：与当前值差距 >30% 进入快速档(α=0.6)；
+                            // 连续 2 个窗口仍差 >30% → 判定为真实帧率跃变（而非瞬时毛刺），
+                            // 直接贴住 raw，消除"游戏已到 100、读数还在爬坡"的数秒滞后；
+                            // 小差距走轻度平滑(α=0.25)防抖动。
                             let diff_ratio =
                                 (raw_fps - rt.smoothed_fps).abs() / rt.smoothed_fps.max(1.0);
-                            let alpha = if diff_ratio > 0.3 { 0.6 } else { 0.25 };
+                            let alpha = if diff_ratio > 0.3 {
+                                rt.fps_fast_streak = rt.fps_fast_streak.saturating_add(1);
+                                if rt.fps_fast_streak >= 2 { 1.0 } else { 0.6 }
+                            } else {
+                                rt.fps_fast_streak = 0;
+                                0.25
+                            };
                             rt.smoothed_fps = alpha * raw_fps + (1.0 - alpha) * rt.smoothed_fps;
                         }
                         SMOOTHED_FPS.store(rt.smoothed_fps.round() as u32, Ordering::Relaxed);
@@ -745,7 +888,7 @@ mod etw {
                     let s1 = rt.buffer.recent_frames(LOW_1PCT_WINDOW_MS);
                     if s1.len() >= LOW_MIN_SAMPLES {
                         let raw = FrameTimeBuffer::percentile_low_fps_of(&s1, 0.01);
-                        rt.smoothed_1low = smooth_low(rt.smoothed_1low, raw);
+                        rt.smoothed_1low = smooth_low(rt.smoothed_1low, raw, &mut rt.rise_streak_1low);
                         if rt.smoothed_1low > 0.0 {
                             ONE_PCT_LOW_FPS.store(rt.smoothed_1low.round() as u32, Ordering::Relaxed);
                         }
@@ -754,7 +897,7 @@ mod etw {
                     let s01 = rt.buffer.recent_frames(LOW_01PCT_WINDOW_MS);
                     if s01.len() >= LOW_MIN_SAMPLES {
                         let raw = FrameTimeBuffer::percentile_low_fps_of(&s01, 0.001);
-                        rt.smoothed_01low = smooth_low(rt.smoothed_01low, raw);
+                        rt.smoothed_01low = smooth_low(rt.smoothed_01low, raw, &mut rt.rise_streak_01low);
                         if rt.smoothed_01low > 0.0 {
                             ZERO_DOT_ONE_PCT_LOW_FPS
                                 .store(rt.smoothed_01low.round() as u32, Ordering::Relaxed);
@@ -902,6 +1045,10 @@ mod etw {
 
     /// ETW 会话生命周期主循环（复刻旧方案的「重试上限 + 30s 宽限」逻辑）
     fn fps_monitor_main() {
+        // 消费线程提高优先级：游戏负载下减少 ProcessTrace 回调被抢点导致的实时丢事件
+        unsafe {
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST);
+        }
         const MAX_RESTARTS: u32 = 5;
         let mut restart_count = 0u32;
 
@@ -974,6 +1121,9 @@ fn process_tracker_loop() {
     let mut pending_name: Option<String> = None;
     let mut pending_since: Option<Instant> = None;
     const DEBOUNCE_DELAY: Duration = Duration::from_millis(500);
+    // 诊断日志计数器（500ms 一次循环，每 10 次输出一行）
+    #[cfg(target_os = "windows")]
+    let mut diag_tick_count = 0u32;
 
     while FPS_ACTIVE.load(Ordering::SeqCst) {
         thread::sleep(Duration::from_millis(500));
@@ -1002,12 +1152,25 @@ fn process_tracker_loop() {
         let now = now_unix_ms();
         let last_frame = LAST_FRAME_TIME.load(Ordering::Relaxed);
         if last_frame > 0 && now > last_frame + 3000 {
-            if SMOOTHED_FPS.load(Ordering::Relaxed) != 0 {
+            // 主值与 1%/0.1% Low 一并归零，否则 Low 会永久卡在旧值
+            let had_fps = SMOOTHED_FPS.swap(0, Ordering::Relaxed) != 0;
+            let had_low = ONE_PCT_LOW_FPS.swap(0, Ordering::Relaxed) != 0
+                || ZERO_DOT_ONE_PCT_LOW_FPS.swap(0, Ordering::Relaxed) != 0;
+            if had_fps || had_low {
                 log::info!(
-                    "FPS监控: 帧率数据已过期 ({}ms 无匹配)，FPS 归零",
+                    "FPS监控: 帧率数据已过期 ({}ms 无匹配)，主值与 1%/0.1% Low 归零",
                     now - last_frame
                 );
-                SMOOTHED_FPS.store(0, Ordering::Relaxed);
+            }
+        }
+
+        // 2.5 诊断日志：每 10 次循环（约 5s）输出一行采集诊断
+        #[cfg(target_os = "windows")]
+        {
+            diag_tick_count += 1;
+            if diag_tick_count >= 10 {
+                diag_tick_count = 0;
+                etw::diag_tick();
             }
         }
 
@@ -1049,7 +1212,10 @@ fn process_tracker_loop() {
                         }
 
                         if !is_game {
+                            // 非游戏目标：主值与 1%/0.1% Low 一并归零
                             SMOOTHED_FPS.store(0, Ordering::Relaxed);
+                            ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
+                            ZERO_DOT_ONE_PCT_LOW_FPS.store(0, Ordering::Relaxed);
                         }
 
                         // 递增代次，通知 ETW 回调清空缓冲区

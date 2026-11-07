@@ -104,12 +104,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { DesktopLyricsSettingsModal } from "@/components/DesktopLyricsSettingsModal";
 import { useCoverColor, useCoverEdgeColor } from "@/hooks/use-cover-color";
 import { isOverlayOpen } from "@/hooks/use-esc-back";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, type Variants } from "framer-motion";
 
 // ═══════════════════════════════════════════════
 // 动画变体定义
 // ═══════════════════════════════════════════════
-const listContainerVariants = {
+const listContainerVariants: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -117,19 +117,19 @@ const listContainerVariants = {
   },
 };
 
-const listItemVariants = {
+const listItemVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: "easeOut" } },
   exit: { opacity: 0, transition: { duration: 0.15 } },
 };
 
-const dropdownVariants = {
+const dropdownVariants: Variants = {
   hidden: { opacity: 0, y: -8, scale: 0.98 },
   visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.2, ease: "easeOut" } },
   exit: { opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12, ease: "easeIn" } },
 };
 
-const tabContentVariants = {
+const tabContentVariants: Variants = {
   hidden: { opacity: 0, x: 12 },
   visible: { opacity: 1, x: 0, transition: { duration: 0.2, ease: "easeOut" } },
   exit: { opacity: 0, x: -8, transition: { duration: 0.12, ease: "easeIn" } },

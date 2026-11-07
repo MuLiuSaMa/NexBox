@@ -9,6 +9,7 @@
   },
   "view": {
     "grid": "Vue grille",
+    "compact": "Vue petites cartes",
     "list": "Vue liste"
   },
   "onboarding": {
@@ -50,6 +51,7 @@
     "settings": "Paramètres",
     "gpuRename": "Renommage GPU",
     "cpuRename": "Renommer le CPU",
+    "mousePolling": "Test de taux de sondage souris",
     "resolutionConverter": "Convertisseur de résolution",
     "dlssPreset": "Paramètres DLSS Delta Force",
     "epicFree": "Jeux gratuits Epic",
@@ -742,6 +744,7 @@
     "optimization": "Optimisation",
     "builtinTools": "Outils intégrés",
     "thirdpartyTools": "Outils tiers",
+    "officialProducts": "Produits officiels",
     "officialTools": "Recommandations officielles",
     "recommended": "Recommandé",
     "tools": {
@@ -1303,6 +1306,7 @@
     "overlayPanelDesc": "Panneau flottant affichant l'état du matériel système",
     "gpuRenameDesc": "Modifier le nom du GPU pour optimiser les performances de jeu",
     "cpuRenameDesc": "Remplacez le nom du CPU affiché dans le Gestionnaire des tâches (pour le plaisir)",
+    "mousePollingDesc": "Mesurez le taux de sondage (polling rate) réel de votre souris, avec statistiques d'intervalle, de gigue et de pics",
     "resolutionConverterDesc": "Convertir les proportions d'image pour différentes résolutions",
     "shaderCacheDesc": "Nettoyer le cache des shaders NVIDIA/AMD/Intel/DirectX pour libérer de l'espace disque",
     "psoCacheDesc": "Nettoyer le cache de shaders PSO de Delta Force (Corbeille par défaut)",
@@ -1374,6 +1378,10 @@
       "priority": "Auto-optimisation des processus",
       "affinity": "Auto-optimisation des cœurs",
       "ifeo": "Priorité IFEO forcée",
+      "io": "E/S disque",
+      "gpu": "Priorité de planification GPU",
+      "memory": "Priorité mémoire",
+      "gpuPref": "GPU hautes performances",
       "enabled": "Auto-optimisation activée",
       "disabled": "Auto-optimisation désactivée"
     },
@@ -1501,6 +1509,28 @@
     "cleanError": "Échec du nettoyage",
     "scanError": "Échec de la numérisation",
     "noVendorSelected": "Veuillez sélectionner au moins un fournisseur GPU"
+  },
+  "mousePolling": {
+    "testing": "En cours",
+    "stopped": "Arrêté",
+    "title": "Test de taux de sondage souris",
+    "realtimeHz": "Taux de sondage en temps réel",
+    "start": "Démarrer le test",
+    "stop": "Arrêter le test",
+    "startHint": "Cliquez sur « Démarrer le test » puis déplacez la souris en continu",
+    "moveHint": "Déplacez la souris pour mesurer le taux de sondage",
+    "deviation": "Écart",
+    "statsTitle": "Statistiques",
+    "avgInterval": "Intervalle moyen",
+    "medianInterval": "Intervalle médian",
+    "minInterval": "Intervalle min",
+    "maxInterval": "Intervalle max",
+    "jitter": "Gigue (écart-type)",
+    "spikes": "Pertes / pics",
+    "totalSamples": "Échantillons totaux",
+    "hint": "Mesure le flux de mouvements reçu par le système, sous l'influence de la charge système et des autres programmes. Les intervalles nettement supérieurs à la médiane (>1,5x) comptent comme des pics ; les pauses entre mouvements sont exclues. Déplacez la souris en continu pendant le test.",
+    "startFailed": "Échec du démarrage du test",
+    "stopFailed": "Échec de l'arrêt du test"
   },
   "cpuRename": {
     "title": "Renommer le CPU",
@@ -1682,11 +1712,6 @@
       "liquidGlassLabel": "Verre liquide",
       "liquidGlassDesc": "Lorsque activé, certaines interfaces utiliseront l'effet \"Verre liquide\", ce qui peut affecter les performances",
       "liquidGlassBlurLabel": "Intensité du flou",
-      "liquidGlassModeLabel": "Mode de verre",
-      "liquidGlassModeFrosted": "Verre dépoli",
-      "liquidGlassModeReal": "Verre liquide transparent",
-      "liquidGlassModeFrostedDesc": "Texture de verre dépoli flouté, intensité du flou réglable",
-      "liquidGlassModeRealDesc": "Utilise un filtre de réfraction SVG pour la réfraction des bords et l'aberration chromatique, plus transparent mais nécessite plus de GPU",
       "islandLiquidGlassLabel": "Île dynamique Verre liquide",
       "islandLiquidGlassDesc": "Applique un effet de verre aux notifications de l'île dynamique ; choisissez le style ci-dessous",
       "islandGlassModeLabel": "Style de verre",
@@ -1744,7 +1769,7 @@
       "thankYou": "Merci pour votre soutien !",
       "placeholder": "Veuillez ajouter l'image du code QR",
       "sponsorList": {
-        "title": "Liste des sponsors",
+        "title": "Liste des sponsors (NexBox, MeowCode, OpenMD, LingTab)",
         "loading": "Chargement...",
         "error": "Échec du chargement",
         "empty": "Aucun sponsor pour l'instant"
@@ -1883,6 +1908,27 @@
     "masterToggleDesc": "Une fois désactivé, aucun raccourci global ne fonctionnera"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "Test de vitesse",
+    "drive": "Disque cible",
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "testing": "Test en cours…",
+    "noDrive": "Aucun disque détecté",
+    "noPartition": "Aucune partition inscriptible sur ce disque",
+    "stagePrepare": "Préparation",
+    "stageSeqWrite": "Écriture séquentielle",
+    "stageSeqRead": "Lecture séquentielle",
+    "stageRndWrite": "Écriture aléatoire",
+    "stageRndRead": "Lecture aléatoire"
+    ,
+    "seqWrite": "Écriture séquentielle",
+    "seqRead": "Lecture séquentielle",
+    "rndWrite": "Écriture aléatoire 4K",
+    "rndRead": "Lecture aléatoire 4K",
+    "latWrite": "Temps d’accès en écriture",
+    "latRead": "Temps d’accès en lecture"
+    },
     "title": "Santé du disque",
     "refresh": "Actualiser",
     "scanning": "Analyse en cours...",
@@ -2062,6 +2108,9 @@
     "loading": "Chargement des configurations de fonctionnalités..."
   },
   "downloadAccel": {
+    "saveDirLabel": "Enregistrer sous",
+    "saveDirBrowse": "Parcourir",
+    "saveDirReset": "Réinitialiser",
     "urlLabel": "Lien de téléchargement",
     "fileNamePlaceholder": "Nom du fichier (optionnel, détecté automatiquement)",
     "segmentsLabel": "Connexions max",

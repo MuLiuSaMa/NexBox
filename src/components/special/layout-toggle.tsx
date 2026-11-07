@@ -1,8 +1,8 @@
 import { HStack, IconButton, Tooltip, useColorModeValue } from "@chakra-ui/react";
-import { LayoutGrid, List } from "lucide-react";
+import { LayoutGrid, Square, List } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-export type LayoutMode = "grid" | "list";
+export type LayoutMode = "grid" | "compact" | "list";
 
 interface LayoutToggleProps {
   mode: LayoutMode;
@@ -18,8 +18,10 @@ export function LayoutToggle({ mode, onChange }: LayoutToggleProps) {
     mode: LayoutMode;
     icon: React.ComponentType<{ size?: number }>;
     labelKey: string;
+    size?: number;
   }[] = [
     { mode: "grid", icon: LayoutGrid, labelKey: "view.grid" },
+    { mode: "compact", icon: Square, labelKey: "view.compact", size: 14 },
     { mode: "list", icon: List, labelKey: "view.list" },
   ];
 
@@ -33,7 +35,7 @@ export function LayoutToggle({ mode, onChange }: LayoutToggleProps) {
           <Tooltip key={opt.mode} label={label} placement="top">
             <IconButton
               aria-label={label}
-              icon={<Icon size={18} />}
+              icon={<Icon size={opt.size ?? 18} />}
               size="sm"
               variant="ghost"
               borderRadius="md"

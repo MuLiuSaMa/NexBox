@@ -13,13 +13,15 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power } from "lucide-react";
+import { RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power, Shuffle, Timer } from "lucide-react";
 import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
+import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
@@ -66,6 +68,39 @@ interface DiskHealthResponse {
   healthy_count: number;
   warning_count: number;
   unhealthy_count: number;
+}
+
+/** `disk-speedtest:progress` 事件负载（与 Rust DiskSpeedProgress 对齐，result 字段平铺） */
+interface DiskSpeedProgress {
+  stage: "prepare" | "seq_write" | "seq_read" | "rnd_write" | "rnd_read" | "done" | "cancelled" | "error";
+  drive: string;
+  progressPct: number;
+  currentMbps: number;
+  seqWriteMbps: number;
+  seqReadMbps: number;
+  seqWriteIops: number;
+  seqReadIops: number;
+  rndWriteMbps: number;
+  rndReadMbps: number;
+  rndWriteIops: number;
+  rndReadIops: number;
+  latWriteMs: number;
+  latReadMs: number;
+  message: string;
+}
+
+/** 带宽格式化：统一用 MB/s（用户口径，不做 GB/s 换算） */
+function formatBandwidth(mbps: number): string {
+  if (!Number.isFinite(mbps) || mbps <= 0) return "--";
+  return `${mbps >= 1000 ? mbps.toFixed(0) : mbps.toFixed(1)} MB/s`;
+}
+
+/** IOPS 格式化：千位 / 万位 / 百万位缩写 */
+function formatIops(iops: number): string {
+  if (!Number.isFinite(iops) || iops <= 0) return "--";
+  if (iops >= 1_000_000) return `${(iops / 1_000_000).toFixed(2)}M`;
+  if (iops >= 10_000) return `${(iops / 1000).toFixed(1)}K`;
+  return Math.round(iops).toLocaleString();
 }
 
 interface DiskOptimizeResult {
@@ -241,6 +276,284 @@ function formatBytes(bytes: number | null): string {
   const gb = bytes / (1024 * 1024 * 1024);
   if (gb >= 1024) return `${(gb / 1024).toFixed(2)} TB`;
   return `${gb.toFixed(1)} GB`;
+}
+
+/** 测速结果独立磁贴卡：图标 + 项目名 + 主值 + 次值（IOPS），样式与页面指标磁贴一致 */
+function SpeedCard({
+  icon: Icon,
+  label,
+  value,
+  secondary,
+}: {
+  icon: React.ComponentType<{ size?: number; color?: string }>;
+  label: string;
+  value: string;
+  secondary?: string;
+}) {
+  const { liquidGlassEnabled } = useBackground();
+  const { getActiveColor } = useThemeColor();
+  const subColor = useColorModeValue("gray.500", "gray.400");
+  const cardBg = useColorModeValue("white", "#111111");
+  const borderColor = useColorModeValue("gray.200", "#333333");
+  const { colorMode } = useColorMode();
+  const titleColor = colorMode === "light" ? "#000000" : "#ffffff";
+
+  const body = (
+    <VStack align="start" spacing={1}>
+      <HStack spacing={2}>
+        <Icon size={14} color={getActiveColor()} />
+        <Text fontSize="xs" color={subColor} noOfLines={1}>{label}</Text>
+      </HStack>
+      <Text fontSize="xl" fontWeight="bold" color={titleColor} lineHeight="1.1">
+        {value}
+      </Text>
+      {secondary ? (
+        <Text fontSize="2xs" color={subColor}>{secondary}</Text>
+      ) : (
+        <Text fontSize="2xs" color="transparent" userSelect="none">
+          &nbsp;
+        </Text>
+      )}
+    </VStack>
+  );
+
+  if (liquidGlassEnabled) {
+    return <LiquidGlassCard p={4}>{body}</LiquidGlassCard>;
+  }
+  return (
+    <Box bg={cardBg} borderRadius="2xl" p={4} border="1px solid" borderColor={borderColor}>
+      {body}
+    </Box>
+  );
+}
+
+/** 「测速」板块：按物理硬盘选择 + 全矩阵测试（顺序 1MiB / 随机 4K / 访问时间）。
+ *  后端走无缓冲 IO（CrystalDiskMark 口径）；测试文件落在该硬盘剩余空间最大的分区。 */
+function DiskSpeedTestSection({ disks }: { disks: DiskHealthInfo[] }) {
+  const { t } = useTranslation();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const subColor = useColorModeValue("gray.500", "gray.400");
+  const labelColor = useColorModeValue("gray.800", "#ffffff");
+  const trackBg = useColorModeValue("gray.100", "#222222");
+
+  const [diskIndex, setDiskIndex] = useState(() => {
+    const boot = disks.find((d) => d.is_boot_disk);
+    return String(boot?.index ?? disks[0]?.index ?? "");
+  });
+  const [testing, setTesting] = useState(false);
+  const [progress, setProgress] = useState<DiskSpeedProgress | null>(null);
+  const [result, setResult] = useState<DiskSpeedProgress | null>(null);
+  const [error, setError] = useState("");
+  const testingRef = useRef(false);
+
+  // 磁盘列表刷新后，若当前选中项不在列表里则回落到系统盘 / 第一项
+  useEffect(() => {
+    if (disks.length > 0 && !disks.some((d) => String(d.index) === diskIndex)) {
+      const boot = disks.find((d) => d.is_boot_disk);
+      setDiskIndex(String(boot?.index ?? disks[0].index));
+    }
+  }, [disks, diskIndex]);
+
+  // 进度事件：done 落最终数值；error/cancelled 收尾
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: UnlistenFn | null = null;
+    (async () => {
+      const fn = await listen<DiskSpeedProgress>("disk-speedtest:progress", (e) => {
+        const p = e.payload;
+        setProgress(p);
+        if (p.stage === "done") {
+          setResult(p);
+          testingRef.current = false;
+          setTesting(false);
+        } else if (p.stage === "cancelled") {
+          testingRef.current = false;
+          setTesting(false);
+        } else if (p.stage === "error") {
+          setError(p.message);
+          testingRef.current = false;
+          setTesting(false);
+        }
+      });
+      if (disposed) fn();
+      else unlisten = fn;
+    })();
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  // 离开页面时若仍在测速，通知后端中止（MousePollingPage 同款兜底）
+  useEffect(
+    () => () => {
+      if (testingRef.current) {
+        invoke("disk_speed_test_stop").catch(() => {});
+      }
+    },
+    []
+  );
+
+  const stageLabel = (stage: string): string => {
+    const keys: Record<string, string> = {
+      prepare: "stagePrepare",
+      seq_write: "stageSeqWrite",
+      seq_read: "stageSeqRead",
+      rnd_write: "stageRndWrite",
+      rnd_read: "stageRndRead",
+    };
+    const key = keys[stage];
+    return key ? t(`diskHealth.speedTest.${key}`) : "";
+  };
+
+  const handleStart = async () => {
+    if (testingRef.current) return;
+    // 按物理硬盘选择：测试文件落在该硬盘剩余空间最大的分区上
+    const disk = disks.find((d) => String(d.index) === diskIndex);
+    const target = disk?.partitions.length
+      ? disk.partitions.reduce((a, b) => (b.available_gb > a.available_gb ? b : a))
+      : null;
+    if (!target) {
+      setError(t("diskHealth.speedTest.noPartition"));
+      return;
+    }
+    setError("");
+    setResult(null);
+    setProgress(null);
+    testingRef.current = true;
+    setTesting(true);
+    try {
+      await invoke("disk_speed_test_start", { driveLetter: target.drive_letter });
+    } catch (e) {
+      // 后端已发出 error 事件；这里兜住启动被拒（如重复启动）的情况
+      setError(String(e));
+      testingRef.current = false;
+      setTesting(false);
+    }
+  };
+
+  const handleStop = async () => {
+    await invoke("disk_speed_test_stop").catch(() => {});
+  };
+
+  return (
+    <SettingCard title={t("diskHealth.speedTest.title")}>
+      {disks.length === 0 ? (
+        <Text fontSize="sm" color={subColor}>
+          {t("diskHealth.speedTest.noDrive")}
+        </Text>
+      ) : (
+        <VStack align="stretch" spacing={4}>
+          <HStack justify="space-between" align="center" flexWrap="wrap" gap={2}>
+            <HStack spacing={3} flex={1} minW="260px">
+              <Text fontSize="sm" color={labelColor} flexShrink={0}>
+                {t("diskHealth.speedTest.drive")}
+              </Text>
+              <Box maxW="320px" w="full">
+                <CustomSelect
+                  value={diskIndex}
+                  onChange={(val) => setDiskIndex(val)}
+                  width="100%"
+                  options={disks.map((d) => ({
+                    value: String(d.index),
+                    label: `${d.model}（${formatGb(d.size_gb)}）`,
+                  }))}
+                />
+              </Box>
+            </HStack>
+            {testing ? (
+              <Button
+                size="sm"
+                variant="outline"
+                colorScheme="red"
+                onClick={handleStop}
+                flexShrink={0}
+              >
+                {t("diskHealth.speedTest.stop")}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                bg={getActiveColor()}
+                color={getContrastTextColor()}
+                _hover={{ opacity: 0.88 }}
+                onClick={handleStart}
+                flexShrink={0}
+              >
+                {t("diskHealth.speedTest.start")}
+              </Button>
+            )}
+          </HStack>
+
+          {testing && progress && (
+            <VStack align="stretch" spacing={2}>
+              <Progress
+                value={progress.progressPct}
+                size="sm"
+                borderRadius="full"
+                hasStripe
+                sx={{ "& > div": { background: getActiveColor() } }}
+                bg={trackBg}
+              />
+              <HStack justify="space-between">
+                <Text fontSize="xs" color={subColor}>
+                  {progress.drive} · {stageLabel(progress.stage) || progress.message}
+                </Text>
+                <Text fontSize="xs" fontWeight="bold" color={getActiveColor()}>
+                  {progress.currentMbps > 0 ? `${progress.currentMbps.toFixed(1)} MB/s` : ""}
+                </Text>
+              </HStack>
+            </VStack>
+          )}
+
+          {result && (
+            <SimpleGrid columns={{ base: 2, md: 3 }} spacing={3}>
+              <SpeedCard
+                icon={Upload}
+                label={t("diskHealth.speedTest.seqWrite")}
+                value={formatBandwidth(result.seqWriteMbps)}
+                secondary={`${formatIops(result.seqWriteIops)} IOPS`}
+              />
+              <SpeedCard
+                icon={Download}
+                label={t("diskHealth.speedTest.seqRead")}
+                value={formatBandwidth(result.seqReadMbps)}
+                secondary={`${formatIops(result.seqReadIops)} IOPS`}
+              />
+              <SpeedCard
+                icon={Shuffle}
+                label={t("diskHealth.speedTest.rndWrite")}
+                value={formatBandwidth(result.rndWriteMbps)}
+                secondary={`${formatIops(result.rndWriteIops)} IOPS`}
+              />
+              <SpeedCard
+                icon={Shuffle}
+                label={t("diskHealth.speedTest.rndRead")}
+                value={formatBandwidth(result.rndReadMbps)}
+                secondary={`${formatIops(result.rndReadIops)} IOPS`}
+              />
+              <SpeedCard
+                icon={Timer}
+                label={t("diskHealth.speedTest.latWrite")}
+                value={`${result.latWriteMs.toFixed(2)} ms`}
+              />
+              <SpeedCard
+                icon={Timer}
+                label={t("diskHealth.speedTest.latRead")}
+                value={`${result.latReadMs.toFixed(2)} ms`}
+              />
+            </SimpleGrid>
+          )}
+
+          {error && (
+            <Text fontSize="xs" color="red.400">
+              {error}
+            </Text>
+          )}
+        </VStack>
+      )}
+    </SettingCard>
+  );
 }
 
 export default function DiskHealthPage() {
@@ -574,6 +887,8 @@ export default function DiskHealthPage() {
               </VStack>
             </SettingCard>
           ))}
+
+          <DiskSpeedTestSection disks={response?.disks ?? []} />
         </VStack>
       )}
     </Box>

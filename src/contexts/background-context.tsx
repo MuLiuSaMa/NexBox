@@ -19,8 +19,6 @@ const PRESET_BACKGROUNDS: PresetBackground[] = [
   { id: 4, name: "预设4", path: "/backgrounds/preset4.webp" },
 ];
 
-type LiquidGlassMode = "normal" | "real";
-
 /** 灵动岛玻璃样式：real = SVG 折射的真实液态玻璃；frosted = 毛玻璃（模糊磨砂） */
 type IslandGlassMode = "real" | "frosted";
 
@@ -33,7 +31,6 @@ interface BackgroundContextType {
   dynamicBgVideo: string | null;
   liquidGlassEnabled: boolean;
   liquidGlassBlur: number;
-  liquidGlassMode: LiquidGlassMode;
   islandLiquidGlassEnabled: boolean;
   islandGlassMode: IslandGlassMode;
   backgroundBlur: number;
@@ -51,7 +48,6 @@ interface BackgroundContextType {
   setDynamicBgVideo: (video: string | null) => void;
   setLiquidGlassEnabled: (enabled: boolean) => void;
   setLiquidGlassBlur: (blur: number) => void;
-  setLiquidGlassMode: (mode: LiquidGlassMode) => void;
   setIslandLiquidGlassEnabled: (enabled: boolean) => void;
   setIslandGlassMode: (mode: IslandGlassMode) => void;
   setBackgroundBlur: (blur: number) => void;
@@ -68,8 +64,7 @@ const BackgroundContext = createContext<BackgroundContextType>({
   activeBgIndex: 0,
   dynamicBgVideo: null,
   liquidGlassEnabled: false,
-  liquidGlassBlur: 1,
-  liquidGlassMode: "normal",
+  liquidGlassBlur: 10,
   islandLiquidGlassEnabled: false,
   islandGlassMode: "real",
   backgroundBlur: 0,
@@ -87,7 +82,6 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setDynamicBgVideo: () => {},
   setLiquidGlassEnabled: () => {},
   setLiquidGlassBlur: () => {},
-  setLiquidGlassMode: () => {},
   setIslandLiquidGlassEnabled: () => {},
   setIslandGlassMode: () => {},
   setBackgroundBlur: () => {},
@@ -111,8 +105,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [activeBgIndex, setActiveBgIndex] = useState(0);
   const [dynamicBgVideo, setDynamicBgVideo] = useState<string | null>(null);
   const [liquidGlassEnabled, setLiquidGlassEnabled] = useState(false);
-  const [liquidGlassBlur, setLiquidGlassBlur] = useState(1);
-  const [liquidGlassMode, setLiquidGlassMode] = useState<LiquidGlassMode>("normal");
+  const [liquidGlassBlur, setLiquidGlassBlur] = useState(10);
   const [islandLiquidGlassEnabled, setIslandLiquidGlassEnabled] = useState(false);
   const [islandGlassMode, setIslandGlassMode] = useState<IslandGlassMode>("real");
   const [backgroundBlur, setBackgroundBlur] = useState(0);
@@ -147,7 +140,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedLiquidGlassMode, savedIslandLiquidGlass, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, savedMrColorMode, savedMrCustomColor, hasLaunched, savedIslandGlassMode] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedIslandLiquidGlass, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, savedMrColorMode, savedMrCustomColor, hasLaunched, savedIslandGlassMode] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -155,7 +148,6 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<string>("dynamic-bg-video"),
             store.get<boolean>("liquid-glass-enabled"),
             store.get<number>("liquid-glass-blur"),
-            store.get<string>("liquid-glass-mode"),
             store.get<boolean>("island-liquid-glass-enabled"),
             store.get<number>("background-blur"),
             store.get<number>("active-preset-index"),
@@ -167,11 +159,15 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<string>("island-glass-mode"),
           ]);
 
-        // 兼容旧版 liquid-glass-enhanced 设置
-        const savedLiquidGlassEnhanced = await store.get<boolean>("liquid-glass-enhanced");
-        if (savedLiquidGlassEnhanced === true && !savedLiquidGlassMode) {
-          setLiquidGlassMode("real");
-          persist("liquid-glass-mode", "real");
+        // 透明液态玻璃已移除：旧版模式 / 增强设置一律删除，统一走毛玻璃
+        const [savedLiquidGlassMode, savedLiquidGlassEnhanced] = await Promise.all([
+          store.get<string>("liquid-glass-mode"),
+          store.get<boolean>("liquid-glass-enhanced"),
+        ]);
+        if (savedLiquidGlassMode !== null && savedLiquidGlassMode !== undefined) {
+          persistDelete("liquid-glass-mode");
+        }
+        if (savedLiquidGlassEnhanced !== null && savedLiquidGlassEnhanced !== undefined) {
           persistDelete("liquid-glass-enhanced");
         }
 
@@ -216,9 +212,6 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         }
         if (savedLiquidGlassBlur !== null && savedLiquidGlassBlur !== undefined) {
           setLiquidGlassBlur(savedLiquidGlassBlur);
-        }
-        if (savedLiquidGlassMode === "normal" || savedLiquidGlassMode === "real") {
-          setLiquidGlassMode(savedLiquidGlassMode);
         }
         if (savedIslandLiquidGlass !== null && savedIslandLiquidGlass !== undefined) {
           setIslandLiquidGlassEnabled(savedIslandLiquidGlass);
@@ -338,11 +331,6 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     persist("liquid-glass-blur", blur);
   }, [persist]);
 
-  const setLiquidGlassModePersist = useCallback((mode: LiquidGlassMode) => {
-    setLiquidGlassMode(mode);
-    persist("liquid-glass-mode", mode);
-  }, [persist]);
-
   const setIslandLiquidGlassEnabledPersist = useCallback((enabled: boolean) => {
     setIslandLiquidGlassEnabled(enabled);
     persist("island-liquid-glass-enabled", enabled);
@@ -443,7 +431,6 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     dynamicBgVideo,
     liquidGlassEnabled,
     liquidGlassBlur,
-    liquidGlassMode,
     islandLiquidGlassEnabled,
     islandGlassMode,
     backgroundBlur,
@@ -461,7 +448,6 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setDynamicBgVideo: setDynamicBgVideoPersist,
     setLiquidGlassEnabled: setLiquidGlassEnabledPersist,
     setLiquidGlassBlur: setLiquidGlassBlurPersist,
-    setLiquidGlassMode: setLiquidGlassModePersist,
     setIslandLiquidGlassEnabled: setIslandLiquidGlassEnabledPersist,
     setIslandGlassMode: setIslandGlassModePersist,
     setBackgroundBlur: setBackgroundBlurPersist,
@@ -470,7 +456,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setJellyBounceEnabled: setJellyBounceEnabledPersist,
     setMrColorMode: setMrColorModePersist,
     setMrCustomColor: setMrCustomColorPersist,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, liquidGlassMode, islandLiquidGlassEnabled, islandGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, mrColorMode, mrCustomColor, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setLiquidGlassModePersist, setIslandLiquidGlassEnabledPersist, setIslandGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist, setMrColorModePersist, setMrCustomColorPersist]);
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, islandLiquidGlassEnabled, islandGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, mrColorMode, mrCustomColor, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setIslandLiquidGlassEnabledPersist, setIslandGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist, setMrColorModePersist, setMrCustomColorPersist]);
 
   return (
     <BackgroundContext.Provider value={value}>

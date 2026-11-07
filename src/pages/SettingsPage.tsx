@@ -53,7 +53,7 @@ import {
   LuGithub,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill, RiGithubFill, RiGiteeFill } from "react-icons/ri";
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -1573,8 +1573,6 @@ function AppearanceSettings() {
     setLiquidGlassEnabled,
     liquidGlassBlur,
     setLiquidGlassBlur,
-    liquidGlassMode,
-    setLiquidGlassMode,
     islandLiquidGlassEnabled,
     setIslandLiquidGlassEnabled,
     islandGlassMode,
@@ -1876,30 +1874,6 @@ function AppearanceSettings() {
             />
           </HStack>
           {liquidGlassEnabled && (
-            <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
-              <HStack justify="space-between" mb={2}>
-                <Text fontSize="sm" color={labelColor}>
-                  {t("settings.appearanceSettings.liquidGlassModeLabel")}
-                </Text>
-                <CustomSelect
-                  value={liquidGlassMode}
-                  onChange={(val) => setLiquidGlassMode(val as "normal" | "real")}
-                  width="160px"
-                  options={[
-                    // 取值仍保留 "normal"（已持久化，不改），显示名按需求叫「毛玻璃」
-                    { value: "normal", label: t("settings.appearanceSettings.liquidGlassModeFrosted") },
-                    { value: "real", label: t("settings.appearanceSettings.liquidGlassModeReal") },
-                  ]}
-                />
-              </HStack>
-              <Text fontSize="xs" color={subLabelColor} mt={1}>
-                {liquidGlassMode === "real"
-                  ? t("settings.appearanceSettings.liquidGlassModeRealDesc")
-                  : t("settings.appearanceSettings.liquidGlassModeFrostedDesc")}
-              </Text>
-            </Box>
-          )}
-          {liquidGlassEnabled && liquidGlassMode === "normal" && (
             <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
               <HStack justify="space-between" mb={2}>
                 <Text fontSize="sm" color={labelColor}>
@@ -2747,13 +2721,38 @@ interface SponsorItem {
   amount: string;
 }
 
+// memo：分批追加列表时只渲染新卡片，避免加载期间整列重渲染阻塞滚动
+const SponsorNameCard = memo(function SponsorNameCard({
+  name,
+  labelColor,
+}: {
+  name: string;
+  labelColor: string;
+}) {
+  return (
+    <LiquidGlassCard
+      px={4}
+      py={3}
+      textAlign="center"
+      minW="96px"
+      flex="0 1 auto"
+      // content-visibility 跳过视口外卡片的渲染；auto 记住真实高度，
+      // 避免卡片进入视口时占位尺寸突变引起滚动跳动
+      sx={{ contentVisibility: "auto", containIntrinsicSize: "auto 47px" }}
+    >
+      <Text fontSize="sm" fontWeight="medium" color={labelColor}>
+        {name}
+      </Text>
+    </LiquidGlassCard>
+  );
+});
+
 function SponsorSettings() {
   const { t } = useTranslation();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
   const [sponsorsError, setSponsorsError] = useState(false);
@@ -2892,34 +2891,9 @@ function SponsorSettings() {
             {t("settings.sponsorSettings.sponsorList.empty")}
           </Text>
         ) : (
-          <Flex flexWrap="wrap" gap={4} justify="center">
+          <Flex flexWrap="wrap" gap={3} justify="center">
             {sponsors.map((sponsor, index) => (
-              <LiquidGlassCard
-                key={index}
-                p={5}
-                textAlign="center"
-                minW="140px"
-                flex="0 1 auto"
-                // 列表可能很长：content-visibility 让浏览器跳过视口外卡片的渲染/绘制，
-                // 只保留可见区的液态玻璃滤镜，滚动不卡且效果完整
-                sx={{ contentVisibility: "auto", containIntrinsicSize: "96px" }}
-              >
-                <Text fontSize="md" fontWeight="medium" color={labelColor} mb={1}>
-                  {sponsor.name}
-                </Text>
-                <Box
-                  display="inline-block"
-                  px={3}
-                  py={1}
-                  borderRadius="lg"
-                  bg={getActiveColor()}
-                  color={getContrastTextColor()}
-                  fontSize="sm"
-                  fontWeight="medium"
-                >
-                  {sponsor.amount}
-                </Box>
-              </LiquidGlassCard>
+              <SponsorNameCard key={index} name={sponsor.name} labelColor={labelColor} />
             ))}
           </Flex>
         )}
@@ -3013,7 +2987,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "10.3.1";
+  const currentVersion = "10.4.4";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

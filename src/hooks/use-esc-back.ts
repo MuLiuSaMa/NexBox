@@ -20,6 +20,7 @@ const PAGE_PARENT: Record<string, string> = {
   "/overlay-panel": "/builtin-tools",
   "/gpu-rename": "/builtin-tools",
   "/cpu-rename": "/builtin-tools",
+  "/mouse-polling": "/builtin-tools",
   "/resolution-converter": "/builtin-tools",
   "/dlss-preset": "/builtin-tools",
   "/disk-health": "/builtin-tools",

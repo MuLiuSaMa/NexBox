@@ -16,6 +16,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { open as openDirectoryDialog } from "@tauri-apps/plugin-dialog";
 import { useTranslation } from "react-i18next";
 import {
   Pause,
@@ -100,6 +101,7 @@ export default function DownloadAcceleratorPage() {
   const subTextColor = useColorModeValue("gray.500", "gray.400");
   const trackBg = useColorModeValue("gray.100", "#222222");
   const pendingSegBg = useColorModeValue("gray.200", "#333333");
+  const pathColor = useColorModeValue("gray.700", "gray.200");
 
   const themeColor = getActiveColor();
   const contrastText = getContrastTextColor();
@@ -109,7 +111,18 @@ export default function DownloadAcceleratorPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
   const [resetDone, setResetDone] = useState(false);
+  const [saveDir, setSaveDir] = useState("");
+  const [isCustomDir, setIsCustomDir] = useState(false);
   const prevSegmentsRef = useRef<Record<string, SegmentDto[]>>({});
+
+  useEffect(() => {
+    invoke<{ dir: string; custom: boolean }>("accel_get_save_dir")
+      .then((info) => {
+        setSaveDir(info.dir);
+        setIsCustomDir(info.custom);
+      })
+      .catch(() => {});
+  }, []);
 
   // 终态外的空分段快照不覆盖已有布局（暂停/错误/重启扫描等场景）
   const upsertTask = useCallback((snap: AccelTask) => {
@@ -185,6 +198,37 @@ export default function DownloadAcceleratorPage() {
       setError(String(e));
     } finally {
       setStarting(false);
+    }
+  };
+
+  // 「下载到」目录：浏览选择（保存到设置，之后所有新任务默认落在这里）
+  const handleBrowseDir = async () => {
+    try {
+      const picked = await openDirectoryDialog({
+        directory: true,
+        multiple: false,
+        defaultPath: saveDir || undefined,
+      });
+      if (typeof picked !== "string" || !picked) return;
+      const info = await invoke<{ dir: string; custom: boolean }>("accel_set_save_dir", {
+        dir: picked,
+      });
+      setSaveDir(info.dir);
+      setIsCustomDir(info.custom);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  const handleResetDir = async () => {
+    try {
+      const info = await invoke<{ dir: string; custom: boolean }>("accel_set_save_dir", {
+        dir: null,
+      });
+      setSaveDir(info.dir);
+      setIsCustomDir(info.custom);
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -508,6 +552,44 @@ export default function DownloadAcceleratorPage() {
             >
               {t("downloadAccel.start")}
             </Button>
+          </HStack>
+          <HStack spacing={3} mt={4} align="center">
+            <Text fontSize="sm" color={subTextColor} flexShrink={0}>
+              {t("downloadAccel.saveDirLabel")}
+            </Text>
+            <Tooltip label={saveDir} hasArrow placement="top">
+              <Text
+                fontSize="sm"
+                color={pathColor}
+                isTruncated
+                flex={1}
+                cursor="default"
+                userSelect="all"
+              >
+                {saveDir}
+              </Text>
+            </Tooltip>
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<FolderOpen size={14} />}
+              onClick={handleBrowseDir}
+              flexShrink={0}
+            >
+              {t("downloadAccel.saveDirBrowse")}
+            </Button>
+            {isCustomDir && (
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<RotateCcw size={12} />}
+                color={subTextColor}
+                onClick={handleResetDir}
+                flexShrink={0}
+              >
+                {t("downloadAccel.saveDirReset")}
+              </Button>
+            )}
           </HStack>
           {error && (
             <Text fontSize="xs" color="red.400" mt={2}>

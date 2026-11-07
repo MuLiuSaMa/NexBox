@@ -24,7 +24,8 @@ const ISLAND_HEIGHT: f64 = 176.0;
 ///     透明小窗口有误判 bug：被误判"被遮挡"→ 渲染挂起 → 恢复 → 反复横跳，
 ///     表现为岛体文字/圆圈无规律闪烁（rAF 驱动的动画在停摆/恢复间抽搐）；
 ///   其余三个禁用后台渲染降频/timer 节流，保证失焦后心跳、轮询与动画帧率稳定。
-const BROWSER_ARGS: &str = "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling";
+/// 与主窗口完全一致的 WebView2 参数（逐项说明见 lib.rs `MAIN_BROWSER_ARGS`）。
+const BROWSER_ARGS: &str = crate::MAIN_BROWSER_ARGS;
 
 /// 按需创建桌面灵动岛窗口（已存在则直接复用）。
 /// 创建即 visible(true)：空闲时整窗透明且鼠标穿透，视觉上等同于不存在。

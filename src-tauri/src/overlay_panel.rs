@@ -1004,9 +1004,11 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
     let result = if let Some(prev) = prev_data {
         let has_new_gpu_data = !new_data.gpu_sensors.is_empty();
         OverlayHardwareData {
-            fps: new_data.fps.or(prev.fps),
-            fps_1low: new_data.fps_1low.or(prev.fps_1low),
-            fps_01low: new_data.fps_01low.or(prev.fps_01low),
+            // FPS 不做 or(prev) 兜底：FPS 读取无节流，None 即真实无数据（过期/无游戏），
+            // 保留旧值会让悬浮窗在退游戏/切桌面后永久卡死在旧帧率
+            fps: new_data.fps,
+            fps_1low: new_data.fps_1low,
+            fps_01low: new_data.fps_01low,
             cpu_usage: new_data.cpu_usage.or(prev.cpu_usage),
             cpu_temp: new_data.cpu_temp.or(prev.cpu_temp),
             cpu_clock: new_data.cpu_clock.or(prev.cpu_clock),

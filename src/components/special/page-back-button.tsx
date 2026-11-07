@@ -31,9 +31,7 @@ const SIZES = {
  * 全站统一的「返回」按钮：返回图标 + 返回字样 + 玻璃卡片包裹。
  *
  * 玻璃相关约束（勿改）：
- * - 不能给卡片加 bg / boxShadow / filter / opacity —— real 模式卡片 bg 必须是 transparent，
- *   boxShadow 会盖掉 .real-liquid-glass 的 CSS 阴影，filter/opacity 会创建 Backdrop Root
- *   导致边缘折射条失效。hover/active 只通过「染色层 opacity + 边框色」表达。
+ * - hover/active 只通过「染色层 opacity + 边框色」表达，不加 bg / boxShadow / filter / opacity。
  * - transition 必须把 LiquidGlassCard 原有的三个过渡一起写上，否则会被整体覆盖。
  */
 export function PageBackButton({
@@ -47,13 +45,12 @@ export function PageBackButton({
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
-  const { liquidGlassEnabled, liquidGlassMode } = useBackground();
+  const { liquidGlassEnabled } = useBackground();
   const adaptive = useAdaptiveTextColor();
 
   const text = label ?? t("common.back");
   const s = SIZES[size];
   const glassOn = liquidGlassEnabled;
-  const isReal = glassOn && liquidGlassMode === "real";
 
   // 玻璃关闭时卡片是白/深色实心，必须用主题色文字；玻璃开启时文字浮在壁纸模糊层上，跟随背景自适应
   const solidText = useColorModeValue("gray.900", "#ffffff");
@@ -84,7 +81,6 @@ export function PageBackButton({
       as="button"
       {...nativeAttrs}
       onClick={handleClick}
-      edgeInset={6}
       display="inline-flex"
       alignItems="center"
       justifyContent="center"
@@ -103,7 +99,6 @@ export function PageBackButton({
       lineHeight="1"
       whiteSpace="nowrap"
       className={`no-bounce${className ? ` ${className}` : ""}`}
-      {...(isReal ? { borderColor: "rgba(255,255,255,0.12)" } : {})}
       _focusVisible={{
         outline: "2px solid",
         outlineColor: "currentColor",

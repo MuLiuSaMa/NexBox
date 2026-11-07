@@ -28,6 +28,7 @@ import {
   ScanLine,
   ScrollText,
   Microchip,
+  Activity,
 } from "lucide-react";
 import nvidiaLogoImg from "@/assets/nvidia.png";
 import csLogoImg from "@/assets/cs-logo.png";
@@ -256,6 +257,14 @@ const defaultTools: ViewItem[] = [
     color: "#8B5CF6",
     badge: "仅供娱乐",
   },
+  {
+    id: "mouse-polling",
+    path: "/mouse-polling",
+    icon: Activity,
+    titleKey: "sidebar.mousePolling",
+    descriptionKey: "builtinTools.mousePollingDesc",
+    color: "#F97316",
+  },
 ];
 
 function loadOrder(): string[] | null {
@@ -321,10 +330,10 @@ export default function BuiltinToolsPage() {
           <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
         </LiquidGlassCard>
       </Flex>
-      {layoutMode === "grid" ? (
-        <ViewGrid tools={tools} onReorder={handleReorder} />
-      ) : (
+      {layoutMode === "list" ? (
         <ViewList tools={tools} onReorder={handleReorder} />
+      ) : (
+        <ViewGrid tools={tools} onReorder={handleReorder} compact={layoutMode === "compact"} />
       )}
     </VStack>
   );

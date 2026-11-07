@@ -11,6 +11,7 @@
   },
   "view": {
     "grid": "网格视图",
+    "compact": "小卡片视图",
     "list": "列表视图"
   },
   "onboarding": {
@@ -52,6 +53,7 @@
     "settings": "设置",
     "gpuRename": "显卡改写",
     "cpuRename": "CPU 改名",
+    "mousePolling": "鼠标轮询率测试",
     "resolutionConverter": "分辨率管理",
     "dlssPreset": "三角洲DLSS设置",
     "steam": "Steam",
@@ -836,6 +838,7 @@
       "unknown": "无法获取硬件信息"
     },
     "thirdpartyTools": "第三方工具",
+    "officialProducts": "官方产品",
     "officialTools": "官方推荐",
     "recommended": "推荐",
     "peripheralDrivers": "外设驱动",
@@ -1194,17 +1197,6 @@
     "recorderNotStarted": "记录器未启动，请稍后重试"
   },
   "overlayPanel": {
-    "remoteMonitor": {
-      "title": "手机远程监控",
-      "description": "开启后可用手机浏览器在同一 WiFi 下实时查看硬件监控数据",
-      "scanHint": "手机扫码或输入以下地址",
-      "copy": "复制地址",
-      "pin": "访问码",
-      "firewallHint": "手机打不开？请允许 Windows 防火墙放行，或临时关闭防火墙测试",
-      "noIp": "未检测到局域网 IP，请确认电脑已连接 WiFi / 网线",
-      "enable": "启用远程监控",
-      "style": "手机端样式"
-    },
     "remoteAccess": {
       "title": "手机远程连接",
       "control": "远程控制（新境盒-安卓端）",
@@ -1597,6 +1589,7 @@
     "overlayPanelDesc": "显示系统硬件状态的悬浮框",
     "gpuRenameDesc": "改写显卡名称以优化游戏性能",
     "cpuRenameDesc": "把任务管理器里显示的 CPU 名称改成任意文字（仅供娱乐）",
+    "mousePollingDesc": "测量鼠标的真实轮询率（回报率），查看间隔、抖动与丢帧尖峰统计",
     "resolutionConverterDesc": "管理显示器分辨率与画面比例",
     "shaderCacheDesc": "强制清理 NVIDIA/AMD/Intel/DirectX 着色器缓存释放磁盘空间",
     "psoCacheDesc": "清理《三角洲行动》PSO 着色器缓存（默认移入回收站）",
@@ -1806,6 +1799,10 @@
       "priority": "进程自动优化",
       "affinity": "核心自动优化",
       "ifeo": "IFEO 优先级强制优化",
+      "io": "磁盘 IO",
+      "gpu": "GPU 调度优先级",
+      "memory": "内存优先级",
+      "gpuPref": "GPU 高性能",
       "enabled": "自动优化已开启",
       "disabled": "自动优化已关闭"
     },
@@ -2104,6 +2101,8 @@
       "mediaKeysDesc": "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件",
       "islandExternalTitle": "灵动岛显示在桌面上",
       "islandExternalDesc": "开启后提示与播放岛移出主窗口，固定显示在屏幕顶部中央；主窗口隐藏到托盘后仍然可见，光标不在岛体上时自动鼠标穿透",
+      "memorySavingTitle": "节约内存（缩小到托盘时销毁窗口）",
+      "memorySavingDesc": "实验性：缩小到托盘时关闭主窗口以大幅释放内存，点击托盘图标重新载入（恢复需短暂加载并回到默认启动页）；音乐播放中会自动改为普通隐藏",
       "gameListTitle": "游戏名单",
       "builtinCount": "内置 {{count}} 款",
       "addGame": "添加游戏",
@@ -2245,11 +2244,6 @@
       "liquidGlassLabel": "液态玻璃",
       "liquidGlassDesc": "启用后，部分界面将使用「液态玻璃」效果，这可能会影响性能",
       "liquidGlassBlurLabel": "模糊程度",
-      "liquidGlassModeLabel": "玻璃模式",
-      "liquidGlassModeFrosted": "毛玻璃",
-      "liquidGlassModeReal": "透明液态玻璃",
-      "liquidGlassModeFrostedDesc": "模糊磨砂质感，可调节模糊程度",
-      "liquidGlassModeRealDesc": "使用 SVG 折射滤镜实现边缘折射和色差效果，更透明但需要更多 GPU 开销",
       "islandLiquidGlassLabel": "灵动岛液态玻璃",
       "islandLiquidGlassDesc": "开启后灵动岛提示使用玻璃质感，样式可在下方选择",
       "islandGlassModeLabel": "玻璃样式",
@@ -2336,7 +2330,7 @@
       "thankYou": "感谢您的支持！",
       "placeholder": "请添加收款码图片",
       "sponsorList": {
-        "title": "赞助者名单",
+        "title": "赞助者名单（新境盒、MeowCode、OpenMD、LingTab）",
         "loading": "加载中...",
         "error": "加载失败",
         "empty": "暂无赞助者"
@@ -3126,6 +3120,28 @@
     "scanError": "扫描失败",
     "noVendorSelected": "请至少选择一个显卡厂商"
   },
+  "mousePolling": {
+    "testing": "测试中",
+    "stopped": "已停止",
+    "title": "鼠标轮询率测试",
+    "realtimeHz": "实时轮询率",
+    "start": "开始测试",
+    "stop": "停止测试",
+    "startHint": "点击「开始测试」后持续移动鼠标",
+    "moveHint": "请移动鼠标以测量轮询率",
+    "deviation": "偏差",
+    "statsTitle": "统计",
+    "avgInterval": "平均间隔",
+    "medianInterval": "中位间隔",
+    "minInterval": "最小间隔",
+    "maxInterval": "最大间隔",
+    "jitter": "抖动（标准差）",
+    "spikes": "丢帧/尖峰",
+    "totalSamples": "总样本数",
+    "hint": "测量的是系统级接收到的鼠标移动上报流，受系统负载与其他程序影响。间隔显著高于中位数（>1.5 倍）会被记为一次尖峰；暂停移动的间隙不计入统计。测试时请持续移动鼠标。",
+    "startFailed": "开始测试失败",
+    "stopFailed": "停止测试失败"
+  },
   "cpuRename": {
     "title": "CPU 改名",
     "funOnly": "仅供娱乐",
@@ -3386,6 +3402,27 @@
     "masterToggleDesc": "关闭后所有全局热键将不生效"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "测速",
+    "drive": "目标硬盘",
+    "start": "开始测速",
+    "stop": "停止",
+    "testing": "测速中…",
+    "noDrive": "未检测到可用硬盘",
+    "noPartition": "该硬盘没有可写分区",
+    "stagePrepare": "准备中",
+    "stageSeqWrite": "顺序写入中",
+    "stageSeqRead": "顺序读取中",
+    "stageRndWrite": "随机写入中",
+    "stageRndRead": "随机读取中"
+    ,
+    "seqWrite": "顺序写入",
+    "seqRead": "顺序读取",
+    "rndWrite": "随机 4K 写入",
+    "rndRead": "随机 4K 读取",
+    "latWrite": "写入访问时间",
+    "latRead": "读取访问时间"
+    },
     "title": "磁盘健康检测",
     "refresh": "刷新",
     "scanning": "检测中...",
@@ -3548,6 +3585,9 @@
     "loading": "正在查询驱动列表..."
   },
   "downloadAccel": {
+    "saveDirLabel": "下载到",
+    "saveDirBrowse": "浏览",
+    "saveDirReset": "恢复默认",
     "urlLabel": "下载链接",
     "fileNamePlaceholder": "文件名（可选，留空自动识别）",
     "segmentsLabel": "最大连接数",

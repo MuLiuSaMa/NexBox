@@ -95,7 +95,7 @@ mod imp {
     }
 
     /// 常驻子类化主窗口（幂等）：拦截冒泡上来的 WM_APPCOMMAND 媒体命令
-    fn install_main_subclass(app: &AppHandle) {
+    fn install_main_subclass<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
         if MAIN_HWND.lock().unwrap().is_some() {
             return;
         }
@@ -119,13 +119,21 @@ mod imp {
     }
 
     /// 恢复主窗口原窗口过程（关闭开关时调用；关闭模式下按键由全局热键直接处理）
-    fn restore_main_subclass() {
+    pub fn restore_main_subclass() {
         let orig = ORIGINAL_WNDPROC.lock().unwrap().take();
         let main_hwnd = *MAIN_HWND.lock().unwrap();
         if let (Some(orig), Some(main_hwnd)) = (orig, main_hwnd) {
             unsafe { SetWindowLongPtrW(main_hwnd as HWND, -4, orig) };
             *MAIN_HWND.lock().unwrap() = None;
             log::info!("[MediaKeys] 已恢复主窗口原窗口过程");
+        }
+    }
+
+    /// 主窗口重建（节约内存模式）后重装子类化：仅在开关开启时执行。
+    /// 旧句柄死后 MAIN_HWND 不清空会拒绝新窗口挂载，销毁前必须先 restore_main_subclass。
+    pub fn rebind_main_subclass<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+        if is_enabled() {
+            install_main_subclass(app);
         }
     }
 
@@ -362,6 +370,24 @@ pub fn control_enabled() -> bool {
 pub fn control_enabled() -> bool {
     true
 }
+
+/// 恢复主窗口原窗口过程（销毁主窗口前调用，句柄死后静态量不清会拒绝新窗口挂载）
+#[cfg(target_os = "windows")]
+pub fn restore_main_subclass() {
+    imp::restore_main_subclass();
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn restore_main_subclass() {}
+
+/// 主窗口重建（节约内存模式）后按开关状态重装 WM_APPCOMMAND 子类化
+#[cfg(target_os = "windows")]
+pub fn rebind_main_subclass_if_enabled<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    imp::rebind_main_subclass(app);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn rebind_main_subclass_if_enabled<R: tauri::Runtime>(_app: &tauri::AppHandle<R>) {}
 
 /// 运行时开关：启用/停用键盘媒体键控制（前端「高级」设置切换时调用）。
 /// 关闭 = 停用本应用 SMTC 会话 + 热键改为直控外部音乐客户端。

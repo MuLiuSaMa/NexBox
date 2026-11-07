@@ -245,6 +245,9 @@ pub async fn open_df_stats_login(app: AppHandle) -> Result<(), String> {
     let data_dir = webview_data_dir();
     let window = WebviewWindowBuilder::new(&app, WINDOW_LABEL, WebviewUrl::External(url))
         .title("三角洲行动 · 战绩数据源")
+        // 独立数据目录 = 独立环境，参数不必与主环境一致；统一用 MAIN_BROWSER_ARGS
+        // 顺带禁掉 Edge 附加服务并限制缓存膨胀（逐项说明见 lib.rs）
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36")
         .inner_size(1100.0, 750.0)
         .resizable(true)

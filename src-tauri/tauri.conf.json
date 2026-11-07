@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NexBox",
-  "version": "10.3.1",
+  "version": "10.4.4",
   "identifier": "NexBox",
   "build": {
     "frontendDist": "../dist",
@@ -22,7 +22,7 @@
         "decorations": false,
         "devtools": true,
         "visible": false,
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --js-flags=--scavenger_max_new_space_capacity_mb=8 --disk-cache-size=67108864"
       },
       {
         "title": "NexBox Desktop Lyrics",
@@ -38,14 +38,16 @@
         "shadow": false,
         "label": "desktop-lyrics",
         "url": "/desktop-lyrics",
-        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling"
+        "additionalBrowserArgs": "--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling --js-flags=--scavenger_max_new_space_capacity_mb=8 --disk-cache-size=67108864"
       }
     ],
     "security": {
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**"
+        ]
       }
     }
   },

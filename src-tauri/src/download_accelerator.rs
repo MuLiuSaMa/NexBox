@@ -173,6 +173,85 @@ impl EventSink for TauriSink {
 const PROGRESS_EVENT: &str = "accel-progress";
 
 // ---------------------------------------------------------------------------
+// 「下载到」目录设置
+// ---------------------------------------------------------------------------
+
+/// 「下载到」目录的持久化文件：用户自选目录写这里，无该文件 / dir 为空 = 跟随系统下载文件夹。
+fn save_dir_config_path() -> PathBuf {
+    engine_dir().join("save-dir.json")
+}
+
+/// 读取用户自定义的「下载到」目录（未配置 / 读取失败 / 非绝对路径返回 None）。
+fn load_custom_save_dir() -> Option<String> {
+    let content = std::fs::read_to_string(save_dir_config_path()).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&content).ok()?;
+    let dir = v.get("dir")?.as_str()?.trim().to_string();
+    if dir.is_empty() || !std::path::Path::new(&dir).is_absolute() {
+        return None;
+    }
+    Some(dir)
+}
+
+/// 落盘「下载到」目录设置（dir=None 写入 null，即恢复默认）。
+fn persist_save_dir_config(dir: Option<&str>) -> Result<(), String> {
+    let path = save_dir_config_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let content = serde_json::json!({ "dir": dir });
+    std::fs::write(&path, content.to_string()).map_err(|e| e.to_string())
+}
+
+/// 当前生效的保存目录：自定义 > 系统下载文件夹 > 临时目录。
+fn resolve_save_dir() -> PathBuf {
+    if let Some(d) = load_custom_save_dir() {
+        return PathBuf::from(d);
+    }
+    dirs::download_dir().unwrap_or_else(std::env::temp_dir)
+}
+
+/// 「下载到」目录信息：当前生效路径 + 是否为用户自定义。
+#[derive(serde::Serialize)]
+pub struct SaveDirInfo {
+    pub dir: String,
+    pub custom: bool,
+}
+
+#[tauri::command]
+pub async fn accel_get_save_dir() -> SaveDirInfo {
+    match load_custom_save_dir() {
+        Some(d) => SaveDirInfo { dir: d, custom: true },
+        None => SaveDirInfo {
+            dir: dirs::download_dir()
+                .unwrap_or_else(std::env::temp_dir)
+                .to_string_lossy()
+                .into_owned(),
+            custom: false,
+        },
+    }
+}
+
+/// 设置「下载到的位置」：dir 为 None / 空 = 恢复默认（系统下载文件夹）。
+/// 自定义目录不存在时自动创建；返回设置后的生效目录信息。
+#[tauri::command]
+pub async fn accel_set_save_dir(dir: Option<String>) -> Result<SaveDirInfo, String> {
+    let trimmed = dir.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    match trimmed {
+        Some(d) => {
+            if !std::path::Path::new(d).is_absolute() {
+                return Err("保存目录必须是绝对路径".into());
+            }
+            tokio::fs::create_dir_all(d)
+                .await
+                .map_err(|e| format!("创建目录失败：{e}"))?;
+            persist_save_dir_config(Some(d))?;
+        }
+        None => persist_save_dir_config(None)?,
+    }
+    Ok(accel_get_save_dir().await)
+}
+
+// ---------------------------------------------------------------------------
 // Tauri 命令
 // ---------------------------------------------------------------------------
 
@@ -202,7 +281,7 @@ pub async fn accel_start(
 
     let dir: PathBuf = match save_dir.filter(|s| !s.trim().is_empty()) {
         Some(s) => PathBuf::from(s),
-        None => dirs::download_dir().unwrap_or_else(std::env::temp_dir),
+        None => resolve_save_dir(),
     };
     tokio::fs::create_dir_all(&dir)
         .await

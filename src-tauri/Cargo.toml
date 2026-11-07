@@ -1,12 +1,12 @@
 [package]
 name = "nexbox"
-version = "10.3.1"
+version = "10.4.4"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"
 repository = ""
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.90"
 
 # 工作区：nx-dl-engine 为独立 crate（edition 2024，承载 FluxDown 搬运源码，
 # 隔离其 let-chains 等新语法对主工程 edition 的影响）
@@ -20,7 +20,7 @@ name = "nexbox_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5", features = [] }
+tauri-build = { version = "2.6", features = [] }
 
 [dependencies]
 nx-dl-engine = { path = "nx-dl-engine" }
@@ -32,10 +32,10 @@ log = "0.4"
 # 不含 devtools：release 构建下 wry 会 SetAreDevToolsEnabled(false)，
 # 关闭 F12/右键「检查」（DevTools 打开会额外占 100~300MB 且可任意调用本地 IPC 命令）；
 # dev 构建由 debug_assertions 兜住，配合 tauri.conf.json 的 "devtools": true 仍可调试。
-tauri = { version = "2.10", features = ["protocol-asset", "tray-icon", "unstable"] }
+tauri = { version = "2.12", features = ["protocol-asset", "tray-icon", "unstable"] }
 # WebView2 COM 接口（MemoryUsageTargetLevel 等 Win32 级控制，与 wry 同版本）
-webview2-com = "0.38"
-windows-core = "0.61"
+webview2-com = "0.39"
+windows-core = "0.62"
 tauri-plugin-log = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"

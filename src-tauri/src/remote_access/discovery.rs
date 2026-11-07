@@ -16,15 +16,15 @@ async fn responder(socket: std::sync::Arc<tokio::net::UdpSocket>) {
                 break;
             }
         };
-        // 控制与只读监控都关闭时不应答，避免噪声
-        if !super::is_enabled() && !crate::remote_monitor::is_enabled() {
+        // 控制服务关闭时不应答，避免噪声
+        if !super::is_enabled() {
             continue;
         }
         let probe = String::from_utf8_lossy(&buf[..len]);
         if !probe.contains(super::DISCOVERY_PROBE_TOKEN) {
             continue;
         }
-        let ip = crate::remote_monitor::local_ip().unwrap_or_default();
+        let ip = super::local_ip().unwrap_or_default();
         let resp = json!({
             "service": "nexbox",
             "name": std::env::var("COMPUTERNAME").unwrap_or_default(),
@@ -32,7 +32,6 @@ async fn responder(socket: std::sync::Arc<tokio::net::UdpSocket>) {
             "ip": ip,
             "tcpPort": super::http_port(),
             "controlEnabled": super::is_enabled(),
-            "monitorEnabled": crate::remote_monitor::is_enabled(),
         });
         let _ = socket.send_to(resp.to_string().as_bytes(), peer).await;
     }

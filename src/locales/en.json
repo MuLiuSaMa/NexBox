@@ -11,6 +11,7 @@
   },
   "view": {
     "grid": "Grid View",
+    "compact": "Small Card View",
     "list": "List View"
   },
   "onboarding": {
@@ -52,6 +53,7 @@
     "settings": "Settings",
     "gpuRename": "GPU Rename",
     "cpuRename": "CPU Rename",
+    "mousePolling": "Mouse Polling Rate Test",
     "dlssPreset": "Delta Force DLSS Settings",
     "steam": "Steam",
     "epicFree": "Epic Free Games",
@@ -1025,6 +1027,7 @@
     "optimization": "Optimization",
     "builtinTools": "Built-in Tools",
     "thirdpartyTools": "Third-party Tools",
+    "officialProducts": "Official Products",
     "officialTools": "Official Recommendations",
     "recommended": "Recommended",
     "peripheralDrivers": "Peripheral Drivers",
@@ -1379,17 +1382,6 @@
     "recorderNotStarted": "Recorder not started, please try again later"
   },
   "overlayPanel": {
-    "remoteMonitor": {
-      "title": "Phone Remote Monitor",
-      "description": "When enabled, view live hardware stats in a phone browser over the same Wi-Fi",
-      "scanHint": "Scan with your phone or enter the address below",
-      "copy": "Copy address",
-      "pin": "Access code",
-      "enable": "Enable remote monitoring",
-      "style": "Phone layout",
-      "firewallHint": "Phone can't connect? Allow NexBox in Windows Defender Firewall, or temporarily disable it to test",
-      "noIp": "No LAN IP detected. Make sure this PC is connected to Wi-Fi / Ethernet"
-    },
     "title": "Overlay Panel",
     "enableOverlay": "Enable Overlay Panel",
     "statusEnabled": "Enabled",
@@ -1710,6 +1702,7 @@
     "overlayPanelDesc": "Floating panel showing system hardware status",
     "gpuRenameDesc": "Modify GPU name to optimize gaming performance",
     "cpuRenameDesc": "Change the CPU name shown in Task Manager to anything you like (for fun only)",
+    "mousePollingDesc": "Measure your mouse's real polling rate, with interval, jitter and spike statistics",
     "resolutionConverterDesc": "Convert aspect ratios at different resolutions",
     "shaderCacheDesc": "Clean up NVIDIA/AMD/Intel/DirectX shader cache to free disk space",
     "psoCacheDesc": "Clean Delta Force PSO shader cache (Recycle Bin by default)",
@@ -1912,6 +1905,10 @@
       "priority": "Process auto-optimize",
       "affinity": "Core auto-optimize",
       "ifeo": "IFEO forced priority",
+      "io": "Disk IO",
+      "gpu": "GPU scheduling priority",
+      "memory": "Memory priority",
+      "gpuPref": "GPU high performance",
       "enabled": "Auto optimize enabled",
       "disabled": "Auto optimize disabled"
     },
@@ -2186,6 +2183,8 @@
       "mediaKeysDesc": "When off, the system media session (SMTC) is disabled: NexBox disappears from the volume overlay/lock screen and media keys are handed back to other apps",
       "islandExternalTitle": "Show Dynamic Island on the desktop",
       "islandExternalDesc": "When on, notifications and the playback island leave the main window and stay pinned to the top-center of the screen. Still visible after the main window is hidden to the tray; the window is click-through unless the cursor is over the island.",
+      "memorySavingTitle": "Memory Saving (Destroy Window on Tray)",
+      "memorySavingDesc": "Experimental: close the main window when minimized to tray to greatly reduce memory usage; click the tray icon to reload (restore takes a moment and returns to the default startup page). Falls back to normal hiding while music is playing",
       "gameListTitle": "Filter Game List",
       "builtinCount": "{{count}} built-in",
       "addGame": "Add Game",
@@ -2324,11 +2323,6 @@
       "liquidGlassLabel": "Liquid Glass",
       "liquidGlassDesc": "When enabled, some interfaces will use the \"Liquid Glass\" effect, which may affect performance",
       "liquidGlassBlurLabel": "Blur Intensity",
-      "liquidGlassModeLabel": "Glass Mode",
-      "liquidGlassModeFrosted": "Frosted Glass",
-      "liquidGlassModeReal": "Transparent Liquid Glass",
-      "liquidGlassModeFrostedDesc": "Blurred frosted texture; blur intensity adjustable",
-      "liquidGlassModeRealDesc": "Uses SVG refraction filter for edge refraction and chromatic aberration, more transparent but requires more GPU resources",
       "islandLiquidGlassLabel": "Dynamic Island Liquid Glass",
       "islandLiquidGlassDesc": "Applies a glass look to dynamic island notifications; pick the style below",
       "islandGlassModeLabel": "Glass Style",
@@ -2415,7 +2409,7 @@
       "thankYou": "Thank you for your support!",
       "placeholder": "Please add QR code image",
       "sponsorList": {
-        "title": "Sponsors",
+        "title": "Sponsors (NexBox, MeowCode, OpenMD, LingTab)",
         "loading": "Loading...",
         "error": "Failed to load",
         "empty": "No sponsors yet"
@@ -3077,6 +3071,28 @@
     "scanError": "Scan failed",
     "noVendorSelected": "Please select at least one GPU vendor"
   },
+  "mousePolling": {
+    "testing": "Testing",
+    "stopped": "Stopped",
+    "title": "Mouse Polling Rate Test",
+    "realtimeHz": "Realtime Polling Rate",
+    "start": "Start Test",
+    "stop": "Stop Test",
+    "startHint": "Click \"Start Test\", then keep moving your mouse",
+    "moveHint": "Move your mouse to measure the polling rate",
+    "deviation": "Deviation",
+    "statsTitle": "Statistics",
+    "avgInterval": "Avg Interval",
+    "medianInterval": "Median Interval",
+    "minInterval": "Min Interval",
+    "maxInterval": "Max Interval",
+    "jitter": "Jitter (Std Dev)",
+    "spikes": "Dropped / Spikes",
+    "totalSamples": "Total Samples",
+    "hint": "Measures the mouse movement stream as received by the system, affected by system load and other programs. Intervals significantly above the median (>1.5x) are counted as spikes; pauses between movements are excluded. Keep moving your mouse during the test.",
+    "startFailed": "Failed to start test",
+    "stopFailed": "Failed to stop test"
+  },
   "cpuRename": {
     "title": "CPU Rename",
     "funOnly": "For fun only",
@@ -3197,6 +3213,27 @@
     "masterToggleDesc": "When off, all global hotkeys will not work"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "Speed Test",
+    "drive": "Target Disk",
+    "start": "Start",
+    "stop": "Stop",
+    "testing": "Testing…",
+    "noDrive": "No disk detected",
+    "noPartition": "No writable partition on this disk",
+    "stagePrepare": "Preparing",
+    "stageSeqWrite": "Sequential writing",
+    "stageSeqRead": "Sequential reading",
+    "stageRndWrite": "Random writing",
+    "stageRndRead": "Random reading"
+    ,
+    "seqWrite": "Sequential Write",
+    "seqRead": "Sequential Read",
+    "rndWrite": "Random 4K Write",
+    "rndRead": "Random 4K Read",
+    "latWrite": "Write Access Time",
+    "latRead": "Read Access Time"
+    },
     "title": "Disk Health",
     "refresh": "Refresh",
     "scanning": "Scanning...",
@@ -3499,6 +3536,9 @@
     "junkScanning": "Deep scanning..."
   },
   "downloadAccel": {
+    "saveDirLabel": "Save to",
+    "saveDirBrowse": "Browse",
+    "saveDirReset": "Reset",
     "urlLabel": "Download URL",
     "fileNamePlaceholder": "File name (optional, auto-detected if empty)",
     "segmentsLabel": "Max connections",

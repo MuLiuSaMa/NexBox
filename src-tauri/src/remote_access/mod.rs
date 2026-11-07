@@ -1,7 +1,7 @@
 //! 局域网远程接入网关（安卓原生 App 对接）
 //!
-//! 在既有只读远程监控 `remote_monitor` 之上，提供"配对码 + 设备令牌"鉴权的
-//! 远程控制能力：结构化 REST + WebSocket JSON API，以及局域网 UDP 设备发现。
+//! 提供"配对码 + 设备令牌"鉴权的远程控制能力：
+//! 结构化 REST + WebSocket JSON API，以及局域网 UDP 设备发现。
 //! 安全模型：
 //! - 仅监听局域网；控制服务默认关闭，用户在弹窗手动开启后跨重启保持
 //!   （开关状态落盘，下次启动自动重开服务）。
@@ -116,6 +116,18 @@ pub fn is_enabled() -> bool {
     ENABLED.load(Ordering::Relaxed)
 }
 
+/// 本机局域网 IPv4：UDP connect 技巧让内核选路但不实际发包。
+pub fn local_ip() -> Option<String> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let addr = socket.local_addr().ok()?;
+    if addr.ip().is_unspecified() {
+        None
+    } else {
+        Some(addr.ip().to_string())
+    }
+}
+
 /// 正在监听的 HTTP 端口，0 表示未运行。
 pub fn http_port() -> u16 {
     PORT.load(Ordering::Relaxed)
@@ -228,7 +240,7 @@ fn try_add_firewall_rules() {
 
 fn build_info() -> AccessInfo {
     let port = PORT.load(Ordering::Relaxed);
-    let ip = crate::remote_monitor::local_ip();
+    let ip = local_ip();
     let url = match (&ip, port) {
         (Some(ip), p) if p > 0 => Some(format!("http://{ip}:{p}/")),
         _ => None,

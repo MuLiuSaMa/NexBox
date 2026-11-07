@@ -1,6 +1,5 @@
 import {
   Box,
-  Flex,
   HStack,
   VStack,
   Text,
@@ -38,10 +37,6 @@ import {
   LuRefreshCw,
   LuTrash2,
   LuPlus,
-  LuHardDrive,
-  LuDatabase,
-  LuKeyboard,
-  LuMonitor,
 } from "react-icons/lu";
 import { Download } from "lucide-react";
 
@@ -82,6 +77,9 @@ function stripExeSuffix(name: string): string {
 
 /** 桌面灵动岛开关的持久化键（store 为权威，localStorage 仅做首帧镜像避免开关自己弹一下） */
 const ISLAND_EXTERNAL_KEY = "nexbox_island_external_window";
+
+/** 节约内存（实验性）开关的持久化键（同上：store 为权威，localStorage 做首帧镜像） */
+const MEMORY_SAVING_KEY = "memory-saving-mode";
 
 export default function AdvancedPage() {
   const { t } = useTranslation();
@@ -160,6 +158,25 @@ export default function AdvancedPage() {
     });
   };
 
+  // ── 节约内存（实验性）：缩小到托盘销毁主窗口 ──
+  // 销毁会释放主窗口 WebView2 进程树（约 100~200MB），托盘恢复时由后端重建；
+  // 音乐播放中后端自动回退为仅隐藏。销毁期间后台音乐/媒体键不可用，属实验性取舍。
+  const [memorySavingEnabled, setMemorySavingEnabled] = useState(
+    () => localStorage.getItem(MEMORY_SAVING_KEY) === "true"
+  );
+  const handleMemorySavingToggle = () => {
+    const newValue = !memorySavingEnabled;
+    setMemorySavingEnabled(newValue);
+    localStorage.setItem(MEMORY_SAVING_KEY, String(newValue));
+    store.set(MEMORY_SAVING_KEY, newValue).then(() => store.save());
+    invoke("set_memory_saving_mode", { enabled: newValue }).catch((e) => {
+      console.error("[MemorySaving] 设置失败:", e);
+      setMemorySavingEnabled(!newValue);
+      localStorage.setItem(MEMORY_SAVING_KEY, String(!newValue));
+      toast({ title: t("settings.advanced.error", "操作失败"), description: String(e), status: "error", duration: 3000, isClosable: true });
+    });
+  };
+
   const refreshSizes = useCallback(async () => {
     try {
       const result = await invoke<StorageSizes>("get_storage_sizes");
@@ -209,6 +226,17 @@ export default function AdvancedPage() {
           const enabled = Boolean(v);
           setIslandExternalEnabled(enabled);
           localStorage.setItem(ISLAND_EXTERNAL_KEY, String(enabled));
+        }
+      })
+      .catch(() => {});
+    // 加载节约内存（实验性）开关（store 为权威）
+    store
+      .get<boolean>(MEMORY_SAVING_KEY)
+      .then((v) => {
+        if (v != null) {
+          const enabled = Boolean(v);
+          setMemorySavingEnabled(enabled);
+          localStorage.setItem(MEMORY_SAVING_KEY, String(enabled));
         }
       })
       .catch(() => {});
@@ -326,11 +354,6 @@ export default function AdvancedPage() {
         <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
           <VStack spacing={4} align="stretch">
             <HStack spacing={4} align="center">
-              <img
-                src="/pawnio.webp"
-                alt={t("settings.pawnio.label", "PawnIO")}
-                style={{ width: 44, height: 44, objectFit: "contain", flexShrink: 0 }}
-              />
               <VStack align="flex-start" spacing={0.5} flex={1}>
                 <HStack spacing={2}>
                   <Text fontSize="sm" color={subLabelColor} fontWeight="medium">
@@ -408,19 +431,6 @@ export default function AdvancedPage() {
         <VStack spacing={4} align="stretch">
           {/* 清除缓存 */}
           <HStack spacing={4}>
-            <Flex
-              align="center"
-              justify="center"
-              w="40px"
-              h="40px"
-              borderRadius="xl"
-              flexShrink={0}
-              bg={accentSoft}
-              border={`1px solid ${accentBorder}`}
-              color={activeColor}
-            >
-              <LuHardDrive size={20} />
-            </Flex>
             <VStack align="flex-start" spacing={0.5} flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="semibold">
                 {t("settings.advanced.cacheTitle", "清除缓存")}
@@ -444,19 +454,6 @@ export default function AdvancedPage() {
           <Divider borderColor={dividerColor} />
           {/* 清除数据 */}
           <HStack spacing={4}>
-            <Flex
-              align="center"
-              justify="center"
-              w="40px"
-              h="40px"
-              borderRadius="xl"
-              flexShrink={0}
-              bg={accentSoft}
-              border={`1px solid ${accentBorder}`}
-              color={activeColor}
-            >
-              <LuDatabase size={20} />
-            </Flex>
             <VStack align="flex-start" spacing={0.5} flex={1}>
               <Text fontSize="sm" color={labelColor} fontWeight="semibold">
                 {t("settings.advanced.dataTitle", "清除数据")}
@@ -480,29 +477,16 @@ export default function AdvancedPage() {
       </LiquidGlassCard>
 
       {/* 键盘媒体键控制音乐播放器 */}
-      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
-        <HStack spacing={4} align="center">
-          <Flex
-            align="center"
-            justify="center"
-            w="40px"
-            h="40px"
-            borderRadius="xl"
-            flexShrink={0}
-            bg={accentSoft}
-            border={`1px solid ${accentBorder}`}
-            color={activeColor}
-          >
-            <LuKeyboard size={20} />
-          </Flex>
-          <VStack align="flex-start" spacing={0.5} flex={1}>
-            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+      <LiquidGlassCard mb={4} px={4} py={3} boxShadow="sm">
+        <HStack justify="space-between">
+          <Box flex={1}>
+            <Text fontSize="sm" color={labelColor} fontWeight="medium">
               {t("settings.advanced.mediaKeysTitle", "键盘媒体键控制音乐（SMTC）")}
             </Text>
-            <Text fontSize="xs" color={subLabelColor}>
+            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
               {t("settings.advanced.mediaKeysDesc", "关闭后同时停用系统媒体会话（SMTC）：音量浮层/锁屏不再显示新境盒，媒体键交还给其他软件")}
             </Text>
-          </VStack>
+          </Box>
           <ThemeSwitch
             size="md"
             isChecked={mediaKeysEnabled}
@@ -512,33 +496,44 @@ export default function AdvancedPage() {
       </LiquidGlassCard>
 
       {/* 灵动岛显示在桌面上 */}
-      <LiquidGlassCard mb={4} px={4} py={4} boxShadow="sm">
-        <HStack spacing={4} align="center">
-          <Flex
-            align="center"
-            justify="center"
-            w="40px"
-            h="40px"
-            borderRadius="xl"
-            flexShrink={0}
-            bg={accentSoft}
-            border={`1px solid ${accentBorder}`}
-            color={activeColor}
-          >
-            <LuMonitor size={20} />
-          </Flex>
-          <VStack align="flex-start" spacing={0.5} flex={1}>
-            <Text fontSize="sm" color={labelColor} fontWeight="semibold">
+      <LiquidGlassCard mb={4} px={4} py={3} boxShadow="sm">
+        <HStack justify="space-between">
+          <Box flex={1}>
+            <Text fontSize="sm" color={labelColor} fontWeight="medium">
               {t("settings.advanced.islandExternalTitle", "灵动岛显示在桌面上")}
             </Text>
-            <Text fontSize="xs" color={subLabelColor}>
+            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
               {t("settings.advanced.islandExternalDesc", "开启后提示与播放岛移出主窗口，固定显示在屏幕顶部中央；主窗口隐藏到托盘后仍然可见，光标不在岛体上时自动鼠标穿透")}
             </Text>
-          </VStack>
+          </Box>
           <ThemeSwitch
             size="md"
             isChecked={islandExternalEnabled}
             onChange={handleIslandExternalToggle}
+          />
+        </HStack>
+      </LiquidGlassCard>
+
+      {/* 节约内存（实验性）：缩小到托盘销毁主窗口 */}
+      <LiquidGlassCard mb={4} px={4} py={3} boxShadow="sm">
+        <HStack justify="space-between">
+          <Box flex={1}>
+            <HStack spacing={2} align="center">
+              <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                {t("settings.advanced.memorySavingTitle", "节约内存（缩小到托盘时销毁窗口）")}
+              </Text>
+              <Badge fontSize="0.6rem" colorScheme="purple" variant="subtle" px={2} py={0.5} borderRadius="full">
+                BETA
+              </Badge>
+            </HStack>
+            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+              {t("settings.advanced.memorySavingDesc", "实验性：缩小到托盘时关闭主窗口以大幅释放内存，点击托盘图标重新载入（恢复需短暂加载并回到默认启动页）；音乐播放中会自动改为普通隐藏")}
+            </Text>
+          </Box>
+          <ThemeSwitch
+            size="md"
+            isChecked={memorySavingEnabled}
+            onChange={handleMemorySavingToggle}
           />
         </HStack>
       </LiquidGlassCard>

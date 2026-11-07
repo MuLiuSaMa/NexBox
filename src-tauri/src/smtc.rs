@@ -52,6 +52,7 @@ mod imp {
     pub fn start(_app: tauri::AppHandle) {}
     pub fn update(_state: super::SmtcState) {}
     pub fn clear() {}
+    pub fn rebind<R: tauri::Runtime>(_app: tauri::AppHandle<R>) {}
     pub fn cover_bytes_for(_src: &str) -> Option<Vec<u8>> {
         None
     }
@@ -151,7 +152,7 @@ mod imp {
     }
 
     /// 初始化 SMTC 会话：Interop GetForWindow 绑定主窗口 + 注册按键/进度事件
-    fn init_controls(app: &AppHandle) -> Result<(), String> {
+    fn init_controls<R: tauri::Runtime>(app: &AppHandle<R>) -> Result<(), String> {
         // WinRT 需要线程具备 COM 公寓初始化
         unsafe {
             let _ = windows::Win32::System::Com::CoInitializeEx(
@@ -239,6 +240,26 @@ mod imp {
 
         *CTRL.lock().unwrap() = Some(controls);
         Ok(())
+    }
+
+    /// 主窗口重建（节约内存模式）后重绑媒体会话到新 HWND：
+    /// 会话与主窗口 HWND 绑定，窗口销毁后旧会话随之失效。
+    /// 重绑后清空元数据缓存，让前端下一次每秒推送重新填充新会话；
+    /// 未播放前会话保持禁用（init_controls 初始 SetIsEnabled(false)），不显示空会话。
+    pub fn rebind<R: tauri::Runtime>(app: AppHandle<R>) {
+        std::thread::spawn(move || {
+            if let Err(e) = init_controls(&app) {
+                log::warn!("[SMTC] 主窗口重建后重绑媒体会话失败: {e}");
+                return;
+            }
+            if let Ok(mut t) = LAST_TRACK.lock() {
+                *t = None;
+            }
+            if let Ok(mut c) = LAST_COVER_KEY.lock() {
+                *c = None;
+            }
+            log::info!("[SMTC] 主窗口重建后媒体会话已重绑到新窗口");
+        });
     }
 
     /// 前端推送最新播放状态（标题/进度/播放状态变化时调用）
@@ -551,6 +572,15 @@ pub struct SmtcState {
 pub fn start(app: tauri::AppHandle) {
     imp::start(app);
 }
+
+/// 主窗口重建（节约内存模式）后把媒体会话重绑到新 HWND，并重置元数据缓存
+#[cfg(target_os = "windows")]
+pub fn rebind_after_main_window_recreate<R: tauri::Runtime>(app: tauri::AppHandle<R>) {
+    imp::rebind(app);
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn rebind_after_main_window_recreate<R: tauri::Runtime>(_app: tauri::AppHandle<R>) {}
 
 #[tauri::command]
 pub fn smtc_update_state(state: SmtcState) {

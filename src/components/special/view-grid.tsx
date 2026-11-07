@@ -37,9 +37,10 @@ import type { ViewItem } from "./view-types";
 interface ViewGridProps {
   tools: ViewItem[];
   onReorder?: (tools: ViewItem[]) => void;
+  compact?: boolean;
 }
 
-function SortableGridCard({ tool }: { tool: ViewItem }) {
+function SortableGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { config } = useThemeColor();
@@ -92,24 +93,24 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
           {tool.badge || "BETA"}
         </Box>
       )}
-      <VStack align="start" spacing={4}>
+      <VStack align="start" spacing={compact ? 3 : 4}>
         <Box
-          w={12}
-          h={12}
-          borderRadius="xl"
+          w={compact ? 9 : 12}
+          h={compact ? 9 : 12}
+          borderRadius={compact ? "lg" : "xl"}
           bg={`${tool.color}20`}
           display="flex"
           alignItems="center"
           justifyContent="center"
           color={tool.color}
         >
-          <IconComponent size={28} />
+          <IconComponent size={compact ? 22 : 28} />
         </Box>
         <VStack align="start" spacing={1}>
-          <Text color={headingColor} fontSize="lg" fontWeight="bold">
+          <Text color={headingColor} fontSize={compact ? "md" : "lg"} fontWeight="bold" noOfLines={compact ? 1 : undefined}>
             {t(tool.titleKey)}
           </Text>
-          <Text color={subTextColor} fontSize="sm">
+          <Text color={subTextColor} fontSize={compact ? "xs" : "sm"} noOfLines={compact ? 2 : undefined}>
             {t(tool.descriptionKey)}
           </Text>
         </VStack>
@@ -120,10 +121,11 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
   const innerCard = liquidGlassEnabled ? (
     <LiquidGlassCard
       w="full"
-      h="full"
-      minH="200px"
-      p={6}
+      h={compact ? "150px" : "full"}
+      minH={compact ? undefined : "200px"}
+      p={compact ? 4 : 6}
       position="relative"
+      glow={!compact}
     >
       {cardContent}
     </LiquidGlassCard>
@@ -131,8 +133,9 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
     <Box
       bg={cardBg}
       borderRadius="3xl"
-      p={6}
-      minH="200px"
+      p={compact ? 4 : 6}
+      h={compact ? "150px" : undefined}
+      minH={compact ? undefined : "200px"}
       border="2px solid"
       borderColor={cardBorder}
       transition="all 0.2s"
@@ -187,7 +190,7 @@ function SortableGridCard({ tool }: { tool: ViewItem }) {
   );
 }
 
-function StaticGridCard({ tool }: { tool: ViewItem }) {
+function StaticGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean }) {
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { config } = useThemeColor();
@@ -218,24 +221,24 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
           {tool.badge || "BETA"}
         </Box>
       )}
-      <VStack align="start" spacing={4}>
+      <VStack align="start" spacing={compact ? 3 : 4}>
         <Box
-          w={12}
-          h={12}
-          borderRadius="xl"
+          w={compact ? 9 : 12}
+          h={compact ? 9 : 12}
+          borderRadius={compact ? "lg" : "xl"}
           bg={`${tool.color}20`}
           display="flex"
           alignItems="center"
           justifyContent="center"
           color={tool.color}
         >
-          <IconComponent size={28} />
+          <IconComponent size={compact ? 22 : 28} />
         </Box>
         <VStack align="start" spacing={1}>
-          <Text color={headingColor} fontSize="lg" fontWeight="bold">
+          <Text color={headingColor} fontSize={compact ? "md" : "lg"} fontWeight="bold" noOfLines={compact ? 1 : undefined}>
             {t(tool.titleKey)}
           </Text>
-          <Text color={subTextColor} fontSize="sm">
+          <Text color={subTextColor} fontSize={compact ? "xs" : "sm"} noOfLines={compact ? 2 : undefined}>
             {t(tool.descriptionKey)}
           </Text>
         </VStack>
@@ -249,11 +252,12 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
         <PressTilt color={tool.color}>
           <LiquidGlassCard
             w="full"
-            h="full"
-            minH="200px"
+            h={compact ? "150px" : "full"}
+            minH={compact ? undefined : "200px"}
             cursor="pointer"
-            p={6}
+            p={compact ? 4 : 6}
             position="relative"
+            glow={!compact}
           >
             {cardContent}
           </LiquidGlassCard>
@@ -268,8 +272,9 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
         <Box
           bg={cardBg}
           borderRadius="3xl"
-          p={6}
-          minH="200px"
+          p={compact ? 4 : 6}
+          h={compact ? "150px" : undefined}
+          minH={compact ? undefined : "200px"}
           cursor="pointer"
           border="2px solid"
           borderColor={cardBorder}
@@ -288,7 +293,7 @@ function StaticGridCard({ tool }: { tool: ViewItem }) {
   );
 }
 
-export function ViewGrid({ tools, onReorder }: ViewGridProps) {
+export function ViewGrid({ tools, onReorder, compact = false }: ViewGridProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -345,9 +350,9 @@ export function ViewGrid({ tools, onReorder }: ViewGridProps) {
   // Without onReorder, render a simple static grid (no drag-and-drop overhead)
   if (!onReorder) {
     return (
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4} w="full">
+      <SimpleGrid columns={compact ? { base: 2, md: 3, lg: 4 } : { base: 1, md: 2, lg: 3 }} spacing={compact ? 3 : 4} w="full">
         {tools.map((tool) => (
-          <StaticGridCard key={tool.id} tool={tool} />
+          <StaticGridCard key={tool.id} tool={tool} compact={compact} />
         ))}
       </SimpleGrid>
     );
@@ -366,9 +371,9 @@ export function ViewGrid({ tools, onReorder }: ViewGridProps) {
     >
       <SortableContext items={toolIds} strategy={rectSortingStrategy}>
         <Box ref={containerRef} overflow="hidden" w="full">
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4} w="full">
+          <SimpleGrid columns={compact ? { base: 2, md: 3, lg: 4 } : { base: 1, md: 2, lg: 3 }} spacing={compact ? 3 : 4} w="full">
             {tools.map((tool) => (
-              <SortableGridCard key={tool.id} tool={tool} />
+              <SortableGridCard key={tool.id} tool={tool} compact={compact} />
             ))}
           </SimpleGrid>
         </Box>

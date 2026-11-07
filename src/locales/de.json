@@ -9,6 +9,7 @@
   },
   "view": {
     "grid": "Rasteransicht",
+    "compact": "Kompakte Karten",
     "list": "Listenansicht"
   },
   "onboarding": {
@@ -50,6 +51,7 @@
     "settings": "Einstellungen",
     "gpuRename": "GPU-Umbenennung",
     "cpuRename": "CPU umbenennen",
+    "mousePolling": "Maus-Polling-Rate-Test",
     "resolutionConverter": "Auflösungskonverter",
     "dlssPreset": "Delta Force DLSS-Einstellungen",
     "epicFree": "Epic Gratis-Spiele",
@@ -742,6 +744,7 @@
     "optimization": "Optimierung",
     "builtinTools": "Eingebaute Werkzeuge",
     "thirdpartyTools": "Drittanbieter-Tools",
+    "officialProducts": "Offizielle Produkte",
     "officialTools": "Offizielle Empfehlungen",
     "recommended": "Empfohlen",
     "tools": {
@@ -1017,15 +1020,6 @@
     "recorderNotStarted": "Recorder nicht gestartet, bitte später erneut versuchen"
   },
   "overlayPanel": {
-    "remoteMonitor": {
-      "title": "Handy-Fernüberwachung",
-      "description": "Nach dem Aktivieren können Sie Hardwarewerte live im Handy-Browser im selben WLAN ansehen",
-      "scanHint": "Mit dem Handy scannen oder die folgende Adresse eingeben",
-      "copy": "Adresse kopieren",
-      "pin": "Zugangscode",
-      "firewallHint": "Handy kann nicht verbinden? Erlauben Sie NexBox in der Windows-Firewall oder deaktivieren Sie sie testweise",
-      "noIp": "Keine LAN-IP erkannt. Stellen Sie sicher, dass der PC mit WLAN / LAN-Kabel verbunden ist"
-    },
     "title": "Overlay-Panel",
     "enableOverlay": "Overlay-Panel aktivieren",
     "statusEnabled": "Aktiviert",
@@ -1312,6 +1306,7 @@
     "overlayPanelDesc": "Schwebendes Panel, das Systemhardware-Status anzeigt",
     "gpuRenameDesc": "GPU-Namen ändern, um Spielleistung zu optimieren",
     "cpuRenameDesc": "Ändert den in der Task-Manager angezeigten CPU-Namen (nur zum Spaß)",
+    "mousePollingDesc": "Misst die echte Polling-Rate deiner Maus, mit Intervall-, Jitter- und Spike-Statistiken",
     "resolutionConverterDesc": "Seitenverhältnisse für verschiedene Auflösungen umrechnen",
     "shaderCacheDesc": "NVIDIA/AMD/Intel/DirectX Shader-Cache bereinigen, um Speicherplatz freizugeben",
     "psoCacheDesc": "Delta-Force-PSO-Shader-Cache bereinigen (standardmäßig Papierkorb)",
@@ -1383,6 +1378,10 @@
       "priority": "Prozess-Auto-Optimierung",
       "affinity": "Kern-Auto-Optimierung",
       "ifeo": "IFEO-Priorität erzwingen",
+      "io": "Festplatten-E/A",
+      "gpu": "GPU-Scheduling-Priorität",
+      "memory": "Speicherpriorität",
+      "gpuPref": "GPU-Hochleistung",
       "enabled": "Auto-Optimierung aktiviert",
       "disabled": "Auto-Optimierung deaktiviert"
     },
@@ -1510,6 +1509,28 @@
     "cleanError": "Bereinigung fehlgeschlagen",
     "scanError": "Scan fehlgeschlagen",
     "noVendorSelected": "Bitte mindestens einen GPU-Hersteller auswählen"
+  },
+  "mousePolling": {
+    "testing": "Läuft",
+    "stopped": "Gestoppt",
+    "title": "Maus-Polling-Rate-Test",
+    "realtimeHz": "Echtzeit-Polling-Rate",
+    "start": "Test starten",
+    "stop": "Test stoppen",
+    "startHint": "Klicke auf „Test starten“ und bewege die Maus ständig weiter",
+    "moveHint": "Bewege die Maus, um die Polling-Rate zu messen",
+    "deviation": "Abweichung",
+    "statsTitle": "Statistiken",
+    "avgInterval": "Ø-Intervall",
+    "medianInterval": "Median-Intervall",
+    "minInterval": "Min-Intervall",
+    "maxInterval": "Max-Intervall",
+    "jitter": "Jitter (Stdabw.)",
+    "spikes": "Ausfälle / Spikes",
+    "totalSamples": "Gesamtproben",
+    "hint": "Misst den vom System empfangenen Mausbewegungsstrom, beeinflusst durch Systemlast und andere Programme. Intervalle deutlich über dem Median (>1,5x) zählen als Spikes; Pausen zwischen Bewegungen werden nicht gewertet. Bewege die Maus während des Tests ständig.",
+    "startFailed": "Teststart fehlgeschlagen",
+    "stopFailed": "Teststopp fehlgeschlagen"
   },
   "cpuRename": {
     "title": "CPU umbenennen",
@@ -1691,11 +1712,6 @@
       "liquidGlassLabel": "Flüssiges Glas",
       "liquidGlassDesc": "Wenn aktiviert, verwenden einige Oberflächen den \"Flüssiges Glas\"-Effekt, der die Leistung beeinträchtigen kann",
       "liquidGlassBlurLabel": "Unschärfeintensität",
-      "liquidGlassModeLabel": "Glasmodus",
-      "liquidGlassModeFrosted": "Milchglas",
-      "liquidGlassModeReal": "Transparentes Flüssiges Glas",
-      "liquidGlassModeFrostedDesc": "Weichgezeichnete Milchglas-Textur; Unschärfe einstellbar",
-      "liquidGlassModeRealDesc": "Verwendet SVG-Brechungsfilter für Kantenbrechung und Chromatische Aberration, transparenter aber GPU-intensiver",
       "islandLiquidGlassLabel": "Dynamic Island Flüssiges Glas",
       "islandLiquidGlassDesc": "Wendet einen Glaseffekt auf Dynamic-Island-Benachrichtigungen an; Stil unten wählbar",
       "islandGlassModeLabel": "Glasstil",
@@ -1753,7 +1769,7 @@
       "thankYou": "Vielen Dank für Ihre Unterstützung!",
       "placeholder": "Bitte QR-Code-Bild hinzufügen",
       "sponsorList": {
-        "title": "Sponsorenliste",
+        "title": "Sponsorenliste (NexBox, MeowCode, OpenMD, LingTab)",
         "loading": "Laden...",
         "error": "Laden fehlgeschlagen",
         "empty": "Noch keine Sponsoren"
@@ -1892,6 +1908,27 @@
     "masterToggleDesc": "Wenn ausgeschaltet, funktionieren keine globalen Hotkeys"
   },
   "diskHealth": {
+    "speedTest": {
+    "title": "Geschwindigkeitstest",
+    "drive": "Zielfestplatte",
+    "start": "Starten",
+    "stop": "Stoppen",
+    "testing": "Teste…",
+    "noDrive": "Keine Festplatte erkannt",
+    "noPartition": "Keine beschreibbare Partition auf dieser Festplatte",
+    "stagePrepare": "Vorbereiten",
+    "stageSeqWrite": "Sequenzielles Schreiben",
+    "stageSeqRead": "Sequenzielles Lesen",
+    "stageRndWrite": "Zufälliges Schreiben",
+    "stageRndRead": "Zufälliges Lesen"
+    ,
+    "seqWrite": "Sequenzielles Schreiben",
+    "seqRead": "Sequenzielles Lesen",
+    "rndWrite": "Zufällig 4K Schreiben",
+    "rndRead": "Zufällig 4K Lesen",
+    "latWrite": "Schreibzugriffszeit",
+    "latRead": "Lesezugriffszeit"
+    },
     "title": "Festplatten-Gesundheit",
     "refresh": "Aktualisieren",
     "scanning": "Scannen...",
@@ -2071,6 +2108,9 @@
     "loading": "Feature-Konfigurationen werden geladen..."
   },
   "downloadAccel": {
+    "saveDirLabel": "Speichern unter",
+    "saveDirBrowse": "Durchsuchen",
+    "saveDirReset": "Zurücksetzen",
     "urlLabel": "Download-URL",
     "fileNamePlaceholder": "Dateiname (optional, wird automatisch ermittelt)",
     "segmentsLabel": "Max. Verbindungen",

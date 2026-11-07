@@ -33,7 +33,6 @@ import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, Trash2, Plus, Move, RotateCcw, Settings } from "lucide-react";
 import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
-import { RemoteMonitorDialog } from "@/components/remote-monitor-dialog";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
@@ -386,9 +385,10 @@ export default function OverlayPanelPage() {
       const data = await invoke<HardwareData>("get_overlay_hardware_data");
       setHardwareData(prev => {
         return {
-          fps: data.fps ?? prev.fps,
-          fps_1low: data.fps_1low ?? prev.fps_1low,
-          fps_01low: data.fps_01low ?? prev.fps_01low,
+          // FPS 不做 ?? 兜底：null 即真实无数据（过期/无游戏），保留旧值会卡死显示
+          fps: data.fps,
+          fps_1low: data.fps_1low,
+          fps_01low: data.fps_01low,
           cpu_usage: data.cpu_usage ?? prev.cpu_usage,
           cpu_temp: data.cpu_temp ?? prev.cpu_temp,
           cpu_clock: data.cpu_clock ?? prev.cpu_clock,
@@ -689,9 +689,7 @@ export default function OverlayPanelPage() {
 
   return (
     <Box pt={8} pb={8}>
-      <PageHeader title={t("overlayPanel.title") || "悬浮框"} mb={6}>
-        <RemoteMonitorDialog />
-      </PageHeader>
+      <PageHeader title={t("overlayPanel.title") || "悬浮框"} mb={6} />
 
       <VStack align="stretch" spacing={5}>
         <SettingCard title={t("overlayPanel.enableOverlay") || "启用悬浮框"}>
