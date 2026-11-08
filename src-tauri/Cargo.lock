@@ -3405,7 +3405,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "nexbox"
-version = "10.4.4"
+version = "10.4.6"
 dependencies = [
  "aes",
  "async-stream",

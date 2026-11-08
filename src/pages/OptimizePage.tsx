@@ -23,7 +23,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
-import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
+import { LayoutToggle, LAYOUT_STORAGE_KEY, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 import { store } from "@/lib/store";
@@ -174,10 +174,18 @@ function applyOrder(allTools: ViewItem[], orderIds: string[]): ViewItem[] {
   return ordered;
 }
 
+function loadLayoutMode(): LayoutMode {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (raw === "grid" || raw === "compact" || raw === "list") return raw;
+  } catch { /* ignore */ }
+  return "grid";
+}
+
 export default function OptimizePage() {
   const { t } = useTranslation();
   const adaptiveTitle = useAdaptiveTextColor();
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(loadLayoutMode);
 
   const [tools, setTools] = useState<ViewItem[]>(() => {
     const saved = loadOrder();
@@ -190,6 +198,13 @@ export default function OptimizePage() {
     saveOrder(newTools.map((t) => t.id));
   }, []);
 
+  const handleLayoutChange = useCallback((mode: LayoutMode) => {
+    setLayoutMode(mode);
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
+    } catch { /* ignore */ }
+  }, []);
+
   const headingColor = useColorModeValue("gray.900", "#ffffff");
 
   const content = (
@@ -199,7 +214,7 @@ export default function OptimizePage() {
           {t("optimization.pageTitle")}
         </Heading>
         <LiquidGlassCard display="inline-flex" p={1} boxShadow="sm">
-          <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
+          <LayoutToggle mode={layoutMode} onChange={handleLayoutChange} />
         </LiquidGlassCard>
       </Flex>
       {layoutMode === "list" ? (

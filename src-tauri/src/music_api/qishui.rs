@@ -158,7 +158,7 @@ impl QishuiAuthRuntime {
         // 与其它窗口保持一致的 WebView2 参数（必须与 tauri.conf.json 逐字相同）：
         // 参数不同会让 WebView2 为同一数据目录再建一个环境，创建控制器直接失败
         // （0x8007139F），窗口没有 webview，后面所有 eval 都会挂住。
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .auto_resize()
         .build()
         .map_err(|e| format!("创建汽水验证窗口失败: {e}"))?;

@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 
 export type LayoutMode = "grid" | "compact" | "list";
 
+/** 内置工具 / 优化页共用的布局偏好键：两页布局样式保持同步 */
+export const LAYOUT_STORAGE_KEY = "nexbox_tools_layout";
+
 interface LayoutToggleProps {
   mode: LayoutMode;
   onChange: (mode: LayoutMode) => void;

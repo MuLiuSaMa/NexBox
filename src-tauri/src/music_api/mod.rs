@@ -812,7 +812,7 @@ fn attach_login_popup_handler<'a, R: tauri::Runtime, M: tauri::Manager<R>>(
         )
         .title("帐号登录")
         .inner_size(560.0, 640.0)
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         // OAuth 走完后第三方会回跳到平台自己的域名，此时登录已完成，
         // 子窗口要自己关掉，否则用户得手动点叉。
         .on_page_load(|window, payload| {
@@ -968,7 +968,7 @@ async fn open_netease_login_window(app: &AppHandle) -> Result<String, String> {
         )
         .title("网易云音乐登录")
         // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .inner_size(940.0, 760.0)
         .min_inner_size(780.0, 580.0),
         app,
@@ -1054,7 +1054,7 @@ async fn open_kugou_login_window(app: &AppHandle) -> Result<String, String> {
         )
         .title("酷狗音乐登录")
         // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .inner_size(900.0, 720.0)
         .min_inner_size(760.0, 560.0),
         app,
@@ -1167,7 +1167,7 @@ async fn open_qq_login_window(app: &AppHandle) -> Result<String, String> {
         )
         .title("QQ 音乐登录")
         // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .inner_size(900.0, 720.0)
         .min_inner_size(760.0, 560.0),
         app,
@@ -1276,7 +1276,7 @@ async fn open_migu_login_window(app: &AppHandle) -> Result<String, String> {
         )
         .title("咪咕音乐登录")
         // 与其它窗口保持一致的 WebView2 参数（禁用 Chromium 自动媒体会话，避免与 smtc.rs 会话重复）
-        .additional_browser_args("--disable-features=MediaSessionService,HardwareMediaKeyHandling,msWebOOUI,msPdfOOUI,msSmartScreenProtection,msEdgeAutofill,msEdgeShopping,msEdgeWallet,CalculateNativeWinOcclusion --autoplay-policy=no-user-gesture-required --disable-background-networking --disable-client-side-phishing-detection --disable-component-update --disable-default-apps --disable-extensions --disable-sync --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling")
+        .additional_browser_args(crate::MAIN_BROWSER_ARGS)
         .inner_size(900.0, 720.0)
         .min_inner_size(760.0, 560.0),
         app,

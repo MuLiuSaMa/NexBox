@@ -46,7 +46,7 @@ function CsLogo({ size = 24 }: { size?: number; color?: string }) {
 
 import { ViewGrid } from "@/components/special/view-grid";
 import { ViewList } from "@/components/special/view-list";
-import { LayoutToggle, type LayoutMode } from "@/components/special/layout-toggle";
+import { LayoutToggle, LAYOUT_STORAGE_KEY, type LayoutMode } from "@/components/special/layout-toggle";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { store } from "@/lib/store";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
@@ -302,9 +302,17 @@ function applyOrder(allTools: ViewItem[], orderIds: string[]): ViewItem[] {
   return ordered;
 }
 
+function loadLayoutMode(): LayoutMode {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (raw === "grid" || raw === "compact" || raw === "list") return raw;
+  } catch { /* ignore */ }
+  return "grid";
+}
+
 export default function BuiltinToolsPage() {
   const { t } = useTranslation();
-  const [layoutMode, setLayoutMode] = useState<LayoutMode>("grid");
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(loadLayoutMode);
 
   const [tools, setTools] = useState<ViewItem[]>(() => {
     const saved = loadOrder();
@@ -317,6 +325,13 @@ export default function BuiltinToolsPage() {
     saveOrder(newTools.map((t) => t.id));
   }, []);
 
+  const handleLayoutChange = useCallback((mode: LayoutMode) => {
+    setLayoutMode(mode);
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
+    } catch { /* ignore */ }
+  }, []);
+
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
 
@@ -327,7 +342,7 @@ export default function BuiltinToolsPage() {
           {t("builtinTools.title")}
         </Heading>
         <LiquidGlassCard display="inline-flex" p={1} boxShadow="sm">
-          <LayoutToggle mode={layoutMode} onChange={setLayoutMode} />
+          <LayoutToggle mode={layoutMode} onChange={handleLayoutChange} />
         </LiquidGlassCard>
       </Flex>
       {layoutMode === "list" ? (
