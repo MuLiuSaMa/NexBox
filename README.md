@@ -14,9 +14,9 @@
   <a href="https://github.com/MuLiuSaMa/NexBox/releases">
     <img src="https://img.shields.io/github/downloads/MuLiuSaMa/NexBox/total?style=flat-square&amp;logo=github&amp;label=%E4%B8%8B%E8%BD%BD%E9%87%8F&amp;color=2dd4bf" alt="GitHub 下载量">
   </a>
-  <img src="https://img.shields.io/badge/Tauri-2.10-ffc131?style=flat-square&amp;logo=tauri" alt="Tauri">
+  <img src="https://img.shields.io/badge/Tauri-2.12-ffc131?style=flat-square&amp;logo=tauri" alt="Tauri">
   <img src="https://img.shields.io/badge/React-19-61dafb?style=flat-square&amp;logo=react" alt="React">
-  <img src="https://img.shields.io/badge/Rust-1.77.2-dea584?style=flat-square&amp;logo=rust" alt="Rust">
+  <img src="https://img.shields.io/badge/Rust-1.90-dea584?style=flat-square&amp;logo=rust" alt="Rust">
   <img src="https://img.shields.io/badge/license-GPL--3.0-green?style=flat-square" alt="License">
 </p>
 
@@ -191,7 +191,7 @@ PC 玩家在游戏中常常需要**同时运行七八个工具软件**——看�
 | 工具 | 版本要求 |
 | --- | --- |
 | **Node.js** | \>= 18.x（建议 20+） |
-| **Rust** | \>= 1.77.2 |
+| **Rust** | \>= 1.90 |
 | **Visual Studio Build Tools** | Windows 专用（C++ 桌面开发工作负载） |
 
 ### 构建步骤
@@ -229,6 +229,7 @@ npm run tauri:build
 
 ```
 nexbox/
+├── ARCHITECTURE.md               # 架构说明
 ├── src/                          # React 前端源码
 │   ├── pages/                    # 页面组件（60 余个功能页面 / 面板）
 │   ├── components/               # 可复用 UI 组件
@@ -254,9 +255,9 @@ nexbox/
 ├── aq_registry/                  # 系统优化注册表脚本
 ├── aq_registry_restore/          # 注册表恢复脚本
 ├── R560-developer/               # NVIDIA NVAPI SDK
-├── docs/screenshots/             # 文档截图
+├── docs/                         # 功能文档与截图
 ├── public/                       # 前端公共资源
-├── .github/workflows/            # CI（lint + build + cargo check）
+├── .github/workflows/            # CI（build + cargo check + cargo test）
 └── package.json                  # Node.js 项目配置
 ```
 
@@ -276,8 +277,8 @@ nexbox/
 
 **后端**
 
--   Tauri 2.10（桌面框架）
--   Rust 1.77.2
+-   Tauri 2.12（桌面框架）
+-   Rust 1.90（2021 edition）
 -   NVML Wrapper（NVIDIA GPU 监控）
 -   WMI / sysinfo（Windows 硬件信息）
 -   LibreHardwareMonitorLib（C# 监控辅助进程）
@@ -287,17 +288,38 @@ nexbox/
 
 **工程化**
 
--   GitHub Actions CI — 前端 lint / build + Rust cargo check
--   Husky + Prettier + ESLint — 提交前代码检查与格式化
+-   GitHub Actions CI — 前端构建 + Rust `cargo check` / `cargo test`
+-   TypeScript 类型检查（`npm run build`）+ Prettier 代码格式化（`npm run format`）
+
+## 架构说明
+
+项目采用 React 前端 → Tauri IPC → Rust 服务层 → Windows 原生能力的分层架构；硬件传感器由独立的 .NET 子进程采集，下载引擎为独立 Rust crate。完整的模块划分、关键数据流、窗口模型与扩展指引见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+## 测试
+
+- 内置 269 个 Rust 单元测试，覆盖下载分片调度、代理配置、Winapp2 规则解析、音乐平台 API、显示缓存、显示滤镜等核心模块。
+- 运行命令：
+
+```bash
+cargo test --workspace --manifest-path src-tauri/Cargo.toml
+```
+
+- CI：GitHub Actions 在 push / PR 时执行前端构建、Rust `cargo check` 与 `cargo test`（见 [.github/workflows/ci.yml](.github/workflows/ci.yml)）。
+- 前端以 TypeScript 类型检查与 Vite 构建作为基础质量门禁：
+
+```bash
+npm run build
+```
 
 ## 贡献指南
 
 欢迎以任何形式参与贡献——报告问题、功能建议、完善文档或提交代码。开发环境搭建、代码规范与 PR 流程详见 [CONTRIBUTING.md](CONTRIBUTING.md)，社区行为准则见 [Code of Conduct](CODE_OF_CONDUCT.md)。
 
-提交前请确保代码通过 lint 检查（CI 也会自动执行）：
+提交前请确保构建与测试通过：
 
 ```bash
-npm run lint && npm run format
+npm run build
+cargo test --workspace --manifest-path src-tauri/Cargo.toml
 ```
 
 ## 许可证

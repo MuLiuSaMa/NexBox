@@ -348,8 +348,8 @@ mod tests {
         let mut edid = vec![0u8; 128];
         // EDID 头
         edid[0..8].copy_from_slice(&[0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00]);
-        // 厂商码：SKY → S=19, K=11, Y=25
-        let word: u16 = ((19 - 1) << 10) | ((11 - 1) << 5) | (25 - 1);
+        // 厂商码：SKY → S=19, K=11, Y=25（EDID 字母编码为 1-based，A=1）
+        let word: u16 = (19 << 10) | (11 << 5) | 25;
         edid[8] = (word >> 8) as u8;
         edid[9] = (word & 0xFF) as u8;
         // 数值序列号 16843009 = 0x01010101

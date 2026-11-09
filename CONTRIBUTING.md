@@ -18,7 +18,7 @@
 | 工具                          | 版本要求                             |
 | ----------------------------- | ------------------------------------ |
 | **Node.js**                   | >= 18.x（建议 20+）                  |
-| **Rust**                      | >= 1.77.2                            |
+| **Rust**                      | >= 1.90                              |
 | **Visual Studio Build Tools** | Windows 专用（C++ 桌面开发工作负载） |
 
 ```bash
@@ -33,19 +33,19 @@ npm install
 npm run tauri:dev
 ```
 
-项目结构与技术栈详见 [README](README.md)。
+项目结构、技术栈与架构说明详见 [README](README.md) 与 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
 ## 代码规范
 
 ### 前端（React + TypeScript）
 
-- 提交前运行 `npm run lint` 与 `npm run format`，确保通过 ESLint 检查并统一 Prettier 格式
+- 提交前运行 `npm run format` 统一 Prettier 格式
 - `npm run build` 会执行 TypeScript 类型检查，类型错误会导致 CI 失败
 
 ### 后端（Rust）
 
 - 新增 Tauri 命令后需在 `src-tauri/src/lib.rs` 中注册
-- 提交前运行 `cargo check` 确认编译通过
+- 提交前运行 `cargo check` 确认编译通过，并运行 `cargo test --workspace --manifest-path src-tauri/Cargo.toml` 确认测试通过
 
 ### 功能开发约定
 
@@ -72,7 +72,7 @@ docs: 更新 README 功能列表
 3. 推送分支：`git push origin feature/amazing-feature`
 4. 发起 Pull Request，清晰描述改动内容与动机
 
-CI 会自动执行前端 lint / build 与 Rust `cargo check`，请确保全部通过。PR 尽量保持小而聚焦，一个 PR 只解决一件事。
+CI 会自动执行前端构建与 Rust `cargo check` / `cargo test`，请确保全部通过。PR 尽量保持小而聚焦，一个 PR 只解决一件事。
 
 ## 许可证
 
