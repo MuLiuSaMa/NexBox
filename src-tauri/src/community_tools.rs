@@ -1476,13 +1476,19 @@ pub fn init_community_download_dir(app: &tauri::AppHandle) {
     }
 }
 
+/// 仅计算下载根目录，**不创建目录**（读取安装状态/打开压缩包时不能凭空造出空文件夹）
 fn download_tools_dir() -> Option<PathBuf> {
-    let root = match download_dir_lock().lock().unwrap().clone() {
-        Some(r) if r.is_absolute() => r,
-        _ => default_download_dir()?,
-    };
-    let _ = std::fs::create_dir_all(&root);
-    Some(root)
+    match download_dir_lock().lock().unwrap().clone() {
+        Some(r) if r.is_absolute() => Some(r),
+        _ => default_download_dir(),
+    }
+}
+
+/// 真正要写入文件前才创建下载根目录
+fn ensure_download_tools_dir() -> Result<PathBuf, String> {
+    let root = download_tools_dir().ok_or_else(|| "无法定位下载目录".to_string())?;
+    std::fs::create_dir_all(&root).map_err(|e| format!("创建下载目录失败：{e}"))?;
+    Ok(root)
 }
 
 #[tauri::command]
@@ -1655,12 +1661,12 @@ pub async fn install_community_tool(
     file: Option<String>,
     download_url: Option<String>,
 ) -> Result<String, String> {
-    let Some(root) = download_tools_dir() else { return Err("无法定位安装目录".to_string()) };
-
     let rel_dir = format!("{PLUGINS_PATH}/{category}/{id}");
 
     // 1) 若有仓库内文件 -> 从 raw 下载到「下载位置」根目录
     if let Some(f) = file.filter(|s| !s.trim().is_empty()) {
+        // 只有真正要落盘时才创建下载根目录，避免浏览列表就凭空生成空文件夹
+        let root = ensure_download_tools_dir()?;
         let ext = std::path::Path::new(&f)
             .extension()
             .map(|e| e.to_string_lossy().into_owned())
@@ -1676,6 +1682,7 @@ pub async fn install_community_tool(
 
     // 2) 外部下载链接
     if let Some(orig) = download_url.filter(|s| !s.trim().is_empty()) {
+        let root = ensure_download_tools_dir()?;
         // 指向本项目仓库的网页 raw 链接 -> 解析相对路径，走 blob 直链下载
         let url = if let Some(rel) = parse_own_gitcode_raw(&orig) {
             resolve_gitcode_file_url("", &rel).await

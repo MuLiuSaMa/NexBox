@@ -1469,41 +1469,79 @@ async fn qishui_signed_post(
         "headers": headers,
         "body": body.to_string(),
     });
-    let script_path = std::env::temp_dir().join("qishui-signer.cjs");
-    // 载荷文件名必须带请求序号：并发签名请求（如登录后红心列表与听歌模式同时发）共用
-    // 同名文件会互相覆盖——先写的请求其 node 进程可能读到后一个请求的载荷，结果错乱失败
+    // 脚本与载荷都按请求序号独立命名：并发签名请求（登录后红心列表与听歌模式
+    // 同时发）共用同名文件会互相覆盖 —— 先写的请求其 node 进程可能读到后一个
+    // 请求的文件，轻则载荷错乱，重则读到被截断的脚本（语法错误 → stdout 为空）
     let seq = SIGN_PAYLOAD_SEQ.fetch_add(1, Ordering::Relaxed);
-    let payload_path = std::env::temp_dir().join(format!("qishui-sign-payload-{}-{seq}.json", std::process::id()));
+    let script_path = std::env::temp_dir().join(format!(
+        "qishui-signer-{}-{seq}.cjs",
+        std::process::id()
+    ));
+    let payload_path = std::env::temp_dir().join(format!(
+        "qishui-sign-payload-{}-{seq}.json",
+        std::process::id()
+    ));
     std::fs::write(&script_path, QISHUI_SIGNER_JS).map_err(|e| e.to_string())?;
     std::fs::write(&payload_path, payload.to_string()).map_err(|e| e.to_string())?;
 
     let node_c = node.clone();
     let script_c = script_path.clone();
     let payload_c = payload_path.clone();
-    let output = tokio::task::spawn_blocking(move || {
-        let mut cmd = std::process::Command::new(&node_c);
-        cmd.arg(&script_c).arg(&payload_c);
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000);
-        }
-        cmd.output()
-    })
+    // 签名进程卡死时不能无限等：前端那边只会一直转圈
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new(&node_c);
+            cmd.arg(&script_c).arg(&payload_c);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                cmd.creation_flags(0x08000000);
+            }
+            cmd.output()
+        }),
+    )
     .await
+    .map_err(|_| "汽水签名进程超时（20s）".to_string())?
     .map_err(|e| format!("签名进程调度失败: {e}"))?
     .map_err(|e| format!("启动 Node 签名进程失败: {e}"))?;
     let _ = std::fs::remove_file(&payload_path);
+    let _ = std::fs::remove_file(&script_path);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(stdout.trim())
-        .map_err(|e| format!("签名进程输出无效: {e} | {}", clip(&stdout, 200)))?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
+        // 把退出码和 stderr 一起带出来：脚本因 require 失败 / 语法问题直接退出时，
+        // 只有这两样能说明原因
+        format!(
+            "签名进程输出无效: {e} | exit={:?} | stderr={}",
+            output.status.code(),
+            clip(stderr.trim(), 200)
+        )
+    })?;
     let status = parsed.get("status").and_then(|v| v.as_i64()).unwrap_or(0);
     if status != 200 {
-        return Err(format!(
-            "汽水接口 HTTP {status}: {}",
-            clip(parsed.get("body").and_then(|v| v.as_str()).unwrap_or(""), 160)
-        ));
+        // 脚本异常分支返回的是 {status:0, error}，body 为空。旧实现只读 body，
+        // 于是错误被压成一句没有任何信息的「HTTP 0:」，完全无法定位
+        let detail = parsed
+            .get("error")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                parsed
+                    .get("body")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.trim().is_empty())
+            })
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                format!(
+                    "exit={:?} stderr={}",
+                    output.status.code(),
+                    clip(stderr.trim(), 160)
+                )
+            });
+        return Err(format!("汽水接口 HTTP {status}: {}", clip(&detail, 300)));
     }
     let body_text = parsed.get("body").and_then(|v| v.as_str()).unwrap_or("");
     serde_json::from_str(body_text)

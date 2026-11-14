@@ -13,10 +13,10 @@
  * - 兼容性更好，性能更优
  */
 
-import { useEffect, useRef, useState, memo } from "react";
+import { useEffect, useRef, memo } from "react";
 import { Box, Text } from "@chakra-ui/react";
 import type { KaraokeLine } from "@/types/music";
-import { getLineProgress, calculateScrollOffset } from "@/lib/karaoke-lyrics";
+import { getLineProgress, calculateScrollOffset, measureScrollRange } from "@/lib/karaoke-lyrics";
 
 interface KaraokeLyricLineProps {
   line: KaraokeLine;
@@ -49,23 +49,39 @@ function KaraokeLyricLineInner({
   const overlayRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLSpanElement>(null);
-  const [scrollNeeded, setScrollNeeded] = useState(false);
-  const scrollLimitRef = useRef(0);
+  /** 可滚动区间：from = 行首贴齐左边缘，to = 行尾贴齐右边缘 */
+  const scrollRangeRef = useRef({ from: 0, to: 0 });
 
-  // 检测超长歌词
+  // 测量可滚动区间，并立即按当前进度定位
   useEffect(() => {
-    if (!isActive || !containerRef.current || !scrollRef.current) return;
+    const scroll = scrollRef.current;
+    const container = containerRef.current;
+    if (!isActive || !scroll || !container) return;
+
     const checkOverflow = () => {
-      if (!scrollRef.current || !containerRef.current) return;
-      const overflow = scrollRef.current.scrollWidth - containerRef.current.clientWidth;
-      const needed = overflow > 4;
-      setScrollNeeded(needed);
-      scrollLimitRef.current = Math.max(0, overflow / 2);
+      scrollRangeRef.current = measureScrollRange(scroll, container);
+      // 挂载瞬间和暂停状态下也要定位一次，否则长句停在未滚动位置，
+      // 右端（或两端）直接露不全
+      const progress = getLineProgress(line, nextLine, audioRef?.currentTime ?? 0);
+      const { from, to } = scrollRangeRef.current;
+      const offset = calculateScrollOffset(progress, from, to);
+      scroll.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`;
     };
     checkOverflow();
     const timer = setTimeout(checkOverflow, 100);
-    return () => clearTimeout(timer);
-  }, [line.text, fontSize, isActive]);
+    // 自定义字体加载完成后文字宽度会变，需重测，否则区间偏小仍会露不全
+    let cancelled = false;
+    document.fonts?.ready
+      .then(() => {
+        if (!cancelled) checkOverflow();
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [line.text, fontSize, isActive, line, nextLine, audioRef]);
 
   // 动画循环：更新顶层 width（跟随 audio 真实播放状态）
   // 不用 isPlaying 门控：暂停缓出期间音频仍在出声，需继续跟随到真正 pause 才停表；
@@ -88,8 +104,9 @@ function KaraokeLyricLineInner({
       el.style.width = `${(progress * 100).toFixed(2)}%`;
 
       // 超长歌词智能水平滚动（滚动整个文字容器）
-      if (scrollNeeded && scrollRef.current) {
-        const offset = calculateScrollOffset(progress, scrollLimitRef.current);
+      if (scrollRef.current) {
+        const { from, to } = scrollRangeRef.current;
+        const offset = calculateScrollOffset(progress, from, to);
         scrollRef.current.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`;
       }
 
@@ -117,8 +134,7 @@ function KaraokeLyricLineInner({
       audioRef.removeEventListener("play", onPlay);
       audioRef.removeEventListener("pause", onPause);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, line, nextLine, scrollNeeded, audioRef]);
+  }, [isActive, line, nextLine, audioRef]);
 
   // ── 非当前行：简单显示 ──
   if (!isActive) {

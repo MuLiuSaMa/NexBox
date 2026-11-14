@@ -53,9 +53,9 @@ import {
   LuGithub,
 } from "react-icons/lu";
 import { RiBilibiliFill, RiTiktokFill, RiGithubFill, RiGiteeFill } from "react-icons/ri";
-import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { useBackground } from "@/contexts/background-context";
+import { useBackground, MAX_BG_IMAGES } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useThemeMode } from "@/contexts/theme-mode-context";
 
@@ -1627,7 +1627,7 @@ function AppearanceSettings() {
         const success = addCustomBgImage(result);
         if (!success) {
           toast({
-            title: t("settings.appearanceSettings.maxImagesReached") || "最多只能添加3张背景图片",
+            title: t("settings.appearanceSettings.maxImagesReached") || "最多只能添加4张背景图片",
             status: "warning",
             duration: 2000,
             isClosable: true,
@@ -1662,7 +1662,7 @@ function AppearanceSettings() {
   };
 
   const handleAddClick = () => {
-    if (customBgImages.length >= 3) {
+    if (customBgImages.length >= MAX_BG_IMAGES) {
       toast({
         title: t("settings.appearanceSettings.maxImagesReached") || "最多只能添加3张背景图片",
         status: "warning",
@@ -2096,23 +2096,29 @@ function AppearanceSettings() {
                   </LiquidGlassCard>
                 </HStack>
 
+                {/* 自动轮播：预设壁纸与自定义图片共用同一个开关 */}
+                {(backgroundMode === "preset" || backgroundMode === "image") && (
+                  <HStack justify="space-between" w="full">
+                    <Box>
+                      <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                        {t("settings.appearanceSettings.carouselLabel")}
+                      </Text>
+                      <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                        {backgroundMode === "image"
+                          ? t("settings.appearanceSettings.carouselDescImage")
+                          : t("settings.appearanceSettings.carouselDesc")}
+                      </Text>
+                    </Box>
+                    <ThemeSwitch
+                      size="md"
+                      isChecked={carouselEnabled}
+                      onChange={() => setCarouselEnabled(!carouselEnabled)}
+                    />
+                  </HStack>
+                )}
+
                 {backgroundMode === "preset" && (
                   <>
-                    <HStack justify="space-between" w="full">
-                      <Box>
-                        <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                          {t("settings.appearanceSettings.carouselLabel")}
-                        </Text>
-                        <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                          {t("settings.appearanceSettings.carouselDesc")}
-                        </Text>
-                      </Box>
-                      <ThemeSwitch
-                        size="md"
-                        isChecked={carouselEnabled}
-                        onChange={() => setCarouselEnabled(!carouselEnabled)}
-                      />
-                    </HStack>
                     <HStack spacing={2} justify="flex-end">
                       {presetBackgrounds.map((preset, index) => (
                         <Box
@@ -2160,7 +2166,7 @@ function AppearanceSettings() {
 
                 {backgroundMode === "image" && (
                   <HStack spacing={2} justify="flex-end">
-                    {[0, 1, 2].map((index) => (
+                    {Array.from({ length: MAX_BG_IMAGES }, (_, i) => i).map((index) => (
                       <Box
                         key={index}
                         position="relative"
@@ -2725,17 +2731,32 @@ interface SponsorItem {
 const SponsorNameCard = memo(function SponsorNameCard({
   name,
   labelColor,
+  glass = false,
 }: {
   name: string;
   labelColor: string;
+  glass?: boolean;
 }) {
+  // 名单可达数百条，若每张卡各自带 backdrop-filter，滚动时每帧都要重新模糊上百个
+  // 渲染表面（外加一层遮罩辉光子树）→ 严重掉帧。这里小卡只保留半透明底色 + 细边框，
+  // 背景模糊统一由外层单块玻璃面板承担。
+  const glassBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
+  const glassBorder = useColorModeValue("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
+  const solidBg = useColorModeValue("white", "#111111");
+  const solidBorder = useColorModeValue("gray.200", "#333333");
+
   return (
-    <LiquidGlassCard
+    <Box
       px={4}
       py={3}
       textAlign="center"
       minW="96px"
       flex="0 1 auto"
+      borderRadius="3xl"
+      border="1px solid"
+      bg={glass ? glassBg : solidBg}
+      borderColor={glass ? glassBorder : solidBorder}
+      transition="background 0.45s, border-color 0.45s"
       // content-visibility 跳过视口外卡片的渲染；auto 记住真实高度，
       // 避免卡片进入视口时占位尺寸突变引起滚动跳动
       sx={{ contentVisibility: "auto", containIntrinsicSize: "auto 47px" }}
@@ -2743,9 +2764,23 @@ const SponsorNameCard = memo(function SponsorNameCard({
       <Text fontSize="sm" fontWeight="medium" color={labelColor}>
         {name}
       </Text>
-    </LiquidGlassCard>
+    </Box>
   );
 });
+
+/** 名单外层：玻璃开启时用一块面板承担全部背景模糊（只 1 个渲染表面）；
+ *  关闭时保持原来的无面板布局，观感与改动前一致。
+ *  `no-bounce` 避免子菜单切换时整块面板跟着果冻弹跳（内部小卡已不带该动画类）。 */
+function SponsorListPanel({ glass, children }: { glass: boolean; children: ReactNode }) {
+  if (glass) {
+    return (
+      <LiquidGlassCard className="no-bounce" p={4} boxShadow="sm">
+        {children}
+      </LiquidGlassCard>
+    );
+  }
+  return <Box>{children}</Box>;
+}
 
 function SponsorSettings() {
   const { t } = useTranslation();
@@ -2753,6 +2788,7 @@ function SponsorSettings() {
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
   const cardBorder = useColorModeValue("gray.200", "#333333");
+  const { liquidGlassEnabled } = useBackground();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
   const [sponsorsError, setSponsorsError] = useState(false);
@@ -2891,11 +2927,18 @@ function SponsorSettings() {
             {t("settings.sponsorSettings.sponsorList.empty")}
           </Text>
         ) : (
-          <Flex flexWrap="wrap" gap={3} justify="center">
-            {sponsors.map((sponsor, index) => (
-              <SponsorNameCard key={index} name={sponsor.name} labelColor={labelColor} />
-            ))}
-          </Flex>
+          <SponsorListPanel glass={liquidGlassEnabled}>
+            <Flex flexWrap="wrap" gap={3} justify="center">
+              {sponsors.map((sponsor, index) => (
+                <SponsorNameCard
+                  key={`${sponsor.name}-${sponsor.amount}-${index}`}
+                  name={sponsor.name}
+                  labelColor={labelColor}
+                  glass={liquidGlassEnabled}
+                />
+              ))}
+            </Flex>
+          </SponsorListPanel>
         )}
       </Box>
     </Box>
@@ -2987,7 +3030,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = useColorModeValue("#f1f2f4", "#262626");
 
-  const currentVersion = "10.4.6";
+  const currentVersion = "10.5.5";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 

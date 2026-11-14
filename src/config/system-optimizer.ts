@@ -85,6 +85,8 @@ export interface OptimizerItem {
   }[];
   /** select 类型的默认选中值 */
   defaultSelectValue?: string;
+  /** 显卡厂商过滤：只对写显卡驱动键的项设置，后端据此只写该厂商的键 */
+  vendor?: "nvidia" | "amd" | "intel";
 }
 
 // 预定义颜色池（固定顺序，避免刷新变化）
@@ -296,6 +298,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.lowLatencyThreshold",
     descKey: "systemOptimizer.nvidia.lowLatencyThresholdDesc",
     risk: "low",
+    vendor: "nvidia",
   },
   {
     id: "perCpuDPC",
@@ -306,6 +309,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.perCpuDPC",
     descKey: "systemOptimizer.nvidia.perCpuDCPDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
   {
     id: "imageSharpening",
@@ -326,6 +330,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableGpuPowerMgmt",
     descKey: "systemOptimizer.nvidia.disableGpuPowerMgmtDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
   {
     id: "disableHDCP",
@@ -336,6 +341,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableHDCP",
     descKey: "systemOptimizer.nvidia.disableHDCPDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
   {
     id: "disableWriteCombining",
@@ -346,6 +352,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableWriteCombining",
     descKey: "systemOptimizer.nvidia.disableWriteCombiningDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
   {
     id: "disableClockGating",
@@ -356,6 +363,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableClockGating",
     descKey: "systemOptimizer.nvidia.disableClockGatingDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
   {
     id: "disableTelemetry",
@@ -376,6 +384,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableDriverLog",
     descKey: "systemOptimizer.nvidia.disableDriverLogDesc",
     risk: "low",
+    vendor: "nvidia",
   },
   {
     id: "lockPState0",
@@ -386,6 +395,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.lockPState0",
     descKey: "systemOptimizer.nvidia.lockPState0Desc",
     risk: "high",
+    vendor: "nvidia",
   },
   {
     id: "disableMiracastOverlay",
@@ -396,6 +406,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.nvidia.disableMiracastOverlay",
     descKey: "systemOptimizer.nvidia.disableMiracastOverlayDesc",
     risk: "medium",
+    vendor: "nvidia",
   },
 
   // ============== AMD 显卡优化 ==============
@@ -408,6 +419,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.amd.shaderCache",
     descKey: "systemOptimizer.amd.shaderCacheDesc",
     risk: "low",
+    vendor: "amd",
   },
   {
     id: "amdPowerOptimization",
@@ -418,6 +430,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.amd.amdPowerOptimization",
     descKey: "systemOptimizer.amd.amdPowerOptimizationDesc",
     risk: "medium",
+    vendor: "amd",
   },
 
   // ============== Intel 显卡优化 ==============
@@ -430,6 +443,7 @@ export const optimizerItems: OptimizerItem[] = [
     titleKey: "systemOptimizer.intel.intelGraphicsOptimization",
     descKey: "systemOptimizer.intel.intelGraphicsOptimizationDesc",
     risk: "medium",
+    vendor: "intel",
   },
 
   // ============== 系统性能调优（8 项） ==============
@@ -633,16 +647,6 @@ export const optimizerItems: OptimizerItem[] = [
     color: COLORS[3],
     titleKey: "systemOptimizer.privacy.disableAppImpactTelemetry",
     descKey: "systemOptimizer.privacy.disableAppImpactTelemetryDesc",
-    risk: "low",
-  },
-  {
-    id: "disableAppImpactTelemetryAgent",
-    regName: "disableAppImpactTelemetryAgent",
-    category: "privacy",
-    icon: Activity,
-    color: COLORS[4],
-    titleKey: "systemOptimizer.privacy.disableAppImpactTelemetryAgent",
-    descKey: "systemOptimizer.privacy.disableAppImpactTelemetryAgentDesc",
     risk: "low",
   },
   {

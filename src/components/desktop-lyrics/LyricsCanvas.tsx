@@ -8,9 +8,9 @@
  * - RAF 更新进度，60fps 流畅
  */
 
-import { useEffect, useRef, useState, memo, useMemo } from "react";
+import { useEffect, useRef, memo, useMemo, useCallback } from "react";
 import type { KaraokeLine } from "@/types/music";
-import { getLineProgress, calculateScrollOffset } from "@/lib/karaoke-lyrics";
+import { getLineProgress, calculateScrollOffset, measureScrollRange } from "@/lib/karaoke-lyrics";
 
 interface LyricsCanvasProps {
   lines: KaraokeLine[];
@@ -60,8 +60,8 @@ function ActiveKaraokeLine({
   const overlayRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLSpanElement>(null);
-  const [scrollNeeded, setScrollNeeded] = useState(false);
-  const scrollLimitRef = useRef(0);
+  /** 可滚动区间：from = 行首贴齐左边缘，to = 行尾贴齐右边缘 */
+  const scrollRangeRef = useRef({ from: 0, to: 0 });
   const currentTimeRef = useRef(currentTime);
   currentTimeRef.current = currentTime;
 
@@ -74,48 +74,69 @@ function ActiveKaraokeLine({
     0 0 8px rgba(0,0,0,0.5)
   `;
 
-  // 检测超长歌词
+  // 按当前进度刷新高亮宽度 + 超长行的横向滚动位置
+  const applyProgress = useCallback(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    const progress = getLineProgress(line, nextLine, currentTimeRef.current);
+    overlay.style.width = `${(progress * 100).toFixed(2)}%`;
+
+    // 短行 from/to 都是 0，偏移归零，避免残留上一行的平移量
+    const scroll = scrollRef.current;
+    if (scroll) {
+      const { from, to } = scrollRangeRef.current;
+      const offset = calculateScrollOffset(progress, from, to);
+      scroll.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`;
+    }
+  }, [line, nextLine]);
+
+  // 测量可滚动区间：文案、字号、字体加载、容器宽度都会改变文字实际宽度
   useEffect(() => {
-    if (!containerRef.current || !scrollRef.current) return;
-    const checkOverflow = () => {
-      if (!scrollRef.current || !containerRef.current) return;
-      const overflow = scrollRef.current.scrollWidth - containerRef.current.clientWidth;
-      const needed = overflow > 4;
-      setScrollNeeded(needed);
-      scrollLimitRef.current = Math.max(0, overflow / 2);
+    const scroll = scrollRef.current;
+    const container = containerRef.current;
+    if (!scroll || !container) return;
+
+    const measure = () => {
+      scrollRangeRef.current = measureScrollRange(scroll, container);
+      applyProgress();
     };
-    checkOverflow();
-    const timer = setTimeout(checkOverflow, 100);
-    return () => clearTimeout(timer);
-  }, [line.text, fontSize]);
+    measure();
+    const timer = window.setTimeout(measure, 120);
+    // 自定义字体（MiSans 等）加载完成后文字宽度会变，需要重测，
+    // 否则按回退字体量出的区间偏小，长句仍是露不全
+    let cancelled = false;
+    document.fonts?.ready
+      .then(() => {
+        if (!cancelled) measure();
+      })
+      .catch(() => {});
 
-  // RAF 更新进度（仅播放时运行）
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [line.text, fontSize, applyProgress]);
+
+  // 播放时逐帧跟随；暂停时也定位一次，避免停在中部被裁切的状态
   useEffect(() => {
-    if (!isPlaying || !overlayRef.current) return;
-    const el = overlayRef.current;
-    el.style.width = "0%";
+    applyProgress();
+    if (!isPlaying) return;
 
-    let rafId: number;
     let running = true;
+    let rafId = 0;
     const tick = () => {
       if (!running) return;
-      const t = currentTimeRef.current;
-      const progress = getLineProgress(line, nextLine, t);
-      el.style.width = `${(progress * 100).toFixed(2)}%`;
-
-      if (scrollNeeded && scrollRef.current) {
-        const offset = calculateScrollOffset(progress, scrollLimitRef.current);
-        scrollRef.current.style.transform = `translate3d(${offset.toFixed(2)}px, 0, 0)`;
-      }
-
+      applyProgress();
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
+
     return () => {
       running = false;
       cancelAnimationFrame(rafId);
     };
-  }, [line, nextLine, scrollNeeded, isPlaying]);
+  }, [applyProgress, isPlaying]);
 
   const sharedStyle: React.CSSProperties = {
     display: "inline-block",

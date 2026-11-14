@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { store } from "@/lib/store";
 import { setIslandExternalRequested } from "@/components/ui/dynamic-island";
 import { type HardwareInfo, getHardwareInfo } from "@/lib/hardware";
@@ -429,8 +430,8 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   const loadIslandExternalWindow = async () => {
     try {
       // 仅主窗口执行：独立窗口（桌面岛/托盘/歌词等）都挂了本 Provider，
-      // 重复创建会互相抢同一个窗口
-      if (window.location.pathname === "/dynamic-island") return;
+      // 由非主窗口对账会与主窗口互相抢同一个岛窗口（例如各自按不同时刻的 store 快照开关）
+      if (getCurrentWindow().label !== "main") return;
       let raw: unknown = await store.get<unknown>("nexbox_island_external_window");
       if (raw === null || raw === undefined) {
         raw = localStorage.getItem("nexbox_island_external_window");
@@ -439,9 +440,9 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
       const enabled = raw === true || raw === "true" || raw === 1;
       // 先写模块开关：启动就开启时，主窗口内嵌岛从第一帧起就不渲染（不会两处同时出现）
       setIslandExternalRequested(enabled);
-      if (enabled) {
-        await invoke("set_dynamic_island_enabled", { enabled: true });
-      }
+      // 无论开关真假都按持久值对账一次：false 时把可能残留的岛窗口收掉，
+      // 避免上次关闭失败留下的透明置顶窗口在本次启动继续吞鼠标
+      await invoke("set_dynamic_island_enabled", { enabled });
     } catch (e) {
       console.error("Failed to restore desktop dynamic island window:", e);
     }

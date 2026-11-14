@@ -169,7 +169,6 @@ function CommunityToolCard({
       <VStack align="start" spacing={3} h="full">
         <Flex h={12} w={12} align="center" justify="center" borderRadius="lg" bg={bg} overflow="hidden">
           {tool.icon_url ? (
-            // eslint-disable-next-line jsx-a11y/alt-text
             <img src={tool.icon_url} alt={tool.name} width={32} height={32} style={{ objectFit: "contain" }} />
           ) : (
             <Icon as={GlyphIcon} boxSize={6} color={iconColor} />

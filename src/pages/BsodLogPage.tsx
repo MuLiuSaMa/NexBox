@@ -599,7 +599,7 @@ export default function BsodLogPage() {
                             <Td fontSize="xs" sx={{ whiteSpace: "nowrap" }}>{e.t}</Td>
                             <Td fontSize="xs" fontFamily="mono">{e.id}</Td>
                             <Td fontSize="xs" maxW="220px" isTruncated>{e.prov}</Td>
-                            <Td fontSize="xs">{e.level}</Td>
+                            <Td fontSize="xs">{t(`bsodLog.levels.${e.level}`, e.level)}</Td>
                             <Td fontSize="xs" color={subTextColor}>{e.msg}</Td>
                           </Tr>
                         ))}

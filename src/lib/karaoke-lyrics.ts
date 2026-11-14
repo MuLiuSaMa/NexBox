@@ -220,27 +220,62 @@ export function getLineProgress(
 
 /**
  * 超长歌词水平滚动偏移量计算
- * 参考 Mineradio 的 updateLyricScroll
  *
- * 策略：
- * - 前 startGate% 静止（让用户看到行首）
- * - 中段缓动滚动到最远处
- * - 末尾保持在最远位置
+ * @param progress 行播放进度 0~1
+ * @param from     行首贴齐容器左边缘时的位移（滚动起点）
+ * @param to       行尾贴齐容器右边缘时的位移（滚动终点，通常为负）
+ *
+ * from / to 由调用方用实际布局测量得到，不能按对齐方式硬编码：
+ * nowrap 的 inline-block 超宽时，Chromium 会保持左端对齐、只向右溢出
+ * （即使容器是 text-align:center），此时 from = 0、to = -overflow。
+ * 旧实现按「居中各溢出 half」把终点算成 -overflow/2，滚动只走了一半，
+ * 于是行尾永远露不全，同时因为起点不是 0 还会把行首切掉。
+ *
+ * 策略：前 8% 停留在行首 → 中段 smoothstep 缓动 → 78% 起到结束停在行尾。
  */
-export function calculateScrollOffset(progress: number, limit: number): number {
-  if (limit <= 0) return 0;
+export function calculateScrollOffset(
+  progress: number,
+  from: number,
+  to: number
+): number {
+  if (!(to < from)) return from;
 
   const p = Math.max(0, Math.min(1, progress));
-  const startGate = 0.08; // 前8%静止
-  const endGate = 0.78;   // 78%时到达最远
+  const startGate = 0.08;
+  const endGate = 0.78;
 
-  if (p < startGate) return 0;
-  if (p >= endGate) return -limit;
+  if (p <= startGate) return from;
+  if (p >= endGate) return to;
 
-  // 缓动函数：smoothstep
   const t = (p - startGate) / (endGate - startGate);
   const eased = t * t * (3 - 2 * t);
-  return -limit * eased;
+  return from + (to - from) * eased;
+}
+
+/**
+ * 测量某一行歌词的可滚动区间。
+ * 返回 from/to；不需要滚动时两者都为 0。
+ */
+export function measureScrollRange(
+  scrollEl: HTMLElement,
+  container: HTMLElement
+): { from: number; to: number } {
+  const cs = getComputedStyle(container);
+  const padLeft = parseFloat(cs.paddingLeft) || 0;
+  const padRight = parseFloat(cs.paddingRight) || 0;
+
+  // offsetLeft 是相对 offsetParent（容器，position:relative）padding 左边缘的布局距离，
+  // 不含 transform，父级 scale 也不会干扰
+  const contentWidth = container.clientWidth - padLeft - padRight;
+  const baseOffset = scrollEl.offsetLeft - padLeft;
+  const textWidth = scrollEl.scrollWidth;
+
+  // 起点让行首贴左边缘，终点让行尾贴右边缘
+  const from = -baseOffset;
+  const to = contentWidth - baseOffset - textWidth;
+
+  // 文字比容器窄（或刚好多一点）就没必要滚动
+  return to < from - 4 ? { from, to } : { from: 0, to: 0 };
 }
 
 // ═══════════════════════════════════════════════

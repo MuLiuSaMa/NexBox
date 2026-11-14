@@ -4446,8 +4446,7 @@ mod delta_icc_tests {
 #[cfg(all(test, target_os = "windows"))]
 mod coordination_tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
-    use std::sync::mpsc::{channel, RecvTimeoutError};
+    use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::sync::Mutex as StdMutex;
     use std::thread;
@@ -4462,10 +4461,10 @@ mod coordination_tests {
         Clear,
     }
 
-    /// 测试注入：置位后，假后端的 `clear` 模拟生产后端在系统关机/注销时的行为——
-    /// 跳过外部进程且**不报告清除成功**（返回 Err）。仅测试模块内可见。
-    /// 用 thread_local 而非进程级静态：cargo test 默认并行运行各测试线程，
-    /// 进程级标志会在测试间泄漏（一个测试置位会污染并行测试的 clear 语义）。
+    // 测试注入：置位后，假后端的 `clear` 模拟生产后端在系统关机/注销时的行为——
+    // 跳过外部进程且**不报告清除成功**（返回 Err）。仅测试模块内可见。
+    // 用 thread_local 而非进程级静态：cargo test 默认并行运行各测试线程，
+    // 进程级标志会在测试间泄漏（一个测试置位会污染并行测试的 clear 语义）。
     thread_local! {
         static TEST_FORCE_SYSTEM_SHUTDOWN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     }
@@ -4520,16 +4519,6 @@ mod coordination_tests {
                 (0..count).map(|_| Mutex::new(None)).collect(),
             );
             let shutting_down = AtomicBool::new(false);
-            let ops = DisplayOps {
-                states: &states,
-                op_locks: &op_locks,
-                ramps: &ramps,
-                shutting_down: &shutting_down,
-                count,
-                backend: &backend,
-            };
-            // 让 fake backend 与 DisplayOps 共享同一 release 通道
-            let _ = backend;
             // 泄漏以避免借用在测试结束时失效 —— 但我们需要借用仅在测试体内有效：
             // 这里改用 Box::leak 以得到 'static 借用。
             let backend_leaked: &'static FakeBackend = Box::leak(Box::new(backend));
@@ -4604,7 +4593,7 @@ mod coordination_tests {
     }
 
     impl GammaBackend for FakeBackend {
-        fn read(&self, display: usize) -> Result<GammaRamp, String> {
+        fn read(&self, _display: usize) -> Result<GammaRamp, String> {
             self.order.lock().unwrap().push(Op::Capture);
             self.maybe_pause(Op::Capture);
             if *self.fail.lock().unwrap() == Some(Op::Capture) {
@@ -4612,7 +4601,7 @@ mod coordination_tests {
             }
             Ok([[1u16; 256]; 3])
         }
-        fn write(&self, display: usize, ramp: &GammaRamp) -> Result<(), String> {
+        fn write(&self, _display: usize, ramp: &GammaRamp) -> Result<(), String> {
             self.order.lock().unwrap().push(Op::Write);
             self.maybe_pause(Op::Write);
             if *self.fail.lock().unwrap() == Some(Op::Write) {
@@ -4621,7 +4610,7 @@ mod coordination_tests {
             *self.screen.lock().unwrap() = *ramp;
             Ok(())
         }
-        fn apply_icc(&self, display: usize, path: &Path) -> Result<(), String> {
+        fn apply_icc(&self, _display: usize, _path: &Path) -> Result<(), String> {
             self.order.lock().unwrap().push(Op::ApplyIcc);
             self.maybe_pause(Op::ApplyIcc);
             if *self.fail.lock().unwrap() == Some(Op::ApplyIcc) {
@@ -4630,7 +4619,7 @@ mod coordination_tests {
             *self.screen.lock().unwrap() = [[2u16; 256]; 3];
             Ok(())
         }
-        fn clear(&self, display: usize) -> Result<(), String> {
+        fn clear(&self, _display: usize) -> Result<(), String> {
             self.order.lock().unwrap().push(Op::Clear);
             self.maybe_pause(Op::Clear);
             if *self.fail.lock().unwrap() == Some(Op::Clear) {
@@ -4886,7 +4875,7 @@ mod coordination_tests {
         let _ = (g1, g2);
         // 放行写回：第一次恢复完成（精确恢复，ramp 删除、pending 清除）。
         ctx.release_pause();
-        restore_thread.join().unwrap();
+        let _ = restore_thread.join().unwrap();
         // 最终：pending 已清除，屏幕回到原始 ramp（没有丢失最终恢复任务）。
         assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "最终恢复任务不得丢失");
         assert_eq!(ctx.screen_value(), [[1u16; 256]; 3], "最终屏幕必须恢复");
@@ -5415,7 +5404,7 @@ mod coordination_tests {
     #[test]
     fn mark_applied_rejected_after_feature_disabled() {
         let ctx = TestContext::new(1);
-        let g1 = ctx.ops.submit(0, |s| {
+        let _g1 = ctx.ops.submit(0, |s| {
             s.filter_active = true;
             bump_operation_generation(s)
         }).unwrap();

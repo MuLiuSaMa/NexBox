@@ -2081,6 +2081,13 @@
       "whea": "WHEA Hardware",
       "disk": "Disk / Storage"
     },
+    "levels": {
+      "critical": "Critical",
+      "error": "Error",
+      "warning": "Warning",
+      "information": "Information",
+      "verbose": "Verbose"
+    },
     "col": {
       "time": "Time",
       "code": "Code",
@@ -2336,10 +2343,11 @@
       "customBackground": "Custom Background",
       "customBackgroundLabel": "Enable Custom Background",
       "imageUrlPlaceholder": "Enter image URL or click to upload",
-      "maxImagesReached": "Maximum of 3 background images allowed",
+      "maxImagesReached": "Maximum of 4 background images allowed",
       "presetBackground": "Preset Background",
       "carouselLabel": "Auto Carousel",
       "carouselDesc": "Auto-switch presets every 10 seconds",
+      "carouselDescImage": "Auto-switch custom images every 10 seconds",
       "imageBackground": "Image Background",
       "dynamicBackground": "Dynamic Background",
       "dynamicBackgroundDesc": "When enabled, dynamic background effect will be displayed",
@@ -2794,10 +2802,8 @@
       "disableCEIPDesc": "Disable Customer Experience Improvement Program",
       "disableDotNetTelemetry": "Disable .NET Telemetry",
       "disableDotNetTelemetryDesc": "DOTNET_CLI_TELEMETRY_OPTOUT=1",
-      "disableAppImpactTelemetry": "Disable App Impact Telemetry",
-      "disableAppImpactTelemetryDesc": "Disable AITEnable policy",
-      "disableAppImpactTelemetryAgent": "Disable App Impact Telemetry Agent",
-      "disableAppImpactTelemetryAgentDesc": "Disable AIT agent",
+      "disableAppImpactTelemetry": "Disable App Impact Telemetry (incl. agent)",
+      "disableAppImpactTelemetryDesc": "Disable AITEnable policy and the AIT agent",
       "disableLicenseTelemetry": "Disable License Telemetry",
       "disableLicenseTelemetryDesc": "NoGenTicket=1, stop license telemetry",
       "disableScheduledDiag": "Disable Scheduled Diagnostics",
@@ -2956,7 +2962,8 @@
     "reverted": "Reverted",
     "optimizing": "Running...",
     "operationError": "Operation failed",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "vendorUnavailable": "No GPU from this vendor detected"
   },
   "windowsUpdate": {
     "pageTitle": "Windows Update & Defender",

@@ -1710,7 +1710,7 @@
       "customBackground": "自訂背景",
       "customBackgroundLabel": "啟用自訂背景",
       "imageUrlPlaceholder": "輸入圖片URL或點擊上傳",
-      "maxImagesReached": "最多只能新增3張背景圖片",
+      "maxImagesReached": "最多只能新增4張背景圖片",
       "presetBackground": "預設背景",
       "imageBackground": "圖片背景",
       "dynamicBackground": "動態背景",

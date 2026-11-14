@@ -151,6 +151,10 @@ export default function AdvancedPage() {
     void emit("island:setting-changed", { enabled: newValue });
     invoke("set_dynamic_island_enabled", { enabled: newValue }).catch((e) => {
       console.error("[Island] 桌面灵动岛窗口切换失败:", e);
+      // 回滚持久化，避免「UI / store / 后端」三方分裂：不回滚的话持久化留在新值、
+      // 实际状态是旧值，下次启动恢复会按新值再试一次（开关与真实状态对不上）
+      localStorage.setItem(ISLAND_EXTERNAL_KEY, String(!newValue));
+      void store.set(ISLAND_EXTERNAL_KEY, !newValue).then(() => store.save());
       setIslandExternalEnabled(!newValue);
       setIslandExternalRequested(!newValue);
       void emit("island:setting-changed", { enabled: !newValue });

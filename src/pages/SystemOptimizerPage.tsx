@@ -48,6 +48,8 @@ interface OptimizeCardProps {
   item: OptimizerItem;
   state: boolean | string;
   isToggling: boolean;
+  /** 本机是否存在适用硬件（显卡项按厂商判定）；false 时置灰 */
+  available: boolean;
   onToggle: (item: OptimizerItem, enable: boolean) => void;
   onSelect: (item: OptimizerItem, value: string) => void;
   headingColor: string;
@@ -63,6 +65,7 @@ const OptimizeCard = memo(function OptimizeCard({
   item,
   state,
   isToggling,
+  available,
   onToggle,
   onSelect,
   headingColor,
@@ -119,7 +122,7 @@ const OptimizeCard = memo(function OptimizeCard({
             </Badge>
           </HStack>
           <Text color={subTextColor} fontSize="xs" noOfLines={2} mt={0.5}>
-            {t(item.descKey)}
+            {available ? t(item.descKey) : t("systemOptimizer.vendorUnavailable")}
           </Text>
         </Box>
       </HStack>
@@ -142,7 +145,7 @@ const OptimizeCard = memo(function OptimizeCard({
       ) : (
         <Switch
           isChecked={isOptimized}
-          isDisabled={isToggling}
+          isDisabled={isToggling || !available}
           onChange={() => onToggle(item, !isOptimized)}
           sx={{
             "& .chakra-switch__track[data-checked]": {
@@ -181,6 +184,7 @@ interface CategorySectionProps {
   category: OptimizerCategory;
   items: OptimizerItem[];
   savedStates: Record<string, boolean | string>;
+  unavailableItems: Set<string>;
   togglingItems: Set<string>;
   onToggle: (item: OptimizerItem, enable: boolean) => void;
   onSelect: (item: OptimizerItem, value: string) => void;
@@ -197,6 +201,7 @@ const CategorySection = memo(function CategorySection({
   category,
   items,
   savedStates,
+  unavailableItems,
   togglingItems,
   onToggle,
   onSelect,
@@ -248,6 +253,7 @@ const CategorySection = memo(function CategorySection({
               item={item}
               state={state}
               isToggling={togglingItems.has(item.id)}
+              available={!unavailableItems.has(item.id)}
               onToggle={onToggle}
               onSelect={onSelect}
               headingColor={headingColor}
@@ -265,23 +271,39 @@ const CategorySection = memo(function CategorySection({
   );
 });
 
-// 收集所有需要扫描的 reg 文件名（select 类型扫描其全部选项）
-function collectScanNames(): string[] {
+// 收集所有需要扫描的 reg 文件名与对应厂商（select 类型扫描其全部选项）
+function collectScanTargets(): { names: string[]; vendors: string[] } {
   const names: string[] = [];
+  const vendors: string[] = [];
   for (const item of optimizerItems) {
     if (item.type === "select") {
-      for (const opt of item.options ?? []) names.push(opt.regName);
+      for (const opt of item.options ?? []) {
+        names.push(opt.regName);
+        vendors.push(item.vendor ?? "");
+      }
     } else {
       names.push(item.regName);
+      vendors.push(item.vendor ?? "");
     }
   }
-  return names;
+  return { names, vendors };
+}
+
+interface ScanResultItem {
+  name: string;
+  applied: boolean;
+  available?: boolean;
 }
 
 // 由注册表扫描结果构建各优化项状态
-function buildScanStates(results: { name: string; applied: boolean }[]) {
+function buildScanStates(results: ScanResultItem[]) {
   const map = new Map(results.map((r) => [r.name, r.applied]));
+  const unavailable = new Set<string>();
+  for (const r of results) {
+    if (r.available === false) unavailable.add(r.name);
+  }
   const states: Record<string, boolean | string> = {};
+  const unavailableItems = new Set<string>();
   let optimizedCount = 0;
   for (const item of optimizerItems) {
     if (item.type === "select") {
@@ -289,13 +311,17 @@ function buildScanStates(results: { name: string; applied: boolean }[]) {
       const val = matched?.value ?? item.defaultSelectValue ?? "";
       states[item.id] = val;
       if (val !== item.defaultSelectValue) optimizedCount++;
+      if ((item.options ?? []).every((opt) => unavailable.has(opt.regName))) {
+        unavailableItems.add(item.id);
+      }
     } else {
       const applied = map.get(item.regName) === true;
       states[item.id] = applied;
       if (applied) optimizedCount++;
+      if (unavailable.has(item.regName)) unavailableItems.add(item.id);
     }
   }
-  return { states, optimizedCount };
+  return { states, optimizedCount, unavailableItems };
 }
 
 // ============ 页面主组件 ============
@@ -313,6 +339,7 @@ export default function SystemOptimizerPage() {
   const [isBatchOptimizing, setIsBatchOptimizing] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [togglingItems, setTogglingItems] = useState<Set<string>>(new Set());
+  const [unavailableItems, setUnavailableItems] = useState<Set<string>>(new Set());
   const [showNotice, setShowNotice] = useState(false);
   const [noticeCountdown, setNoticeCountdown] = useState(NOTICE_COUNTDOWN_SECONDS);
 
@@ -346,11 +373,13 @@ export default function SystemOptimizerPage() {
     let cancelled = false;
     async function init() {
       const startTime = Date.now();
+      const scanTargets = collectScanTargets();
       const [savedResult, noticeResult, scanResult] = await Promise.allSettled([
         store.get<Record<string, boolean | string>>(STORE_KEY),
         store.get<boolean>(NOTICE_KEY),
-        invoke<{ name: string; applied: boolean }[]>("scan_registry_tweaks", {
-          names: collectScanNames(),
+        invoke<ScanResultItem[]>("scan_registry_tweaks", {
+          names: scanTargets.names,
+          vendors: scanTargets.vendors,
         }),
       ]);
       if (cancelled) return;
@@ -364,11 +393,24 @@ export default function SystemOptimizerPage() {
       const saved = savedResult.status === "fulfilled" && savedResult.value
         ? savedResult.value
         : {};
+      // 旧版「应用影响遥测代理」与「应用影响遥测」写同一个注册表值，已合并为一项：
+      // 迁移旧记录（任一为 true 即视为已开启），并清掉废弃键。
+      if ("disableAppImpactTelemetryAgent" in saved) {
+        const legacy = saved.disableAppImpactTelemetryAgent === true;
+        saved.disableAppImpactTelemetry = saved.disableAppImpactTelemetry === true || legacy;
+        delete saved.disableAppImpactTelemetryAgent;
+        try {
+          await store.set(STORE_KEY, saved);
+          await store.save();
+        } catch {}
+      }
       // 扫描结果优先；扫描失败时回退到保存的状态，保证开关仍能显示
-      const scanned = scanResult.status === "fulfilled" && scanResult.value
-        ? buildScanStates(scanResult.value).states
+      const scanBuilt = scanResult.status === "fulfilled" && scanResult.value
+        ? buildScanStates(scanResult.value)
         : null;
+      const scanned = scanBuilt?.states ?? null;
       const finalStates = scanned ?? saved;
+      if (scanBuilt) setUnavailableItems(scanBuilt.unavailableItems);
       // 确保 loading 至少显示 400ms
       const remaining = Math.max(0, 400 - (Date.now() - startTime));
       if (remaining > 0) {
@@ -421,12 +463,14 @@ export default function SystemOptimizerPage() {
     async (showToast = true) => {
       setIsScanning(true);
       try {
-        const results = await invoke<{ name: string; applied: boolean }[]>(
+        const scanTargets = collectScanTargets();
+        const results = await invoke<ScanResultItem[]>(
           "scan_registry_tweaks",
-          { names: collectScanNames() },
+          { names: scanTargets.names, vendors: scanTargets.vendors },
         );
-        const { states: newSaved, optimizedCount } = buildScanStates(results);
+        const { states: newSaved, optimizedCount, unavailableItems: nextUnavailable } = buildScanStates(results);
         setSavedStates(newSaved);
+        setUnavailableItems(nextUnavailable);
         persistStates(newSaved);
         if (showToast) {
           toast({
@@ -467,7 +511,7 @@ export default function SystemOptimizerPage() {
       const optimistic = { ...savedStatesRef.current, [item.id]: enable };
       setSavedStates(optimistic);
       try {
-        await invoke(cmd, { name: item.regName });
+        await invoke(cmd, { name: item.regName, vendor: item.vendor ?? null });
         persistStates(optimistic);
         toast({
           title: enable
@@ -510,7 +554,7 @@ export default function SystemOptimizerPage() {
       const optimistic = { ...savedStatesRef.current, [item.id]: value };
       setSavedStates(optimistic);
       try {
-        await invoke("apply_registry_tweak", { name: option.regName });
+        await invoke("apply_registry_tweak", { name: option.regName, vendor: item.vendor ?? null });
         persistStates(optimistic);
         toast({
           title: t("systemOptimizer.optimized"),
@@ -555,7 +599,8 @@ export default function SystemOptimizerPage() {
           }
           return item.regName;
         });
-        await invoke("batch_apply_registry_tweaks", { names });
+        const vendors = targets.map((item) => item.vendor ?? "");
+        await invoke("batch_apply_registry_tweaks", { names, vendors });
         const newSaved: Record<string, boolean | string> = { ...savedStatesRef.current };
         for (const item of targets) {
           newSaved[item.id] = item.type === "select"
@@ -591,7 +636,8 @@ export default function SystemOptimizerPage() {
     setIsBatchOptimizing(true);
     try {
       const names = optimizerItems.map((item) => item.regName);
-      await invoke("batch_restore_registry_tweaks", { names });
+      const vendors = optimizerItems.map((item) => item.vendor ?? "");
+      await invoke("batch_restore_registry_tweaks", { names, vendors });
       const newSaved: Record<string, boolean | string> = {};
       for (const item of optimizerItems) {
         newSaved[item.id] = item.type === "select"
@@ -776,6 +822,7 @@ export default function SystemOptimizerPage() {
         category={activeCategory}
         items={itemsByCategory[activeCategory]}
         savedStates={savedStates}
+        unavailableItems={unavailableItems}
         togglingItems={togglingItems}
         onToggle={toggleItem}
         onSelect={selectItem}

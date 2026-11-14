@@ -122,6 +122,8 @@ export default function DynamicIslandWindowPage() {
   // 「穿透翻转 ↔ notifyIslandIdle ↔ collapse/expand」循环 → 文字反复消失出现。
   // 穿透开启时窗口收不到 mousemove，锁不会误触发；光标真正离开后锁 400ms 过期恢复判定
   const lockThroughUntilRef = useRef(0);
+  // 上次强制复述穿透的时间戳（空闲态每 2s 重放一次，兜底 WebView2 子窗口晚建/重建）
+  const lastThroughAssertRef = useRef(0);
 
   useEffect(() => {
     const down = () => {
@@ -323,11 +325,14 @@ export default function DynamicIslandWindowPage() {
     let disposed = false;
     let busy = false;
 
-    const setThrough = async (ignore: boolean) => {
-      if (throughRef.current === ignore) return;
-      // 开启穿透前补一次「光标已离开」：否则悬停中直接穿透，岛窗口的 mouseleave
-      // 永远不会触发 → 主窗口只 hold 不 extend → 提示永不自动收起
-      if (ignore) notifyIslandIdle();
+    const setThrough = async (ignore: boolean, force = false) => {
+      const changed = throughRef.current !== ignore;
+      if (!force && !changed) return;
+      // 只在真正切换到穿透时补一次「光标已离开」：否则悬停中直接穿透，岛窗口的
+      // mouseleave 永远不会触发 → 主窗口只 hold 不 extend → 提示永不自动收起。
+      // 定期强制复述（force 且状态未变）绝不能触发它——每 2s 重放一次 extend
+      // 会不断重置自动关闭计时，提示永远关不掉
+      if (ignore && changed) notifyIslandIdle();
       throughRef.current = ignore;
       try {
         await invoke("dynamic_island_set_click_through", { ignore });
@@ -351,7 +356,12 @@ export default function DynamicIslandWindowPage() {
           return;
         }
         if (!hasContentRef.current) {
-          await setThrough(true);
+          // 空闲态定期复述穿透：WebView2 子窗口可能在页面加载后晚建或重建，
+          // 新子窗口不继承父窗口的 WS_EX_TRANSPARENT，只发一次会重新长出死区
+          const now = Date.now();
+          const force = now - lastThroughAssertRef.current > 2000;
+          if (force) lastThroughAssertRef.current = now;
+          await setThrough(true, force);
           return;
         }
         // 活动锁定期：光标刚在窗内活动过（悬停/展开动画中），强制保持可交互，
@@ -378,7 +388,12 @@ export default function DynamicIslandWindowPage() {
           cursor.x <= pos.x + r.right * dpr + margin &&
           cursor.y >= pos.y + r.top * dpr - margin &&
           cursor.y <= pos.y + r.bottom * dpr + margin;
-        await setThrough(!inside);
+        // 切回穿透时同样定期强制复述：内容显示期间 WebView2 子窗口若重建，
+        // 新建子窗口默认 enabled，会重新长出死区
+        const now = Date.now();
+        const reassert = !inside && now - lastThroughAssertRef.current > 2000;
+        if (reassert) lastThroughAssertRef.current = now;
+        await setThrough(!inside, reassert);
       } catch {
         /* 窗口正在销毁 / 光标查询失败：下一轮再试 */
       } finally {
@@ -386,7 +401,9 @@ export default function DynamicIslandWindowPage() {
       }
     };
 
-    void setThrough(true);
+    // 强制下发一次：Rust 侧建窗时的穿透发生在 WebView2 子窗口创建之前，
+    // 子窗口不继承 WS_EX_TRANSPARENT，必须等页面就绪后再按当前状态重放一遍
+    void setThrough(true, true);
     const timer = setInterval(() => void tick(), 60);
     return () => {
       disposed = true;

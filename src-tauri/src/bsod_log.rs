@@ -11,10 +11,20 @@
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::os::windows::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::OnceLock;
+use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
+use windows_sys::Win32::Globalization::GetACP;
+use windows_sys::Win32::System::ProcessStatus::{EnumPageFilesW, ENUM_PAGE_FILE_INFORMATION};
+use windows_sys::Win32::System::SystemInformation::{
+    GetLogicalProcessorInformation, GetSystemInfo, GetTickCount64, GlobalMemoryStatusEx,
+    RelationProcessorCore, MEMORYSTATUSEX, SYSTEM_INFO, SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+};
+use winreg::enums::HKEY_LOCAL_MACHINE;
+use winreg::RegKey;
 
 use crate::bsod_bugcheck as bugcheck;
 
@@ -164,151 +174,8 @@ const GRAPHICS_CODES: [u32; 7] = [0x116, 0x117, 0x119, 0x10E, 0xB4, 0xEA, 0x14C]
 const WHEA_TEXT: &str = "WHEA-Logger 报告了硬件级错误。WHEA 是 CPU/芯片组对「不可纠正错误」的上报通道，出现该类事件时故障几乎都落在硬件或固件层面（CPU 供电/超频、内存、PCIe 设备、主板），而不是 Windows 本身。";
 
 // ============================================================================
-// PowerShell 采集脚本
+// 原生采集：注册表 / Win32 API / wevtutil（无 PowerShell、无 WMI）
 // ============================================================================
-
-const PS_SCRIPT: &str = r#"
-$ErrorActionPreference = 'SilentlyContinue'
-$ProgressPreference = 'SilentlyContinue'
-$out = $env:BSOD_OUT
-
-function Trim-Msg($m, $n) {
-  if ($null -eq $m) { return '' }
-  $s = [string]$m
-  $s = $s -replace "`r`n", ' ' -replace "`n", ' '
-  if ($s.Length -gt $n) { return $s.Substring(0, $n) }
-  return $s
-}
-
-function Props($e) {
-  $vals = @()
-  foreach ($p in $e.Properties) {
-    try { $v = $p.Value } catch { $v = $null }
-    if ($null -eq $v) { $vals += ''; continue }
-    if ($v -is [byte[]]) { $vals += ('0x' + (($v | ForEach-Object { $_.ToString('X2') }) -join '')) }
-    else { $vals += [string]$v }
-  }
-  return ,$vals
-}
-
-function Ev($filter, $max, $group) {
-  $res = @()
-  try { $evs = Get-WinEvent -FilterHashtable $filter -MaxEvents $max -ErrorAction Stop } catch { return @() }
-  foreach ($e in $evs) {
-    $res += @{
-      t = $e.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')
-      id = $e.Id
-      prov = $e.ProviderName
-      level = $e.LevelDisplayName
-      task = $e.TaskDisplayName
-      msg = (Trim-Msg $e.Message 700)
-      props = (Props $e)
-      group = $group
-    }
-  }
-  return ,$res
-}
-
-$R = @{}
-$R['errors'] = @()
-
-try {
-  $os = Get-CimInstance Win32_OperatingSystem
-  $R['os'] = @{
-    caption = $os.Caption; version = $os.Version; build = $os.BuildNumber
-    arch = $os.OSArchitecture
-    install_date = $(if ($os.InstallDate) { $os.InstallDate.ToString('yyyy-MM-dd') } else { '' })
-    last_boot = $(if ($os.LastBootUpTime) { $os.LastBootUpTime.ToString('yyyy-MM-dd HH:mm:ss') } else { '' })
-    mem_total = [int64]$os.TotalVisibleMemorySize * 1024
-    mem_free  = [int64]$os.FreePhysicalMemory * 1024
-  }
-} catch { $R['errors'] += "OS: $($_.Exception.Message)" }
-
-try {
-  $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
-  $R['cpu'] = @{ name = $cpu.Name; cores = $cpu.NumberOfCores; threads = $cpu.NumberOfLogicalProcessors }
-} catch { $R['errors'] += "CPU: $($_.Exception.Message)" }
-
-try {
-  $cs = Get-CimInstance Win32_ComputerSystem
-  $R['machine'] = @{ vendor = $cs.Manufacturer; model = $cs.Model }
-} catch { $R['errors'] += "CS: $($_.Exception.Message)" }
-
-try {
-  $cc = Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CrashControl'
-  $R['crashcontrol'] = @{ enabled = [int]$cc.CrashDumpEnabled; dumpfile = [string]$cc.DumpFile }
-} catch { $R['errors'] += "CrashControl: $($_.Exception.Message)" }
-
-try {
-  $pf = @(Get-CimInstance Win32_PageFileUsage | Select-Object -First 1)
-  if ($pf -and $pf[0]) {
-    $R['pagefile'] = @{ name = [string]$pf[0].Name; alloc = [int64]$pf[0].AllocatedBaseSize; current = [int64]$pf[0].CurrentUsage }
-  } else { $R['pagefile'] = @{ name=''; alloc=0; current=0 } }
-} catch { $R['errors'] += "PageFile: $($_.Exception.Message)"; $R['pagefile'] = @{ name=''; alloc=0; current=0 } }
-
-$R['events'] = @()
-$R['events'] += Ev @{ LogName = 'System'; Id = 1001,41,6008 } 200 'crash'
-$R['events'] += Ev @{ LogName = 'Application'; ProviderName = 'Microsoft-Windows-WHEA-Logger'; Id = 17,18,19 } 200 'whea'
-$R['events'] += Ev @{ LogName = 'System'; Id = 7,11,51,55,98,129,153,157 } 300 'disk'
-
-$dumps = @()
-foreach ($dir in @("$env:SystemRoot\Minidump")) {
-  if (Test-Path $dir) {
-    Get-ChildItem -Path $dir -Filter '*.dmp' -ErrorAction SilentlyContinue | ForEach-Object {
-      $dumps += @{ path = $_.FullName; size = $_.Length; mtime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }
-    }
-  }
-}
-$fullDump = Join-Path $env:SystemRoot 'MEMORY.DMP'
-if (Test-Path $fullDump) {
-  $fi = Get-Item $fullDump
-  $dumps += @{ path = $fi.FullName; size = $fi.Length; mtime = $fi.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }
-}
-$liveDir = Join-Path $env:SystemRoot 'LiveKernelReports'
-if (Test-Path $liveDir) {
-  Get-ChildItem -Path $liveDir -Filter '*.dmp' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-    $dumps += @{ path = $_.FullName; size = $_.Length; mtime = $_.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss') }
-  }
-}
-$R['dump_files'] = $dumps
-
-$R | ConvertTo-Json -Depth 8 -Compress | Out-File -Encoding UTF8 -FilePath $out
-exit 0
-"#;
-
-// ============================================================================
-// PS 输出的中间结构
-// ============================================================================
-
-#[derive(Debug, Default, Deserialize)]
-struct RawPs {
-    #[serde(default)] os: Option<RawOs>,
-    #[serde(default)] cpu: Option<RawCpu>,
-    #[serde(default)] machine: Option<RawMachine>,
-    #[serde(default)] crashcontrol: Option<RawCrashCtl>,
-    #[serde(default)] pagefile: Option<RawPageFile>,
-    #[serde(default)] events: Option<Vec<RawEvent>>,
-    #[serde(default)] dump_files: Option<Vec<RawDumpFile>>,
-    #[serde(default)] errors: Option<Vec<String>>,
-}
-#[derive(Debug, Default, Deserialize)]
-struct RawOs { caption: Option<String>, version: Option<String>, build: Option<String>,
-    arch: Option<String>, install_date: Option<String>, last_boot: Option<String>,
-    mem_total: Option<u64>, mem_free: Option<u64> }
-#[derive(Debug, Default, Deserialize)]
-struct RawCpu { name: Option<String>, cores: Option<u32>, threads: Option<u32> }
-#[derive(Debug, Default, Deserialize)]
-struct RawMachine { vendor: Option<String>, model: Option<String> }
-#[derive(Debug, Default, Deserialize)]
-struct RawCrashCtl { enabled: Option<i64>, dumpfile: Option<String> }
-#[derive(Debug, Default, Deserialize)]
-struct RawPageFile { name: Option<String>, alloc: Option<u64>, current: Option<u64> }
-#[derive(Debug, Default, Deserialize)]
-struct RawEvent { t: Option<String>, id: Option<u32>, prov: Option<String>,
-    level: Option<String>, task: Option<String>, msg: Option<String>,
-    props: Option<Vec<String>>, group: Option<String> }
-#[derive(Debug, Default, Deserialize)]
-struct RawDumpFile { path: Option<String>, size: Option<u64>, mtime: Option<String> }
 
 // ============================================================================
 // 主命令
@@ -323,66 +190,53 @@ pub async fn bsod_collect_evidence() -> Result<BsodEvidence, String> {
 
 fn collect_evidence_sync() -> Result<BsodEvidence, String> {
     let mut errors: Vec<String> = Vec::new();
+    let queries = [
+        EventQuery {
+            log: "System",
+            xpath: "*[System[(EventID=1001 or EventID=41 or EventID=6008)]]",
+            max: 200,
+            group: "crash",
+        },
+        EventQuery {
+            log: "Application",
+            xpath: "*[System[Provider[@Name='Microsoft-Windows-WHEA-Logger'] and (EventID=17 or EventID=18 or EventID=19)]]",
+            max: 200,
+            group: "whea",
+        },
+        EventQuery {
+            log: "System",
+            xpath: "*[System[(EventID=7 or EventID=11 or EventID=51 or EventID=55 or EventID=98 or EventID=129 or EventID=153 or EventID=157)]]",
+            max: 300,
+            group: "disk",
+        },
+    ];
 
-    let raw: RawPs = match run_ps_collect() {
-        Ok(v) => v,
-        Err(e) => { errors.push(format!("PowerShell 采集失败: {}", e)); RawPs::default() }
-    };
-    if let Some(es) = raw.errors.as_ref() {
-        for e in es { errors.push(format!("PS 子任务: {}", e)); }
-    }
+    // 三组事件日志查询最耗时（约 80–110ms/组），与注册表、转储枚举并行。
+    let (system, config, dumps, event_results) = std::thread::scope(|scope| {
+        let handles: Vec<_> = queries
+            .iter()
+            .map(|q| scope.spawn(move || query_events(q)))
+            .collect();
 
-    let mut system = SystemInfo::default();
-    if let Some(os) = raw.os.as_ref() {
-        system.caption = os.caption.clone().unwrap_or_default();
-        system.version = os.version.clone().unwrap_or_default();
-        system.build = os.build.clone().unwrap_or_default();
-        system.arch = os.arch.clone().unwrap_or_default();
-        system.install_date = os.install_date.clone().unwrap_or_default();
-        system.last_boot = os.last_boot.clone().unwrap_or_default();
-        system.mem_total = os.mem_total.unwrap_or(0);
-        system.mem_free = os.mem_free.unwrap_or(0);
-    }
-    if let Some(cpu) = raw.cpu.as_ref() {
-        system.cpu_name = cpu.name.clone().unwrap_or_default().trim().to_string();
-        system.cpu_cores = cpu.cores.unwrap_or(0);
-        system.cpu_threads = cpu.threads.unwrap_or(0);
-    }
-    if let Some(mc) = raw.machine.as_ref() {
-        system.machine_vendor = mc.vendor.clone().unwrap_or_default().trim().to_string();
-        system.machine_model = mc.model.clone().unwrap_or_default().trim().to_string();
-    }
+        let system = collect_system_info(&mut errors);
+        let config = collect_dump_config(&mut errors);
+        let dumps = collect_dumps();
 
-    let mut config = DumpConfig::default();
-    if let Some(cc) = raw.crashcontrol.as_ref() {
-        config.crash_dump_enabled = cc.enabled.unwrap_or(-1);
-        config.dump_file = cc.dumpfile.clone().unwrap_or_default();
-    }
-    if let Some(pf) = raw.pagefile.as_ref() {
-        config.pagefile_name = pf.name.clone().unwrap_or_default();
-        config.pagefile_alloc_mb = pf.alloc.unwrap_or(0);
-        config.pagefile_current_mb = pf.current.unwrap_or(0);
-    }
-
-    let events: Vec<EventRecord> = raw.events.unwrap_or_default().into_iter().map(|e| {
-        EventRecord {
-            t: e.t.unwrap_or_default(),
-            id: e.id.unwrap_or(0),
-            prov: e.prov.unwrap_or_default(),
-            level: e.level.unwrap_or_default(),
-            task: e.task.unwrap_or_default(),
-            msg: e.msg.unwrap_or_default(),
-            props: e.props.unwrap_or_default(),
-            group: e.group.unwrap_or_else(|| "other".to_string()),
+        let mut results = Vec::with_capacity(handles.len());
+        for handle in handles {
+            results.push(handle.join());
         }
-    }).collect();
+        (system, config, dumps, results)
+    });
 
-    let dumps: Vec<DumpInfo> = raw.dump_files.unwrap_or_default().into_iter().map(|d| {
-        let path = d.path.unwrap_or_default();
-        let size = d.size.unwrap_or(0);
-        let mtime = d.mtime.unwrap_or_default();
-        parse_dump_file(&path, size, &mtime)
-    }).collect();
+    let mut events = Vec::new();
+    for (i, joined) in event_results.into_iter().enumerate() {
+        match joined {
+            Ok(Ok(mut evs)) => events.append(&mut evs),
+            Ok(Err(e)) => errors.push(format!("事件日志 {}: {}", queries[i].log, e)),
+            Err(_) => errors.push(format!("事件日志 {}: 查询线程异常退出", queries[i].log)),
+        }
+    }
 
     let (crashes, findings, summary) = analyze(&system, &config, &dumps, &events, &errors);
 
@@ -392,41 +246,656 @@ fn collect_evidence_sync() -> Result<BsodEvidence, String> {
     })
 }
 
-fn run_ps_collect() -> Result<RawPs, String> {
-    let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
-    let pid = std::process::id();
-    let tmp = std::env::temp_dir().join(format!("nexbox_bsod_{}_{}.json", pid, stamp));
-    let tmp_str = tmp.to_string_lossy().to_string();
-
-    let mut cmd = Command::new("powershell");
-    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", PS_SCRIPT])
-        .env("BSOD_OUT", &tmp_str)
-        .current_dir("C:\\")
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let output = cmd.output().map_err(|e| format!("启动 powershell 失败: {}", e))?;
-    if !output.status.success() && !tmp.exists() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("powershell 退出码 {:?}：{}", output.status.code(), stderr.trim()));
-    }
-
-    let content = read_with_retry(&tmp, Duration::from_secs(3))?;
-    let _ = fs::remove_file(&tmp);
-    let s = content.trim_start_matches('\u{feff}');
-    serde_json::from_str::<RawPs>(s)
-        .map_err(|e| format!("解析 PS JSON 失败: {} | head={}", e, s.chars().take(120).collect::<String>()))
+struct EventQuery {
+    log: &'static str,
+    xpath: &'static str,
+    max: u32,
+    group: &'static str,
 }
 
-fn read_with_retry(path: &std::path::Path, timeout: Duration) -> Result<String, String> {
-    let start = std::time::Instant::now();
-    loop {
-        match fs::read_to_string(path) {
-            Ok(s) if !s.trim().is_empty() => return Ok(s),
-            _ => {}
-        }
-        if start.elapsed() > timeout { return Err("PS 未生成输出文件（超时）".to_string()); }
-        std::thread::sleep(Duration::from_millis(150));
+fn query_events(q: &EventQuery) -> Result<Vec<EventRecord>, String> {
+    let exe = system32_exe("wevtutil.exe");
+    let filter = format!("/q:{}", q.xpath);
+    let count = format!("/c:{}", q.max);
+    let output = Command::new(&exe)
+        .args(["qe", q.log, filter.as_str(), "/f:xml", count.as_str(), "/rd:true"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("启动 wevtutil 失败: {}", e))?;
+    if !output.status.success() {
+        return Err(format!(
+            "退出码 {:?}: {}",
+            output.status.code(),
+            decode_console_text(&output.stderr).trim()
+        ));
     }
+    Ok(parse_events_xml(&decode_console_text(&output.stdout), q.group))
+}
+
+fn system32_exe(name: &str) -> PathBuf {
+    std::env::var("SystemRoot")
+        .map(|root| Path::new(&root).join("System32").join(name))
+        .unwrap_or_else(|_| PathBuf::from(name))
+}
+
+/// wevtutil 的输出编码跟随系统 ANSI 代码页（中文系统是 GBK）：
+/// 先按 UTF-8 严格解码，失败再用 GetACP 对应的编码。
+fn decode_console_text(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    let acp = unsafe { GetACP() };
+    let label = match acp {
+        936 => "gbk",
+        950 => "big5",
+        932 => "shift_jis",
+        949 => "euc-kr",
+        65001 => "utf-8",
+        _ => "windows-1252",
+    };
+    let enc = encoding_rs::Encoding::for_label(label.as_bytes())
+        .unwrap_or(encoding_rs::WINDOWS_1252);
+    let (text, _, _) = enc.decode(bytes);
+    text.into_owned()
+}
+
+fn parse_events_xml(xml: &str, group: &str) -> Vec<EventRecord> {
+    use regex::Regex;
+    static PROVIDER_RE: OnceLock<Regex> = OnceLock::new();
+    static EVENT_ID_RE: OnceLock<Regex> = OnceLock::new();
+    static TIME_RE: OnceLock<Regex> = OnceLock::new();
+    static LEVEL_RE: OnceLock<Regex> = OnceLock::new();
+    static DATA_RE: OnceLock<Regex> = OnceLock::new();
+
+    let provider_re =
+        PROVIDER_RE.get_or_init(|| Regex::new(r"Provider Name='([^']*)'").unwrap());
+    let event_id_re =
+        EVENT_ID_RE.get_or_init(|| Regex::new(r"<EventID[^>]*>(\d+)</EventID>").unwrap());
+    let time_re = TIME_RE.get_or_init(|| Regex::new(r"SystemTime='([^']+)'").unwrap());
+    let level_re = LEVEL_RE.get_or_init(|| Regex::new(r"<Level>(\d+)</Level>").unwrap());
+    let data_re = DATA_RE
+        .get_or_init(|| Regex::new(r"(?s)<Data(?: Name='([^']*)')?>([^<]*)</Data>").unwrap());
+
+    let mut events = Vec::new();
+    for raw in xml.split("<Event ").skip(1) {
+        let block = raw.split("</Event>").next().unwrap_or(raw);
+        let Some(id) = event_id_re
+            .captures(block)
+            .and_then(|c| c[1].parse::<u32>().ok())
+        else {
+            continue;
+        };
+        let prov = provider_re
+            .captures(block)
+            .map(|c| c[1].to_string())
+            .unwrap_or_default();
+        let time_raw = time_re
+            .captures(block)
+            .map(|c| c[1].to_string())
+            .unwrap_or_default();
+        let t = parse_event_time(&time_raw);
+        let level = level_key(
+            level_re
+                .captures(block)
+                .and_then(|c| c[1].parse::<u32>().ok())
+                .unwrap_or(4),
+        )
+        .to_string();
+
+        let mut named: Vec<(String, String)> = Vec::new();
+        for cap in data_re.captures_iter(block) {
+            let name = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+            named.push((name, xml_unescape(&cap[2])));
+        }
+
+        if group == "crash" {
+            match id {
+                1001 => {
+                    // 只认带 BugcheckCode 的 1001，避免把其它来源的 1001 当成蓝屏。
+                    if !named
+                        .iter()
+                        .any(|(n, _)| n.eq_ignore_ascii_case("BugcheckCode"))
+                    {
+                        continue;
+                    }
+                }
+                41 => {
+                    if !prov.to_ascii_lowercase().contains("kernel-power") {
+                        continue;
+                    }
+                }
+                6008 => {
+                    if !prov.eq_ignore_ascii_case("EventLog") {
+                        continue;
+                    }
+                }
+                _ => continue,
+            }
+        } else if group == "whea" && !prov.to_ascii_lowercase().contains("whea") {
+            continue;
+        }
+
+        let props = event_props(id, &named);
+        let msg = synth_event_message(id, group, &named, &props);
+        if group == "disk" {
+            // 与旧 PS 采集脚本一致：存储堆栈白名单外的同 ID 事件（Kernel-Processor-Power、
+            // Filter Manager、SCM 等）不进入事件列表；NTFS 98 的健康巡检也不计入。
+            if !is_disk_provider(&prov) {
+                continue;
+            }
+            if id == 98 && is_healthy_volume_msg(&msg) {
+                continue;
+            }
+        }
+        events.push(EventRecord {
+            t,
+            id,
+            prov,
+            level,
+            task: String::new(),
+            msg,
+            props,
+            group: group.to_string(),
+        });
+    }
+    events
+}
+
+fn parse_event_time(raw: &str) -> String {
+    chrono::DateTime::parse_from_rfc3339(raw)
+        .map(|dt| {
+            dt.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string()
+        })
+        .unwrap_or_else(|_| raw.chars().take(19).collect::<String>().replace('T', " "))
+}
+
+fn level_key(level: u32) -> &'static str {
+    match level {
+        1 => "critical",
+        2 => "error",
+        3 => "warning",
+        5 => "verbose",
+        _ => "information",
+    }
+}
+
+fn xml_unescape(s: &str) -> String {
+    s.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&#13;", " ")
+        .replace("&#10;", " ")
+        .replace("&amp;", "&")
+}
+
+fn event_props(id: u32, named: &[(String, String)]) -> Vec<String> {
+    if id == 1001 || id == 41 {
+        let get = |name: &str| {
+            named
+                .iter()
+                .find(|(n, _)| n.eq_ignore_ascii_case(name))
+                .map(|(_, v)| v.clone())
+        };
+        if let Some(code) = get("BugcheckCode") {
+            let mut props = Vec::with_capacity(5);
+            props.push(code);
+            for i in 1..=4 {
+                if let Some(v) = get(&format!("BugcheckParameter{}", i)) {
+                    props.push(v);
+                }
+            }
+            return props;
+        }
+    }
+    named
+        .iter()
+        .map(|(_, v)| v.clone())
+        .filter(|v| !v.is_empty())
+        .collect()
+}
+
+fn synth_event_message(
+    id: u32,
+    group: &str,
+    named: &[(String, String)],
+    props: &[String],
+) -> String {
+    match (group, id) {
+        ("crash", 1001) => {
+            let code = props
+                .first()
+                .and_then(|s| parse_evt_u32(s))
+                .filter(|c| *c != 0);
+            match code {
+                Some(c) => format!(
+                    "检测错误: {} ({})",
+                    bugcheck::format_code(c),
+                    format_bugcheck_args(props)
+                ),
+                None => "系统记录了蓝屏事件（未解析到错误码）".to_string(),
+            }
+        }
+        ("crash", 41) => {
+            let code = props
+                .first()
+                .and_then(|s| parse_evt_u32(s))
+                .filter(|c| *c != 0);
+            match code {
+                Some(c) => format!(
+                    "系统非正常关机：BugCheck {} ({})",
+                    bugcheck::format_code(c),
+                    format_bugcheck_args(props)
+                ),
+                None => "系统非正常关机（未记录 BugCheck 码）".to_string(),
+            }
+        }
+        ("crash", 6008) => "上一次系统关机是意外的。".to_string(),
+        ("disk", 98) => {
+            let drive = named_value(named, "DriveName").unwrap_or_else(|| "卷".to_string());
+            match named_value(named, "CorruptionActionState") {
+                Some(state) if state == "0" => {
+                    format!("{} 运行状况良好，无需执行任何操作。", drive)
+                }
+                Some(state) => format!("{} 需要修复（CorruptionActionState={}）。", drive, state),
+                None => format!("{} 状态未知（事件 98）。", drive),
+            }
+        }
+        _ => join_event_data(named, 700),
+    }
+}
+
+fn format_bugcheck_args(props: &[String]) -> String {
+    props
+        .iter()
+        .skip(1)
+        .take(4)
+        .map(|s| parse_evt_u64_raw(s).unwrap_or(0))
+        .map(|v| format!("0x{:016X}", v))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn named_value(named: &[(String, String)], name: &str) -> Option<String> {
+    named
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+}
+
+fn join_event_data(named: &[(String, String)], max: usize) -> String {
+    let text = named
+        .iter()
+        .filter(|(_, v)| !v.trim().is_empty())
+        .map(|(n, v)| {
+            if n.is_empty() {
+                v.trim().to_string()
+            } else {
+                format!("{}={}", n, v.trim())
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ｜ ");
+    truncate(&text, max)
+}
+
+/// BugcheckCode 在事件 XML 里是十进制，BugcheckParameterN 是带 0x 的十六进制；
+/// 统一按「有 0x 走十六进制，否则十进制」解析。
+fn parse_evt_u64_raw(s: &str) -> Option<u64> {
+    let t = s.trim();
+    if t.is_empty() {
+        return None;
+    }
+    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
+        u64::from_str_radix(hex, 16).ok()
+    } else if let Ok(v) = t.parse::<u64>() {
+        Some(v)
+    } else {
+        u64::from_str_radix(t, 16).ok()
+    }
+}
+
+fn parse_evt_u32(s: &str) -> Option<u32> {
+    parse_evt_u64_raw(s).map(|v| v as u32)
+}
+
+fn collect_system_info(errors: &mut Vec<String>) -> SystemInfo {
+    use chrono::TimeZone;
+
+    let mut system = SystemInfo::default();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+    match hklm.open_subkey(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion") {
+        Ok(key) => {
+            let product: String = key.get_value("ProductName").unwrap_or_default();
+            system.caption = crate::hardware::long_os_version()
+                .filter(|v| !v.trim().is_empty())
+                .unwrap_or(product);
+            system.version = key.get_value("CurrentVersion").unwrap_or_default();
+            let build: String = key
+                .get_value::<String, _>("CurrentBuildNumber")
+                .or_else(|_| key.get_value::<String, _>("CurrentBuild"))
+                .unwrap_or_default();
+            let ubr: u32 = key.get_value("UBR").unwrap_or(0);
+            system.build = if build.trim().is_empty() {
+                String::new()
+            } else if ubr > 0 {
+                format!("{}.{}", build.trim(), ubr)
+            } else {
+                build.trim().to_string()
+            };
+            if let Ok(install) = key.get_value::<u32, _>("InstallDate") {
+                system.install_date = chrono::Local
+                    .timestamp_opt(install as i64, 0)
+                    .single()
+                    .map(|d| d.format("%Y-%m-%d").to_string())
+                    .unwrap_or_default();
+            }
+        }
+        Err(e) => errors.push(format!("OS: {}", e)),
+    }
+
+    system.arch = if std::env::var_os("PROCESSOR_ARCHITEW6432").is_some() {
+        "64-bit".to_string()
+    } else if std::env::var("PROCESSOR_ARCHITECTURE")
+        .map(|v| v.eq_ignore_ascii_case("x86"))
+        .unwrap_or(false)
+    {
+        "32-bit".to_string()
+    } else {
+        "64-bit".to_string()
+    };
+
+    let mut mem: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    mem.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+    if unsafe { GlobalMemoryStatusEx(&mut mem) } != 0 {
+        system.mem_total = mem.ullTotalPhys;
+        system.mem_free = mem.ullAvailPhys;
+    }
+
+    let uptime_ms = unsafe { GetTickCount64() };
+    system.last_boot = SystemTime::now()
+        .checked_sub(std::time::Duration::from_millis(uptime_ms))
+        .map(|boot| {
+            let dt: chrono::DateTime<chrono::Local> = boot.into();
+            dt.format("%Y-%m-%d %H:%M:%S").to_string()
+        })
+        .unwrap_or_default();
+
+    match hklm.open_subkey(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0") {
+        Ok(key) => {
+            system.cpu_name = key
+                .get_value::<String, _>("ProcessorNameString")
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+        }
+        Err(e) => errors.push(format!("CPU: {}", e)),
+    }
+    system.cpu_cores = count_physical_cores();
+    system.cpu_threads = std::env::var("NUMBER_OF_PROCESSORS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .or_else(|| {
+            std::thread::available_parallelism()
+                .ok()
+                .map(|n| n.get() as u32)
+        })
+        .unwrap_or(0);
+
+    if let Ok(key) = hklm.open_subkey(r"HARDWARE\DESCRIPTION\System\BIOS") {
+        system.machine_vendor = key
+            .get_value::<String, _>("SystemManufacturer")
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+        system.machine_model = key
+            .get_value::<String, _>("SystemProductName")
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+    }
+
+    system
+}
+
+fn count_physical_cores() -> u32 {
+    unsafe {
+        let mut len: u32 = 0;
+        GetLogicalProcessorInformation(std::ptr::null_mut(), &mut len);
+        if len == 0 {
+            return 0;
+        }
+        let mut buf = vec![0u8; len as usize];
+        if GetLogicalProcessorInformation(
+            buf.as_mut_ptr() as *mut SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+            &mut len,
+        ) == 0
+        {
+            return 0;
+        }
+        let count = len as usize / std::mem::size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>();
+        let entries = std::slice::from_raw_parts(
+            buf.as_ptr() as *const SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+            count,
+        );
+        entries
+            .iter()
+            .filter(|info| info.Relationship == RelationProcessorCore)
+            .count() as u32
+    }
+}
+
+fn collect_dump_config(errors: &mut Vec<String>) -> DumpConfig {
+    let mut config = DumpConfig::default();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+
+    match hklm.open_subkey(r"SYSTEM\CurrentControlSet\Control\CrashControl") {
+        Ok(key) => {
+            config.crash_dump_enabled = key
+                .get_value::<u32, _>("CrashDumpEnabled")
+                .map(|v| v as i64)
+                .unwrap_or(-1);
+            config.dump_file =
+                expand_env(&key.get_value::<String, _>("DumpFile").unwrap_or_default());
+        }
+        Err(e) => errors.push(format!("CrashControl: {}", e)),
+    }
+
+    if let Ok(key) = hklm
+        .open_subkey(r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management")
+    {
+        if let Ok(lines) = key.get_value::<Vec<String>, _>("PagingFiles") {
+            if let Some(first) = lines.first() {
+                config.pagefile_name = first
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+            }
+        }
+    }
+
+    // 页面文件：EnumPageFilesW 直接给出每个分页文件的 TotalSize/TotalInUse（页数），
+    // 与原来的 Win32_PageFileUsage.AllocatedBaseSize/CurrentUsage 对应，且不需要 WMI。
+    let page_size = system_page_size();
+    let mut acc = PagefileAccum::default();
+    if unsafe {
+        EnumPageFilesW(
+            Some(pagefile_enum_cb),
+            &mut acc as *mut PagefileAccum as *mut core::ffi::c_void,
+        )
+    } != 0
+    {
+        if !acc.name.is_empty() {
+            config.pagefile_name = acc.name;
+        }
+        let mb = 1024 * 1024;
+        config.pagefile_alloc_mb = acc.alloc_pages.saturating_mul(page_size) / mb;
+        config.pagefile_current_mb = acc.current_pages.saturating_mul(page_size) / mb;
+    } else {
+        // 枚举失败时用提交限制 - 物理内存近似页面文件总量。
+        let mut mem: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+        mem.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+        if unsafe { GlobalMemoryStatusEx(&mut mem) } != 0 {
+            let mb = 1024 * 1024;
+            config.pagefile_alloc_mb = mem.ullTotalPageFile.saturating_sub(mem.ullTotalPhys) / mb;
+            let committed = mem.ullTotalPageFile.saturating_sub(mem.ullAvailPageFile);
+            let physical_in_use = mem.ullTotalPhys.saturating_sub(mem.ullAvailPhys);
+            config.pagefile_current_mb = committed.saturating_sub(physical_in_use) / mb;
+        }
+    }
+
+    config
+}
+
+#[derive(Default)]
+struct PagefileAccum {
+    alloc_pages: u64,
+    current_pages: u64,
+    name: String,
+}
+
+unsafe extern "system" fn pagefile_enum_cb(
+    context: *mut core::ffi::c_void,
+    info: *mut ENUM_PAGE_FILE_INFORMATION,
+    filename: windows_sys::core::PCWSTR,
+) -> windows_sys::Win32::Foundation::BOOL {
+    let acc = &mut *(context as *mut PagefileAccum);
+    if !info.is_null() {
+        acc.alloc_pages += (*info).TotalSize as u64;
+        acc.current_pages += (*info).TotalInUse as u64;
+    }
+    if acc.name.is_empty() && !filename.is_null() {
+        acc.name = pcwstr_to_string(filename);
+    }
+    1
+}
+
+fn pcwstr_to_string(ptr: *const u16) -> String {
+    let mut len = 0usize;
+    unsafe {
+        while *ptr.add(len) != 0 {
+            len += 1;
+        }
+        String::from_utf16_lossy(std::slice::from_raw_parts(ptr, len))
+    }
+}
+
+fn system_page_size() -> u64 {
+    let mut info: SYSTEM_INFO = unsafe { std::mem::zeroed() };
+    unsafe { GetSystemInfo(&mut info) };
+    if info.dwPageSize == 0 {
+        4096
+    } else {
+        info.dwPageSize as u64
+    }
+}
+
+fn expand_env(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut rest = value;
+    while let Some(start) = rest.find('%') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        if let Some(end) = after.find('%') {
+            let name = &after[..end];
+            if let Ok(v) = std::env::var(name) {
+                out.push_str(&v);
+            } else {
+                out.push('%');
+                out.push_str(name);
+                out.push('%');
+            }
+            rest = &after[end + 1..];
+        } else {
+            out.push_str(&rest[start..]);
+            return out;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+type DumpFileEntry = (String, u64, String);
+
+fn collect_dumps() -> Vec<DumpInfo> {
+    let mut files = list_dump_files();
+    files.sort_by(|a, b| b.2.cmp(&a.2));
+    files
+        .into_iter()
+        .map(|(path, size, mtime)| parse_dump_file(&path, size, &mtime))
+        .collect()
+}
+
+fn list_dump_files() -> Vec<DumpFileEntry> {
+    let root = std::env::var("SystemRoot").unwrap_or_else(|_| "C:\\Windows".to_string());
+    let mut out: Vec<DumpFileEntry> = Vec::new();
+
+    let minidump = Path::new(&root).join("Minidump");
+    if let Ok(entries) = fs::read_dir(&minidump) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !has_dmp_ext(&path) {
+                continue;
+            }
+            if let Ok(meta) = entry.metadata() {
+                out.push((
+                    path.to_string_lossy().to_string(),
+                    meta.len(),
+                    fmt_mtime(meta.modified().ok()),
+                ));
+            }
+        }
+    }
+
+    let memory = Path::new(&root).join("MEMORY.DMP");
+    if let Ok(meta) = fs::metadata(&memory) {
+        out.push((
+            memory.to_string_lossy().to_string(),
+            meta.len(),
+            fmt_mtime(meta.modified().ok()),
+        ));
+    }
+
+    let live = Path::new(&root).join("LiveKernelReports");
+    if live.is_dir() {
+        for entry in walkdir::WalkDir::new(&live)
+            .max_depth(8)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if !entry.file_type().is_file() || !has_dmp_ext(entry.path()) {
+                continue;
+            }
+            if let Ok(meta) = entry.metadata() {
+                out.push((
+                    entry.path().to_string_lossy().to_string(),
+                    meta.len(),
+                    fmt_mtime(meta.modified().ok()),
+                ));
+            }
+        }
+    }
+
+    out
+}
+
+fn has_dmp_ext(path: &Path) -> bool {
+    path.extension()
+        .map(|e| e.eq_ignore_ascii_case("dmp"))
+        .unwrap_or(false)
+}
+
+fn fmt_mtime(t: Option<SystemTime>) -> String {
+    t.map(|t| {
+        let dt: chrono::DateTime<chrono::Local> = t.into();
+        dt.format("%Y-%m-%d %H:%M:%S").to_string()
+    })
+    .unwrap_or_default()
 }
 
 // ============================================================================
@@ -504,6 +973,13 @@ fn read_u32_at<R: Read + Seek>(r: &mut R, off: u64) -> Option<u32> {
     Some(u32::from_le_bytes(b))
 }
 
+fn read_u8_at<R: Read + Seek>(r: &mut R, off: u64) -> Option<u8> {
+    r.seek(SeekFrom::Start(off)).ok()?;
+    let mut b = [0u8; 1];
+    r.read_exact(&mut b).ok()?;
+    Some(b[0])
+}
+
 fn read_u64_at<R: Read + Seek>(r: &mut R, off: u64) -> Option<u64> {
     r.seek(SeekFrom::Start(off)).ok()?;
     let mut b = [0u8; 8];
@@ -548,7 +1024,9 @@ fn parse_mdmp<R: Read + Seek>(r: &mut R, info: &mut DumpInfo) -> Result<(), Stri
         let arch = read_u32_at(r, sr as u64).unwrap_or(0) & 0xFFFF;
         info.arch = match arch { 0 => "x86".into(), 5 => "ARM".into(), 6 => "IA64".into(),
             9 => "AMD64".into(), 12 => "ARM64".into(), v => format!("未知({})", v) };
-        info.processor_count = (read_u32_at(r, (sr as u64) + 4).unwrap_or(0) & 0xFF) as u32;
+        // MINIDUMP_SYSTEM_INFO.NumberOfProcessors 是 +6 处的 UCHAR；
+        // 旧实现按 +4 读 u32 & 0xFF，实际拿到的是 ProcessorRevision 低字节。
+        info.processor_count = read_u8_at(r, (sr as u64) + 6).unwrap_or(0) as u32;
         let major = read_u32_at(r, (sr as u64) + 8).unwrap_or(0);
         let minor = read_u32_at(r, (sr as u64) + 12).unwrap_or(0);
         let build = read_u32_at(r, (sr as u64) + 16).unwrap_or(0);
@@ -627,6 +1105,22 @@ fn parse_bugcheck_msg(msg: &str) -> (Option<u32>, Vec<u64>, String) {
     (code, args, dump)
 }
 
+/// 从事件 XML 的结构化 props 里取 BugCheck 码与参数：
+/// props 顺序为 [BugcheckCode, BugcheckParameter1..4]。
+fn parse_bugcheck_fields(props: &[String]) -> Option<(u32, Vec<u64>)> {
+    let code = props
+        .first()
+        .and_then(|s| parse_evt_u32(s))
+        .filter(|c| *c != 0)?;
+    let args = props
+        .iter()
+        .skip(1)
+        .take(4)
+        .filter_map(|s| parse_evt_u64_raw(s))
+        .collect();
+    Some((code, args))
+}
+
 #[derive(Debug, Default, Clone)]
 struct CrashAgg {
     time: i64,
@@ -657,11 +1151,17 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
         let t = parse_ts(&e.t).unwrap_or(0);
         match e.id {
             1001 => {
-                let (code, args, dump_path) = parse_bugcheck_msg(&e.msg);
-                if let Some(idx) = find_or_new(&mut crashes, t, code, &dump_path, true) {
+                let (code, args, dump_path) = match parse_bugcheck_fields(&e.props) {
+                    Some((c, a)) => (Some(c), a, String::new()),
+                    None => parse_bugcheck_msg(&e.msg),
+                };
+                // 非蓝屏来源的 1001（或码为 0）不生成崩溃记录；XML 解析路径已在
+                // parse_events_xml 里按 BugcheckCode 字段过滤，这里兜住异常输入。
+                let Some(code) = code.filter(|c| *c != 0) else { continue; };
+                if let Some(idx) = find_or_new(&mut crashes, t, Some(code), &dump_path, true) {
                     let c = &mut crashes[idx];
                     c.sources.push("事件 1001（BugCheck）".to_string());
-                    if c.bugcheck.is_none() && code.is_some() { c.bugcheck = code; }
+                    if c.bugcheck.is_none() { c.bugcheck = Some(code); }
                     if c.args.is_empty() && !args.is_empty() { c.args = args.clone(); }
                     if c.dump_path.is_empty() && !dump_path.is_empty() { c.dump_path = dump_path.clone(); }
                     if c.time == 0 { c.time = t; }
@@ -669,19 +1169,13 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
                 }
             }
             41 => {
-                let props = &e.props;
-                let code: Option<u32> = props.first().and_then(|s| {
-                    let s = s.trim();
-                    if s.is_empty() { None } else {
-                        u32::from_str_radix(s.trim_start_matches("0x").trim_start_matches("0X"), 16).ok()
-                    }
-                });
-                let args: Vec<u64> = props.iter().skip(1).take(4).filter_map(|s| {
-                    let s = s.trim();
-                    if s.is_empty() { None } else {
-                        u64::from_str_radix(s.trim_start_matches("0x").trim_start_matches("0X"), 16).ok()
-                    }
-                }).collect();
+                // BugcheckCode 在事件 XML 里是十进制；旧实现一律按十六进制解析会得到错误码。
+                let code: Option<u32> = e.props.first()
+                    .and_then(|s| parse_evt_u32(s))
+                    .filter(|c| *c != 0);
+                let args: Vec<u64> = e.props.iter().skip(1).take(4)
+                    .filter_map(|s| parse_evt_u64_raw(s))
+                    .collect();
                 let allow_new = code.is_some();
                 match find_or_new(&mut crashes, t, code, "", allow_new) {
                     Some(idx) => {
@@ -752,8 +1246,17 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
             code_hex: c.bugcheck.map(bugcheck::format_code).unwrap_or_default(),
             name: bugcheck::name_of(c.bugcheck),
             bugcheck_cn: info.map(|i| i.cn.to_string()).unwrap_or_default(),
-            category: info.map(|i| i.category.to_string()).unwrap_or_default(),
-            severity: info.map(|i| i.severity.to_string()).unwrap_or_else(|| "medium".to_string()),
+            // 详情表未收录时按官方名称关键词推断大类，避免分类列空白
+            category: c.bugcheck.map(bugcheck::category_of).unwrap_or("").to_string(),
+            severity: info.map(|i| i.severity.to_string()).unwrap_or_else(|| {
+                // 官方名称表命中但无详情：按归因大类给一个保守的等级
+                match c.bugcheck.map(bugcheck::category_of) {
+                    Some(bugcheck::CAT_MEMORY) | Some(bugcheck::CAT_BOOT) => "high".to_string(),
+                    Some(bugcheck::CAT_GRAPHICS) | Some(bugcheck::CAT_STORAGE) => "medium".to_string(),
+                    Some(_) => "medium".to_string(),
+                    None => "medium".to_string(),
+                }
+            }),
             args: c.args.clone(),
             explains, causes, fixes,
             dump_path: c.dump_path.clone(),
@@ -772,6 +1275,13 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
     let mut findings: Vec<Finding> = Vec::new();
     let ev_whea: Vec<&EventRecord> = events.iter().filter(|e| e.group == "whea").collect();
     let ev_disk: Vec<&EventRecord> = events.iter().filter(|e| e.group == "disk").collect();
+    let has_crash = !crash_records.is_empty();
+    // 「有蓝屏」必须是真正解析到 BugCheck 码的崩溃；只有 41/6008、LiveKernel
+    // 或 WHEA/磁盘事件时，不能把环境事件当成蓝屏原因，否则无蓝屏的机器也会被
+    // 提示成硬件故障。
+    let has_bsod = crash_records
+        .iter()
+        .any(|c| c.bugcheck.is_some() && !c.is_live);
 
     for c in crash_records.iter() {
         if c.bugcheck.is_none() {
@@ -829,7 +1339,7 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
             confidence: 0.85, tag: "硬件".into(),
         });
     }
-    if !ev_whea.is_empty() {
+    if has_bsod && !ev_whea.is_empty() {
         let ev: Vec<String> = ev_whea.iter().take(6).map(|e| format!("{} ｜ {}", e.t, truncate(&e.msg, 150))).collect();
         findings.push(Finding {
             severity: "critical".into(),
@@ -857,13 +1367,16 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
             // 仅接受真存储堆栈的 provider；否则 FltMgr/ACE-CORE 这类反作弊过滤驱动
             // 上报的同 ID 事件会被误判为磁盘错误。
             if !is_disk_provider(&e.prov) { continue; }
+            // NTFS 98 有两种语义：一种是真的「卷需要修复」，另一种是每次开机都会写的
+            // 「卷运行状况良好」。后者是健康巡检，计入磁盘错误会刷出几十条误报。
+            if e.id == 98 && is_healthy_volume_msg(&e.msg) { continue; }
             if let Some((_, name)) = DISK_NAMES.iter().find(|(id, _)| *id == e.id) {
                 hits.push((*e, *name));
             }
         }
         hits
     };
-    if disk_hits.len() >= 3 {
+    if has_bsod && disk_hits.len() >= 3 {
         let ev: Vec<String> = disk_hits.iter().take(8)
             .map(|(e, name)| format!("{} ｜ {}（事件 {}）｜ {}", e.t, name, e.id, truncate(&e.msg, 130)))
             .collect();
@@ -882,8 +1395,10 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
         });
     }
 
+    // 本机没有任何蓝屏记录时，转储配置/页面文件这类「预防建议」不是归因结论，
+    // 放进「原因分析」只会制造噪声（用户会以为系统真的出了故障）。
     let enabled = config.crash_dump_enabled;
-    if enabled == 0 {
+    if has_crash && enabled == 0 {
         findings.push(Finding {
             severity: "medium".into(),
             title: "系统当前禁用了崩溃转储".into(),
@@ -891,12 +1406,12 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
             evidence: vec!["CrashDumpEnabled = 0".into()],
             actions: vec![
                 "开启「小内存转储」：系统属性 → 高级 → 启动和故障恢复 → 设置".into(),
-                "或在管理员 PowerShell 执行：wmic recoveros set DebugInfoType = 3".into(),
+                "设置立即生效，下次蓝屏时会写入 C:\\Windows\\Minidump".into(),
             ],
             confidence: 0.95, tag: "配置".into(),
         });
     }
-    if enabled == 3 && !dumps.iter().any(|d| d.path.to_lowercase().contains("minidump")) {
+    if has_crash && enabled == 3 && !dumps.iter().any(|d| d.path.to_lowercase().contains("minidump")) {
         findings.push(Finding {
             severity: "low".into(),
             title: "已配置小内存转储，但尚未找到 dump 文件".into(),
@@ -908,7 +1423,7 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
     }
 
     let mem_gb = system.mem_total as f64 / 1024.0 / 1024.0 / 1024.0;
-    if (enabled == 1 || enabled == 7) && config.pagefile_alloc_mb > 0 && mem_gb > 0.0 {
+    if has_crash && (enabled == 1 || enabled == 7) && config.pagefile_alloc_mb > 0 && mem_gb > 0.0 {
         let alloc_mb = config.pagefile_alloc_mb as f64;
         let need = mem_gb * 1024.0 * if enabled == 1 { 0.5 } else { 1.0 };
         if alloc_mb < need * 0.6 {
@@ -954,22 +1469,8 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
         }
     }
 
-    if crash_records.is_empty() {
-        findings.push(Finding {
-            severity: "info".into(),
-            title: "本机未发现蓝屏记录".into(),
-            detail: "在系统事件日志与转储目录中都没有找到蓝屏（BugCheck）或非正常关机的记录。如果确实遇到过蓝屏，可能是转储被关闭、或已有记录被清理；下面给出的配置与变更信息仍可用于预防性检查。".into(),
-            evidence: vec![
-                "事件日志 1001（BugCheck）：无".into(),
-                format!("C:\\Windows\\Minidump：{}", if dumps.is_empty() { "未发现 .dmp 文件".into() } else { format!("存在 {} 个文件", dumps.len()) }),
-            ],
-            actions: vec![
-                "确认「小内存转储」已开启，便于下次蓝屏自动留下可分析的记录".into(),
-                "若蓝屏时没有时间看代码，可开启蓝屏界面截图或留意屏幕上的错误码".into(),
-            ],
-            confidence: 0.9, tag: "状态".into(),
-        });
-    }
+    // 没有解析到任何蓝屏记录时，「原因分析」保持为空：页头/概览已经明确
+    // 说明“未发现蓝屏”，再塞一条结论卡片只会让用户误以为系统有问题。
 
     findings.sort_by(|a, b| sev_order(&a.severity).cmp(&sev_order(&b.severity))
         .then(b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal)));
@@ -989,7 +1490,7 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
     } else {
         ("ok".to_string(), "未发现蓝屏记录".to_string(), "系统日志与转储目录中都没有蓝屏证据".to_string())
     };
-    if !errors.is_empty() {
+    if has_crash && !errors.is_empty() {
         findings.push(Finding {
             severity: "info".into(),
             title: "部分证据未采集成功".into(),
@@ -1074,6 +1575,20 @@ fn is_disk_provider(prov: &str) -> bool {
     // 兵分一道：任何包含 "disk"/"ntfs"/"volume"/"storage" 的 provider 也归入白名单
     // （注意用 "storage" 而不是 "stor"，避免误匹到 Microsoft-Windows-Store）
     p.contains("disk") || p.contains("ntfs") || p.contains("volume") || p.contains("storage")
+}
+
+/// 判断一条 NTFS 98 事件是不是「卷运行状况良好」这种健康巡检消息。
+/// 同一事件 ID 也会用于「卷需要修复」的真实故障，所以只能看消息文本。
+fn is_healthy_volume_msg(msg: &str) -> bool {
+    const HEALTHY: &[&str] = &[
+        "运行状况良好", "无需执行任何操作", "无需采取任何操作",
+        "is healthy", "no action is required", "no further action",
+    ];
+    let m = msg.to_ascii_lowercase();
+    HEALTHY.iter().any(|k| {
+        let k = k.to_ascii_lowercase();
+        m.contains(&k)
+    })
 }
 
 fn truncate(s: &str, n: usize) -> String {
@@ -1165,6 +1680,19 @@ mod tests {
     }
 
     #[test]
+    fn healthy_volume_msg_detected() {
+        // 每次开机都会写的健康巡检消息，不能算磁盘故障
+        assert!(is_healthy_volume_msg(
+            "卷 C: (\\Device\\HarddiskVolume3) 运行状况良好。无需执行任何操作。"));
+        assert!(is_healthy_volume_msg(
+            "Volume C: (\\Device\\HarddiskVolume3) is healthy. No action is required."));
+        // 真正需要修复的消息仍然命中
+        assert!(!is_healthy_volume_msg(
+            "卷 C: (\\Device\\HarddiskVolume3) 需要修复。请运行 chkdsk /f。"));
+        assert!(!is_healthy_volume_msg(""));
+    }
+
+    #[test]
     fn is_disk_provider_filters_fltmgr() {
         // 真磁盘/存储 provider 命中
         assert!(is_disk_provider("disk"));
@@ -1181,5 +1709,200 @@ mod tests {
         assert!(!is_disk_provider("Microsoft-Windows-Kernel-Power"));
         assert!(!is_disk_provider("Service Control Manager"));
         assert!(!is_disk_provider("Microsoft-Windows-Store"));
+    }
+
+    fn evt_xml(provider: &str, id: u32, level: u32, data: &[(&str, &str)]) -> String {
+        let data_xml = data
+            .iter()
+            .map(|(n, v)| format!("<Data Name='{}'>{}</Data>", n, v))
+            .collect::<String>();
+        format!(
+            "<Event xmlns='http://schemas.microsoft.com/win/2004/08/events/event'><System>\
+             <Provider Name='{}'/><EventID>{}</EventID><Level>{}</Level>\
+             <TimeCreated SystemTime='2026-11-14T02:25:34.8990917Z'/><Channel>System</Channel>\
+             </System><EventData>{}</EventData></Event>",
+            provider, id, level, data_xml
+        )
+    }
+
+    #[test]
+    fn evt_numbers_decimal_and_hex() {
+        // BugcheckCode 是十进制
+        assert_eq!(parse_evt_u32("159"), Some(0x9F));
+        assert_eq!(parse_evt_u32("26"), Some(0x1A));
+        // BugcheckParameterN 是带 0x 的十六进制
+        assert_eq!(parse_evt_u64_raw("0x1000007E"), Some(0x1000_007E));
+        assert_eq!(parse_evt_u64_raw("0x41790"), Some(0x41790));
+        assert_eq!(parse_evt_u32(""), None);
+    }
+
+    #[test]
+    fn xml_bugcheck_1001_uses_structured_fields() {
+        let xml = evt_xml(
+            "Microsoft-Windows-WER-SystemErrorReporting",
+            1001,
+            2,
+            &[
+                ("BugcheckCode", "26"),
+                ("BugcheckParameter1", "0x41790"),
+                ("BugcheckParameter2", "0x141bb77b60"),
+                ("BugcheckParameter3", "0xfffff806792ac240"),
+                ("BugcheckParameter4", "0x76bb00000000"),
+            ],
+        );
+        let events = parse_events_xml(&xml, "crash");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].id, 1001);
+        assert_eq!(events[0].level, "error");
+        let (code, args) = parse_bugcheck_fields(&events[0].props).unwrap();
+        assert_eq!(code, 0x1A);
+        assert_eq!(args[0], 0x41790);
+        assert_eq!(args.len(), 4);
+        assert!(events[0].msg.contains("0x0000001A"));
+    }
+
+    #[test]
+    fn xml_kernel_power_41_decimal_code() {
+        let xml = evt_xml(
+            "Microsoft-Windows-Kernel-Power",
+            41,
+            1,
+            &[
+                ("BugcheckCode", "159"),
+                ("BugcheckParameter1", "0x0"),
+                ("BugcheckParameter2", "0x0"),
+                ("BugcheckParameter3", "0x0"),
+                ("BugcheckParameter4", "0x0"),
+            ],
+        );
+        let events = parse_events_xml(&xml, "crash");
+        assert_eq!(events.len(), 1);
+        let (code, _) = parse_bugcheck_fields(&events[0].props).unwrap();
+        assert_eq!(code, 0x9F);
+        assert!(events[0].msg.contains("0x0000009F"));
+    }
+
+    #[test]
+    fn xml_ignores_non_bugcheck_1001() {
+        // 没有 BugcheckCode 的 1001（其它 provider 复用事件 ID）不能再生成崩溃记录
+        let xml = evt_xml("Some-Provider", 1001, 4, &[("foo", "bar")]);
+        assert!(parse_events_xml(&xml, "crash").is_empty());
+    }
+
+    #[test]
+    fn ntfs98_health_from_xml() {
+        // 健康巡检在采集阶段就被丢弃（与旧 PS 脚本一致），不进入事件列表
+        let healthy = evt_xml(
+            "Microsoft-Windows-Ntfs",
+            98,
+            4,
+            &[
+                ("DriveName", "C:"),
+                ("DeviceName", "\\Device\\HarddiskVolume3"),
+                ("CorruptionActionState", "0"),
+            ],
+        );
+        assert!(parse_events_xml(&healthy, "disk").is_empty());
+
+        let broken = evt_xml(
+            "Microsoft-Windows-Ntfs",
+            98,
+            2,
+            &[
+                ("DriveName", "C:"),
+                ("DeviceName", "\\Device\\HarddiskVolume3"),
+                ("CorruptionActionState", "1"),
+            ],
+        );
+        let events = parse_events_xml(&broken, "disk");
+        assert_eq!(events.len(), 1);
+        assert!(!is_healthy_volume_msg(&events[0].msg));
+    }
+
+    #[test]
+    fn disk_group_drops_noise_providers() {
+        // Kernel-Processor-Power 复用事件 ID 55，不能进入磁盘事件列表
+        let noise = evt_xml(
+            "Microsoft-Windows-Kernel-Processor-Power",
+            55,
+            4,
+            &[("Group", "0"), ("Number", "15")],
+        );
+        assert!(parse_events_xml(&noise, "disk").is_empty());
+
+        let real = evt_xml(
+            "Microsoft-Windows-Ntfs",
+            55,
+            2,
+            &[("DriveName", "C:"), ("DeviceName", "\\Device\\HarddiskVolume3")],
+        );
+        assert_eq!(parse_events_xml(&real, "disk").len(), 1);
+    }
+
+    #[test]
+    fn no_bsod_suppresses_hardware_and_disk_findings() {
+        let event = |id: u32, prov: &str, group: &str| EventRecord {
+            t: "2026-11-14 10:00:00".to_string(),
+            id,
+            prov: prov.to_string(),
+            level: "error".to_string(),
+            task: String::new(),
+            msg: format!("event {}", id),
+            props: Vec::new(),
+            group: group.to_string(),
+        };
+        let events = vec![
+            event(17, "Microsoft-Windows-WHEA-Logger", "whea"),
+            event(7, "disk", "disk"),
+            event(129, "Microsoft-Windows-StorPort", "disk"),
+            event(153, "disk", "disk"),
+        ];
+        let (crashes, findings, summary) =
+            analyze(&SystemInfo::default(), &DumpConfig::default(), &[], &events, &[]);
+
+        assert!(crashes.is_empty());
+        assert_eq!(summary.status, "ok");
+        // 没有解析到 BugCheck 时，WHEA/磁盘事件只能留在「事件日志」页，
+        // 不能作为「原因分析」里的硬件/存储故障结论；干净机器的结论应为空。
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn mdmp_processor_count_reads_byte_at_plus6() {
+        // 构造最小 MDMP：目录 1 项（SystemInfo），SystemInfo 在 0x60，
+        // NumberOfProcessors 是 +6 处的 UCHAR；旧实现读 +4 会拿到 ProcessorRevision。
+        let mut buf = vec![0u8; 0x100];
+        buf[8..12].copy_from_slice(&1u32.to_le_bytes());
+        buf[12..16].copy_from_slice(&0x20u32.to_le_bytes());
+        buf[0x20..0x24].copy_from_slice(&7u32.to_le_bytes());
+        buf[0x24..0x28].copy_from_slice(&0x38u32.to_le_bytes());
+        buf[0x28..0x2C].copy_from_slice(&0x60u32.to_le_bytes());
+        buf[0x60..0x64].copy_from_slice(&9u32.to_le_bytes()); // AMD64
+        buf[0x64..0x66].copy_from_slice(&0x1234u16.to_le_bytes()); // ProcessorRevision
+        buf[0x66] = 12; // NumberOfProcessors
+        buf[0x68..0x6C].copy_from_slice(&10u32.to_le_bytes());
+        buf[0x6C..0x70].copy_from_slice(&0u32.to_le_bytes());
+        buf[0x70..0x74].copy_from_slice(&22631u32.to_le_bytes());
+
+        let mut info = DumpInfo {
+            path: String::new(),
+            file_size: buf.len() as u64,
+            mtime: String::new(),
+            format: "MDMP".to_string(),
+            bugcheck: None,
+            bugcheck_hex: String::new(),
+            args: Vec::new(),
+            exception_address: None,
+            arch: String::new(),
+            os_build: String::new(),
+            processor_count: 0,
+            ok: false,
+            error: String::new(),
+            is_live: false,
+        };
+        parse_mdmp(&mut std::io::Cursor::new(buf), &mut info).unwrap();
+        assert_eq!(info.processor_count, 12);
+        assert_eq!(info.arch, "AMD64");
+        assert_eq!(info.os_build, "10.0.22631");
     }
 }

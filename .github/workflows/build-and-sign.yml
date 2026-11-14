@@ -11,18 +11,22 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "22"
+          cache: npm
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      # tauri-cli 来自 devDependencies，必须走 npm 脚本；它会先执行
+      # beforeBuildCommand（npm run build）再编译，产物按 productName 命名为 NexBox.exe
       - name: Build Tauri App
-        run: cargo tauri build
+        run: npm run tauri:build
 
       # 直接上传单独exe，对应SignPath <pe-file>
       - name: Upload unsigned EXE artifact
@@ -30,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nexbox-build
-          path: src-tauri/target/release/NexBox.exe
+          path: src-tauri/target/release/nexbox.exe
           retention-days: 14
 
       - name: Submit Signing Request to SignPath

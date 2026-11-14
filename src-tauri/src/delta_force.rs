@@ -899,27 +899,3 @@ pub async fn cache_delta_image(app: tauri::AppHandle, url: String) -> Result<Str
     Ok(file.to_string_lossy().to_string())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn decode_utf16_le(bytes: &[u8]) -> String {
-        if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-            // skip BOM
-            let rest = &bytes[2..];
-            let mut u16s = Vec::with_capacity(rest.len() / 2);
-            for chunk in rest.chunks(2) {
-                if chunk.len() == 2 {
-                    let lo = chunk[0] as u16;
-                    let hi = chunk[1] as u16;
-                    u16s.push(lo | (hi << 8));
-                }
-            }
-            String::from_utf16(&u16s).unwrap_or_default()
-        } else {
-            String::from_utf8(bytes.to_vec()).unwrap_or_default()
-        }
-    }
-
-
-}

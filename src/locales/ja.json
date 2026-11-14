@@ -1898,10 +1898,8 @@
       "disableCEIPDesc": "カスタマーエクスペリエンス向上プログラムを無効化",
       "disableDotNetTelemetry": ".NETテレメトリ無効",
       "disableDotNetTelemetryDesc": "DOTNET_CLI_TELEMETRY_OPTOUT=1",
-      "disableAppImpactTelemetry": "アプリ影響テレメトリ無効",
-      "disableAppImpactTelemetryDesc": "AITEnableポリシーを無効化",
-      "disableAppImpactTelemetryAgent": "アプリ影響テレメトリエージェント無効",
-      "disableAppImpactTelemetryAgentDesc": "AITエージェントを無効化",
+      "disableAppImpactTelemetry": "アプリ影響テレメトリ無効（エージェント含む）",
+      "disableAppImpactTelemetryDesc": "AITEnableポリシーとAITエージェントを無効化",
       "disableLicenseTelemetry": "ライセンステレメトリ無効",
       "disableLicenseTelemetryDesc": "NoGenTicket=1、ライセンステレメトリ停止",
       "disableScheduledDiag": "スケジュール診断無効",
@@ -2060,7 +2058,8 @@
     "reverted": "復元済み",
     "optimizing": "実行中...",
     "operationError": "操作に失敗しました",
-    "loading": "読み込み中..."
+    "loading": "読み込み中...",
+    "vendorUnavailable": "このベンダーのGPUが検出されません"
   },
   "shaderCache": {
     "title": "シェーダーキャッシュクリーンアップ",
@@ -2323,7 +2322,7 @@
       "customBackground": "カスタム背景",
       "customBackgroundLabel": "カスタム背景を有効化",
       "imageUrlPlaceholder": "画像URLを入力するか、クリックしてアップロード",
-      "maxImagesReached": "最大3枚の背景画像まで追加できます",
+      "maxImagesReached": "最大4枚の背景画像まで追加できます",
       "presetBackground": "プリセット背景",
       "imageBackground": "画像背景",
       "dynamicBackground": "動的背景",

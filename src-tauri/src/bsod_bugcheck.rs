@@ -1,5 +1,10 @@
 //! BugCheck 代码知识库（移植自 BSODAnalyzer-main/bsod/bugcheck.py）
 //! 只收录能在客户端给出可靠解释的常见码；未收录码走通用分析路径。
+//!
+//! 名称解析三级回退：详情表（人工校对中文）→ 官方名称全表（`names.rs`，380 条）
+//! → 「未收录的 BugCheck 码」。
+
+mod names;
 
 /// 归因大类
 pub const CAT_DRIVER: &str = "driver";
@@ -647,11 +652,19 @@ pub fn lookup(code: u32) -> Option<&'static BugCheckMeta> {
     BUGCHECKS.iter().find(|(k, _)| *k == c).map(|(_, v)| v)
 }
 
-/// 显示名；未收录返回 "未收录的 BugCheck 码"，code=None 返回 "未知"。
+/// 显示名：优先取详情表的人工校对名称，回退到官方全表名称，都没有才说「未收录」。
 pub fn name_of(code: Option<u32>) -> String {
     match code {
         None => "未知".to_string(),
-        Some(c) => lookup(c).map(|m| m.name.to_string()).unwrap_or_else(|| "未收录的 BugCheck 码".to_string()),
+        Some(c) => {
+            let base = base_code(c);
+            if let Some(m) = lookup(base) {
+                return m.name.to_string();
+            }
+            names::name_of_code(base)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "未收录的 BugCheck 码".to_string())
+        }
     }
 }
 
@@ -686,6 +699,42 @@ pub fn generic_causes(code: u32) -> (Vec<String>, Vec<String>) {
     )
 }
 
+/// 按官方名称关键词推断归因大类（详情表未收录但名称表命中时使用）。
+/// 让 380 条官方码也能给出「显卡 / 磁盘 / 内存」这类分组，而不是空白。
+pub fn category_of(code: u32) -> &'static str {
+    if let Some(info) = lookup(code) {
+        return info.category;
+    }
+    let Some(name) = names::name_of_code(base_code(code)) else {
+        return CAT_SYSTEM;
+    };
+    let n = name.to_ascii_uppercase();
+    let has = |kw: &str| n.contains(kw);
+    if has("VIDEO") || has("GRAPHICS") || has("DISP") || has("TDR") || has("NV") || has("DXG") {
+        CAT_GRAPHICS
+    } else if has("WHEA") || has("MACHINE_CHECK") || has("MEMORY_MANAGEMENT")
+        || has("PAGE_FAULT") || has("MEMORY") || has("PFN") || has("CLOCK_WATCHDOG")
+    {
+        CAT_MEMORY
+    } else if has("NTFS") || has("FILE_SYSTEM") || has("DISK") || has("STORAGE")
+        || has("VOLUME") || has("INPAGE") || has("FAT")
+    {
+        CAT_STORAGE
+    } else if has("POWER") || has("SLEEP") || has("ACPI") || has("THERMAL") {
+        CAT_POWER
+    } else if has("USB") || has("HID") {
+        CAT_USB
+    } else if has("BOOT") || has("INITIALIZATION") || has("PHASE") {
+        CAT_BOOT
+    } else if has("DRIVER") || has("IRQL") || has("POOL") || has("DPC") || has("ISR")
+        || has("MUTEX") || has("SPIN_LOCK")
+    {
+        CAT_DRIVER
+    } else {
+        CAT_SYSTEM
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -708,5 +757,36 @@ mod tests {
     fn dump_variant_normalized() {
         // 0x1000007E 应查表为 0x7E SYSTEM_THREAD_EXCEPTION_NOT_HANDLED
         assert_eq!(lookup(0x1000_007E).unwrap().name, "SYSTEM_THREAD_EXCEPTION_NOT_HANDLED");
+    }
+
+    #[test]
+    fn official_names_cover_detail_table() {
+        // 详情表里的每个码都必须在官方名称表里也有对应名字
+        for (code, meta) in BUGCHECKS {
+            assert_eq!(
+                names::name_of_code(*code),
+                Some(meta.name),
+                "0x{:X} 在官方名称表中缺失或名称不一致",
+                code
+            );
+        }
+    }
+
+    #[test]
+    fn name_of_falls_back_to_official_table() {
+        // 0x1 只有官方名称、没有中文详情
+        assert!(lookup(0x1).is_none());
+        assert_eq!(name_of(Some(0x1)), "APC_INDEX_MISMATCH");
+        // 详情表命中的仍以详情表为准
+        assert_eq!(name_of(Some(0x0A)), "IRQL_NOT_LESS_OR_EQUAL");
+    }
+
+    #[test]
+    fn category_inferred_from_official_name() {
+        assert_eq!(category_of(0x0A), CAT_DRIVER);
+        assert_eq!(category_of(0x124), CAT_MEMORY);
+        // 0x49 只有官方名称、没有中文详情，靠名称关键词归到内存
+        assert!(lookup(0x49).is_none());
+        assert_eq!(category_of(0x49), CAT_MEMORY);
     }
 }

@@ -97,7 +97,7 @@ export function useBackground() {
 }
 
 
-const MAX_BG_IMAGES = 3;
+export const MAX_BG_IMAGES = 4;
 
 export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("none");
@@ -371,17 +371,26 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     persist("mr-custom-color", color);
   }, [persist]);
 
-  // 预设壁纸轮播定时器
-  // 轮播是临时展示，用内部 setActivePresetIndex（不持久化），
-  // 避免每 10 秒写一次磁盘；用户手动切换预设时才走 setActivePresetIndexPersist 持久化。
+  // 壁纸轮播定时器：预设壁纸与自定义图片共用 carouselEnabled 开关
+  // 轮播是临时展示，用内部 setActivePresetIndex / setActiveBgIndex（不持久化），
+  // 避免每 10 秒写一次磁盘；用户手动切换壁纸时才走对应的 *Persist 持久化。
   const carouselTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const customBgImageCount = customBgImages.length;
 
   useEffect(() => {
-    if (backgroundMode === "preset" && carouselEnabled) {
+    const isPresetCarousel = backgroundMode === "preset" && carouselEnabled;
+    const isImageCarousel = backgroundMode === "image" && carouselEnabled && customBgImageCount > 1;
+
+    if (isPresetCarousel || isImageCarousel) {
+      const total = isPresetCarousel ? PRESET_BACKGROUNDS.length : customBgImageCount;
       carouselTimerRef.current = setInterval(() => {
         // 窗口最小化/隐藏到托盘时暂停轮播，降低后台 CPU 占用
         if (document.hidden) return;
-        setActivePresetIndex((prev) => (prev + 1) % PRESET_BACKGROUNDS.length);
+        if (isPresetCarousel) {
+          setActivePresetIndex((prev) => (prev + 1) % total);
+        } else {
+          setActiveBgIndex((prev) => (prev + 1) % total);
+        }
       }, 10000);
     } else {
       if (carouselTimerRef.current) {
@@ -396,7 +405,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         carouselTimerRef.current = null;
       }
     };
-  }, [backgroundMode, carouselEnabled]);
+  }, [backgroundMode, carouselEnabled, customBgImageCount]);
 
   const addCustomBgImage = useCallback((image: string): boolean => {
     if (customBgImages.length >= MAX_BG_IMAGES) {

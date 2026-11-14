@@ -1,6 +1,0 @@
-Windows Registry Editor Version 5.00
-
-;Disable Application Impact Telemetry Agent
-
-[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\AppCompat]
-"AITEnable"=dword:00000000

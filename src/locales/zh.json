@@ -1975,6 +1975,13 @@
       "whea": "硬件 WHEA",
       "disk": "磁盘/存储"
     },
+    "levels": {
+      "critical": "严重",
+      "error": "错误",
+      "warning": "警告",
+      "information": "信息",
+      "verbose": "详细"
+    },
     "col": {
       "time": "时间",
       "code": "代码",
@@ -2257,10 +2264,11 @@
       "customBackground": "自定义背景",
       "customBackgroundLabel": "启用自定义背景",
       "imageUrlPlaceholder": "输入图片URL或点击上传",
-      "maxImagesReached": "最多只能添加3张背景图片",
+      "maxImagesReached": "最多只能添加4张背景图片",
       "presetBackground": "预设背景",
       "carouselLabel": "自动轮播",
       "carouselDesc": "每10秒自动切换预设壁纸",
+      "carouselDescImage": "每10秒自动切换自定义图片",
       "imageBackground": "图片背景",
       "dynamicBackground": "动态背景",
       "dynamicBackgroundDesc": "启用后将显示动态背景效果",
@@ -2722,10 +2730,8 @@
       "disableCEIPDesc": "禁用客户体验改善计划",
       "disableDotNetTelemetry": "禁用 DotNet 遥测",
       "disableDotNetTelemetryDesc": "DOTNET_CLI_TELEMETRY_OPTOUT=1",
-      "disableAppImpactTelemetry": "禁用应用影响遥测",
-      "disableAppImpactTelemetryDesc": "禁用 AITEnable 策略",
-      "disableAppImpactTelemetryAgent": "禁用应用影响遥测代理",
-      "disableAppImpactTelemetryAgentDesc": "禁用 AIT 代理",
+      "disableAppImpactTelemetry": "禁用应用影响遥测（含代理）",
+      "disableAppImpactTelemetryDesc": "禁用 AITEnable 策略，同时关闭 AIT 代理",
       "disableLicenseTelemetry": "禁用许可遥测",
       "disableLicenseTelemetryDesc": "NoGenTicket=1，停止许可遥测",
       "disableScheduledDiag": "禁用计划诊断",
@@ -2884,7 +2890,8 @@
     "reverted": "已恢复",
     "optimizing": "执行中...",
     "operationError": "操作执行失败",
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "vendorUnavailable": "本机未检测到该厂商显卡"
   },
   "windowsUpdate": {
     "pageTitle": "Windows 更新与 Defender",

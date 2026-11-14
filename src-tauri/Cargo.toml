@@ -1,6 +1,6 @@
 [package]
 name = "nexbox"
-version = "10.4.6"
+version = "10.5.5"
 description = "NexBox - 为现代玩家打造的游戏工具箱"
 authors = ["MuLiu_SaMa"]
 license = "GPL-3.0"

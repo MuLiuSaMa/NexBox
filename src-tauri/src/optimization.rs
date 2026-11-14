@@ -4265,6 +4265,143 @@ pub async fn reset_peripheral_settings() -> Result<PerfTweakResult, String> {
 // ========== AQ_REGISTRY 模块 - 纯 Rust 注册表操作（零外部进程） ==========
 // 感谢 1U 工具箱提供系统优化支持
 
+/// 显示适配器设备类注册表路径（显卡驱动键的父键）
+const DISPLAY_CLASS_PATH: &str =
+    r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}";
+/// .reg 中用于匹配显卡驱动键的类 GUID 片段
+const DISPLAY_CLASS_GUID_STR: &str = "{4d36e968-e325-11ce-bfc1-08002be10318}";
+
+/// 枚举本机真实显卡驱动键（形如 "0000"、"0002"），可按厂商过滤。
+///
+/// 旧版 .reg 把键号写死成 0000/0001，多显卡或驱动重装后编号会变，
+/// 导致写入落到不存在的键、扫描整项判为未优化。这里改为运行时枚举。
+/// vendor: Some("nvidia"|"amd"|"intel") 只返回该厂商的键；None 返回全部显卡键。
+fn display_adapter_keys(vendor: Option<&str>) -> Vec<String> {
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let Ok(class_key) = hklm.open_subkey_with_flags(DISPLAY_CLASS_PATH, KEY_READ) else {
+        return Vec::new();
+    };
+    let want = vendor.map(|v| v.trim().to_lowercase()).filter(|v| !v.is_empty());
+    let mut keys = Vec::new();
+    for sub in class_key.enum_keys().flatten() {
+        // 只认 00xx 形式的驱动实例键，跳过 Properties 等无关键
+        if sub.len() != 4 || !sub.starts_with("00") || !sub[2..].chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        let Ok(sub_key) = class_key.open_subkey_with_flags(&sub, KEY_READ) else {
+            continue;
+        };
+        let desc = sub_key
+            .get_value::<String, _>("DriverDesc")
+            .unwrap_or_default()
+            .to_lowercase();
+        // 未安装驱动的占位设备不算显卡
+        if desc.contains("basic display") || desc.contains("基本显示") {
+            continue;
+        }
+        if let Some(ref w) = want {
+            let mid = sub_key
+                .get_value::<String, _>("MatchingDeviceId")
+                .unwrap_or_default()
+                .to_uppercase();
+            let matched = match w.as_str() {
+                "nvidia" => mid.contains("VEN_10DE") || desc.contains("nvidia") || desc.contains("geforce"),
+                "amd" => mid.contains("VEN_1002") || desc.contains("radeon") || desc.contains("amd"),
+                "intel" => mid.contains("VEN_8086") && (desc.contains("graphics") || desc.contains("iris") || desc.contains("arc")),
+                _ => true,
+            };
+            if !matched {
+                continue;
+            }
+        }
+        keys.push(sub);
+    }
+    keys.sort();
+    keys
+}
+
+/// 把 .reg 内容里写死的显卡键号展开成本机真实存在的键。
+///
+/// - 不含显卡类 GUID 的内容原样返回；
+/// - 含 GUID 时，按 vendor 枚举真实键，每个键复制一份条目（保留 `\UMD` 等后缀）；
+/// - 本机没有匹配厂商的显卡时返回空串，调用方据此判定「不可用」。
+fn expand_reg_content(content: &str, vendor: Option<&str>) -> String {
+    if !content.contains(DISPLAY_CLASS_GUID_STR) {
+        return content.to_string();
+    }
+    let keys = display_adapter_keys(vendor);
+    if keys.is_empty() {
+        return String::new();
+    }
+
+    // 按 [键路径] 切块，逐块判断是否为显卡键
+    let mut out = String::from("Windows Registry Editor Version 5.00\r\n\r\n");
+    let mut block_path: Option<String> = None;
+    let mut block_lines: Vec<String> = Vec::new();
+
+    fn flush(out: &mut String, path: &Option<String>, lines: &[String], keys: &[String]) {
+        let Some(p) = path else { return };
+        let lower = p.to_lowercase();
+        let guid_lower = DISPLAY_CLASS_GUID_STR.to_lowercase();
+        if let Some(pos) = lower.find(&guid_lower) {
+            // 显卡键：取 GUID 之后的剩余路径（形如 \0000 或 \0000\UMD）
+            let tail = &p[pos + DISPLAY_CLASS_GUID_STR.len()..];
+            let suffix = match tail.find('\\') {
+                // 跳过原来的键号段，保留其后的子键（如 \UMD）
+                Some(i) => match tail[i + 1..].find('\\') {
+                    Some(j) => &tail[i + 1 + j..],
+                    None => "",
+                },
+                None => "",
+            };
+            let base = &p[..pos + DISPLAY_CLASS_GUID_STR.len()];
+            for k in keys {
+                out.push_str(&format!("[{}\\{}{}]\r\n", base, k, suffix));
+                for l in lines {
+                    out.push_str(l);
+                    out.push_str("\r\n");
+                }
+                out.push_str("\r\n");
+            }
+        } else {
+            out.push_str(&format!("[{}]\r\n", p));
+            for l in lines {
+                out.push_str(l);
+                out.push_str("\r\n");
+            }
+            out.push_str("\r\n");
+        }
+    }
+
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with("Windows Registry Editor") {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            flush(&mut out, &block_path, &block_lines, &keys);
+            block_path = Some(line[1..line.len() - 1].to_string());
+            block_lines.clear();
+            continue;
+        }
+        if block_path.is_some() {
+            block_lines.push(line.to_string());
+        }
+    }
+    flush(&mut out, &block_path, &block_lines, &keys);
+    out
+}
+
+/// 读取 .reg 并按厂商展开显卡键；返回 (展开后内容, 本机是否有匹配显卡)
+fn read_expanded_reg(name: &str, is_restore: bool, vendor: Option<&str>) -> Result<(String, bool), String> {
+    let raw = read_reg_file(name, is_restore)?;
+    if !raw.contains(DISPLAY_CLASS_GUID_STR) {
+        return Ok((raw, true));
+    }
+    let expanded = expand_reg_content(&raw, vendor);
+    Ok((expanded.clone(), !expanded.trim().is_empty()))
+}
+
 /// 读取 .reg 文件内容（自动处理 UTF-8 和 UTF-16LE 编码）
 fn read_reg_file(name: &str, is_restore: bool) -> Result<String, String> {
     let path = resolve_reg_path(name, is_restore)?;
@@ -4551,16 +4688,91 @@ fn scan_reg_content(content: &str) -> Result<bool, String> {
     Ok(all_match)
 }
 
+/// 把展开后的 .reg 按「显卡驱动键」分组扫描。
+///
+/// 同一优化项在多张显卡上的条目是**或**关系（任一张显卡全部命中即算已优化），
+/// 同一张显卡内的多个值仍是**与**关系。非显卡键的条目单独成组，必须全部命中。
+/// 这样单显卡机器不会因为「另一个键不存在」而整项判 false。
+fn scan_reg_content_grouped(content: &str) -> bool {
+    if content.trim().is_empty() {
+        return false;
+    }
+    let guid_lower = DISPLAY_CLASS_GUID_STR.to_lowercase();
+
+    // 切块：(键路径, 该键下的原始行)
+    let mut blocks: Vec<(String, Vec<String>)> = Vec::new();
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with("Windows Registry Editor") {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            blocks.push((line[1..line.len() - 1].to_string(), Vec::new()));
+            continue;
+        }
+        if let Some(last) = blocks.last_mut() {
+            last.1.push(line.to_string());
+        }
+    }
+
+    // 显卡块按「驱动键号」归组，非显卡块各自独立
+    let mut gpu_groups: std::collections::BTreeMap<String, Vec<String>> = std::collections::BTreeMap::new();
+    let mut other_blocks: Vec<String> = Vec::new();
+    for (path, lines) in blocks {
+        let lower = path.to_lowercase();
+        if let Some(pos) = lower.find(&guid_lower) {
+            let tail = &path[pos + DISPLAY_CLASS_GUID_STR.len()..];
+            let key_id = tail
+                .trim_start_matches('\\')
+                .split('\\')
+                .next()
+                .unwrap_or("")
+                .to_string();
+            let entry = gpu_groups.entry(key_id).or_default();
+            entry.push(format!("[{}]", path));
+            entry.extend(lines);
+        } else {
+            let mut block = format!("[{}]\r\n", path);
+            for l in lines {
+                block.push_str(&l);
+                block.push_str("\r\n");
+            }
+            other_blocks.push(block);
+        }
+    }
+
+    // 非显卡部分必须全部命中
+    for block in &other_blocks {
+        if !scan_reg_content(block).unwrap_or(false) {
+            return false;
+        }
+    }
+    if gpu_groups.is_empty() {
+        return true;
+    }
+    // 显卡部分：任一张显卡全部命中即可
+    gpu_groups.values().any(|lines| {
+        let block = lines.join("\r\n");
+        scan_reg_content(&block).unwrap_or(false)
+    })
+}
+
 /// 单个优化项的扫描结果
 #[derive(serde::Serialize)]
 pub struct TweakScanResult {
     pub name: String,
     pub applied: bool,
+    /// 本机是否存在该优化项适用的硬件（显卡项按厂商判定）；false 时前端置灰而非显示为「关」
+    pub available: bool,
 }
 
 /// 批量扫描优化项当前状态（读取 aq_registry/<name>.reg 与注册表当前值比对）
+/// vendors 与 names 一一对应，元素为空串表示不做厂商过滤。
 #[tauri::command]
-pub async fn scan_registry_tweaks(names: Vec<String>) -> Result<Vec<TweakScanResult>, String> {
+pub async fn scan_registry_tweaks(
+    names: Vec<String>,
+    vendors: Option<Vec<String>>,
+) -> Result<Vec<TweakScanResult>, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
@@ -4568,14 +4780,20 @@ pub async fn scan_registry_tweaks(names: Vec<String>) -> Result<Vec<TweakScanRes
     // 扫描同样为阻塞的注册表读取，放入后台线程避免卡顿 UI
     tokio::task::spawn_blocking(move || {
         let mut results = Vec::with_capacity(names.len());
-        for name in &names {
-            let applied = match read_reg_file(name, false) {
-                Ok(content) => scan_reg_content(&content).unwrap_or(false),
-                Err(_) => false,
+        for (i, name) in names.iter().enumerate() {
+            let vendor = vendors
+                .as_ref()
+                .and_then(|v| v.get(i))
+                .map(|s| s.as_str())
+                .filter(|s| !s.trim().is_empty());
+            let (applied, available) = match read_expanded_reg(name, false, vendor) {
+                Ok((content, available)) => (scan_reg_content_grouped(&content), available),
+                Err(_) => (false, true),
             };
             results.push(TweakScanResult {
                 name: name.clone(),
                 applied,
+                available,
             });
         }
         Ok(results)
@@ -4640,53 +4858,160 @@ fn elevated_reg_import(reg_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// 将多个 .reg 文件合并为一个临时文件（保留首个头行），返回路径。
-/// 供批量提权导入使用：一次 UAC 完成整批写入。
-fn merge_reg_files(paths: &[PathBuf]) -> Result<PathBuf, String> {
-    let mut out = String::from("Windows Registry Editor Version 5.00\r\n\r\n");
-    for p in paths {
-        let bytes = fs::read(p).map_err(|e| format!("读取注册表文件失败 ({}): {}", p.display(), e))?;
-        let content = if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-            let u16s: Vec<u16> = bytes[2..]
-                .chunks_exact(2)
-                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-                .collect();
-            String::from_utf16_lossy(&u16s)
-        } else if bytes.len() >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF {
-            String::from_utf8_lossy(&bytes[3..]).to_string()
-        } else {
-            String::from_utf8_lossy(&bytes).to_string()
-        };
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with("Windows Registry Editor") {
-                continue;
+/// 列出 aq_registry 目录下所有优化项名（不含扩展名），用于恢复时的引用计数
+fn all_tweak_names() -> Vec<String> {
+    let Ok(probe) = resolve_reg_path("lockPState0", false) else {
+        return Vec::new();
+    };
+    let Some(dir) = probe.parent() else { return Vec::new() };
+    let Ok(rd) = fs::read_dir(dir) else { return Vec::new() };
+    rd.flatten()
+        .filter_map(|e| {
+            let p = e.path();
+            if p.extension().and_then(|s| s.to_str()) != Some("reg") {
+                return None;
             }
-            out.push_str(line);
-            out.push_str("\r\n");
+            p.file_stem().and_then(|s| s.to_str()).map(|s| s.to_string())
+        })
+        .collect()
+}
+
+/// 解析 .reg 内容为 (键路径, 值名, 目标数据) 三元组列表
+fn parse_reg_entries(content: &str) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with("Windows Registry Editor") {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            cur = line[1..line.len() - 1].to_string();
+            continue;
+        }
+        if let Some(v) = line.strip_prefix("@=") {
+            out.push((cur.clone(), String::new(), v.trim().to_string()));
+        } else if let Some(rest) = line.strip_prefix('"') {
+            if let Some(eq) = rest.find("\"=") {
+                let name = rest[..eq].replace("\\\"", "\"");
+                out.push((cur.clone(), name, rest[eq + 2..].trim().to_string()));
+            }
         }
     }
-    let tmp = env::temp_dir().join("nexbox_batch_import.reg");
-    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
-    bytes.extend(out.encode_utf16().flat_map(|u| u.to_le_bytes()));
-    fs::write(&tmp, bytes).map_err(|e| format!("写入临时合并文件失败: {}", e))?;
-    Ok(tmp)
+    out
+}
+
+/// 恢复时判断某个「删除值」条目是否仍被其它已启用的优化项占用。
+///
+/// 例：lockPState0 与 amdPowerOptimization 都写 DisableDynamicPstate=1，
+/// 关掉其中一项时不能把另一项还需要的值删掉，否则重启后开关会自己变关。
+fn value_still_needed(
+    self_name: &str,
+    key_path: &str,
+    value_name: &str,
+    exclude: &[String],
+) -> bool {
+    let target_key = key_path.to_lowercase();
+    let target_val = value_name.to_lowercase();
+    for other in all_tweak_names() {
+        if other == self_name || exclude.iter().any(|e| e == &other) {
+            continue;
+        }
+        let Ok(raw) = read_reg_file(&other, false) else { continue };
+        // 其它项按「全部显卡」展开，避免因厂商过滤漏判占用
+        let expanded = expand_reg_content(&raw, None);
+        let entries = parse_reg_entries(&expanded);
+        let wanted = entries.iter().any(|(k, v, data)| {
+            k.to_lowercase() == target_key
+                && v.to_lowercase() == target_val
+                && data != "-"
+        });
+        if !wanted {
+            continue;
+        }
+        // 该项当前是否真的处于已应用状态
+        if scan_reg_content_grouped(&expanded) {
+            return true;
+        }
+    }
+    false
+}
+
+/// 过滤 restore 内容：跳过仍被其它已启用项占用的「删除值」条目。
+/// 返回 (过滤后内容, 被跳过的条目数)。
+fn filter_restore_content(
+    self_name: &str,
+    content: &str,
+    exclude: &[String],
+) -> (String, usize) {
+    let mut out = String::from("Windows Registry Editor Version 5.00\r\n\r\n");
+    let mut cur = String::new();
+    let mut pending: Vec<String> = Vec::new();
+    let mut skipped = 0usize;
+
+    fn flush(out: &mut String, cur: &str, pending: &mut Vec<String>) {
+        if cur.is_empty() || pending.is_empty() {
+            pending.clear();
+            return;
+        }
+        out.push_str(&format!("[{}]\r\n", cur));
+        for l in pending.iter() {
+            out.push_str(l);
+            out.push_str("\r\n");
+        }
+        out.push_str("\r\n");
+        pending.clear();
+    }
+
+    for raw in content.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(';') || line.starts_with("Windows Registry Editor") {
+            continue;
+        }
+        if line.starts_with('[') && line.ends_with(']') {
+            flush(&mut out, &cur, &mut pending);
+            cur = line[1..line.len() - 1].to_string();
+            continue;
+        }
+        // 只拦截 "X"=- 形式的删除；写回默认值的条目照常执行
+        let is_delete = line
+            .strip_prefix('"')
+            .and_then(|r| r.find("\"=").map(|eq| (r[..eq].replace("\\\"", "\""), &r[eq + 2..])))
+            .map(|(name, val)| (name, val.trim() == "-"));
+        if let Some((name, true)) = is_delete {
+            if value_still_needed(self_name, &cur, &name, exclude) {
+                skipped += 1;
+                continue;
+            }
+        }
+        pending.push(line.to_string());
+    }
+    flush(&mut out, &cur, &mut pending);
+    (out, skipped)
 }
 
 /// 应用单个注册表优化（读取 aq_registry/<name>.reg 并通过 winreg 写入）
+/// vendor 为显卡厂商过滤（nvidia/amd/intel），非显卡项传 None。
 #[tauri::command]
-pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, String> {
+pub async fn apply_registry_tweak(
+    name: String,
+    vendor: Option<String>,
+) -> Result<PerfTweakResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
     // 注册表读写为阻塞操作，放入后台线程执行，避免卡顿主线程 UI
     tokio::task::spawn_blocking(move || {
-        let content = read_reg_file(&name, false)?;
+        let v = vendor.as_deref().filter(|s| !s.trim().is_empty());
+        let (content, available) = read_expanded_reg(&name, false, v)?;
+        if !available {
+            return Err("本机未检测到该厂商显卡，无法应用此优化".to_string());
+        }
         if let Err(e) = apply_reg_content(&content) {
             if is_access_denied_err(&e) {
-                // 拒绝访问：进程未提权或键 ACL 受保护 → 提权 reg.exe 导入整个文件（弹一次 UAC）
-                let path = resolve_reg_path(&name, false)?;
+                // 拒绝访问：进程未提权或键 ACL 受保护 → 提权 reg.exe 导入展开后的内容（弹一次 UAC）
+                let path = write_temp_reg(&content, &format!("nexbox_{}", name))?;
                 elevated_reg_import(&path)?;
             } else {
                 return Err(e);
@@ -4701,18 +5026,37 @@ pub async fn apply_registry_tweak(name: String) -> Result<PerfTweakResult, Strin
     .map_err(|e| format!("优化执行线程异常: {}", e))?
 }
 
+/// 把展开后的 .reg 内容写入临时文件（UTF-16LE），供提权 reg.exe 导入
+fn write_temp_reg(content: &str, stem: &str) -> Result<PathBuf, String> {
+    let safe: String = stem
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+    let tmp = env::temp_dir().join(format!("{}.reg", safe));
+    let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
+    bytes.extend(content.encode_utf16().flat_map(|u| u.to_le_bytes()));
+    fs::write(&tmp, bytes).map_err(|e| format!("写入临时注册表文件失败: {}", e))?;
+    Ok(tmp)
+}
+
 /// 恢复单个注册表优化（读取 aq_registry_restore/<name>.restore.reg 并通过 winreg 写入）
+/// 仍被其它已启用优化项占用的值不会被删除。
 #[tauri::command]
-pub async fn restore_registry_tweak(name: String) -> Result<PerfTweakResult, String> {
+pub async fn restore_registry_tweak(
+    name: String,
+    vendor: Option<String>,
+) -> Result<PerfTweakResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
     tokio::task::spawn_blocking(move || {
-        let content = read_reg_file(&name, true)?;
+        let v = vendor.as_deref().filter(|s| !s.trim().is_empty());
+        let (raw, _available) = read_expanded_reg(&name, true, v)?;
+        let (content, skipped) = filter_restore_content(&name, &raw, &[]);
         if let Err(e) = apply_reg_content(&content) {
             if is_access_denied_err(&e) {
-                let path = resolve_reg_path(&name, true)?;
+                let path = write_temp_reg(&content, &format!("nexbox_restore_{}", name))?;
                 elevated_reg_import(&path)?;
             } else {
                 return Err(e);
@@ -4720,32 +5064,99 @@ pub async fn restore_registry_tweak(name: String) -> Result<PerfTweakResult, Str
         }
         Ok(PerfTweakResult {
             success: true,
-            message: "优化已恢复".to_string(),
+            message: if skipped > 0 {
+                format!("优化已恢复（{} 个值仍被其它已启用项使用，已保留）", skipped)
+            } else {
+                "优化已恢复".to_string()
+            },
         })
     })
     .await
     .map_err(|e| format!("恢复执行线程异常: {}", e))?
 }
 
-/// 并行执行一批注册表 .reg 应用/恢复任务（注册表写入互不冲突，按 CPU 数分块并发）
-/// 返回 (成功数, 失败列表)。restore=true 时读取 <name>.restore.reg 执行恢复。
-fn batch_apply_reg_files(names: &[String], restore: bool) -> (usize, Vec<(String, String)>) {
+/// 执行一批注册表 .reg 应用/恢复任务。
+/// 涉及相同注册表键的项归入同一 worker 串行执行，避免同键写入顺序不确定；
+/// 无交集的项才按 CPU 数并发。restore=true 时读取 <name>.restore.reg 并做引用计数过滤。
+fn batch_apply_reg_files(
+    names: &[String],
+    vendors: &[String],
+    restore: bool,
+) -> (usize, Vec<(String, String)>) {
     let results: Mutex<Vec<(String, Result<(), String>)>> = Mutex::new(Vec::new());
+
+    // 预读并展开，同时收集每项涉及的键集合
+    let mut prepared: Vec<(String, String, std::collections::HashSet<String>)> = Vec::new();
+    let mut failed: Vec<(String, String)> = Vec::new();
+    for (i, name) in names.iter().enumerate() {
+        let v = vendors.get(i).map(|s| s.as_str()).filter(|s| !s.trim().is_empty());
+        match read_expanded_reg(name, restore, v) {
+            Ok((content, available)) => {
+                if !available {
+                    // 本机无该厂商显卡：视为跳过而非失败
+                    continue;
+                }
+                let content = if restore {
+                    // 批量恢复时，本批次内的其它项也要一并排除占用判断
+                    let (filtered, _) = filter_restore_content(name, &content, names);
+                    filtered
+                } else {
+                    content
+                };
+                let keys: std::collections::HashSet<String> = parse_reg_entries(&content)
+                    .into_iter()
+                    .map(|(k, _, _)| k.to_lowercase())
+                    .collect();
+                prepared.push((name.clone(), content, keys));
+            }
+            Err(e) => failed.push((name.clone(), e)),
+        }
+    }
+
+    // 按「键集合有交集」做并查集分组，同组串行
+    let mut group_of: Vec<usize> = (0..prepared.len()).collect();
+    for i in 0..prepared.len() {
+        for j in 0..i {
+            if prepared[i].2.intersection(&prepared[j].2).next().is_some() {
+                let gi = group_of[i];
+                let gj = group_of[j];
+                if gi != gj {
+                    for g in group_of.iter_mut() {
+                        if *g == gi {
+                            *g = gj;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let mut groups: std::collections::BTreeMap<usize, Vec<usize>> = std::collections::BTreeMap::new();
+    for (idx, g) in group_of.iter().enumerate() {
+        groups.entry(*g).or_default().push(idx);
+    }
+
     let worker_count = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4)
         .clamp(1, 8);
-    let chunk_size = (names.len() + worker_count - 1) / worker_count;
+    // 把分组轮转分配到 worker，保证同组一定在同一个 worker 内串行
+    let mut buckets: Vec<Vec<usize>> = vec![Vec::new(); worker_count];
+    for (n, (_, members)) in groups.iter().enumerate() {
+        buckets[n % worker_count].extend(members.iter().copied());
+    }
 
     std::thread::scope(|s| {
-        for chunk in names.chunks(chunk_size.max(1)) {
+        for bucket in buckets {
+            if bucket.is_empty() {
+                continue;
+            }
             let res_ref = &results;
+            let prep_ref = &prepared;
             s.spawn(move || {
                 let mut local: Vec<(String, Result<(), String>)> = Vec::new();
-                for name in chunk {
-                    let r = read_reg_file(name, restore)
-                        .and_then(|content| apply_reg_content(&content));
-                    local.push((name.clone(), r));
+                for idx in bucket {
+                    let (name, content, _) = &prep_ref[idx];
+                    local.push((name.clone(), apply_reg_content(content)));
                 }
                 res_ref.lock().unwrap().extend(local);
             });
@@ -4754,22 +5165,23 @@ fn batch_apply_reg_files(names: &[String], restore: bool) -> (usize, Vec<(String
 
     let all = results.into_inner().unwrap();
     let success_count = all.iter().filter(|(_, r)| r.is_ok()).count();
-    let failed: Vec<(String, String)> = all
-        .into_iter()
-        .filter_map(|(name, r)| r.err().map(|e| (name, e)))
-        .collect();
+    failed.extend(all.into_iter().filter_map(|(name, r)| r.err().map(|e| (name, e))));
     (success_count, failed)
 }
 
-/// 批量应用注册表优化
+/// 批量应用注册表优化（vendors 与 names 一一对应，空串表示不限厂商）
 #[tauri::command]
-pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweakResult, String> {
+pub async fn batch_apply_registry_tweaks(
+    names: Vec<String>,
+    vendors: Option<Vec<String>>,
+) -> Result<PerfTweakResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
     tokio::task::spawn_blocking(move || {
-        let (success_count, failed) = batch_apply_reg_files(&names, false);
+        let vendors = vendors.unwrap_or_default();
+        let (success_count, failed) = batch_apply_reg_files(&names, &vendors, false);
 
         if failed.is_empty() {
             return Ok(PerfTweakResult {
@@ -4782,11 +5194,20 @@ pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweak
         let denied: Vec<&(String, String)> =
             failed.iter().filter(|(_, e)| is_access_denied_err(e)).collect();
         if !denied.is_empty() {
-            let paths: Result<Vec<PathBuf>, String> = denied
+            // 提权导入必须用展开后的内容，否则会把写死的 0000/0001 又导回去
+            let merged_content: Result<String, String> = denied
                 .iter()
-                .map(|(n, _)| resolve_reg_path(n, false))
-                .collect();
-            match paths.and_then(|paths| merge_reg_files(&paths)).and_then(|p| elevated_reg_import(&p)) {
+                .map(|(n, _)| {
+                    let i = names.iter().position(|x| x == n).unwrap_or(usize::MAX);
+                    let v = vendors.get(i).map(|s| s.as_str()).filter(|s| !s.trim().is_empty());
+                    read_expanded_reg(n, false, v).map(|(c, _)| c)
+                })
+                .collect::<Result<Vec<String>, String>>()
+                .map(|parts| parts.join("\r\n"));
+            match merged_content
+                .and_then(|c| write_temp_reg(&c, "nexbox_batch_import"))
+                .and_then(|p| elevated_reg_import(&p))
+            {
                 Ok(()) => {
                     return Ok(PerfTweakResult {
                         success: true,
@@ -4827,15 +5248,19 @@ pub async fn batch_apply_registry_tweaks(names: Vec<String>) -> Result<PerfTweak
     .map_err(|e| format!("批量优化线程异常: {}", e))?
 }
 
-/// 批量恢复注册表优化
+/// 批量恢复注册表优化（vendors 与 names 一一对应，空串表示不限厂商）
 #[tauri::command]
-pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTweakResult, String> {
+pub async fn batch_restore_registry_tweaks(
+    names: Vec<String>,
+    vendors: Option<Vec<String>>,
+) -> Result<PerfTweakResult, String> {
     if !cfg!(target_os = "windows") {
         return Err("此功能仅支持 Windows 系统".to_string());
     }
 
     tokio::task::spawn_blocking(move || {
-        let (success_count, failed) = batch_apply_reg_files(&names, true);
+        let vendors = vendors.unwrap_or_default();
+        let (success_count, failed) = batch_apply_reg_files(&names, &vendors, true);
 
         if failed.is_empty() {
             return Ok(PerfTweakResult {
@@ -4847,11 +5272,22 @@ pub async fn batch_restore_registry_tweaks(names: Vec<String>) -> Result<PerfTwe
         let denied: Vec<&(String, String)> =
             failed.iter().filter(|(_, e)| is_access_denied_err(e)).collect();
         if !denied.is_empty() {
-            let paths: Result<Vec<PathBuf>, String> = denied
+            let merged_content: Result<String, String> = denied
                 .iter()
-                .map(|(n, _)| resolve_reg_path(n, true))
-                .collect();
-            match paths.and_then(|paths| merge_reg_files(&paths)).and_then(|p| elevated_reg_import(&p)) {
+                .map(|(n, _)| {
+                    let i = names.iter().position(|x| x == n).unwrap_or(usize::MAX);
+                    let v = vendors.get(i).map(|s| s.as_str()).filter(|s| !s.trim().is_empty());
+                    read_expanded_reg(n, true, v).map(|(c, _)| {
+                        // 全量恢复时本批次全部排除，避免互相保留导致删不掉
+                        filter_restore_content(n, &c, &names).0
+                    })
+                })
+                .collect::<Result<Vec<String>, String>>()
+                .map(|parts| parts.join("\r\n"));
+            match merged_content
+                .and_then(|c| write_temp_reg(&c, "nexbox_batch_restore"))
+                .and_then(|p| elevated_reg_import(&p))
+            {
                 Ok(()) => {
                     return Ok(PerfTweakResult {
                         success: true,
