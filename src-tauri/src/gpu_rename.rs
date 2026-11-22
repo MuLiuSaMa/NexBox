@@ -287,7 +287,7 @@ fn is_integrated_by_name(name: &str) -> bool {
 /// 2. LocationInformation 判断（核显通常标记为 "Internal Graphics" / "on board"）
 /// 3. Vendor ID 兜底：若 vendor 为 Intel(8086) 且名称不含 "Arc"，则视为核显
 ///    （Intel 独显仅有 Arc 系列，其余 Intel 显卡均为核显。
-///     此兜底用于应对核显被旧版改名工具改成独显名字后名称判断失效的情况。）
+///    此兜底用于应对核显被旧版改名工具改成独显名字后名称判断失效的情况。）
 ///
 /// 注意：不能依据 LocationInformation 是否包含 "bus 0" 来判断 ——
 /// 独立显卡的 LocationInformation 通常是 "PCI bus 0, device X, function Y"，同样包含 "bus 0"，
@@ -370,7 +370,7 @@ fn read_gpu_name(key: &RegKey) -> Option<String> {
 ///   原始名，与 Legacy 恢复逻辑（只恢复第一张独显）保持一致，
 ///   避免出现「已备份但右侧没有原始显卡」的显示不一致。
 #[cfg(target_os = "windows")]
-fn apply_backup_to_list(list: &mut Vec<GpuInfo>, backup: &Option<BackupData>) {
+fn apply_backup_to_list(list: &mut [GpuInfo], backup: &Option<BackupData>) {
     let mut backup_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     if let Some(BackupData::Multi(entries)) = backup {
         for e in entries {

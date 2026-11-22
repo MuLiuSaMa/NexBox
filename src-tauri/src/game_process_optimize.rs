@@ -253,7 +253,7 @@ fn process_matches(process_name: &str, entry: &str) -> bool {
 fn find_pids_by_name(system: &System, names: &[String]) -> Vec<u32> {
     let mut pids = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         if names.iter().any(|n| process_matches(&name, n)) {
             let pid = process.pid().as_u32();
@@ -1257,7 +1257,7 @@ pub async fn list_running_processes() -> Result<Vec<RunningProcessInfo>, String>
 
     let mut seen = std::collections::HashSet::new();
     let mut list: Vec<RunningProcessInfo> = Vec::new();
-    for (_, proc_) in sys.processes() {
+    for proc_ in sys.processes().values() {
         let name = proc_.name().to_string();
         if name.is_empty() || seen.contains(&name.to_lowercase()) {
             continue;

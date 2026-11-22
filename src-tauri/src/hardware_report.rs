@@ -161,26 +161,24 @@ fn load_disk_data() -> Vec<HardwareSnapshot> {
 
     if let Ok(file) = File::open(&path) {
         let reader = BufReader::new(file);
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if line.trim().is_empty() {
-                    continue;
-                }
-                if let Ok(snap) = serde_json::from_str::<HardwareSnapshot>(&line) {
-                    // 只保留 30 天内的数据
-                    if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&snap.timestamp) {
-                        if ts < thirty_days_ago {
-                            continue;
-                        }
+        for line in reader.lines().map_while(Result::ok) {
+            if line.trim().is_empty() {
+                continue;
+            }
+            if let Ok(snap) = serde_json::from_str::<HardwareSnapshot>(&line) {
+                // 只保留 30 天内的数据
+                if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(&snap.timestamp) {
+                    if ts < thirty_days_ago {
+                        continue;
                     }
-                    all_data.push(snap);
                 }
+                all_data.push(snap);
             }
         }
     }
 
     // 按时间排序
-    all_data.sort_by(|a, b| a.elapsed_sec.cmp(&b.elapsed_sec));
+    all_data.sort_by_key(|a| a.elapsed_sec);
     all_data
 }
 

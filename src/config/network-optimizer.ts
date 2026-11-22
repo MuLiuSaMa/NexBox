@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { Globe, Network, Zap } from "lucide-react";
+import { Network, Zap } from "lucide-react";
 
 export interface DnsPreset {
   id: string;

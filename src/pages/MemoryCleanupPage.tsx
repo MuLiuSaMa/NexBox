@@ -1,12 +1,7 @@
-import {
-  Box, Heading, VStack, Text, HStack, useColorModeValue,
-  Button, Progress, SimpleGrid, Switch,
-  Slider, SliderTrack, SliderFilledTrack, SliderThumb,
-  Input, Alert, AlertIcon, AlertDescription, Badge,
-} from "@chakra-ui/react";
+import { Box, VStack, Text, HStack, Button, Progress, SimpleGrid, Switch, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Input, Alert, AlertIcon, AlertDescription, Badge } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { MemoryStick, Cpu, HardDrive, Settings } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,9 +9,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { LazyStore } from "@tauri-apps/plugin-store";
 import { CustomSelect } from "@/components/special/custom-select";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { useBackground } from "@/contexts/background-context";
+
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface MemoryData {
   physical_total: number; physical_used: number; physical_available: number;
   virtual_total: number; virtual_used: number; virtual_available: number;
@@ -24,9 +20,6 @@ interface MemoryData {
 }
 interface CleanupResult { success: boolean; message: string; freed_mb: number; }
 interface GameStartCleanConfig { enabled: boolean; }
-interface AutoCleanConfig {
-  enabled: boolean; interval_seconds: number; threshold_mb: number; clean_type: string;
-}
 
 interface PagefileRecommendation {
   verdict: string; suggested_initial_mb: number; suggested_max_mb: number; message: string;
@@ -59,18 +52,19 @@ function getDriveLabel(path: string): string {
 const store = new LazyStore("auto-clean.json");
 
 export default function MemoryCleanupPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
+
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const toast = useDynamicIsland("memory");
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const labelColor = useColorModeValue("gray.600", "#ffffff");
-  const trackBg = useColorModeValue("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
+
+  const cardBorder = cm("gray.200", "#333333");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const labelColor = cm("gray.600", "#ffffff");
+  const trackBg = cm("gray.200", "#333333");
 
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +163,8 @@ export default function MemoryCleanupPage() {
         console.error("Auto-clean toggle error:", error);
       }
     })();
+    // autoCleanType/Interval/Threshold 变化由 restartAutoClean 显式触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoClean]);
 
   const restartAutoClean = useCallback(async () => {
@@ -218,7 +214,7 @@ export default function MemoryCleanupPage() {
     await store.save();
   };
 
-  const handleThresholdChangeEnd = async (value: number) => {
+  const handleThresholdChangeEnd = async (_value: number) => {
     await restartAutoClean();
   };
 
@@ -477,6 +473,7 @@ export default function MemoryCleanupPage() {
           size="sm"
           colorScheme={progressColor}
           borderRadius="full"
+          data-corner="round"
           mb={3}
           bg={trackBg}
         />
@@ -760,6 +757,7 @@ export default function MemoryCleanupPage() {
                                       px={2}
                                       py={0.5}
                                       borderRadius="full"
+                                      data-corner="round"
                                       fontWeight="600"
                                     >
                                       {t(`optimization.memoryCleanup.pagefile.mode${d.mode === "none" ? "None" : d.mode === "custom" ? "Custom" : "System"}`)}
@@ -772,7 +770,7 @@ export default function MemoryCleanupPage() {
                                         <Button
                                           key={mode}
                                           size="sm"
-                                          borderRadius="full"
+                                          borderRadius="full" data-corner="round"
                                           bg={active ? themeConfig.primaryColor : undefined}
                                           color={active ? getContrastTextColor() : labelColor}
                                           border={active ? "none" : "1px solid"}
@@ -866,7 +864,7 @@ export default function MemoryCleanupPage() {
                           <Alert
                             status={pagefile.recommendation.verdict === "low" ? "warning" : pagefile.recommendation.verdict === "high" ? "error" : "success"}
                             borderRadius="xl"
-                            bg={useColorModeValue("orange.50", "rgba(255, 165, 0, 0.1)")}
+                            bg={cm("orange.50", "rgba(255, 165, 0, 0.1)")}
                             borderLeft="4px solid"
                             borderColor={pagefile.recommendation.verdict === "low" ? "orange.400" : pagefile.recommendation.verdict === "high" ? "red.400" : "green.400"}
                           >

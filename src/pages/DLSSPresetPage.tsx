@@ -19,17 +19,17 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  MenuOptionGroup,
-  MenuItemOption,
+  
+  
   Spinner,
-  Divider,
+  
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
-import { Cpu, Eye, FileText, Settings, ChevronDown, Check, Monitor, Thermometer } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+import { Cpu, Eye, FileText, Settings, ChevronDown, Check, Monitor} from "lucide-react";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -108,7 +108,7 @@ interface TextureQualityOption {
   name: string;
   description: string;
 }
-const getTextureQualityOptions = (t: (key: string) => string): TextureQualityOption[] => [
+const getTextureQualityOptions = (_t: (key: string) => string): TextureQualityOption[] => [
   { id: "default", name: "默认", description: "不修改" },
   { id: "high_quality", name: "高质量", description: "最高纹理过滤质量" },
   { id: "quality", name: "质量", description: "平衡画质与性能" },
@@ -121,7 +121,7 @@ interface AntialiasingOption {
   name: string;
   description: string;
 }
-const getAntialiasingOptions = (t: (key: string) => string): AntialiasingOption[] => [
+const getAntialiasingOptions = (_t: (key: string) => string): AntialiasingOption[] => [
   { id: "default", name: "默认", description: "不修改" },
   { id: "off", name: "关", description: "关闭透明度超采样" },
   { id: "2x", name: "2x 超采样", description: "2倍透明度超采样" },
@@ -190,7 +190,8 @@ function DLSSCard() {
   const [selectedTextureQuality, setSelectedTextureQuality] = useState("default");
   const [selectedAntialiasing, setSelectedAntialiasing] = useState("default");
   const [isApplying, setIsApplying] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
+
   const dlssPresets = getDLSSPresets(t);
   const dlssQualityOptions = getDLSSQualityOptions(t);
   const textureQualityOptions = getTextureQualityOptions(t);
@@ -284,7 +285,7 @@ function DLSSCard() {
               <LiquidGlassCard px={3} py={1.5}>
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentPreset?.name}</Badge>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{currentPreset?.name}</Badge>
                     <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentPreset?.description}</Text>
                     {currentPreset?.recommended && <Badge colorScheme="green" fontSize="8px">{t("deltaForce.recommended")}</Badge>}
                   </HStack>
@@ -297,7 +298,7 @@ function DLSSCard() {
                 <MenuItem key={preset.id} onClick={() => setSelectedPreset(preset.id)} bg={selectedPreset === preset.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
-                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{preset.name}</Badge>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{preset.name}</Badge>
                       <Text fontSize="sm" color={textColor}>{preset.description}</Text>
                     </HStack>
                     <HStack spacing={2}>
@@ -318,7 +319,7 @@ function DLSSCard() {
               <LiquidGlassCard px={3} py={1.5}>
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentQuality?.name}</Badge>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{currentQuality?.name}</Badge>
                     <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentQuality?.description}</Text>
                   </HStack>
                   <ChevronDown size={16} />
@@ -330,7 +331,7 @@ function DLSSCard() {
                 <MenuItem key={option.id} onClick={() => setSelectedQuality(option.id)} bg={selectedQuality === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
-                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{option.name}</Badge>
                       <Text fontSize="sm" color={textColor}>{option.description}</Text>
                     </HStack>
                     {selectedQuality === option.id && <Check size={14} color={themeConfig.primaryColor} />}
@@ -348,7 +349,7 @@ function DLSSCard() {
               <LiquidGlassCard px={3} py={1.5}>
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentTextureQuality?.name}</Badge>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{currentTextureQuality?.name}</Badge>
                     <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentTextureQuality?.description}</Text>
                   </HStack>
                   <ChevronDown size={16} />
@@ -360,7 +361,7 @@ function DLSSCard() {
                 <MenuItem key={option.id} onClick={() => setSelectedTextureQuality(option.id)} bg={selectedTextureQuality === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
-                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{option.name}</Badge>
                       <Text fontSize="sm" color={textColor}>{option.description}</Text>
                     </HStack>
                     {selectedTextureQuality === option.id && <Check size={14} color={themeConfig.primaryColor} />}
@@ -378,7 +379,7 @@ function DLSSCard() {
               <LiquidGlassCard px={3} py={1.5}>
                 <HStack justify="space-between">
                   <HStack spacing={2}>
-                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{currentAntialiasing?.name}</Badge>
+                    <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{currentAntialiasing?.name}</Badge>
                     <Text fontSize="xs" color={subTextColor} noOfLines={1}>{currentAntialiasing?.description}</Text>
                   </HStack>
                   <ChevronDown size={16} />
@@ -390,7 +391,7 @@ function DLSSCard() {
                 <MenuItem key={option.id} onClick={() => setSelectedAntialiasing(option.id)} bg={selectedAntialiasing === option.id ? hoverBg : "transparent"} _hover={{ bg: hoverBg }}>
                   <HStack spacing={3} w="full" justify="space-between">
                     <HStack spacing={2}>
-                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" px={2}>{option.name}</Badge>
+                      <Badge bg={hexToRgba(themeConfig.primaryColor, 0.15)} color={themeConfig.primaryColor} borderRadius="full" data-corner="round" px={2}>{option.name}</Badge>
                       <Text fontSize="sm" color={textColor}>{option.description}</Text>
                     </HStack>
                     {selectedAntialiasing === option.id && <Check size={14} color={themeConfig.primaryColor} />}
@@ -430,7 +431,7 @@ function pickDisplayGpu(info: HardwareInfo | null): GpuInfo | null {
 }
 
 function GpuInfoCard() {
-  const { config: themeConfig } = useThemeColor();
+
   // 复用应用启动时已加载的硬件信息：进页面即可同步渲染，不再每次重新扫描全量硬件
   const { hardwareInfo } = useAppStartup();
   const [gpuInfo, setGpuInfo] = useState<GpuInfo | null>(() => pickDisplayGpu(hardwareInfo));
@@ -599,6 +600,7 @@ function PresetReferenceTable() {
                     bg={hexToRgba(themeConfig.primaryColor, 0.15)}
                     color={themeConfig.primaryColor}
                     borderRadius="full"
+                    data-corner="round"
                     px={3}
                     py={1}
                   >
@@ -618,7 +620,7 @@ function PresetReferenceTable() {
 
 export default function DLSSPresetPage() {
   const { t } = useTranslation();
-  const { config: themeConfig } = useThemeColor();
+
 
   return (
     <Box pt={8} pb={8}>

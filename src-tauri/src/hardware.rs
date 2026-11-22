@@ -39,6 +39,8 @@ pub struct CpuInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+// 变体名参与序列化（前端按 "NVIDIA"/"AMD" 匹配），改名会破坏已有数据与前端判断
+#[allow(clippy::upper_case_acronyms)]
 pub enum GpuVendor {
     NVIDIA,
     AMD,
@@ -974,7 +976,7 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
 
     let mut gpus = Vec::new();
     for row in &rows {
-        let name = row.get("Name").and_then(|v| v_str(v)).unwrap_or_default();
+        let name = row.get("Name").and_then(v_str).unwrap_or_default();
         // 排除 Microsoft 基础显示适配器（未安装驱动的占位设备）
         if name.is_empty() || name.to_lowercase().contains("basic display") {
             continue;
@@ -982,7 +984,7 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
         // 结构化过滤：物理显卡的 DeviceID 必须含 PCI\VEN_ 且厂商不在虚拟黑名单。
         // 排除基础显示适配器、RDP 远程显示、SWD 软件设备、虚拟化伪 PCI 显卡、
         // 以及 MuMu / GameViewer 等非 PCI 路径的 IDD 虚拟显示器。
-        let device_id = row.get("DeviceID").and_then(|v| v_str(v)).unwrap_or_default();
+        let device_id = row.get("DeviceID").and_then(v_str).unwrap_or_default();
         if !is_physical_pci_gpu(&device_id) {
             log::debug!("跳过非物理 PCI 显卡(WMI): {} ({})", name, device_id);
             continue;
@@ -993,7 +995,7 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
             continue;
         }
         // 排除状态异常设备（Error / Degraded）
-        if let Some(status) = row.get("Status").and_then(|v| v_str(v)) {
+        if let Some(status) = row.get("Status").and_then(v_str) {
             let s = status.to_lowercase();
             if s.contains("error") || s.contains("degraded") {
                 log::info!("跳过状态异常的显卡: {} ({})", name, status);
@@ -1005,12 +1007,12 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
         // AdapterRAM 单位为字节，超过 4GB 会溢出为 0，此处仅作兜底（动态源会补充真实显存）
         let memory_gb = row
             .get("AdapterRAM")
-            .and_then(|v| v_u64(v))
+            .and_then(v_u64)
             .map(|b| b as f64 / 1024.0 / 1024.0 / 1024.0)
             .filter(|v| *v > 0.0);
         let driver_date = row
             .get("DriverDate")
-            .and_then(|v| v_str(v))
+            .and_then(v_str)
             .map(|d| format_driver_date(&d))
             .unwrap_or_default();
 
@@ -1020,35 +1022,35 @@ pub(crate) fn get_gpus_static_from_wmi() -> Vec<GpuStaticInfo> {
             memory_gb,
             driver_version: row
                 .get("DriverVersion")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
             video_processor: row
                 .get("VideoProcessor")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
             adapter_compatibility: row
                 .get("AdapterCompatibility")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
             driver_date,
             installed_drivers: row
                 .get("InstalledDisplayDrivers")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
             video_mode: row
                 .get("VideoModeDescription")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
-            resolution_width: row.get("CurrentHorizontalResolution").and_then(|v| v_u32(v)),
-            resolution_height: row.get("CurrentVerticalResolution").and_then(|v| v_u32(v)),
-            refresh_rate: row.get("CurrentRefreshRate").and_then(|v| v_u32(v)),
-            device_id: row.get("DeviceID").and_then(|v| v_str(v)).unwrap_or_default(),
+            resolution_width: row.get("CurrentHorizontalResolution").and_then(v_u32),
+            resolution_height: row.get("CurrentVerticalResolution").and_then(v_u32),
+            refresh_rate: row.get("CurrentRefreshRate").and_then(v_u32),
+            device_id: row.get("DeviceID").and_then(v_str).unwrap_or_default(),
             pnp_device_id: row
                 .get("PNPDeviceID")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .unwrap_or_default(),
-            status: row.get("Status").and_then(|v| v_str(v)).unwrap_or_default(),
-            inf_filename: row.get("InfName").and_then(|v| v_str(v)).unwrap_or_default(),
+            status: row.get("Status").and_then(v_str).unwrap_or_default(),
+            inf_filename: row.get("InfName").and_then(v_str).unwrap_or_default(),
             video_architecture: None,
             video_memory_type: None,
         });
@@ -1070,7 +1072,7 @@ fn get_gpu_info() -> Vec<GpuInfo> {
     // 两者都提供真实显存，修复 AMD 显卡 >4GB 显存被 WMI AdapterRAM(Uint32) 溢出吞掉的问题。
 
     // 1. NVML 获取 NVIDIA 显卡（最佳方案：提供完整信息包括驱动版本；已过滤 vGPU）
-    let nvml_gpus = match std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml()) {
+    let nvml_gpus = match std::panic::catch_unwind(get_nvidia_gpus_with_nvml) {
         Ok(Ok(gpus)) => gpus,
         Ok(Err(e)) => {
             log::debug!("NVML 查询失败，仅用 LHML: {}", e);
@@ -1217,15 +1219,18 @@ fn is_integrated_gpu_name(name: &str) -> bool {
     false
 }
 
+/// 单条动态读数：(归一化名称, 温度, 占用, 显存)
+type GpuDynamicReading = (String, Option<f64>, Option<u32>, Option<f64>);
+
 /// 获取 GPU 动态数据：(温度, 占用, 显存)。
 /// 显存优先取 NVML（NVIDIA）/ LHML（AMD 等独显）的真实值，来源返回 None 则无显存。
 fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Option<u32>, Option<f64>)> {
     // 收集各数据源的动态读数：(归一化名称, 温度, 占用, 显存)
     // NVIDIA → NVML；AMD / Intel → LHML
-    let mut dynamic: Vec<(String, Option<f64>, Option<u32>, Option<f64>)> = Vec::new();
+    let mut dynamic: Vec<GpuDynamicReading> = Vec::new();
 
     // 1. NVIDIA：NVML
-    let nvml_result = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
+    let nvml_result = std::panic::catch_unwind(get_nvidia_gpus_with_nvml);
     if let Ok(Ok(gpus)) = nvml_result {
         for g in &gpus {
             dynamic.push((
@@ -1238,7 +1243,7 @@ fn get_gpu_dynamic_info(gpu_static: &[GpuStaticInfo]) -> Vec<(Option<f64>, Optio
     }
 
     // 2. AMD / Intel / 通用：LHML（LibreHardwareMonitor）
-    let lhml_result = std::panic::catch_unwind(|| get_gpus_from_lhml());
+    let lhml_result = std::panic::catch_unwind(get_gpus_from_lhml);
     if let Ok(gpus) = lhml_result {
         for g in &gpus {
             dynamic.push((
@@ -1601,16 +1606,16 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
         // 日志
         if let Some(m) = mobo_row {
-            let manu = m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
-            let prod = m.get("Product").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let manu = m.get("Manufacturer").and_then(wmi_query::v_str).unwrap_or_default();
+            let prod = m.get("Product").and_then(wmi_query::v_str).unwrap_or_default();
             log::info!("主板: {} {}", manu, prod);
         } else if let Some(s) = sys_row {
-            let manu = s.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
-            let model = s.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let manu = s.get("Manufacturer").and_then(wmi_query::v_str).unwrap_or_default();
+            let model = s.get("Model").and_then(wmi_query::v_str).unwrap_or_default();
             log::info!("主板(Win32_BaseBoard 为空，回退 Win32_ComputerSystem): {} {}", manu, model);
         }
         if let Some(b) = bios_row {
-            let ver = b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+            let ver = b.get("SMBIOSBIOSVersion").and_then(wmi_query::v_str).unwrap_or_default();
             log::info!("BIOS: {}", ver);
         }
 
@@ -1623,30 +1628,30 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
 
         // 兜底：BaseBoard 为空时用 ComputerSystem 的 Manufacturer / Model
         let product = mobo_row
-            .and_then(|m| m.get("Product").and_then(|v| wmi_query::v_str(v)))
-            .or_else(|| sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))))
+            .and_then(|m| m.get("Product").and_then(wmi_query::v_str))
+            .or_else(|| sys_row.and_then(|s| s.get("Model").and_then(wmi_query::v_str)))
             .unwrap_or_else(|| "未知".to_string());
         let manufacturer = mobo_row
-            .and_then(|m| m.get("Manufacturer").and_then(|v| wmi_query::v_str(v)))
-            .or_else(|| sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))))
+            .and_then(|m| m.get("Manufacturer").and_then(wmi_query::v_str))
+            .or_else(|| sys_row.and_then(|s| s.get("Manufacturer").and_then(wmi_query::v_str)))
             .unwrap_or_else(|| "未知".to_string());
 
         let chassis_types = chassis_row
             .and_then(|c| c.get("ChassisTypes"))
-            .map(|v| wmi_query::v_u16_arr(v))
+            .map(wmi_query::v_u16_arr)
             .filter(|a| !a.is_empty());
 
         Some(MotherboardInfo {
             product,
             manufacturer,
-            serial_number: mobo_row.and_then(|m| m.get("SerialNumber").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            version: mobo_row.and_then(|m| m.get("Version").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            bios_vendor: bios_row.and_then(|b| b.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            bios_version: bios_row.and_then(|b| b.get("SMBIOSBIOSVersion").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            bios_release_date: bios_row.and_then(|b| b.get("ReleaseDate").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            system_manufacturer: sys_row.and_then(|s| s.get("Manufacturer").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            system_model: sys_row.and_then(|s| s.get("Model").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
-            system_type: sys_row.and_then(|s| s.get("SystemType").and_then(|v| wmi_query::v_str(v))).unwrap_or_else(|| "未知".to_string()),
+            serial_number: mobo_row.and_then(|m| m.get("SerialNumber").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            version: mobo_row.and_then(|m| m.get("Version").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            bios_vendor: bios_row.and_then(|b| b.get("Manufacturer").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            bios_version: bios_row.and_then(|b| b.get("SMBIOSBIOSVersion").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            bios_release_date: bios_row.and_then(|b| b.get("ReleaseDate").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            system_manufacturer: sys_row.and_then(|s| s.get("Manufacturer").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            system_model: sys_row.and_then(|s| s.get("Model").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
+            system_type: sys_row.and_then(|s| s.get("SystemType").and_then(wmi_query::v_str)).unwrap_or_else(|| "未知".to_string()),
             chassis_type: chassis_type_name(&chassis_types),
         })
     });
@@ -1657,15 +1662,15 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
             Ok(results) => {
                 log::info!("获取到{}个内存条信息", results.len());
                 results.into_iter().map(|row| {
-                    let capacity_bytes = row.get("Capacity").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0) as f64;
+                    let capacity_bytes = row.get("Capacity").and_then(wmi_query::v_u64).unwrap_or(0) as f64;
                     // 内存厂商：WMI 常返回十六进制 JEDEC 码或占位串（Unknown / To be filled by O.E.M. 等），
                     // 统一解码为真实品牌；无法识别的真实厂商保留原文，占位/空回退“未知”。
                     let manufacturer = crate::jedec::resolve_mem_manufacturer(
-                        row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).as_deref(),
+                        row.get("Manufacturer").and_then(wmi_query::v_str).as_deref(),
                     ).unwrap_or_else(|| "未知".to_string());
                     // 型号：去除尾部填充的空格/\0，纯占位（全 0 / 全 F / 空）回退“未知”。
                     let part_number = {
-                        let raw = row.get("PartNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let raw = row.get("PartNumber").and_then(wmi_query::v_str).unwrap_or_default();
                         let trimmed = raw.trim().trim_end_matches('\0').trim().to_string();
                         let is_placeholder = trimmed.is_empty()
                             || trimmed.chars().all(|c| c == '0')
@@ -1674,11 +1679,11 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                     };
                     // 内存类型：MemoryType 在部分系统（尤其 DDR5）返回 0/未知，回退 SMBIOSMemoryType。
                     let memory_type = {
-                        let primary = memory_type_name(row.get("MemoryType").and_then(|v| wmi_query::v_u16(v)));
+                        let primary = memory_type_name(row.get("MemoryType").and_then(wmi_query::v_u16));
                         if primary != "未知" {
                             primary
                         } else {
-                            memory_type_name(row.get("SMBIOSMemoryType").and_then(|v| wmi_query::v_u16(v)))
+                            memory_type_name(row.get("SMBIOSMemoryType").and_then(wmi_query::v_u16))
                         }
                     };
                     MemoryInfo {
@@ -1688,19 +1693,19 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                         // Speed: 优先使用 ConfiguredClockSpeed（实际运行频率），
                         // 回退到 Speed（模块额定频率），因为 Speed 在某些系统（特别是 DDR5）上可能不准确
                         speed_mhz: {
-                            let configured = row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0);
+                            let configured = row.get("ConfiguredClockSpeed").and_then(wmi_query::v_u32).unwrap_or(0);
                             if configured > 0 { configured }
-                            else { row.get("Speed").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0) }
+                            else { row.get("Speed").and_then(wmi_query::v_u32).unwrap_or(0) }
                         },
-                        bank_label: row.get("BankLabel").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        form_factor: memory_form_factor_name(row.get("FormFactor").and_then(|v| wmi_query::v_u16(v))),
+                        bank_label: row.get("BankLabel").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        form_factor: memory_form_factor_name(row.get("FormFactor").and_then(wmi_query::v_u16)),
                         memory_type,
-                        configured_clock_speed: row.get("ConfiguredClockSpeed").and_then(|v| wmi_query::v_u32(v)),
-                        configured_voltage: row.get("ConfiguredVoltage").and_then(|v| wmi_query::v_u32(v)),
-                        data_width: row.get("DataWidth").and_then(|v| wmi_query::v_u32(v)),
-                        total_width: row.get("TotalWidth").and_then(|v| wmi_query::v_u32(v)),
-                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        type_detail: row.get("TypeDetail").and_then(|v| wmi_query::v_u16(v)).map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
+                        configured_clock_speed: row.get("ConfiguredClockSpeed").and_then(wmi_query::v_u32),
+                        configured_voltage: row.get("ConfiguredVoltage").and_then(wmi_query::v_u32),
+                        data_width: row.get("DataWidth").and_then(wmi_query::v_u32),
+                        total_width: row.get("TotalWidth").and_then(wmi_query::v_u32),
+                        serial_number: row.get("SerialNumber").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        type_detail: row.get("TypeDetail").and_then(wmi_query::v_u16).map(|d| d.to_string()).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<MemoryInfo>>()
             }
@@ -1721,25 +1726,25 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                 // 卷 → 物理盘号映射，用于获取每个硬盘的准确分区容量
                 let volume_map = enumerate_volumes_by_disk();
                 results.into_iter().map(|row| {
-                    let index = row.get("Index").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0);
+                    let index = row.get("Index").and_then(wmi_query::v_u32).unwrap_or(0);
                     let partition_total_gb =
                         volume_map.get(&index).map(|ps| ps.iter().map(|p| p.total_gb).sum());
                     let size_gb = resolve_disk_size_gb(
-                        row.get("Size").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0),
+                        row.get("Size").and_then(wmi_query::v_u64).unwrap_or(0),
                         partition_total_gb,
                     );
-                    let media_type = row.get("MediaType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                    let media_type = row.get("MediaType").and_then(wmi_query::v_str).unwrap_or_default();
                     let is_ssd = media_type.to_lowercase().contains("ssd") || media_type.to_lowercase().contains("solid state");
                     DiskDetailInfo {
-                        model: row.get("Model").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        model: row.get("Model").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                         size_gb,
-                        interface_type: row.get("InterfaceType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        serial_number: row.get("SerialNumber").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        firmware_revision: row.get("FirmwareRevision").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        interface_type: row.get("InterfaceType").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        serial_number: row.get("SerialNumber").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        firmware_revision: row.get("FirmwareRevision").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                         media_type: if media_type.is_empty() { "未知".to_string() } else { media_type },
-                        bytes_per_sector: row.get("BytesPerSector").and_then(|v| wmi_query::v_u32(v)),
-                        partitions: row.get("Partitions").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
-                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        bytes_per_sector: row.get("BytesPerSector").and_then(wmi_query::v_u32),
+                        partitions: row.get("Partitions").and_then(wmi_query::v_u32).unwrap_or(0),
+                        status: row.get("Status").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                         is_ssd,
                     }
                 }).collect::<Vec<DiskDetailInfo>>()
@@ -1765,9 +1770,9 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                 ];
                 let filtered: Vec<_> = results.into_iter()
                     .filter(|row| {
-                        let status = row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
-                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
-                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let status = row.get("Status").and_then(wmi_query::v_str).unwrap_or_default();
+                        let pnp = row.get("PNPDeviceID").and_then(wmi_query::v_str).unwrap_or_default();
+                        let name = row.get("Name").and_then(wmi_query::v_str).unwrap_or_default();
                         if status != "OK" { return false; }
                         let pnp_lower = pnp.to_lowercase();
                         if pnp_lower.starts_with("usb\\") || pnp_lower.starts_with("hid\\") || pnp_lower.starts_with("swd\\") {
@@ -1780,11 +1785,11 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                 log::info!("获取到{}个声卡信息", filtered.len());
                 filtered.into_iter().map(|row| {
                     SoundCardInfo {
-                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        status: row.get("Status").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        device_id: row.get("DeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        pnp_device_id: row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        name: row.get("Name").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        status: row.get("Status").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        device_id: row.get("DeviceID").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        pnp_device_id: row.get("PNPDeviceID").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<SoundCardInfo>>()
             }
@@ -1813,10 +1818,10 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                         let physical = matches!(row.get("PhysicalAdapter"), Some(Variant::Bool(true)));
                         let enabled = matches!(row.get("NetEnabled"), Some(Variant::Bool(true)));
                         if !physical || !enabled { return false; }
-                        let pnp = row.get("PNPDeviceID").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let pnp = row.get("PNPDeviceID").and_then(wmi_query::v_str).unwrap_or_default();
                         if pnp.to_lowercase().starts_with("swd\\") { return false; }
-                        let name = row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
-                        let adapter = row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_default();
+                        let name = row.get("Name").and_then(wmi_query::v_str).unwrap_or_default();
+                        let adapter = row.get("AdapterType").and_then(wmi_query::v_str).unwrap_or_default();
                         let name_lower = name.to_lowercase();
                         !net_filter_keywords.iter().any(|kw| name_lower.contains(&kw.to_lowercase()))
                             && !adapter.to_lowercase().contains("loopback")
@@ -1824,19 +1829,19 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
                     .collect();
                 log::info!("获取到{}个网卡信息", filtered.len());
                 filtered.into_iter().map(|row| {
-                    let speed_bps = row.get("Speed").and_then(|v| wmi_query::v_u64(v)).unwrap_or(0);
-                    let max_bps = row.get("MaxSpeed").and_then(|v| wmi_query::v_u64(v));
+                    let speed_bps = row.get("Speed").and_then(wmi_query::v_u64).unwrap_or(0);
+                    let max_bps = row.get("MaxSpeed").and_then(wmi_query::v_u64);
                     NetworkCardInfo {
-                        name: row.get("Name").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        manufacturer: row.get("Manufacturer").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        adapter_type: row.get("AdapterType").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        mac_address: row.get("MACAddress").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        name: row.get("Name").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        manufacturer: row.get("Manufacturer").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        adapter_type: row.get("AdapterType").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        mac_address: row.get("MACAddress").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                         speed_mbps: speed_bps / 1_000_000,
-                        connection_name: row.get("NetConnectionID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        service_name: row.get("ServiceName").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
-                        index: row.get("Index").and_then(|v| wmi_query::v_u32(v)).unwrap_or(0),
+                        connection_name: row.get("NetConnectionID").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        service_name: row.get("ServiceName").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
+                        index: row.get("Index").and_then(wmi_query::v_u32).unwrap_or(0),
                         max_speed: max_bps.map(|s| s / 1_000_000),
-                        guid: row.get("GUID").and_then(|v| wmi_query::v_str(v)).unwrap_or_else(|| "未知".to_string()),
+                        guid: row.get("GUID").and_then(wmi_query::v_str).unwrap_or_else(|| "未知".to_string()),
                     }
                 }).collect::<Vec<NetworkCardInfo>>()
             }
@@ -1865,7 +1870,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
         fallback_enumerate_monitors()
     });
 
-    let cpu = cpu_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| CpuInfo {
+    let cpu = cpu_handle.join().unwrap_or(None).unwrap_or_else(|| CpuInfo {
         name: "未知CPU".to_string(),
         manufacturer: "未知".to_string(),
         cores: 0,
@@ -1889,7 +1894,7 @@ fn get_static_hardware_info() -> Result<StaticHardwareInfo, HardwareError> {
     });
 
     let gpu_static = gpu_handle.join().unwrap_or_else(|_| Vec::new());
-    let motherboard = mobo_handle.join().unwrap_or_else(|_| None).unwrap_or_else(|| MotherboardInfo {
+    let motherboard = mobo_handle.join().unwrap_or(None).unwrap_or_else(|| MotherboardInfo {
         product: "未知".to_string(),
         manufacturer: "未知".to_string(),
         serial_number: "未知".to_string(),
@@ -2018,7 +2023,7 @@ pub fn get_hardware_info() -> Result<HardwareInfo, HardwareError> {
 
 #[tauri::command]
 pub async fn get_hardware() -> Result<HardwareInfo, String> {
-    match tauri::async_runtime::spawn_blocking(|| get_hardware_info()).await {
+    match tauri::async_runtime::spawn_blocking(get_hardware_info).await {
         Ok(Ok(info)) => Ok(info),
         Ok(Err(e)) => Err(e.to_string()),
         Err(e) => Err(e.to_string()),
@@ -2027,7 +2032,7 @@ pub async fn get_hardware() -> Result<HardwareInfo, String> {
 
 #[tauri::command]
 pub async fn get_cpu_load() -> Result<Option<u16>, String> {
-    match tauri::async_runtime::spawn_blocking(|| get_cpu_dynamic_info()).await {
+    match tauri::async_runtime::spawn_blocking(get_cpu_dynamic_info).await {
         Ok(load) => Ok(load),
         Err(e) => Err(e.to_string()),
     }
@@ -2043,7 +2048,7 @@ pub struct GpuStatus {
 pub async fn get_gpu_status(index: usize) -> Result<GpuStatus, String> {
     let result = tauri::async_runtime::spawn_blocking(move || {
         // 1. NVML（NVIDIA 最佳方案）
-        let nvml_gpus = std::panic::catch_unwind(|| get_nvidia_gpus_with_nvml());
+        let nvml_gpus = std::panic::catch_unwind(get_nvidia_gpus_with_nvml);
         if let Ok(Ok(gpus)) = nvml_gpus {
             if let Some(gpu) = gpus.get(index) {
                 return GpuStatus {
@@ -2620,12 +2625,12 @@ fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
     .unwrap_or_default();
     let mut part_meta: std::collections::HashMap<u32, (bool, bool)> = std::collections::HashMap::new();
     for r in &partition_rows {
-        if let Some(idx) = r.get("DiskIndex").and_then(|v| v_u32(v)) {
-            let ty = r.get("Type").and_then(|v| v_str(v)).unwrap_or_default();
+        if let Some(idx) = r.get("DiskIndex").and_then(v_u32) {
+            let ty = r.get("Type").and_then(v_str).unwrap_or_default();
             let is_gpt = ty.to_uppercase().contains("GPT");
             let is_boot = r
                 .get("BootPartition")
-                .and_then(|v| v_str(v))
+                .and_then(v_str)
                 .map(|s| s.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
             let e = part_meta.entry(idx).or_insert((false, false));
@@ -2648,14 +2653,14 @@ fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
     let mut unhealthy = 0u32;
 
     for (i, row) in rows.iter().enumerate() {
-        let index = row.get("Index").and_then(|v| v_u32(v)).unwrap_or(i as u32);
-        let model = row.get("Model").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
-        let media_type = row.get("MediaType").and_then(|v| v_str(v)).unwrap_or_default();
-        let wmi_size_gb = row.get("Size").and_then(|v| v_u64(v)).unwrap_or(0) as f64 / 1_073_741_824.0;
-        let interface_type = row.get("InterfaceType").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
-        let serial = row.get("SerialNumber").and_then(|v| v_str(v)).unwrap_or_default();
-        let status = row.get("Status").and_then(|v| v_str(v)).unwrap_or_else(|| "未知".to_string());
-        let pnp = row.get("PNPDeviceID").and_then(|v| v_str(v)).unwrap_or_default();
+        let index = row.get("Index").and_then(v_u32).unwrap_or(i as u32);
+        let model = row.get("Model").and_then(v_str).unwrap_or_else(|| "未知".to_string());
+        let media_type = row.get("MediaType").and_then(v_str).unwrap_or_default();
+        let wmi_size_gb = row.get("Size").and_then(v_u64).unwrap_or(0) as f64 / 1_073_741_824.0;
+        let interface_type = row.get("InterfaceType").and_then(v_str).unwrap_or_else(|| "未知".to_string());
+        let serial = row.get("SerialNumber").and_then(v_str).unwrap_or_default();
+        let status = row.get("Status").and_then(v_str).unwrap_or_else(|| "未知".to_string());
+        let pnp = row.get("PNPDeviceID").and_then(v_str).unwrap_or_default();
 
         // 判定 NVMe / SSD（与前端 isSsdMedia 逻辑保持一致）
         let is_nvme = pnp.to_lowercase().contains("nvme")
@@ -2766,7 +2771,7 @@ fn get_disk_health_info_inner() -> Result<DiskHealthResponse, String> {
 
 #[tauri::command]
 pub async fn get_disk_health_info() -> Result<DiskHealthResponse, String> {
-    match tauri::async_runtime::spawn_blocking(|| get_disk_health_info_inner()).await {
+    match tauri::async_runtime::spawn_blocking(get_disk_health_info_inner).await {
         Ok(Ok(info)) => Ok(info),
         Ok(Err(e)) => Err(e),
         Err(e) => Err(format!("异步任务失败: {}", e)),

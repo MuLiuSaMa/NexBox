@@ -48,12 +48,14 @@ export default function InstallingPage({
         setProgress(100);
         await new Promise((r) => setTimeout(r, 400));
         onComplete();
-      } catch (err: any) {
+      } catch (err: unknown) {
         onError(String(err));
       }
     };
 
     doInstall();
+    // 安装流程只在挂载时执行一次，props 变化不应重启安装
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

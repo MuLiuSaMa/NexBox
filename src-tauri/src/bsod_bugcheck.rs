@@ -642,7 +642,7 @@ pub const BUGCHECKS: &[(u32, BugCheckMeta)] = &[
 
 /// 去掉「由转储反读」标志位，得到基础码。
 pub fn base_code(code: u32) -> u32 {
-    let c = code & 0xFFFF_FFFF;
+    let c = code;
     if c & DUMP_VARIANT != 0 { c & !DUMP_VARIANT } else { c }
 }
 
@@ -670,7 +670,7 @@ pub fn name_of(code: Option<u32>) -> String {
 
 /// 统一显示写法 `0x0000007E`。
 pub fn format_code(code: u32) -> String {
-    format!("0x{:08X}", code & 0xFFFF_FFFF)
+    format!("0x{:08X}", code)
 }
 
 /// 通用参数描述（未收录码使用）。

@@ -74,7 +74,7 @@ export function PageBackButton({
   }, [onClick, to, location.pathname, navigate]);
 
   // BoxProps 不含 type，字面量写法会触发多余属性检查，用变量展开绕过
-  const nativeAttrs = { type: "button" } as any;
+  const nativeAttrs = { type: "button" } as Record<string, string>;
 
   return (
     <LiquidGlassCard

@@ -228,6 +228,7 @@ export default function CpuRenamePage() {
                 {isModified && (
                   <Badge
                     borderRadius="full"
+                    data-corner="round"
                     px={2}
                     py={0.5}
                     fontSize="10px"

@@ -38,7 +38,6 @@ function KaraokeLyricLineInner({
   nextLine,
   isActive,
   fontSize,
-  activeColor,
   highlightColor,
   textColor,
   subTextColor,

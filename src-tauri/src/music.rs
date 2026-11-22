@@ -225,7 +225,7 @@ pub const SUPPORTED_AUDIO_EXTENSIONS: [&str; 11] = [
 
 /// 检查某个扩展名是否受支持（传入时已去掉点号并小写）
 fn is_supported_extension(ext: &str) -> bool {
-    SUPPORTED_AUDIO_EXTENSIONS.iter().any(|item| *item == ext)
+    SUPPORTED_AUDIO_EXTENSIONS.contains(&ext)
 }
 
 /// 通过图片数据的 magic bytes 判断 MIME 类型，比标签声明的 MIME 更可靠
@@ -368,7 +368,7 @@ pub async fn get_music_files() -> Result<Vec<MusicFile>, String> {
         });
     }
 
-    files.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    files.sort_by_key(|left| left.name.to_lowercase());
     Ok(files)
 }
 
@@ -405,7 +405,7 @@ fn build_local_song_info(
                 .unwrap_or_default()
         });
 
-    let size = std::fs::metadata(&path)
+    let size = std::fs::metadata(path)
         .map(|meta| meta.len())
         .unwrap_or(0);
 
@@ -464,7 +464,7 @@ pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<Ve
     let infos: Vec<LocalSongInfo> = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<LocalSongInfo>();
         // 将路径分片分配给各 worker，worker 解析后通过通道发送
-        let chunk_size = (total + workers - 1) / workers;
+        let chunk_size = total.div_ceil(workers);
         for chunk in paths.chunks(chunk_size) {
             let chunk = chunk.to_vec();
             let tx = tx.clone();
@@ -478,7 +478,7 @@ pub async fn import_local_music(app: AppHandle, paths: Vec<String>) -> Result<Ve
                         let _ = tx.send(info);
                     }
                     let n = done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                    if n % 50 == 0 || n == total {
+                    if n.is_multiple_of(50) || n == total {
                         log::info!("[Music] 本地导入进度 {n}/{total}");
                     }
                 }
@@ -612,7 +612,7 @@ pub async fn verify_local_covers(
 
     let repairs: Vec<CoverRepairInfo> = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<CoverRepairInfo>();
-        let chunk_size = (total + workers - 1) / workers;
+        let chunk_size = total.div_ceil(workers);
         for chunk in pending.chunks(chunk_size) {
             let tx = tx.clone();
             let folder_cover_cache = Arc::clone(&folder_cover_cache);

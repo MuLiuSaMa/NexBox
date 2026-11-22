@@ -116,6 +116,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
           top={3}
           right={3}
           borderRadius="full"
+          data-corner="round"
           bg="transparent"
           color={activeColor}
           _hover={{ bg: "transparent", color: activeColor }}
@@ -132,6 +133,7 @@ export function StartupAdModal({ ads }: { ads: SplashAd[] }) {
                 w="7px"
                 h="7px"
                 borderRadius="full"
+                data-corner="round"
                 bg={i === index ? activeColor : "rgba(255,255,255,0.6)"}
                 transition="background 0.2s"
               />

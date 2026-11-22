@@ -4,7 +4,7 @@ import {
   Heading,
   VStack,
   Flex,
-  useColorModeValue,
+  
 } from "@chakra-ui/react";
 import {
   Cpu,
@@ -205,7 +205,7 @@ export default function OptimizePage() {
     } catch { /* ignore */ }
   }, []);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+
 
   const content = (
     <VStack align="start" spacing={6}>

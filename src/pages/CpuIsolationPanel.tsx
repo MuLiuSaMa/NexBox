@@ -122,7 +122,7 @@ export default function CpuIsolationPanel({
   const eCoreColor = "#F6AD55";
   // 隔离操作使用琥珀/红色系，与「分配」的主题色形成语义区分
   const isoColor = "#DD6B20";
-  const isoColorRgba = (opacity: number) => hexToRgba(isoColor, opacity);
+  const isoColorRgba = useCallback((opacity: number) => hexToRgba(isoColor, opacity), [isoColor]);
 
   const isoCheckboxSx = useMemo(
     () => ({
@@ -519,7 +519,7 @@ export default function CpuIsolationPanel({
             {t(`${k}.excludeProcess`)}
           </Text>
           {excludeProcess && (
-            <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={0.5} borderRadius="full">
+            <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={0.5} borderRadius="full" data-corner="round">
               {excludeProcess.name}
             </Badge>
           )}
@@ -588,6 +588,7 @@ export default function CpuIsolationPanel({
                     w="8px"
                     h="8px"
                     borderRadius="full"
+                    data-corner="round"
                     bg={excludeProcess?.pid === proc.pid ? themeColorHex : "transparent"}
                     flexShrink={0}
                   />
@@ -658,6 +659,7 @@ export default function CpuIsolationPanel({
                     borderColor={isoColor}
                     onClick={() => applyPreset("allPCores")}
                     borderRadius="full"
+                    data-corner="round"
                   >
                     {t("optimization.cpuScheduler.presetAllPCores")}
                   </Button>
@@ -669,6 +671,7 @@ export default function CpuIsolationPanel({
                     borderColor={eCoreColor}
                     onClick={() => applyPreset("allECores")}
                     borderRadius="full"
+                    data-corner="round"
                   >
                     {t("optimization.cpuScheduler.presetAllECores")}
                   </Button>
@@ -682,6 +685,7 @@ export default function CpuIsolationPanel({
                 borderColor={isoColor}
                 onClick={() => applyPreset("allCores")}
                 borderRadius="full"
+                data-corner="round"
               >
                 {t("optimization.cpuScheduler.presetAllCores")}
               </Button>
@@ -780,7 +784,7 @@ export default function CpuIsolationPanel({
               <VStack align="start" spacing={1}>
                 <Text color={subTextColor} fontSize="xs">{t(`${k}.isolatedMaskLabel`)}:</Text>
                 <HStack spacing={2}>
-                  <Badge bg={isoColorRgba(0.15)} color={isoColor} fontSize="sm" px={3} py={1} borderRadius="full">
+                  <Badge bg={isoColorRgba(0.15)} color={isoColor} fontSize="sm" px={3} py={1} borderRadius="full" data-corner="round">
                     0x{isolatedMask.toString(16).toUpperCase().padStart(16, "0")}
                   </Badge>
                   {isAllCoresSelected && (
@@ -937,6 +941,7 @@ export default function CpuIsolationPanel({
                     px={2}
                     py={1}
                     borderRadius="full"
+                    data-corner="round"
                   >
                     {rule.preset === "allPCores"
                       ? t("optimization.cpuScheduler.presetAllPCores")
@@ -954,12 +959,12 @@ export default function CpuIsolationPanel({
                     </Text>
                   </VStack>
                   {isRuleActive(rule) && (
-                    <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full">
+                    <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full" data-corner="round">
                       {t(`${k}.activeBadge`)}
                     </Badge>
                   )}
                   {rule.auto_apply && (
-                    <Badge bg="green.500" color="#ffffff" fontSize="xs" px={2} py={1} borderRadius="full">
+                    <Badge bg="green.500" color="#ffffff" fontSize="xs" px={2} py={1} borderRadius="full" data-corner="round">
                       {t(`${k}.autoApplyBadge`)}
                     </Badge>
                   )}
@@ -968,6 +973,7 @@ export default function CpuIsolationPanel({
                   {isRuleActive(rule) ? (
                     <Button
                       size="xs"
+                      data-corner="round"
                       variant="ghost"
                       color={isoColor}
                       onClick={handleRestore}
@@ -976,13 +982,14 @@ export default function CpuIsolationPanel({
                       {t(`${k}.restoreRule`)}
                     </Button>
                   ) : (
-                    <Button size="xs" variant="ghost" color={isoColor} onClick={() => handleApplyRule(rule)}>
+                    <Button size="xs" data-corner="round" variant="ghost" color={isoColor} onClick={() => handleApplyRule(rule)}>
                       {t("optimization.cpuScheduler.applyRule")}
                     </Button>
                   )}
                   <IconButton
                     aria-label="delete"
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     icon={<Trash2 size={14} />}
                     color="red.400"

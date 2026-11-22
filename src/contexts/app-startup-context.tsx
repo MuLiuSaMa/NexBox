@@ -82,10 +82,6 @@ interface ThirdPartyTool {
   check_executable: string | null;
 }
 
-interface ToolWithStatus {
-  tool: ThirdPartyTool;
-  installed: boolean;
-}
 
 interface AppStartupContextType {
   isStartupComplete: boolean;
@@ -237,7 +233,7 @@ export function useAppStartup() {
 export function AppStartupProvider({ children }: { children: ReactNode }) {
   const [isStartupComplete, setIsStartupComplete] = useState(false);
   const [startupProgress, setStartupProgress] = useState(0);
-  const [startupMessage, setStartupMessage] = useState("正在启动...");
+  const [startupMessage] = useState("正在启动...");
   const [hardwareInfo, setHardwareInfo] = useState<HardwareInfo | null>(null);
   const [tools, setTools] = useState<ThirdPartyTool[]>([]);
   const [overlaySettings, setOverlaySettings] = useState<OverlaySettings | null>(null);
@@ -265,10 +261,6 @@ export function AppStartupProvider({ children }: { children: ReactNode }) {
   // 最新竖排悬浮框位置（null = 尚未加载；{ x: null, y: null } = 已重置清除）
   const verticalPosRef = useRef<{ x: number | null; y: number | null } | null>(null);
 
-  const updateProgress = (progress: number, message: string) => {
-    setStartupProgress(progress);
-    setStartupMessage(message);
-  };
 
   const loadHardwareInfo = async () => {
     try {
@@ -989,7 +981,7 @@ const saveOverlaySettings = async (settings: OverlaySettings) => {
     runStartup();
 
     return () => {};
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   return (

@@ -221,6 +221,7 @@ export function CustomSelect({
                         px={1.5}
                         py={0.5}
                         borderRadius="full"
+                        data-corner="round"
                       >
                         {option.badge}
                       </Badge>

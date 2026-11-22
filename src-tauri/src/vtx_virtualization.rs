@@ -171,7 +171,7 @@ fn query_hypervisor_launch() -> Option<String> {
         // UTF-16LE with BOM
         let bytes = &stdout[2..];
         let units: Vec<u16> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>().0.iter()
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
         String::from_utf16_lossy(&units)
@@ -237,8 +237,8 @@ pub async fn fix_vtx_virtualization_popup() -> Result<String, String> {
     }
 
     // 回读校验
-    let hvci_ok = read_dword(HVCI_KEY, "Enabled").map_or(true, |v| v == 0);
-    let vbs_ok = read_dword(VBS_KEY, "EnableVirtualizationBasedSecurity").map_or(true, |v| v == 0);
+    let hvci_ok = read_dword(HVCI_KEY, "Enabled").is_none_or(|v| v == 0);
+    let vbs_ok = read_dword(VBS_KEY, "EnableVirtualizationBasedSecurity").is_none_or(|v| v == 0);
 
     if hvci_ok && vbs_ok {
         Ok("修复已执行成功：已关闭内存完整性、VBS 虚拟化安全与 Hyper-V 自动启动，重启电脑后生效。".to_string())

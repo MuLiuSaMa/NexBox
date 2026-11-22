@@ -20,7 +20,7 @@ export function LiquidGlassMenuItem({
 }: LiquidGlassMenuItemProps) {
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getBorderColor, getContrastTextColor } = useThemeColor();
-  const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
+  const { isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
 
   const activeBg = getActiveColor();
   const activeTextFinal = getContrastTextColor();

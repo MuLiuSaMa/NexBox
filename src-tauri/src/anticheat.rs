@@ -217,7 +217,7 @@ fn process_matches(process_name: &str, entry: &str) -> bool {
 
 fn find_group_pids(system: &System, procs: &[&str]) -> Vec<(u32, String)> {
     let mut out = Vec::new();
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         if procs.iter().any(|n| process_matches(&name, n)) {
             out.push((process.pid().as_u32(), name));
@@ -414,7 +414,7 @@ fn ac_auto_detect_loop(group: &'static AcGroupDef, generation: u64) {
         let optimized = detect_and_optimize(group);
         let mut stats = AUTO_DETECT_STATS.lock().unwrap();
         let map = stats.get_or_insert_with(std::collections::HashMap::new);
-        let s = map.entry(group.key.to_string()).or_insert_with(AcAutoDetectStats::default);
+        let s = map.entry(group.key.to_string()).or_default();
         s.is_running = true;
         s.last_check = Some(chrono::Local::now().to_rfc3339());
         s.total_optimized = s.total_optimized.saturating_add(optimized.len() as u32);

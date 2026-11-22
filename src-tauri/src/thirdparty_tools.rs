@@ -472,11 +472,7 @@ pub async fn download_tool(tool_id: String, window: tauri::Window) -> Result<Str
             std::io::Write::write_all(&mut file, &chunk).map_err(|e| e.to_string())?;
             downloaded += chunk.len() as u64;
 
-            let progress = if total_size > 0 {
-                ((downloaded * 100) / total_size) as u32
-            } else {
-                0
-            };
+            let progress = (downloaded * 100).checked_div(total_size).unwrap_or(0) as u32;
 
             let _ = window.emit(
                 "tool-download-progress",

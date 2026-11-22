@@ -31,13 +31,12 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, RotateCcw, Monitor, ChevronDown, Check, Image, Plus, Minus, Save, Trash2 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -191,7 +190,7 @@ export default function CrosshairPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("target");
   const { crosshairHotkey, saveCrosshairHotkey } = useAppStartup();
-  const { getActiveColor, getHoverColor, getBorderColor, getContrastTextColor } = useThemeColor();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
 
   const [settings, setSettings] = useState<CrosshairSettings>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(false);
@@ -203,7 +202,7 @@ export default function CrosshairPage() {
 
   useEffect(() => {
     (async () => {
-      let v = await store.get<boolean>("nexbox_auto_crosshair");
+      const v = await store.get<boolean>("nexbox_auto_crosshair");
       if (v !== null && v !== undefined) {
         setAutoApplyOnStartup(v);
       } else {
@@ -864,6 +863,7 @@ export default function CrosshairPage() {
                         aria-label={t("crosshair.deletePreset") || "删除预设"}
                         icon={<Trash2 size={12} />}
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         position="absolute"
                         top={1}
@@ -1185,6 +1185,7 @@ export default function CrosshairPage() {
                           aria-label="X-"
                           icon={<Minus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1239,6 +1240,7 @@ export default function CrosshairPage() {
                           aria-label="X+"
                           icon={<Plus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1261,6 +1263,7 @@ export default function CrosshairPage() {
                           aria-label="Y-"
                           icon={<Minus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1315,6 +1318,7 @@ export default function CrosshairPage() {
                           aria-label="Y+"
                           icon={<Plus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1430,6 +1434,7 @@ export default function CrosshairPage() {
                           aria-label="X-"
                           icon={<Minus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1484,6 +1489,7 @@ export default function CrosshairPage() {
                           aria-label="X+"
                           icon={<Plus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1506,6 +1512,7 @@ export default function CrosshairPage() {
                           aria-label="Y-"
                           icon={<Minus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}
@@ -1560,6 +1567,7 @@ export default function CrosshairPage() {
                           aria-label="Y+"
                           icon={<Plus size={12} />}
                           size="xs"
+                          data-corner="round"
                           variant="outline"
                           borderColor={cardBorder}
                           _hover={{ borderColor: getActiveColor(), bg: hoverBg }}

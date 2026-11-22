@@ -121,6 +121,7 @@ fn fetch_delta_passwords_from_primary_api() -> Option<Vec<DeltaPasswordItem>> {
 /// 备用接口：https://api.s0o1.com/API/sjz/mm/
 /// 返回纯文本，格式形如：
 ///   1. 潮汐监狱
+///
 ///   具体点位：监狱行政区1楼大厅楼梯拐角处
 ///   每日密码：0557
 ///   地点图片：https://...
@@ -845,7 +846,7 @@ pub async fn open_platform_window(
         .on_new_window(move |new_url, _features| {
             if let Some(window) = app_clone.get_webview_window(&label_clone) {
                 let safe = new_url.as_str().replace('\\', "\\\\").replace('\'', "\\'");
-                let _ = window.eval(&format!(
+                let _ = window.eval(format!(
                     "var f=document.getElementById('viewer');if(f)f.src='{safe}';"
                 ));
             }

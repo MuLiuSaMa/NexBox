@@ -48,7 +48,7 @@ export async function fetchLatestRelease(): Promise<ReleaseInfo | null> {
 
     const data = await response.json();
     return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -68,7 +68,7 @@ export async function fetchAllReleases(): Promise<ReleaseInfo[]> {
       ...r,
       html_url: releaseHtmlUrl(r.tag_name),
     }));
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -88,7 +88,7 @@ export async function fetchReleaseByTag(tag: string): Promise<ReleaseInfo | null
 
     const data = await response.json();
     return { ...data, html_url: releaseHtmlUrl(data.tag_name) };
-  } catch (error) {
+  } catch {
     return null;
   }
 }

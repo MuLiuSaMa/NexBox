@@ -1,30 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  HStack,
-  VStack,
-  Badge,
-  Button,
-  IconButton,
-  Spinner,
-  Tooltip,
-  useColorModeValue,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  AlertDialog,
-  AlertDialogOverlay,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogBody,
-  AlertDialogFooter,
-  Image,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, HStack, VStack, Badge, Button, IconButton, Spinner, Tooltip, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, AlertDialog, AlertDialogOverlay, AlertDialogContent, AlertDialogHeader, AlertDialogBody, AlertDialogFooter, Image } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -33,6 +7,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { useBackground } from "@/contexts/background-context";
 import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
 import {
   Video,
@@ -51,9 +26,9 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ── MV 播放器样式辅助（与 MusicPage 一致） ──
 
 const rangeSliderSx = {
@@ -250,6 +225,7 @@ function MvStylePlayer({
                 w="64px"
                 h="64px"
                 borderRadius="full"
+                data-corner="round"
                 bg="rgba(0,0,0,0.6)"
                 display="flex"
                 alignItems="center"
@@ -536,20 +512,23 @@ function isUnderFolder(videoPath: string, folderPath: string): boolean {
 const THUMB_BATCH = 12;
 
 export default function NvidiaRecordingPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { config, getActiveColor, getHoverColor } = useThemeColor();
   const toast = useDynamicIsland("wrench");
 
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#cccccc");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#cccccc");
+  const dividerColor = cm("gray.200", "#333333");
   // 卡片缩略图区域的底色/边框随主题（在组件顶层取，避免在渲染回调内调用 hook）
-  const prefersColorScheme = useColorModeValue("light", "dark");
+  const prefersColorScheme = cm("light", "dark");
   // 悬浮控制条：液态玻璃开/关两套外观
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const solidBarBg = useColorModeValue("rgba(255,255,255,0.88)", "rgba(20,20,20,0.88)");
-  const glassBarBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
-  const glassBarBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
+  const solidBarBg = cm("rgba(255,255,255,0.88)", "rgba(20,20,20,0.88)");
+  const glassBarBg = cm("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassBarBorder = cm("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
+  // 详情弹窗底色：提到组件顶部，避免在 JSX 条件分支里调用 hook
+  const modalBg = cm("white", "#141414");
 
   const [scanning, setScanning] = useState(false);
   const [videos, setVideos] = useState<RecordingVideo[]>([]);
@@ -989,6 +968,7 @@ export default function NvidiaRecordingPage() {
           px={5}
           py={2.5}
           borderRadius="full"
+          data-corner="round"
           border="1px solid"
           borderColor={liquidGlassEnabled ? glassBarBorder : dividerColor}
           boxShadow="xl"
@@ -1026,8 +1006,9 @@ export default function NvidiaRecordingPage() {
         </Flex>
       )}
 
-      {/* 视频预览 — 音乐播放器 MV 风格（毛玻璃全屏遮罩 + 上滑动画 + 自定义控制栏） */}
-      {previewVideo && (
+      {/* 视频预览 — 音乐播放器 MV 风格（毛玻璃全屏遮罩 + 上滑动画 + 自定义控制栏）
+          portal 到 body：主滚动容器带顶部渐隐 mask，mask 会让 fixed 后代以容器为包含块并被裁到容器盒内 */}
+      {previewVideo && createPortal(
         <Box
           position="fixed"
           top={0}
@@ -1115,7 +1096,7 @@ export default function NvidiaRecordingPage() {
             />
           </Box>
         </Box>
-      )}
+      , document.body)}
 
       {/* 详情 Modal：视频 + 完整信息（与旧版预览一致） */}
       <Modal
@@ -1128,7 +1109,7 @@ export default function NvidiaRecordingPage() {
       >
         <ModalOverlay />
         {detailVideo && (
-          <ModalContent bg={useColorModeValue("white", "#141414")} borderRadius="3xl">
+          <ModalContent bg={modalBg} borderRadius="3xl">
             <ModalHeader fontSize="md" color={textColor} pr={14}>
               <HStack spacing={2}>
                 <Info size={16} color={getActiveColor()} />
@@ -1198,7 +1179,7 @@ export default function NvidiaRecordingPage() {
         returnFocusOnClose={false}
       >
         <AlertDialogOverlay>
-          <AlertDialogContent bg={useColorModeValue("white", "#141414")} borderRadius="3xl">
+          <AlertDialogContent bg={cm("white", "#141414")} borderRadius="3xl">
             <AlertDialogHeader fontSize="lg" fontWeight="bold" color={textColor}>
               <HStack spacing={2}>
                 <AlertTriangle size={18} color="red.400" />
@@ -1260,6 +1241,7 @@ function VideoCard({
   accentColor: string;
   prefersColorScheme: "light" | "dark";
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const hasThumb = !!thumbSrc;
 
@@ -1276,7 +1258,7 @@ function VideoCard({
       <Box
         position="relative"
         borderBottom="1px solid"
-        borderColor={useColorModeValue("gray.100", "#262626")}
+        borderColor={cm("gray.100", "#262626")}
         bg={prefersColorScheme === "dark" ? "#0d0d0d" : "#f3f4f6"}
         sx={{ aspectRatio: "16/9" }}
         cursor={batchMode ? undefined : "pointer"}
@@ -1312,6 +1294,7 @@ function VideoCard({
             w="22px"
             h="22px"
             borderRadius="full"
+            data-corner="round"
             border="2px solid"
             borderColor={selected ? accentColor : "rgba(255,255,255,0.9)"}
             bg={selected ? accentColor : "rgba(0,0,0,0.35)"}
@@ -1352,6 +1335,7 @@ function VideoCard({
                 aria-label={t("nvidiaRecording.details")}
                 icon={<Info size={14} />}
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 colorScheme="telegram"
                 onClick={(e) => {
@@ -1366,6 +1350,7 @@ function VideoCard({
                 aria-label={t("nvidiaRecording.openWithPlayer")}
                 icon={<MediaPlayerIcon size={16} />}
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 onClick={(e) => {
                   (e.currentTarget as HTMLButtonElement).blur();
@@ -1378,6 +1363,7 @@ function VideoCard({
                 aria-label={t("nvidiaRecording.revealInFolder")}
                 icon={<FolderOpen size={14} />}
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 onClick={(e) => {
                   (e.currentTarget as HTMLButtonElement).blur();
@@ -1390,6 +1376,7 @@ function VideoCard({
                 aria-label={t("nvidiaRecording.delete")}
                 icon={<Trash2 size={14} />}
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 colorScheme="red"
                 onClick={(e) => {
@@ -1496,11 +1483,12 @@ function FolderChip({
   onDelete?: () => void;
   accentColor: string;
 }) {
-  const chipBg = useColorModeValue("gray.100", "#252525");
+  const cm = useColorValue();
+  const chipBg = cm("gray.100", "#252525");
   // 液态玻璃开启时用半透明+背景模糊；未开启时保持普通底色
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const glassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
-  const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
+  const glassBg = cm("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassBorder = cm("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
   return (
     <Box
       as="button"
@@ -1511,6 +1499,7 @@ function FolderChip({
       pr={onDelete ? 1.5 : 3}
       py={1.5}
       borderRadius="full"
+      data-corner="round"
       fontSize="xs"
       fontWeight={active ? "bold" : "medium"}
       bg={liquidGlassEnabled ? glassBg : chipBg}
@@ -1539,6 +1528,7 @@ function FolderChip({
           h="18px"
           flexShrink={0}
           borderRadius="full"
+          data-corner="round"
           color="inherit"
           opacity={0.6}
           onClick={(e: React.MouseEvent) => {
@@ -1556,8 +1546,9 @@ function FolderChip({
 
 /** 信息面板行 */
 function InfoRow({ label, value }: { label: string; value: string }) {
-  const labelColor = useColorModeValue("gray.500", "#999999");
-  const valueColor = useColorModeValue("gray.800", "#ffffff");
+  const cm = useColorValue();
+  const labelColor = cm("gray.500", "#999999");
+  const valueColor = cm("gray.800", "#ffffff");
   return (
     <Flex py={2} gap={4} alignItems="flex-start">
       <Text w={88} flexShrink={0} color={labelColor}>
@@ -1572,8 +1563,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 /** 信息面板行 — 长文本单行显示，溢出悬停轮播滚动（用于完整路径） */
 function InfoMarqueeRow({ label, value }: { label: string; value: string }) {
-  const labelColor = useColorModeValue("gray.500", "#999999");
-  const valueColor = useColorModeValue("gray.800", "#ffffff");
+  const cm = useColorValue();
+  const labelColor = cm("gray.500", "#999999");
+  const valueColor = cm("gray.800", "#ffffff");
   return (
     <Flex py={2} gap={4} alignItems="center">
       <Text w={88} flexShrink={0} color={labelColor}>

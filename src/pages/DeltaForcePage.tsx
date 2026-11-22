@@ -1,32 +1,4 @@
-import {
-  Box,
-  Text,
-  Heading,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Badge,
-  Spinner,
-  SimpleGrid,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Button,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  ModalCloseButton,
-  Textarea,
-  FormControl,
-  FormLabel,
-  Wrap,
-  WrapItem,
-  Divider,
-  IconButton,
-} from "@chakra-ui/react";
+import { Box, Text, Heading, VStack, HStack, Badge, Spinner, SimpleGrid, Input, InputGroup, InputLeftElement, Button, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton, Textarea, FormControl, FormLabel, Wrap, WrapItem, Divider, IconButton } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -56,6 +28,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ── Types ──
 interface DeltaPasswordItem {
   name: string;
@@ -123,6 +96,7 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 
 // ── PasswordCard (unchanged) ──
 function PasswordCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("target");
   const [passwords, setPasswords] = useState<DeltaPasswordItem[]>([]);
@@ -130,10 +104,12 @@ function PasswordCard() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const textColor = useColorModeValue("#000000", "#ffffff");
-  const cardItemBg = useColorModeValue("gray.50", "#1a1a1a");
-  const cardItemHoverBg = useColorModeValue("gray.100", "#222222");
+  const subTextColor = cm("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
+  const cardItemBg = cm("gray.50", "#1a1a1a");
+  const cardItemHoverBg = cm("gray.100", "#222222");
+  const fallbackCardBg = cm("white", "#111111");
+  const fallbackCardBorder = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
 
   useEffect(() => {
@@ -251,11 +227,11 @@ function PasswordCard() {
   }
   return (
     <Box
-      bg={useColorModeValue("white", "#111111")}
+      bg={fallbackCardBg}
       borderRadius="xl"
       p={5}
       border="1px solid"
-      borderColor={useColorModeValue("gray.200", "#333333")}
+      borderColor={fallbackCardBorder}
     >
       {content}
     </Box>
@@ -264,15 +240,16 @@ function PasswordCard() {
 
 // ── MoreGunCodesCard ──
 function MoreGunCodesCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
 
   const content = (
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
@@ -318,15 +295,16 @@ function MoreGunCodesCard() {
 
 // ── RouletteCard ──
 function RouletteCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
 
   const content = (
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
@@ -372,15 +350,16 @@ function RouletteCard() {
 
 // ── OfficialMapCard ──
 function OfficialMapCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
   const toast = useDynamicIsland("target");
 
@@ -393,7 +372,7 @@ function OfficialMapCard() {
         title: t("deltaForce.officialMapToolTitle", "三角洲行动 - 官方地图工具"),
         label: `official-map-${Date.now()}`,
       });
-    } catch (error) {
+    } catch {
       toast({
         title: t("deltaForce.openFailed", "打开失败"),
         status: "error",
@@ -448,15 +427,16 @@ function OfficialMapCard() {
 
 // ── OfficialWallpaperCard ──
 function OfficialWallpaperCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
   const [isOpening, setIsOpening] = useState(false);
   const toast = useDynamicIsland("target");
 
@@ -466,7 +446,7 @@ function OfficialWallpaperCard() {
     try {
       const { open } = await import("@tauri-apps/plugin-shell");
       await open("https://df.qq.com/cp/community1031/wallpaper.html#/");
-    } catch (error) {
+    } catch {
       toast({
         title: t("deltaForce.openFailed", "打开失败"),
         status: "error",
@@ -551,6 +531,7 @@ const LoadoutCard = memo(function LoadoutCard({
   liquidGlassEnabled: boolean;
   primaryColor: string;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const code = (
     <VStack align="stretch" spacing={3}>
@@ -578,7 +559,7 @@ const LoadoutCard = memo(function LoadoutCard({
         <Text
           fontSize="sm"
           fontFamily="monospace"
-          bg={useColorModeValue("gray.100", "#2a2a2a")}
+          bg={cm("gray.100", "#2a2a2a")}
           p={3}
           borderRadius="lg"
           wordBreak="break-all"
@@ -590,6 +571,7 @@ const LoadoutCard = memo(function LoadoutCard({
         </Text>
         <Button
           size="xs"
+          data-corner="round"
           position="absolute"
           right={2}
           top={2}
@@ -618,6 +600,7 @@ const LoadoutCard = memo(function LoadoutCard({
         <HStack spacing={1}>
           <Button
             size="xs"
+            data-corner="round"
             variant="ghost"
             color={isReported ? "green.400" : subTextColor}
             onClick={() => onReport(item.id)}
@@ -663,6 +646,7 @@ const LoadoutCard = memo(function LoadoutCard({
 
 // ── GunLoadoutBrowser ──
 const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("target");
   const { getActiveColor } = useThemeColor();
@@ -671,11 +655,15 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
   const primaryColor = getActiveColor();
-  const textColor = useColorModeValue("#000000", "#ffffff");
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const textColor = cm("#000000", "#ffffff");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
+  const uploadModalGlassBg = cm("rgba(255,255,255,0.2)", "rgba(0,0,0,0.25)");
+  const uploadModalSolidBg = cm("white", "#1a1a1a");
+  const uploadModalGlassBorder = cm("rgba(255,255,255,0.2)", "rgba(255,255,255,0.08)");
+  const uploadModalTextColor = cm("#000", "#fff");
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [weaponsMap, setWeaponsMap] = useState<Record<number, WeaponItem[]>>({});
@@ -687,9 +675,9 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearch, setActiveSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"likes" | "latest">("likes");
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  // 仅需 setter：isRefreshing 本身未参与渲染
+  const [, setIsRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [reportedIds, setReportedIds] = useState<Set<number>>(new Set());
@@ -709,10 +697,6 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
   }, []);
 
   // ── Load loadouts on filter change ──
-  useEffect(() => {
-    loadLoadouts();
-  }, [selectedCategoryId, selectedWeapon, page, sortBy, activeSearch]);
-
   const loadLoadouts = useCallback(async () => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
@@ -751,7 +735,12 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
     } finally {
       setIsRefreshing(false);
     }
-  }, [selectedCategoryId, selectedWeapon, page, sortBy, activeSearch, toast]);
+  }, [selectedCategoryId, selectedWeapon, page, activeSearch, toast]);
+
+  // ── 筛选条件变化时重新拉取（loadLoadouts 已包含全部筛选依赖）──
+  useEffect(() => {
+    loadLoadouts();
+  }, [loadLoadouts]);
 
   // ── Load weapons when category selected ──
   useEffect(() => {
@@ -770,7 +759,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
       })();
     }
     setSelectedWeapon("");
-  }, [selectedCategoryId]);
+  }, [selectedCategoryId, weaponsMap]);
 
   // ── Search debounce ──
   const handleSearchChange: React.ChangeEventHandler<HTMLInputElement> = useCallback((e) => {
@@ -928,6 +917,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
             px={4}
             py={2}
             borderRadius="full"
+            data-corner="round"
             fontSize="sm"
             fontWeight="medium"
             bg={selectedCategoryId === "all" ? primaryColor : "transparent"}
@@ -951,6 +941,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
               px={4}
               py={2}
               borderRadius="full"
+              data-corner="round"
               fontSize="sm"
               fontWeight="medium"
               bg={
@@ -1029,6 +1020,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
             value={searchQuery}
             onChange={handleSearchChange}
             borderRadius="full"
+            data-corner="round"
           />
         </InputGroup>
 
@@ -1124,18 +1116,10 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
           backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : "blur(4px)"}
         />
         <ModalContent
-          bg={
-            liquidGlassEnabled
-              ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(0,0,0,0.25)")
-              : useColorModeValue("white", "#1a1a1a")
-          }
+          bg={liquidGlassEnabled ? uploadModalGlassBg : uploadModalSolidBg}
           backdropFilter={liquidGlassEnabled ? `blur(${effectiveBlur}px)` : undefined}
-          borderColor={
-            liquidGlassEnabled
-              ? useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.08)")
-              : undefined
-          }
-          color={useColorModeValue("#000", "#fff")}
+          borderColor={liquidGlassEnabled ? uploadModalGlassBorder : undefined}
+          color={uploadModalTextColor}
         >
           <ModalHeader>{t("deltaForce.upload")}</ModalHeader>
           <ModalCloseButton />
@@ -1174,7 +1158,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
                   placeholder={t("deltaForce.codePlaceholder")}
                   rows={3}
                   maxLength={500}
-                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                  _placeholder={{ color: cm("#000", "#ccc") }}
                 />
               </FormControl>
               <FormControl>
@@ -1184,7 +1168,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
                   onChange={(e) => setUploadDesc(e.target.value)}
                   placeholder={t("deltaForce.descriptionPlaceholder")}
                   maxLength={200}
-                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                  _placeholder={{ color: cm("#000", "#ccc") }}
                 />
               </FormControl>
               <FormControl>
@@ -1195,7 +1179,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
                   onChange={(e) => setUploadCost(e.target.value)}
                   placeholder="0"
                   min={0}
-                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                  _placeholder={{ color: cm("#000", "#ccc") }}
                 />
               </FormControl>
               <FormControl>
@@ -1205,7 +1189,7 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
                   onChange={(e) => setUploadAuthor(e.target.value)}
                   placeholder={t("deltaForce.nicknamePlaceholder")}
                   maxLength={20}
-                  _placeholder={{ color: useColorModeValue("#000", "#ccc") }}
+                  _placeholder={{ color: cm("#000", "#ccc") }}
                 />
               </FormControl>
               {uploadError && (
@@ -1236,11 +1220,11 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
     <LiquidGlassCard p={5}>{weaponCodesContent}</LiquidGlassCard>
   ) : (
     <Box
-      bg={useColorModeValue("white", "#111111")}
+      bg={cardBg}
       borderRadius="xl"
       p={5}
       border="1px solid"
-      borderColor={useColorModeValue("gray.200", "#333333")}
+      borderColor={borderColor}
     >
       {weaponCodesContent}
     </Box>
@@ -1251,15 +1235,16 @@ const GunLoadoutBrowser = memo(function GunLoadoutBrowser() {
 
 // ── StatsAnalysisCard ──
 function StatsAnalysisCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
 
   const content = (
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
@@ -1305,15 +1290,16 @@ function StatsAnalysisCard() {
 
 // ── StreamerSettingsCard ──
 function StreamerSettingsCard() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardHoverBg = useColorModeValue("gray.100", "#222222");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subTextColor = cm("#000000", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardHoverBg = cm("gray.100", "#222222");
+  const borderColor = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("#000000", "#ffffff");
+  const textColor = cm("#000000", "#ffffff");
 
   const content = (
     <VStack align="center" spacing={3} py={2} justify="center" h="100%">
@@ -1360,7 +1346,6 @@ function StreamerSettingsCard() {
 // ── Main Page ──
 export default function DeltaForcePage() {
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
 
   return (

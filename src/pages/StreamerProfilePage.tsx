@@ -124,6 +124,7 @@ function ValueControl({ field, group }: { field: SettingField; group: SettingGro
           w="34px"
           h="18px"
           borderRadius="full"
+          data-corner="round"
           bg={on ? primaryColor : trackBg}
           position="relative"
           transition="background-color 0.2s"
@@ -135,6 +136,7 @@ function ValueControl({ field, group }: { field: SettingField; group: SettingGro
             left={on ? "18px" : "2px"}
             boxSize="14px"
             borderRadius="full"
+            data-corner="round"
             bg={on ? "#000" : "#ffffff"}
             transition="left 0.2s"
             boxShadow="0 1px 2px rgba(0,0,0,0.35)"
@@ -148,7 +150,7 @@ function ValueControl({ field, group }: { field: SettingField; group: SettingGro
     const pct = sliderPercent(field);
     return (
       <HStack spacing={3} justify="flex-end">
-        <Box flex={1} h="5px" borderRadius="full" bg={trackBg} position="relative" overflow="hidden">
+        <Box flex={1} h="5px" borderRadius="full" data-corner="round" bg={trackBg} position="relative" overflow="hidden">
           <Box
             position="absolute"
             left={0}
@@ -157,6 +159,7 @@ function ValueControl({ field, group }: { field: SettingField; group: SettingGro
             w={`${pct}%`}
             bg={primaryColor}
             borderRadius="full"
+            data-corner="round"
           />
         </Box>
         <Text fontSize="xs" fontWeight="600" color={textColor} minW="52px" textAlign="right">
@@ -407,6 +410,7 @@ function TogglePill({
         w="34px"
         h="18px"
         borderRadius="full"
+        data-corner="round"
         bg={checked ? primaryColor : trackBg}
         position="relative"
         transition="background-color 0.2s"
@@ -418,6 +422,7 @@ function TogglePill({
           left={checked ? "18px" : "2px"}
           boxSize="14px"
           borderRadius="full"
+          data-corner="round"
           bg={checked ? "#000" : "#ffffff"}
           transition="left 0.2s"
           boxShadow="0 1px 2px rgba(0,0,0,0.35)"

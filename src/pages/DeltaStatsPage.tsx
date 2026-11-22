@@ -8,7 +8,6 @@ import {
   Badge,
   Spinner,
   SimpleGrid,
-  useColorModeValue,
   useColorMode,
   useToast,
   IconButton,
@@ -21,6 +20,7 @@ import {
   Td,
 } from "@chakra-ui/react";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -51,15 +51,14 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
-import { useNavigate } from "react-router-dom";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import qqPlatformLogo from "@/assets/df-qq.webp";
 import wechatPlatformLogo from "@/assets/df-wechat.webp";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ═══ 类型 ═══
 interface DfLoginState {
   logged_in: boolean;
@@ -190,8 +189,9 @@ function StatCard({
   color: string;
   sub?: string;
 }) {
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const cm = useColorValue();
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
   return (
     <LiquidGlassCard p={4}>
       <VStack align="flex-start" spacing={1.5}>
@@ -225,13 +225,14 @@ function QrCorners({ color }: { color: string }) {
 }
 
 function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
+  const cm = useColorValue();
   const { getActiveColor, getBorderColor, getHoverColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const borderColor = getBorderColor();
   const hoverBg = getHoverColor();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
+  const cardBorder = cm("gray.200", "#333333");
 
   const [method, setMethod] = useState<"qq" | "wx">("qq");
   const [phase, setPhase] = useState<LoginPhase>("idle");
@@ -506,7 +507,7 @@ function DataSourceLogin({ onLogin }: { onLogin: () => void }) {
                 </Box>
               )}
               {phase === "success" && (
-                <Box position="absolute" top={-2} right={-2} bg="green.400" borderRadius="full" p={1} boxShadow="md">
+                <Box position="absolute" top={-2} right={-2} bg="green.400" borderRadius="full" data-corner="round" p={1} boxShadow="md">
                   <CheckCircle2 size={16} color="white" />
                 </Box>
               )}
@@ -560,12 +561,13 @@ function SegmentedTabs({
   onChange: (id: string) => void;
   size?: "xs" | "sm";
 }) {
+  const cm = useColorValue();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  const textColor = useColorModeValue("gray.600", "#cccccc");
-  const hoverBg = useColorModeValue("blackAlpha.50", "whiteAlpha.100");
-  const trackBorder = useColorModeValue("gray.200", "#333333");
+  const textColor = cm("gray.600", "#cccccc");
+  const hoverBg = cm("blackAlpha.50", "whiteAlpha.100");
+  const trackBorder = cm("gray.200", "#333333");
 
   return (
     <HStack
@@ -615,12 +617,13 @@ function PersonalDetail({
   onSwitchMode: (mode: "sol" | "tdm") => void;
   onSessionExpired?: () => void;
 }) {
+  const cm = useColorValue();
   const [mode, setMode] = useState<"sol" | "tdm">("sol");
   const { getActiveColor, getBorderColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const borderColor = getBorderColor();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
   // 战绩数据：烽火地带 sol / 全面战场 mp
   const [solData, setSolData] = useState<Record<string, unknown> | null>(null);
   const [mpData, setMpData] = useState<Record<string, unknown> | null>(null);
@@ -635,18 +638,6 @@ function PersonalDetail({
     // 过滤出 总览(0) + S1-S11
     const valid = items.filter((s) => s && /^(0|[1-9]|1[01])$/.test(String(s.season_id)));
     if (valid.length) setSeasonList(valid);
-  }, []);
-
-  const pickStats = useCallback((r: Record<string, unknown> | null): Record<string, unknown> | null => {
-    // 优先取 season.sol / season.mp（含 total_fight/total_kill 等当季字段）
-    const season = r?.season as Record<string, unknown> | undefined;
-    const sol = season?.sol as Record<string, unknown> | null | undefined;
-    const mp = season?.mp as Record<string, unknown> | null | undefined;
-    if (sol && typeof sol === "object" && Object.keys(sol).length && Number(sol.total_fight ?? sol.total_price ?? 0) > 0) return sol;
-    if (mp && typeof mp === "object" && Object.keys(mp).length && Number(mp.total_fight ?? mp.total_score ?? 0) > 0) return mp;
-    if (season?.stats && typeof season.stats === "object") return season.stats as Record<string, unknown>;
-    if (r?.stats && typeof r.stats === "object") return r.stats as Record<string, unknown>;
-    return null;
   }, []);
 
   useEffect(() => {
@@ -713,6 +704,7 @@ function PersonalDetail({
             w="64px"
             h="64px"
             borderRadius="full"
+            data-corner="round"
             overflow="hidden"
             bg={`${primaryColor}22`}
             display="flex"
@@ -811,19 +803,21 @@ function PersonalDetail({
 
 // ═══ 对局战绩：展示对局记录列表，可按干员 / 地图筛选 ═══
 function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
-  const { getActiveColor, getHoverColor, getBorderColor } = useThemeColor();
+  const cm = useColorValue();
+  const { getActiveColor, getHoverColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const hoverColor = getHoverColor();
-  const borderColor = getBorderColor();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
   // 提升为组件级常量（避免在 map 回调内调用 useColorModeValue 造成 hook 顺序违规）
-  const trackBorder = useColorModeValue("gray.200", "#333333");
-  const imgBg = useColorModeValue("blackAlpha.50", "whiteAlpha.50");
-  const rowBg = useColorModeValue("rgba(255,255,255,0.55)", "rgba(255,255,255,0.06)");
-  const rowBorder = useColorModeValue("rgba(180,190,205,0.5)", "rgba(255,255,255,0.1)");
-  const modalBorder = useColorModeValue("rgba(255,255,255,0.75)", "rgba(255,255,255,0.14)");
-  const modalBg = useColorModeValue("rgba(250,250,252,0.82)", "rgba(22,26,33,0.88)");
+  const trackBorder = cm("gray.200", "#333333");
+  const imgBg = cm("blackAlpha.50", "whiteAlpha.50");
+  const rowBg = cm("rgba(255,255,255,0.55)", "rgba(255,255,255,0.06)");
+  const rowBorder = cm("rgba(180,190,205,0.5)", "rgba(255,255,255,0.1)");
+  const modalBorder = cm("rgba(255,255,255,0.75)", "rgba(255,255,255,0.14)");
+  const modalBg = cm("rgba(250,250,252,0.82)", "rgba(22,26,33,0.88)");
+  // 详情弹窗关闭按钮的悬停底色：提到组件顶部，避免在 JSX 条件分支里调用 hook
+  const iconHoverBg = cm("blackAlpha.100", "whiteAlpha.100");
   const [mode, setMode] = useState<"sol" | "tdm">("sol");
   const [records, setRecords] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(true);
@@ -952,6 +946,7 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
           <IconButton
             aria-label="refresh"
             size="xs"
+            data-corner="round"
             variant="ghost"
             icon={refreshing ? <Spinner size="sm" color={primaryColor} /> : <RefreshCw size={14} />}
             isDisabled={refreshing}
@@ -1012,7 +1007,6 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
             const killPlayer = Number(r.killPlayer ?? 0);
             const killCnt = Number(r.killCnt ?? r.killNum ?? 0);
             const assist = Number(r.assistCnt ?? r.assist ?? 0);
-            const rescue = Number(r.rescue ?? 0);
             return (
               <LiquidGlassCard key={idx} p={0} overflow="hidden">
                 <Box
@@ -1079,6 +1073,7 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
             aria-label="上一页"
             icon={<ChevronLeft size={16} />}
             size="xs"
+            data-corner="round"
             variant="ghost"
             color={textColor}
             isDisabled={safePage <= 1}
@@ -1089,6 +1084,7 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
             aria-label="下一页"
             icon={<ChevronRight size={16} />}
             size="xs"
+            data-corner="round"
             variant="ghost"
             color={textColor}
             isDisabled={safePage >= totalPages}
@@ -1097,8 +1093,9 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
         </HStack>
       )}
 
-      {/* N 卡录屏式全屏遮罩预览：对局详情 */}
-      {detailMatch && (
+      {/* N 卡录屏式全屏遮罩预览：对局详情
+          portal 到 body：主滚动容器带顶部渐隐 mask，mask 会让 fixed 后代以容器为包含块并被裁到容器盒内 */}
+      {detailMatch && createPortal(
         <Box
           position="fixed"
           top={0}
@@ -1138,7 +1135,7 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
                 </Text>
               </VStack>
               <IconButton aria-label="关闭" icon={<X size={20} />} size="sm" variant="ghost" color={textColor}
-                _hover={{ bg: useColorModeValue("blackAlpha.100", "whiteAlpha.100") }}
+                _hover={{ bg: iconHoverBg }}
                 onClick={() => setDetailMatch(null)} />
             </HStack>
 
@@ -1208,18 +1205,19 @@ function BattleStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
             </Box>
           </Box>
         </Box>
-      )}
+      , document.body)}
     </VStack>
   );
 }
 
 // ═══ 战绩分析：PPS / MMR / MES / 未来5局压力预测（独立页签）═══
-function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
+function AnalyzerStats({ onSessionExpired: _onSessionExpired }: { onSessionExpired?: () => void }) {
+  const cm = useColorValue();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
-  const trackBg = useColorModeValue("blackAlpha.100", "whiteAlpha.100");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
+  const trackBg = cm("blackAlpha.100", "whiteAlpha.100");
   const [mode, setMode] = useState<"sol" | "tdm">("sol");
   const [records, setRecords] = useState<Record<string, unknown>[]>([]);
   const [report, setReport] = useState<Record<string, unknown> | null>(null);
@@ -1386,10 +1384,9 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
     // 战斗风格：基于带入成本与产出比判定
     const totalKill = records.reduce((a, r) => a + Number(r.killCnt ?? 0), 0);
     const avgKill = total / Math.max(total, 1) > 0 ? totalKill / total : 0;
-    const kd = analysis?.kd ?? 0;
     const style = fightStyle;
     return { topMap, topAgent, topEquip: [], freqPerDay, avgKill, style, total, gearPcts, avgEquip, combatPref };
-  }, [records, mapMap, agentMap, analysis]);
+  }, [records, mapMap, agentMap]);
 
   return (
     <VStack align="stretch" spacing={4}>
@@ -1433,8 +1430,8 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
               ] as const).map(([key, label]) => (
                 <HStack key={key} spacing={2} fontSize="xs">
                   <Text color={subTextColor} w="44px" flexShrink={0}>{label}</Text>
-                  <Box flex={1} h="6px" borderRadius="full" bg={trackBg} overflow="hidden">
-                    <Box h="100%" w={`${analysis[key]}%`} bg={pressureColor(key)} borderRadius="full" />
+                  <Box flex={1} h="6px" borderRadius="full" data-corner="round" bg={trackBg} overflow="hidden">
+                    <Box h="100%" w={`${analysis[key]}%`} bg={pressureColor(key)} borderRadius="full" data-corner="round" />
                   </Box>
                   <Text color={textColor} w="36px" textAlign="right" fontWeight="600">{analysis[key]}%</Text>
                 </HStack>
@@ -1464,8 +1461,8 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
                 {prefs.topMap.map((m, i) => (
                   <HStack key={i} spacing={2} fontSize="xs">
                     <Text color={subTextColor} w="70px" noOfLines={1}>{m.name}</Text>
-                    <Box flex={1} h="6px" borderRadius="full" bg={trackBg} overflow="hidden">
-                      <Box h="100%" w={`${m.pct}%`} bg={primaryColor} borderRadius="full" />
+                    <Box flex={1} h="6px" borderRadius="full" data-corner="round" bg={trackBg} overflow="hidden">
+                      <Box h="100%" w={`${m.pct}%`} bg={primaryColor} borderRadius="full" data-corner="round" />
                     </Box>
                     <Text color={textColor} w="32px" textAlign="right" fontWeight="600">{m.pct}%</Text>
                   </HStack>
@@ -1480,8 +1477,8 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
                 {prefs.topAgent.map((a, i) => (
                   <HStack key={i} spacing={2} fontSize="xs">
                     <Text color={subTextColor} w="70px" noOfLines={1}>{a.name}</Text>
-                    <Box flex={1} h="6px" borderRadius="full" bg={trackBg} overflow="hidden">
-                      <Box h="100%" w={`${a.pct}%`} bg="blue.400" borderRadius="full" />
+                    <Box flex={1} h="6px" borderRadius="full" data-corner="round" bg={trackBg} overflow="hidden">
+                      <Box h="100%" w={`${a.pct}%`} bg="blue.400" borderRadius="full" data-corner="round" />
                     </Box>
                     <Text color={textColor} w="32px" textAlign="right" fontWeight="600">{a.pct}%</Text>
                   </HStack>
@@ -1500,8 +1497,8 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
                 ] as const).map(([key, label, color]) => (
                   <HStack key={key} spacing={2} fontSize="xs">
                     <Text color={subTextColor} w="40px" flexShrink={0}>{label}</Text>
-                    <Box flex={1} h="6px" borderRadius="full" bg={trackBg} overflow="hidden">
-                      <Box h="100%" w={`${prefs.gearPcts[key]}%`} bg={color} borderRadius="full" />
+                    <Box flex={1} h="6px" borderRadius="full" data-corner="round" bg={trackBg} overflow="hidden">
+                      <Box h="100%" w={`${prefs.gearPcts[key]}%`} bg={color} borderRadius="full" data-corner="round" />
                     </Box>
                     <Text color={textColor} w="32px" textAlign="right" fontWeight="600">{prefs.gearPcts[key]}%</Text>
                   </HStack>
@@ -1517,8 +1514,8 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
                 {prefs.combatPref.map((c, i) => (
                   <HStack key={i} spacing={2} fontSize="xs">
                     <Text color={subTextColor} w="40px" flexShrink={0}>{c.name}</Text>
-                    <Box flex={1} h="6px" borderRadius="full" bg={trackBg} overflow="hidden">
-                      <Box h="100%" w={`${c.pct}%`} bg={c.name === "跑刀" ? "green.400" : c.name === "猛攻" ? "red.400" : "blue.400"} borderRadius="full" />
+                    <Box flex={1} h="6px" borderRadius="full" data-corner="round" bg={trackBg} overflow="hidden">
+                      <Box h="100%" w={`${c.pct}%`} bg={c.name === "跑刀" ? "green.400" : c.name === "猛攻" ? "red.400" : "blue.400"} borderRadius="full" data-corner="round" />
                     </Box>
                     <Text color={textColor} w="32px" textAlign="right" fontWeight="600">{c.pct}%</Text>
                   </HStack>
@@ -1558,11 +1555,23 @@ function AnalyzerStats({ onSessionExpired }: { onSessionExpired?: () => void }) 
 }
 
 // ═══ 出货统计 ═══
+// 固定地图顺序（用户指定）：零号大坝 / 巴克什 / AZ3 / 航天基地 / 长弓溪谷 / 潮汐监狱
+// 提到模块级：常量不随渲染变化，避免每次渲染生成新引用（也能作为稳定的 useMemo 依赖语义）
+const MAP_ORDER: { match: (id: string) => boolean; name: string }[] = [
+  { match: (id) => /^(2201|2202|2211|2212|2231|2232|2233|2242|2251)$/.test(id), name: "零号大坝" },
+  { match: (id) => /^(8102|8103|8151)$/.test(id), name: "巴克什" },
+  { match: (id) => /^(8901|8902|8921|8922|8923)$/.test(id), name: "AZ3" },
+  { match: (id) => /^(3901|3902|3951)$/.test(id), name: "航天基地" },
+  { match: (id) => /^(1901|1902|1911|1912)$/.test(id), name: "长弓溪谷" },
+  { match: (id) => /^(8802|8803)$/.test(id), name: "潮汐监狱" },
+];
+
 function LootStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
+  const cm = useColorValue();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("gray.500", "#888888");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
+  const textColor = cm("gray.800", "#ffffff");
   const [daily, setDaily] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   // 地图-赛季统计
@@ -1670,15 +1679,6 @@ function LootStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
   const maxAbsProfit = Math.max(...profits.map((p) => Math.abs(p)), 1);
 
   // ── 按赛季统计各地图（官方 GetMapStats 接口，按 sid 返回真实赛季数据）──
-  // 固定地图顺序（用户指定）：零号大坝 / 巴克什 / AZ3 / 航天基地 / 长弓溪谷 / 潮汐监狱
-  const MAP_ORDER: { match: (id: string) => boolean; name: string }[] = [
-    { match: (id) => /^(2201|2202|2211|2212|2231|2232|2233|2242|2251)$/.test(id), name: "零号大坝" },
-    { match: (id) => /^(8102|8103|8151)$/.test(id), name: "巴克什" },
-    { match: (id) => /^(8901|8902|8921|8922|8923)$/.test(id), name: "AZ3" },
-    { match: (id) => /^(3901|3902|3951)$/.test(id), name: "航天基地" },
-    { match: (id) => /^(1901|1902|1911|1912)$/.test(id), name: "长弓溪谷" },
-    { match: (id) => /^(8802|8803)$/.test(id), name: "潮汐监狱" },
-  ];
   // 官方接口返回的地图统计（按选中赛季）
   const [mapStats, setMapStats] = useState<Record<string, unknown>[] | null>(null);
   const [mapStatsLoading, setMapStatsLoading] = useState(false);
@@ -1697,7 +1697,7 @@ function LootStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
     } finally {
       setMapStatsLoading(false);
     }
-  }, []);
+  }, [onSessionExpired]);
   useEffect(() => {
     void loadMapStats(curSeason, "sol");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1806,9 +1806,9 @@ function LootStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
                   </HStack>
                 </Box>
                 <HStack spacing={3} fontSize="xs" color={subTextColor}>
-                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" bg="green.400" /><Text>盈利</Text></HStack>
-                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" bg="red.400" /><Text>亏损</Text></HStack>
-                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" bg="gray.300" /><Text>无对局（0）</Text></HStack>
+                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" data-corner="round" bg="green.400" /><Text>盈利</Text></HStack>
+                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" data-corner="round" bg="red.400" /><Text>亏损</Text></HStack>
+                  <HStack spacing={1}><Box boxSize={2} borderRadius="full" data-corner="round" bg="gray.300" /><Text>无对局（0）</Text></HStack>
                   <Text>单位：哈夫币（每天取真实对局盈亏之和，无对局显示 0，鼠标悬停查看数值）</Text>
                 </HStack>
               </VStack>
@@ -1874,20 +1874,24 @@ function LootStats({ onSessionExpired }: { onSessionExpired?: () => void }) {
 
 // ═══ 我的藏品（分类：武器 / 干员 / 载具 / 挂饰 / 典藏）═══
 function Collections() {
+  const cm = useColorValue();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const subTextColor = useColorModeValue("gray.500", "#888888");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
+  const textColor = cm("gray.800", "#ffffff");
   const { colorMode } = useColorMode();
   const isDark = colorMode === "dark";
-  const previewDivider = useColorModeValue("rgba(160,170,190,0.4)", "rgba(255,255,255,0.1)");
-  const modalBorder = useColorModeValue("rgba(255,255,255,0.75)", "rgba(255,255,255,0.14)");
-  const modalBg = useColorModeValue("rgba(250,250,252,0.82)", "rgba(22,26,33,0.88)");
+  const previewDivider = cm("rgba(160,170,190,0.4)", "rgba(255,255,255,0.1)");
+  const modalBorder = cm("rgba(255,255,255,0.75)", "rgba(255,255,255,0.14)");
+  const modalBg = cm("rgba(250,250,252,0.82)", "rgba(22,26,33,0.88)");
+  // 预览弹窗关闭按钮的悬停底色：提到组件顶部，避免在 JSX 条件分支里调用 hook
+  const iconHoverBg = cm("blackAlpha.100", "whiteAlpha.100");
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeCat, setActiveCat] = useState("all");
   const [skinMap, setSkinMap] = useState<Map<number, SkinDictEntry>>(new Map());
-  const [agentMap, setAgentMap] = useState<Map<number, AgentDictEntry>>(new Map());
+  // 干员字典当前仅写入（归类依赖 skinMap），保留 setter 维持原有加载流程
+  const [, setAgentMap] = useState<Map<number, AgentDictEntry>>(new Map());
   // 点击放大预览
   const [preview, setPreview] = useState<{ it: Record<string, unknown>; total: number; name: string; cat: string; img: string } | null>(null);
 
@@ -1952,7 +1956,7 @@ function Collections() {
   }, [load, loadDicts]);
 
   // 分类：典藏(红装 grade>=6 的武器/近战枪皮) → 武器 → 载具 → 干员 → 挂饰
-  const categorize = (it: Record<string, unknown>): string => {
+  const categorize = useCallback((it: Record<string, unknown>): string => {
     const id = Number(it.id ?? it.gid ?? 0);
     const skin = skinMap.get(id);
     const grade = Number(skin?.grade ?? it.grade ?? it.quality ?? 0);
@@ -1969,7 +1973,7 @@ function Collections() {
     if (String(it.secondClass ?? "") === "operator") return "operator";
     if (String(it.secondClass ?? "") === "pendant") return "pendant";
     return "other";
-  };
+  }, [skinMap]);
 
   const CATS: { key: string; label: string }[] = [
     { key: "all", label: "全部" },
@@ -2004,7 +2008,7 @@ function Collections() {
     ];
     for (const k of keys) {
       const v = it[k];
-      if (typeof v === "string" && v.length > 4 && v.length < 400 && /^[a-zA-Z0-9\/\:\.\-]+$/.test(v) && (v.includes("/") || v.includes("."))) {
+      if (typeof v === "string" && v.length > 4 && v.length < 400 && /^[a-zA-Z0-9/:.-]+$/.test(v) && (v.includes("/") || v.includes("."))) {
         return v.startsWith("http") || v.startsWith("//") ? v : "https://" + v;
       }
     }
@@ -2039,7 +2043,7 @@ function Collections() {
     <VStack align="stretch" spacing={4}>
       <HStack justify="space-between">
         <Text fontSize="sm" color={subTextColor}>我的藏品（{merged.length} 种）</Text>
-        <IconButton aria-label="refresh" size="xs" variant="ghost" icon={<RefreshCw size={14} />}
+        <IconButton aria-label="refresh" size="xs" data-corner="round" variant="ghost" icon={<RefreshCw size={14} />}
           onClick={() => { void invoke("refresh_df_stats_collect"); }} />
       </HStack>
 
@@ -2049,6 +2053,7 @@ function Collections() {
           <Button
             key={c.key}
             size="xs"
+            data-corner="round"
             variant="ghost"
             flexShrink={0}
             bg={activeCat === c.key ? primaryColor : "transparent"}
@@ -2085,7 +2090,7 @@ function Collections() {
                       <img src={img.startsWith("//") ? "https:" + img : img} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }}
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                       {total > 1 && (
-                        <Badge position="absolute" top={1} right={1} fontSize="xs" borderRadius="full" bg="rgba(0,0,0,0.55)" color="#ffffff">
+                        <Badge position="absolute" top={1} right={1} fontSize="xs" borderRadius="full" data-corner="round" bg="rgba(0,0,0,0.55)" color="#ffffff">
                           ×{total}
                         </Badge>
                       )}
@@ -2094,7 +2099,7 @@ function Collections() {
                     <Box h="72px" borderRadius="md" bg="rgba(0,0,0,0.18)" display="flex" alignItems="center" justifyContent="center" position="relative">
                       <Package size={22} color={gc.isDarkMode ? "rgba(255,255,255,0.8)" : subTextColor} />
                       {total > 1 && (
-                        <Badge position="absolute" top={1} right={1} fontSize="xs" borderRadius="full" bg="rgba(0,0,0,0.55)" color="#ffffff">
+                        <Badge position="absolute" top={1} right={1} fontSize="xs" borderRadius="full" data-corner="round" bg="rgba(0,0,0,0.55)" color="#ffffff">
                           ×{total}
                         </Badge>
                       )}
@@ -2117,8 +2122,8 @@ function Collections() {
         </Text>
       )}
 
-      {/* N 卡式全屏放大预览 */}
-      {preview && (
+      {/* N 卡式全屏放大预览（同上，portal 到 body 避开容器 mask 裁剪） */}
+      {preview && createPortal(
         <Box
           position="fixed"
           top={0}
@@ -2151,7 +2156,7 @@ function Collections() {
                 <Text fontSize="xs" color={subTextColor} fontWeight={600}>{preview.cat}{preview.total > 1 ? ` · ×${preview.total}` : ""}</Text>
               </VStack>
               <IconButton aria-label="关闭" icon={<X size={20} />} size="sm" variant="ghost" color={textColor}
-                _hover={{ bg: useColorModeValue("blackAlpha.100", "whiteAlpha.100") }}
+                _hover={{ bg: iconHoverBg }}
                 onClick={() => setPreview(null)} />
             </HStack>
             <Box p={6} display="flex" alignItems="center" justifyContent="center" minH="260px">
@@ -2168,19 +2173,19 @@ function Collections() {
             </Box>
           </Box>
         </Box>
-      )}
+      , document.body)}
     </VStack>
   );
 }
 
 // ═══ 主页面 ═══
 export default function DeltaStatsPage() {
-  const navigate = useNavigate();
+  const cm = useColorValue();
   const { getActiveColor, getBorderColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const borderColor = getBorderColor();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#888888");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#888888");
   const toast = useToast();
 
   const [login, setLogin] = useState<DfLoginState | null>(null);
@@ -2298,7 +2303,7 @@ export default function DeltaStatsPage() {
               borderColor={borderColor}
               maxW="220px"
       >
-              <Box w="20px" h="20px" borderRadius="full" overflow="hidden" bg={`${primaryColor}22`} display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
+              <Box w="20px" h="20px" borderRadius="full" data-corner="round" overflow="hidden" bg={`${primaryColor}22`} display="flex" alignItems="center" justifyContent="center" flexShrink={0}>
                 {userAvatar ? (
                   <img src={userAvatar} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }}
                     onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
@@ -2312,6 +2317,7 @@ export default function DeltaStatsPage() {
               <IconButton
                 aria-label="退出登录"
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 icon={<LogOut size={14} />}
                 color={subTextColor}

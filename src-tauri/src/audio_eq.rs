@@ -88,11 +88,11 @@ pub fn fx_params() -> &'static Mutex<SoundEffectParams> {
 #[tauri::command]
 pub fn update_eq_effects(clarity: f64, ambience: f64, width: f64, dynamics: f64, bass: f64) -> Result<(), String> {
     let mut params = fx_params().lock().map_err(|e| format!("锁错误: {}", e))?;
-    params.clarity = clarity.max(0.0).min(1.0);
-    params.ambience = ambience.max(0.0).min(1.0);
-    params.width = width.max(0.0).min(1.0);
-    params.dynamics = dynamics.max(0.0).min(1.0);
-    params.bass = bass.max(0.0).min(1.0);
+    params.clarity = clarity.clamp(0.0, 1.0);
+    params.ambience = ambience.clamp(0.0, 1.0);
+    params.width = width.clamp(0.0, 1.0);
+    params.dynamics = dynamics.clamp(0.0, 1.0);
+    params.bass = bass.clamp(0.0, 1.0);
     params.version = params.version.wrapping_add(1);
     log::info!("[eq] Effects updated: clarity={:.2} ambience={:.2} width={:.2} dynamics={:.2} bass={:.2}", params.clarity, params.ambience, params.width, params.dynamics, params.bass);
     Ok(())
@@ -602,11 +602,10 @@ pub async fn uninstall_virtual_audio_driver(_app: AppHandle) -> Result<String, S
     // 3. 保险清理：删除服务项、.sys 文件
     run_hidden_command("sc", &["delete", "FXVAD"]);
     let sys_path = std::path::Path::new(r"C:\Windows\System32\drivers\fxvad.sys");
-    if sys_path.exists() {
-        if fs::remove_file(sys_path).is_err() {
+    if sys_path.exists()
+        && fs::remove_file(sys_path).is_err() {
             schedule_reboot_delete(sys_path);
         }
-    }
 
     // 4. 清理实例 ID 存档
     let _ = fs::remove_file(fxvad_instance_id_file());
@@ -659,11 +658,10 @@ fn find_all_oem_infs(pnp_output: &str, keyword: &str) -> Vec<String> {
         let start = caps.get(0).unwrap().end();
         let end = (start + 500).min(pnp_output.len());
         let tail = &pnp_output[start..end];
-        if tail.to_lowercase().contains(&keyword.to_lowercase()) {
-            if !results.contains(&oem) {
+        if tail.to_lowercase().contains(&keyword.to_lowercase())
+            && !results.contains(&oem) {
                 results.push(oem);
             }
-        }
     }
     // 方法2（兜底）: 直接搜索整个输出中的 oemNN.inf 及其所在区块
     if results.is_empty() {
@@ -751,7 +749,7 @@ pub async fn start_eq_engine(_app: AppHandle, device_name: Option<String>) -> Re
             name
         }
     } else if prev_device.starts_with("PREV:") {
-        let name = prev_device[5..].to_string();
+        let name = prev_device.strip_prefix("PREV:").unwrap_or("").to_string();
         log::info!("[eq] Previous device name: '{}'", name);
         name
     } else {

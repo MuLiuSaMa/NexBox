@@ -206,7 +206,7 @@ pub fn reveal_large_file(path: String) -> Result<(), String> {
         if let Some(parent) = path_buf.parent() {
             if parent.exists() {
                 Command::new("explorer")
-                    .arg(&parent.to_string_lossy().to_string())
+                    .arg(parent.to_string_lossy().to_string())
                     .creation_flags(CREATE_NO_WINDOW)
                     .spawn()
                     .map_err(|e| format!("打开资源管理器失败: {}", e))?;

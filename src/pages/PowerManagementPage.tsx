@@ -1,22 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  Badge,
-  Button,
-  useColorModeValue,
-  Spinner,
-  useDisclosure,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  Divider,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, VStack, HStack, Badge, Button, Spinner, useDisclosure, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, Divider } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { AnimatePresence, motion } from "framer-motion";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -36,9 +18,10 @@ import {
   Cpu,
   Lock,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface BuiltinPowerPlan {
   id: string;
   filename: string;
@@ -84,9 +67,10 @@ function SystemPlanCard({
   activateLoading: boolean;
   deleteLoading: boolean;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
   const accentColor = "#805ad5";
 
   return (
@@ -126,12 +110,13 @@ function SystemPlanCard({
             {plan.is_active ? (
               <Badge
                 borderRadius="full"
+                data-corner="round"
                 px={2.5}
                 py={0.5}
                 fontSize="xs"
                 fontWeight="bold"
                 colorScheme="green"
-                bg={useColorModeValue(
+                bg={cm(
                   "green.50",
                   "rgba(72,187,120,0.1)"
                 )}
@@ -186,9 +171,10 @@ function BuiltinPlanCard({
   importLoading: boolean;
   importActivateLoading: boolean;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
   const accentColor = "#F6AD55";
 
   return (
@@ -228,12 +214,13 @@ function BuiltinPlanCard({
             {plan.is_imported ? (
               <Badge
                 borderRadius="full"
+                data-corner="round"
                 px={2.5}
                 py={0.5}
                 fontSize="xs"
                 fontWeight="medium"
                 colorScheme="blue"
-                bg={useColorModeValue(
+                bg={cm(
                   "blue.50",
                   "rgba(66,153,225,0.1)"
                 )}
@@ -244,12 +231,13 @@ function BuiltinPlanCard({
               <>
                 <Badge
                   borderRadius="full"
+                  data-corner="round"
                   px={2.5}
                   py={0.5}
                   fontSize="xs"
                   fontWeight="medium"
                   colorScheme="gray"
-                  bg={useColorModeValue(
+                  bg={cm(
                     "gray.50",
                     "rgba(128,128,128,0.15)"
                   )}
@@ -287,13 +275,14 @@ function BuiltinPlanCard({
 }
 
 export default function PowerManagementPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("power");
 
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
 
   const [builtinPlans, setBuiltinPlans] = useState<BuiltinPowerPlan[]>([]);
   const [systemPlans, setSystemPlans] = useState<SystemPowerPlan[]>([]);
@@ -598,12 +587,13 @@ export default function PowerManagementPage() {
                 </LiquidGlassButton>
                 <Badge
                   borderRadius="full"
+                  data-corner="round"
                   px={3}
                   py={1.5}
                   fontSize="xs"
                   fontWeight="bold"
                   colorScheme="green"
-                  bg={useColorModeValue(
+                  bg={cm(
                     "green.50",
                     "rgba(72,187,120,0.1)"
                   )}

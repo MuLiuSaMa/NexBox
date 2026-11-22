@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex, OnceLock};
 use std::time::{Duration, Instant};
 use futures_util::future::join_all;
@@ -374,7 +374,7 @@ async fn fetch_plugin_json(encoded_path: &str, token: &str) -> Option<String> {
     let cleaned: String = content.chars().filter(|c| !c.is_whitespace()).collect();
     use base64::Engine as _;
     let bytes = base64::engine::general_purpose::STANDARD.decode(&cleaned).ok()?;
-    Some(String::from_utf8(bytes).ok()?)
+    String::from_utf8(bytes).ok()
 }
 
 /// 读取单个工具目录：列目录拿 sha 映射（图标 blob 直链用）+ 下载 plugin.json → 解析
@@ -1044,6 +1044,8 @@ async fn create_pr(
     Err(format!("无法解析 PR 链接，原始响应：{}", v))
 }
 
+// 参数即一个插件清单的全部字段，拆结构体会改动调用点并混淆来源
+#[allow(clippy::too_many_arguments)]
 fn build_plugin_json(
     name: &str,
     description: &str,
@@ -1061,7 +1063,7 @@ fn build_plugin_json(
     tool_id: &str,
 ) -> String {
     let tag_list: Vec<String> = tags
-        .split(|c| c == ',' || c == '，' || c == ';' || c == '；')
+        .split([',', '，', ';', '；'])
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .collect();
@@ -1167,7 +1169,7 @@ fn prepare_icon_bytes(path: &str) -> Result<(Vec<u8>, String), String> {
             // 无法解码的图片格式：保留原始数据，但限制大小避免触发 contents 限制
             let bytes = std::fs::read(p).map_err(|e| format!("读取图标失败：{e}"))?;
             if (bytes.len() as u64) > MAX_CONTENTS_UPLOAD {
-                return Err(format!("图标超过限制，请使用较小的图片"));
+                return Err("图标超过限制，请使用较小的图片".to_string());
             }
             let ext = p.extension().and_then(|s| s.to_str()).unwrap_or("png").to_string();
             Ok((bytes, format!("{base_name}.{ext}")))
@@ -1589,11 +1591,7 @@ async fn download_from_raw(app: &tauri::AppHandle, relative_path: &str, dest: &P
         let chunk = chunk.map_err(|e| format!("下载失败：{e}"))?;
         std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("写入失败：{e}"))?;
         downloaded += chunk.len() as u64;
-        let percent = if total > 0 {
-            Some(((downloaded * 100) / total).min(100) as u32)
-        } else {
-            None
-        };
+        let percent = (downloaded * 100).checked_div(total).map(|p| p.min(100) as u32);
         emit_install_progress(app, "下载中...", percent);
     }
     Ok(())
@@ -1610,7 +1608,7 @@ fn safe_segment(s: &str) -> String {
 }
 
 /// 下载到「下载位置」根目录，命名 {分类}-{id}.{ext}，保证显示位置与实际文件位置一致
-fn archive_path(root: &PathBuf, category: &str, id: &str, ext: &str) -> PathBuf {
+fn archive_path(root: &Path, category: &str, id: &str, ext: &str) -> PathBuf {
     root.join(format!("{}-{}.{}", safe_segment(category), safe_segment(id), ext))
 }
 
@@ -1694,7 +1692,7 @@ pub async fn install_community_tool(
         };
         let ext = orig
             .split('/')
-            .last()
+            .next_back()
             .filter(|s| !s.is_empty())
             .and_then(|s| std::path::Path::new(s).extension())
             .map(|e| e.to_string_lossy().into_owned())
@@ -1720,11 +1718,7 @@ pub async fn install_community_tool(
             let chunk = chunk.map_err(|e| format!("下载失败：{e}"))?;
             std::io::Write::write_all(&mut file, &chunk).map_err(|e| format!("写入失败：{e}"))?;
             downloaded += chunk.len() as u64;
-            let percent = if total > 0 {
-                Some(((downloaded * 100) / total).min(100) as u32)
-            } else {
-                None
-            };
+            let percent = (downloaded * 100).checked_div(total).map(|p| p.min(100) as u32);
             emit_install_progress(&app, "下载中...", percent);
         }
         emit_install_progress(&app, "下载完成", Some(100));

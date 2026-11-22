@@ -182,7 +182,7 @@ fn strip_html(text: &str) -> String {
             result.push(ch);
         }
     }
-    decode_display_text(&result.trim())
+    decode_display_text(result.trim())
 }
 
 /// 酷狗认证信息 (对照 extractKugouAuth)
@@ -626,6 +626,8 @@ async fn gateway_request(
 }
 
 /// Android Gateway 请求 (完整版, 支持自定义 Referer 和 base URL)
+// 参数来自一次 gateway 调用，拆成结构体会破坏与 gateway_request 的签名一致性
+#[allow(clippy::too_many_arguments)]
 async fn gateway_request_full(
     path: &str,
     method: &str,
@@ -874,8 +876,8 @@ fn map_artists(item: &Value) -> Vec<Artist> {
 
     let singer_name = item.get("SingerName").and_then(|v| v.as_str()).unwrap_or("");
     let names: Vec<String> = singer_name
-        .split(|c| c == '、' || c == '/' || c == ',')
-        .map(|s| strip_html(s))
+        .split(['、', '/', ','])
+        .map(strip_html)
         .filter(|s| !s.is_empty())
         .collect();
     let ids = item.get("SingerId").and_then(|v| v.as_array());
@@ -918,8 +920,8 @@ fn map_kugou_artists(item: &Value) -> Vec<Artist> {
     let singer_name = first_string(item, &["SingerName", "singername", "author_name", "singer"]);
     let ids = item.get("SingerId").and_then(|v| v.as_array());
     singer_name
-        .split(|c| c == '/' || c == ',' || c == '\u{3001}')
-        .map(|s| strip_html(s))
+        .split(['/', ',', '\u{3001}'])
+        .map(strip_html)
         .filter(|s| !s.is_empty())
         .enumerate()
         .map(|(i, name)| Artist {
@@ -1388,7 +1390,7 @@ async fn public_special_tracks_paged(
     let songs = extract_mobile_list(&json)
         .iter()
         .map(map_playlist_track)
-        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
         .collect();
 
     Ok((playlist, songs))
@@ -1438,8 +1440,8 @@ pub async fn search(keywords: &str, limit: u32, cookie: &str) -> Result<Vec<Song
 
     let songs: Vec<Song> = list
         .iter()
-        .map(|item| map_search_item(item))
-        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .map(map_search_item)
+        .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
         .collect();
 
     Ok(songs)
@@ -1545,7 +1547,7 @@ pub async fn artist_songs(artist_id: &str, limit: u32, offset: u32, cookie: &str
     Ok(extract_mobile_list(&json)
         .iter()
         .map(map_playlist_track)
-        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
         .collect())
 }
 
@@ -1885,6 +1887,8 @@ fn hash_candidates_from_song(song: &Song, requested_quality: &str) -> Vec<(Strin
 }
 
 /// 获取歌曲播放 URL — 4级降级策略 (对照 handleKugouSongUrl)
+// 各档位 hash 与 cookie 来自一次 IPC 调用，拆结构体会改动前端命令契约
+#[allow(clippy::too_many_arguments)]
 pub async fn song_url(
     hash: &str,
     album_id: &str,
@@ -1908,7 +1912,6 @@ pub async fn song_url(
             reason: Some("MISSING_HASH".into()),
             message: Some("缺少酷狗歌曲 hash".into()),
             fee: None,
-            ..Default::default()
         });
     }
 
@@ -2022,7 +2025,6 @@ pub async fn song_url(
         reason: Some(restriction.category),
         message: Some(restriction.message),
         fee: None,
-        ..Default::default()
     })
 }
 
@@ -2349,7 +2351,7 @@ pub async fn playlist_tracks(playlist_id: &str, cookie: &str) -> Result<(Playlis
 
         for item in &chunk_arr {
             let mapped = map_playlist_track(item);
-            if !mapped.name.is_empty() && (mapped.hash.as_deref().unwrap_or("").is_empty() == false || !mapped.id.is_empty()) {
+            if !mapped.name.is_empty() && (!mapped.hash.as_deref().unwrap_or("").is_empty() || !mapped.id.is_empty()) {
                 all_tracks.push(mapped);
             }
         }
@@ -2435,8 +2437,8 @@ pub async fn playlist_tracks_paged(playlist_id: &str, cookie: &str, start: usize
 
     let tracks: Vec<Song> = chunk_arr
         .iter()
-        .map(|item| map_playlist_track(item))
-        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+        .map(map_playlist_track)
+        .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
         .collect();
 
     // 反转
@@ -2511,8 +2513,8 @@ pub async fn guess_like(cookie: &str, limit: u32) -> Result<Vec<Song>, String> {
                     if !arr.is_empty() {
                         found = arr
                             .iter()
-                            .map(|item| map_playlist_track(item))
-                            .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+                            .map(map_playlist_track)
+                            .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
                             .take(limit as usize)
                             .collect();
                         if !found.is_empty() {
@@ -2884,7 +2886,7 @@ async fn fetch_kugou_web_vip_info(cookie: &str, auth: &KugouAuth) -> Option<Valu
                 return None;
             }
             // 检查是否有错误码
-            let data = body.get("data").unwrap_or_else(|| &body);
+            let data = body.get("data").unwrap_or(&body);
             let has_error = [body.get("errno"), body.get("error_code"), body.get("errorCode"), body.get("errcode"),
                 data.get("errno"), data.get("error_code"), data.get("errorCode"), data.get("errcode")]
                 .iter()
@@ -2986,12 +2988,12 @@ async fn fetch_kugou_vip_info(cookie: &str, auth: &KugouAuth) -> Option<Value> {
     }
 
     // Gateway 端点 (并行发起)
-    spawn_gw!("/v1/get_union_vip", vec![("busi_type", "concept")], None::<&str>);
-    spawn_gw!("/v1/vipuser_sub", vec![("busi_type", "concept")], None::<&str>);
-    spawn_gw!("/kugouvip/v2/batch_union_vipinfo", vec![("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
-    spawn_gw!("/kugouvip/v1/batch_union_vipinfo", vec![("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
-    spawn_gw!("/mobile/vipinfo", vec![("plat", "0")], None::<&str>);
-    spawn_gw!("/v1/get_union_vip", vec![("busi_type", "concept")], Some("https://kugouvip.kugou.com"));
+    spawn_gw!("/v1/get_union_vip", [("busi_type", "concept")], None::<&str>);
+    spawn_gw!("/v1/vipuser_sub", [("busi_type", "concept")], None::<&str>);
+    spawn_gw!("/kugouvip/v2/batch_union_vipinfo", [("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
+    spawn_gw!("/kugouvip/v1/batch_union_vipinfo", [("busi_type", "concept"), ("userids", &auth_userid)], None::<&str>);
+    spawn_gw!("/mobile/vipinfo", [("plat", "0")], None::<&str>);
+    spawn_gw!("/v1/get_union_vip", [("busi_type", "concept")], Some("https://kugouvip.kugou.com"));
 
     // H5 Gateway 端点
     spawn_h5!("/v1/get_union_vip");
@@ -3280,8 +3282,8 @@ pub async fn get_rank_songs(cookie: &str, rank_id: &str, limit: u32) -> Result<V
             if let Some(arr) = songs_arr {
                 if !arr.is_empty() {
                     let songs: Vec<Song> = arr.iter()
-                        .map(|item| map_playlist_track(item))
-                        .filter(|s| !s.name.is_empty() && (s.hash.as_deref().unwrap_or("").is_empty() == false || !s.id.is_empty()))
+                        .map(map_playlist_track)
+                        .filter(|s| !s.name.is_empty() && (!s.hash.as_deref().unwrap_or("").is_empty() || !s.id.is_empty()))
                         .take(limit as usize)
                         .collect();
                     if !songs.is_empty() {

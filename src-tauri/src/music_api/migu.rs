@@ -900,7 +900,6 @@ pub async fn song_url(
                         None
                     },
                     fee: None,
-                    ..Default::default()
                 });
             }
             Err(e) => {
@@ -923,7 +922,6 @@ pub async fn song_url(
         reason: Some(last_err),
         message: Some("无版权或需要咪咕 VIP".into()),
         fee: Some(1),
-        ..Default::default()
     })
 }
 

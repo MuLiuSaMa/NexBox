@@ -9,7 +9,7 @@ import {
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { invoke } from "@tauri-apps/api/core";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -25,7 +25,7 @@ interface PlatformInfo {
 
 export default function OtherGunCodePlatformsPage() {
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+
   const textColor = useColorModeValue("#000000", "#ffffff");
   const subTextColor = useColorModeValue("#000000", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");

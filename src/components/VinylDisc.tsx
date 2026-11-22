@@ -73,6 +73,7 @@ function VinylDiscInner({ isPlaying, accentColor, coverUrl }: VinylDiscProps) {
         top="calc(var(--disc) * -0.67)"
         right="calc(var(--disc) * -0.71)"
         borderRadius="full"
+        data-corner="round"
         background={`radial-gradient(circle, ${hexToRgba(accentColor, 0.30)} 0%, ${hexToRgba(accentColor, 0.13)} 42%, rgba(255,255,255,0) 68%)`}
         sx={{ animation: isPlaying ? "vinylGlowBreath 5s ease-in-out infinite" : undefined }}
       />
@@ -84,6 +85,7 @@ function VinylDiscInner({ isPlaying, accentColor, coverUrl }: VinylDiscProps) {
         top="calc(var(--disc) * -0.32)"
         right="calc(var(--disc) * -0.36)"
         borderRadius="full"
+        data-corner="round"
         sx={{ animation: "vinylDiscIn 0.7s cubic-bezier(0.25, 0.8, 0.35, 1)" }}
       >
         {/* 旋转层：半透明盘体 + 唱片细纹 + 斑驳质感 + 封面 + 中孔 */}
@@ -91,6 +93,7 @@ function VinylDiscInner({ isPlaying, accentColor, coverUrl }: VinylDiscProps) {
           position="absolute"
           inset={0}
           borderRadius="full"
+          data-corner="round"
           sx={{
             animation: "vinylSpin 24s linear infinite",
             animationPlayState: isPlaying ? "running" : "paused",
@@ -112,6 +115,7 @@ function VinylDiscInner({ isPlaying, accentColor, coverUrl }: VinylDiscProps) {
             top="15%"
             left="15%"
             borderRadius="full"
+            data-corner="round"
             overflow="hidden"
             boxShadow={`0 0 0 1px rgba(255,255,255,0.25), 0 6px 30px rgba(0,0,0,0.18)`}
           >
@@ -136,6 +140,7 @@ function VinylDiscInner({ isPlaying, accentColor, coverUrl }: VinylDiscProps) {
           position="absolute"
           inset={0}
           borderRadius="full"
+          data-corner="round"
           background="conic-gradient(from 215deg at 50% 50%, rgba(255,255,255,0) 0deg, rgba(255,255,255,0.15) 34deg, rgba(255,255,255,0.04) 72deg, rgba(255,255,255,0) 118deg, rgba(255,255,255,0) 242deg, rgba(255,255,255,0.10) 292deg, rgba(255,255,255,0) 338deg)"
         />
       </Box>

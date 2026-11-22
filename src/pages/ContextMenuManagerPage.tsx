@@ -1,28 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  Input,
-  Tab,
-  TabList,
-  TabPanel,
-  TabPanels,
-  Tabs,
-  useColorModeValue,
-  Spinner,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  IconButton,
-  Tooltip,
-  Badge,
-  Image,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, VStack, HStack, Input, Tab, TabList, TabPanel, TabPanels, Tabs, Spinner, Table, Thead, Tbody, Tr, Th, Td, IconButton, Tooltip, Badge, Image } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -30,11 +6,12 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Ban, RotateCcw, RefreshCw, HardDrive } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface ContextMenuItem {
   name: string;
   verb: string;
@@ -91,6 +68,7 @@ const menuCategoryLabels: Record<string, string> = {
 const menuCategoryOrder = ["all", "file", "folder", "desktop", "drive", "allFiles"] as const;
 
 export default function ContextMenuManagerPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("rocket");
   const { liquidGlassEnabled } = useBackground();
@@ -123,21 +101,18 @@ export default function ContextMenuManagerPage() {
     );
   }, []);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const tableBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.7)"
-    : useColorModeValue("#ffffff", "#1a1a1a");
-  const tableBorder = liquidGlassEnabled
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+    const tableBorder = liquidGlassEnabled
     ? "rgba(255,255,255,0.3)"
-    : useColorModeValue("gray.200", "#333333");
-  const pathColor = useColorModeValue("gray.500", "#888888");
+    : cm("gray.200", "#333333");
+  const pathColor = cm("gray.500", "#888888");
   const hoverBg = `${themeConfig.primaryColor}1F`;
-  const deleteColor = useColorModeValue("red.500", "red.400");
+  const deleteColor = cm("red.500", "red.400");
   const restoreColor = themeConfig.primaryColor;
   const inputGlassBg = liquidGlassEnabled
-    ? useColorModeValue("rgba(255,255,255,0.26)", "rgba(255,255,255,0.1)")
-    : useColorModeValue("#ffffff", "#1a1a1a");
+    ? cm("rgba(255,255,255,0.26)", "rgba(255,255,255,0.1)")
+    : cm("#ffffff", "#1a1a1a");
   const inputGlassProps = {
     bg: inputGlassBg,
     borderColor: `${themeConfig.primaryColor}59`,
@@ -177,7 +152,7 @@ export default function ContextMenuManagerPage() {
       }
       if (spinner) setIsScanning(false);
     },
-    [t, toast]
+    [t, toast, localErr]
   );
 
   const scanPc = useCallback(
@@ -198,7 +173,7 @@ export default function ContextMenuManagerPage() {
       }
       if (spinner) setIsScanning(false);
     },
-    [t, toast]
+    [t, toast, localErr]
   );
 
   const loadDrives = useCallback(async () => {
@@ -515,7 +490,7 @@ export default function ContextMenuManagerPage() {
                                   {item.name}
                                 </Text>
                                 {item.is_hidden && (
-                                  <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2} fontSize="xs" flexShrink={0}>
+                                  <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round" px={2} fontSize="xs" flexShrink={0}>
                                     {t("contextMenu.hidden")}
                                   </Badge>
                                 )}
@@ -538,6 +513,7 @@ export default function ContextMenuManagerPage() {
                                 colorScheme={item.category === "file" ? "purple" : item.category === "desktop" ? "green" : "blue"}
                                 variant="subtle"
                                 borderRadius="full"
+                                data-corner="round"
                                 px={2}
                                 fontSize="xs"
                                 flexShrink={0}
@@ -688,7 +664,7 @@ export default function ContextMenuManagerPage() {
                                   {row.name}
                                 </Text>
                                 {row.is_hidden && (
-                                  <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2} fontSize="xs" flexShrink={0}>
+                                  <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round" px={2} fontSize="xs" flexShrink={0}>
                                     {t("contextMenu.hidden")}
                                   </Badge>
                                 )}
@@ -706,6 +682,7 @@ export default function ContextMenuManagerPage() {
                                 colorScheme={row.hives.some((h) => h === "HKCU") ? "green" : "orange"}
                                 variant="subtle"
                                 borderRadius="full"
+                                data-corner="round"
                                 px={2}
                                 fontSize="xs"
                                 flexShrink={0}

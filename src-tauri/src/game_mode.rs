@@ -403,7 +403,7 @@ fn collect_family(root: u32, system: &System) -> HashSet<u32> {
     family.insert(root);
     loop {
         let mut added = false;
-        for (_, process) in system.processes() {
+        for process in system.processes().values() {
             let pid = process.pid().as_u32();
             if family.contains(&pid) {
                 continue;
@@ -597,7 +597,7 @@ fn sweep_loop(app: tauri::AppHandle, generation: u64) {
         }
 
         if !active {
-            if !CORE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().map_or(true, |m| m.is_empty())
+            if !CORE.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_none_or(|m| m.is_empty())
             {
                 release_all();
             }

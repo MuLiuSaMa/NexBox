@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Box,
   Button,
@@ -15,9 +15,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { RefreshCw, CheckCircle2, XCircle } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
-import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -82,7 +80,6 @@ const phaseLabel: Record<RepairProgress["phase"], string> = {
 };
 
 export default function RuntimeRepairPage() {
-  const { t } = useTranslation();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
@@ -103,7 +100,7 @@ export default function RuntimeRepairPage() {
     return () => unlisten?.();
   }, []);
 
-  const refreshStatuses = async () => {
+  const refreshStatuses = useCallback(async () => {
     setIsChecking(true);
     try {
       const next = await invoke<RuntimeStatus[]>("get_runtime_statuses");
@@ -113,11 +110,11 @@ export default function RuntimeRepairPage() {
     } finally {
       setIsChecking(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     void refreshStatuses();
-  }, []);
+  }, [refreshStatuses]);
 
   const repair = async (runtimeId: RuntimeId) => {
     setActiveId(runtimeId);

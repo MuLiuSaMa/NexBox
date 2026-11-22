@@ -88,7 +88,7 @@ function splitIntoLines(text: string): string[] {
   // 多句：贪心分两行，尽量均衡（第二行承接剩余所有句子）
   const totalLen = t.replace(/\s/g, "").length;
   const half = totalLen / 2;
-  let line1: string[] = [];
+  const line1: string[] = [];
   let acc = 0;
   for (const s of sentences) {
     const sz = s.replace(/\s/g, "").length;
@@ -118,7 +118,6 @@ function ImmersiveLyricsViewInner({
   lines,
   loading,
   audioRef,
-  isPlaying,
   coverColor,
   baseFontSize,
 }: ImmersiveLyricsViewProps) {
@@ -258,7 +257,7 @@ function ImmersiveLyricsViewInner({
     }, EXIT_MS);
 
     startEnter(activeIndex);
-  }, [activeIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeIndex]);  
 
   // ── 颜色与字号派生 ──
   const isLightText = coverColor.isLight;
@@ -540,7 +539,6 @@ function hsla(h: number, s: number, l: number, a: number): string {
 const MAX_RIPPLES = 24;
 
 export const ImmersiveRippleField = memo(function ImmersiveRippleField({
-  isPlaying,
   bgRgb,
 }: {
   isPlaying: boolean;
@@ -684,6 +682,7 @@ export const ImmersiveRippleField = memo(function ImmersiveRippleField({
           width={`${r.size}px`}
           height={`${r.size}px`}
           borderRadius="50%"
+          data-corner="round"
           sx={{
             transform: r.side === "left" ? "translate(-50%, -50%)" : "translate(50%, -50%)",
             // 左波纹加深背景，右波纹变浅背景（背景色自身深浅，非黑白）

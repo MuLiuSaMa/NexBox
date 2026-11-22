@@ -20,7 +20,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { Blend, Contrast, Expand, Eye, Gauge, Grid3x3, LayoutGrid, Moon, RefreshCw, Ruler, Shrink, SquareStack, Type, Waves } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavPosition } from "@/components/ui/main-layout";
@@ -845,8 +844,7 @@ function TestLayout({
 
 export default function ScreenTestPage() {
   const { t } = useTranslation();
-  const { config: themeConfig, getActiveColor, getContrastTextColor } = useThemeColor();
-  const activeColor = getActiveColor();
+  const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
   const subColor = useColorModeValue("gray.500", "#888888");
@@ -896,6 +894,7 @@ export default function ScreenTestPage() {
                   }}
                   _hover={{ bg: themeColorRgba(0.15) }}
                   borderRadius="full"
+                  data-corner="round"
                   fontWeight="600"
                   fontSize="sm"
                   px={5}

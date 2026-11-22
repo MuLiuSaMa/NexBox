@@ -190,7 +190,7 @@ fn parse_metadata_bytes(bytes: &[u8]) -> Option<(u64, String, i64)> {
     // 偏移 24 是路径长度字段,真正的 UTF-16 路径从偏移 28 开始,否则首字符会变成控制字符。
     let path_bytes = &bytes[28..path_end];
     let utf16_path: Vec<u16> = path_bytes
-        .chunks_exact(2)
+        .as_chunks::<2>().0.iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
         .take_while(|character| *character != 0)
         .collect();
@@ -248,7 +248,7 @@ fn current_user_sid_uncached() -> Option<String> {
         }
 
         // 使用 u64 缓冲区保证 TOKEN_USER 在 Windows 目标上的对齐要求。
-        let mut buffer = vec![0u64; (required_size as usize + 7) / 8];
+        let mut buffer = vec![0u64; (required_size as usize).div_ceil(8)];
         let success = GetTokenInformation(
             token_handle,
             TokenUser,

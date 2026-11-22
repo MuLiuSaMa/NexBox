@@ -1,27 +1,5 @@
 import { useState } from "react";
-import {
-  HStack,
-  VStack,
-  Button,
-  Text,
-  IconButton,
-  Tooltip,
-  Avatar,
-  Box,
-  Badge,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  Spinner,
-  useColorModeValue,
-} from "@chakra-ui/react";
+import { HStack, VStack, Button, Text, IconButton, Tooltip, Avatar, Box, Badge, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, Menu, MenuButton, MenuList, MenuItem, Spinner } from "@chakra-ui/react";
 import { QRCodeSVG } from "qrcode.react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import {
@@ -38,6 +16,7 @@ import { useMusicStore, coverProxyUrl } from "@/stores/music-store";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import type { MusicProvider } from "@/types/music";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface ProviderOption {
   id: MusicProvider;
   name: string;
@@ -93,6 +72,7 @@ function ProviderLogo({ src, size = 40, rounded = "lg" }: { src: string; size?: 
       w={`${size}px`}
       h={`${size}px`}
       borderRadius={rounded}
+      data-corner={rounded === "full" ? "round" : undefined}
       overflow="hidden"
       flexShrink={0}
       bg="white"
@@ -148,6 +128,7 @@ export function VipBadge({
 }
 
 export function MusicLoginSection() {
+  const cm = useColorValue();
   const {
     loginInfo,
     loginInfos,
@@ -186,13 +167,13 @@ export function MusicLoginSection() {
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
 
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const modalBg = useColorModeValue("white", "#1a1a1a");
-  const modalBorder = useColorModeValue("gray.200", "#333333");
-  const menuBg = useColorModeValue("white", "#1a1a1a");
-  const menuBorder = useColorModeValue("gray.200", "#333333");
-  const menuHoverBg = useColorModeValue("gray.50", "#252525");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const modalBg = cm("white", "#1a1a1a");
+  const modalBorder = cm("gray.200", "#333333");
+  const menuBg = cm("white", "#1a1a1a");
+  const menuBorder = cm("gray.200", "#333333");
+  const menuHoverBg = cm("gray.50", "#252525");
 
   // 已登录的平台数量
   const loggedInProviders = PROVIDERS.filter((p) => !p.disabled && loginInfos[p.id]?.logged_in);
@@ -374,7 +355,7 @@ export function MusicLoginSection() {
                 as={Box}
                 cursor="pointer"
                 borderRadius="md"
-                _hover={{ bg: useColorModeValue("gray.100", "#252525") }}
+                _hover={{ bg: cm("gray.100", "#252525") }}
                 p={1}
               >
                 <HStack spacing={2}>

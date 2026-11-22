@@ -71,17 +71,17 @@ fn read_reg_str_raw_decode(bytes: &[u8]) -> Option<String> {
 
     // UTF-16LE（常规 REG_SZ 形态）
     let mut utf16 = String::new();
-    let utf16_err;
-    if bytes.len() % 2 == 0 {
+    
+    let utf16_err = if bytes.len().is_multiple_of(2) {
         let units: Vec<u16> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>().0.iter()
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect();
         utf16 = String::from_utf16_lossy(&units);
-        utf16_err = utf16.chars().filter(|&c| c == '\u{FFFD}').count();
+        utf16.chars().filter(|&c| c == '\u{FFFD}').count()
     } else {
-        utf16_err = usize::MAX;
-    }
+        usize::MAX
+    };
     candidates.push((score_text(&utf16), utf16_err, 2, utf16));
 
     // UTF-8
@@ -279,7 +279,7 @@ pub async fn list_installed_apps() -> Result<Vec<InstalledApp>, String> {
         &mut seen,
     );
 
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     Ok(out)
 }
 
@@ -348,10 +348,10 @@ fn split_command(cmd: &str) -> (String, String) {
         return (String::new(), String::new());
     }
     // 形态 1：程序被引号包裹
-    if cmd.starts_with('"') {
-        if let Some(end) = cmd[1..].find('"') {
-            let prog = &cmd[1..1 + end];
-            let rest = &cmd[1 + end + 1..];
+    if let Some(inner) = cmd.strip_prefix('"') {
+        if let Some(end) = inner.find('"') {
+            let prog = &inner[..end];
+            let rest = &inner[end + 1..];
             return (prog.to_string(), rest.trim().to_string());
         }
     }

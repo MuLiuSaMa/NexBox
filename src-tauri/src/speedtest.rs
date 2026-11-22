@@ -157,6 +157,8 @@ fn now_phase(phase: &str) -> f64 {
     }
 }
 
+// 参数对应一次进度上报的完整上下文，拆结构体会改动所有调用点
+#[allow(clippy::too_many_arguments)]
 fn emit_progress(
     app: &AppHandle,
     stage: &str,
@@ -263,6 +265,8 @@ async fn run_ping_test(
 }
 
 /// 下载测速：多线程并发拉取测速文件，实时统计速率
+// 参数对应一次测速任务的完整上下文，拆结构体会改动调用方
+#[allow(clippy::too_many_arguments)]
 async fn run_download_test(
     client: &Client,
     app: &AppHandle,
@@ -391,6 +395,8 @@ async fn run_download_test(
 }
 
 /// 上传测速：多线程并发流式上传随机数据，边发边计数（避免速率跳变为 0）
+// 参数对应一次测速任务的完整上下文，拆结构体会改动调用方
+#[allow(clippy::too_many_arguments)]
 async fn run_upload_test(
     client: &Client,
     app: &AppHandle,

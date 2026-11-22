@@ -185,7 +185,7 @@ pub fn parse(content: &str) -> Vec<CleanerEntry> {
     let mut entries: Vec<CleanerEntry> = Vec::new();
     let mut current: Option<CleanerEntry> = None;
 
-    for line in content.split(|c| c == '\r' || c == '\n') {
+    for line in content.split(['\r', '\n']) {
         let line = line.trim();
         if line.is_empty() || line.starts_with(';') || line.starts_with('#') {
             continue;
@@ -307,12 +307,12 @@ DetectFile=%LocalAppData%\\NothingHere*
         assert_eq!(chrome.detect_files.len(), 1);
         assert_eq!(chrome.file_keys.len(), 2);
         assert_eq!(chrome.reg_keys.len(), 1);
-        assert_eq!(chrome.default_select, true);
+        assert!(chrome.default_select);
         assert_eq!(chrome.detect_keys.len(), 0);
 
         let pinned = &entries[1];
         assert_eq!(pinned.name, "Google Chrome Pinned Tabs");
-        assert_eq!(pinned.default_select, false);
+        assert!(!pinned.default_select);
     }
 
     #[test]

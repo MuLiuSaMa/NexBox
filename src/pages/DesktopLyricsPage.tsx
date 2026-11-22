@@ -143,11 +143,10 @@ export default function DesktopLyricsPage() {
     enableUnlockHook();
 
     let active = true;
-    let intervalId: ReturnType<typeof setInterval>;
 
     // 每 200ms 轮询：光标在窗口内且未隐藏按钮 → 显示内嵌按钮并激活钩子拦截，
     // 否则隐藏；悬停态由光标是否落在按钮区域内决定
-    intervalId = setInterval(async () => {
+    const intervalId = setInterval(async () => {
       if (!active || !isLockedRef.current) return;
       try {
         // 隐藏解锁按钮开关开启时，强制隐藏，鼠标移入也不自动显示
@@ -209,7 +208,7 @@ export default function DesktopLyricsPage() {
 
   // 拖动窗口（未锁定时）
   const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (_e: React.MouseEvent) => {
       if (isLockedRef.current) return;
       // 仅在非控制栏区域触发拖动
       // 控制栏内部会 stopPropagation，所以这里收到的都是背景区域

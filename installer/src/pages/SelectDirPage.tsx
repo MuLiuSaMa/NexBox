@@ -33,12 +33,13 @@ export default function SelectDirPage({ onDirChange, onValidChange, onShortcutCh
       onDirChange(path);
       checkSpace(path);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     const valid = available >= REQUIRED_SPACE;
     onValidChange(valid);
-  }, [available]);
+  }, [available, onValidChange]);
 
   const checkSpace = async (path: string) => {
     try {
@@ -60,7 +61,9 @@ export default function SelectDirPage({ onDirChange, onValidChange, onShortcutCh
         title: t("dir_title"),
       });
       if (selected) {
-        const target = `${selected}\\NexBox`;
+        // 资源管理器对盘符根目录返回 "D:\"，直接拼接会得到 "D:\\NexBox"
+        const base = selected.replace(/[\\/]+$/, "");
+        const target = `${base}\\NexBox`;
         setDir(target);
         onDirChange(target);
         setAvailable(-1);

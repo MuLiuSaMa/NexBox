@@ -271,6 +271,8 @@ pub async fn kugou_artist_songs(app: AppHandle, artist_id: String, limit: Option
 }
 
 #[tauri::command]
+// 参数即前端 invoke 的字段，拆成结构体会改动 Tauri 命令契约
+#[allow(clippy::too_many_arguments)]
 pub async fn kugou_song_url(
     app: AppHandle,
     hash: String,

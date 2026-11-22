@@ -11,7 +11,6 @@ import type {
   PlayMode,
   PlaybackQuality,
   SongUrlResult,
-  KaraokeLine,
   MusicProvider,
   CommentPage,
   Album,
@@ -2781,7 +2780,7 @@ export const useMusicStore = create<MusicState>((set, get) => ({
           } else {
             useMusicStore.setState({ qishuiQrStatus: "请用 汽水音乐App 扫码并确认登录" });
           }
-        } catch (e) {
+        } catch {
           if (!useMusicStore.getState().qishuiQrOpen) break;
           useMusicStore.setState({ qishuiQrStatus: "二维码检测失败，重试中…" });
         }

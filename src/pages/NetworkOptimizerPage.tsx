@@ -15,8 +15,7 @@ import {
   Spinner,
 } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
-import { Copy, Globe, RefreshCw } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+import { Globe, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";

@@ -1,43 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  Heading,
-  VStack,
-  HStack,
-  Badge,
-  Checkbox,
-  Button,
-  useColorModeValue,
-  Spinner,
-  SimpleGrid,
-  Icon,
-  Progress,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItemOption,
-  MenuOptionGroup,
-  Portal,
-  AlertDialog,
-  AlertDialogOverlay,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogBody,
-  AlertDialogFooter,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, Heading, VStack, HStack, Badge, Checkbox, Button, Spinner, SimpleGrid, Icon, Progress, Table, Thead, Tbody, Tr, Th, Td, Tabs, TabList, Tab, TabPanels, TabPanel, Tooltip, Menu, MenuButton, MenuList, MenuItemOption, MenuOptionGroup, Portal, AlertDialog, AlertDialogOverlay, AlertDialogContent, AlertDialogHeader, AlertDialogBody, AlertDialogFooter } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -75,6 +36,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ============================================================================
 // Types
 // ============================================================================
@@ -296,14 +258,14 @@ const CleanItemCard = memo(function CleanItemCard({
   onToggleSelect,
   primaryColor,
 }: CleanItemCardProps) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
-  const pathColor = useColorModeValue("gray.400", "#666666");
-  const hoverBorderColor = liquidGlassEnabled
-    ? "rgba(255,255,255,0.5)"
-    : useColorModeValue("gray.300", "#444444");
+  const headingColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
+  const pathColor = cm("gray.400", "#666666");
+  const hoverBorderBaseColor = cm("gray.300", "#444444");
+  const hoverBorderColor = liquidGlassEnabled ? "rgba(255,255,255,0.5)" : hoverBorderBaseColor;
   const IconComponent = getItemIcon(item.id);
 
   const hasContent = item.exists && item.size_bytes > 0;
@@ -413,12 +375,13 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
   onToggleExpand,
   primaryColor,
 }: JunkCategoryCardProps) {
+  const cm = useColorValue();
   const { t, i18n } = useTranslation();
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
-  const pathColor = useColorModeValue("gray.400", "#666666");
-  const rowBg = useColorModeValue("#f7fafc", "#232323");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const headingColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
+  const pathColor = cm("gray.400", "#666666");
+  const rowBg = cm("#f7fafc", "#232323");
+  const dividerColor = cm("gray.200", "#333333");
 
   const hasContent = category.file_count > 0;
 
@@ -487,6 +450,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
             {hasContent && (
               <Button
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 color={primaryColor}
                 mt={1}
@@ -552,6 +516,7 @@ const JunkCategoryCard = memo(function JunkCategoryCard({
           {hasMoreFiles && (
             <Button
               size="xs"
+              data-corner="round"
               variant="ghost"
               color={primaryColor}
               w="full"
@@ -669,6 +634,7 @@ const BigFilesTable = memo(function BigFilesTable({
                     <Tooltip label={t("storageClean.bigReveal")}>
                       <Button
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         p={1}
                         minW="auto"
@@ -682,6 +648,7 @@ const BigFilesTable = memo(function BigFilesTable({
                     <Tooltip label={t("storageClean.bigDelete")}>
                       <Button
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         p={1}
                         minW="auto"
@@ -709,21 +676,22 @@ const BigFilesTable = memo(function BigFilesTable({
 // ============================================================================
 
 export default function StorageCleanPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("disk");
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
 
   const adaptiveTitle = useAdaptiveTextColor();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
 
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
 
   // 使用提示框改为跟随主题色
   const tipTitleColor = themeConfig.primaryColor;
-  const tipTextColor = useColorModeValue("gray.600", "rgba(200,200,200,0.85)");
-  const selectBg = useColorModeValue("#ffffff", "#1e2024");
+  const tipTextColor = cm("gray.600", "rgba(200,200,200,0.85)");
+  const selectBg = cm("#ffffff", "#1e2024");
 
   const [tabIndex, setTabIndex] = useState(0);
 
@@ -1348,6 +1316,7 @@ export default function StorageCleanPage() {
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
+            data-corner="round"
             fontWeight="600"
             fontSize="sm"
             px={5}
@@ -1366,6 +1335,7 @@ export default function StorageCleanPage() {
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
+            data-corner="round"
             fontWeight="600"
             fontSize="sm"
             px={5}
@@ -1384,6 +1354,7 @@ export default function StorageCleanPage() {
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
+            data-corner="round"
             fontWeight="600"
             fontSize="sm"
             px={5}

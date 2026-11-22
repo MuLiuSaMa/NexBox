@@ -270,7 +270,7 @@ pub fn scan(
                 let heap = heap.into_inner().unwrap();
                 let mut results: Vec<LargeFileEntry> =
                     heap.iter().map(|item| item.0.clone()).collect();
-                results.sort_by(|a, b| b.size.cmp(&a.size));
+                results.sort_by_key(|a| std::cmp::Reverse(a.size));
                 return Ok(results);
             }
 
@@ -292,7 +292,7 @@ pub fn scan(
 
                 let count = file_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
 
-                if last_emit.elapsed().as_millis() >= 200 || count % 1000 == 0 {
+                if last_emit.elapsed().as_millis() >= 200 || count.is_multiple_of(1000) {
                     let progress = LargeFileScanProgress {
                         current_path: path_str.clone(),
                         scanned_count: count,
@@ -324,7 +324,7 @@ pub fn scan(
 
         let heap = heap.into_inner().unwrap();
         let mut results: Vec<LargeFileEntry> = heap.iter().map(|item| item.0.clone()).collect();
-        results.sort_by(|a, b| b.size.cmp(&a.size));
+        results.sort_by_key(|a| std::cmp::Reverse(a.size));
 
         log::info!(
             "大文件扫描完成: 扫描 {} 个文件, 返回 {} 项 (Top {})",

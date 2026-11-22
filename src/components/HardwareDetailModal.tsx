@@ -10,7 +10,7 @@ import {
   Text,
   Divider,
   useColorModeValue,
-  Box,
+  
 } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import type { ElementType } from "react";

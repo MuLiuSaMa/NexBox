@@ -3,7 +3,7 @@ import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { GripVertical, Cpu, Thermometer, Activity, HardDrive, Key, Gauge, Fan, Zap, Clock, Download, Settings } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
+
 import {
   DndContext,
   closestCenter,
@@ -147,6 +147,7 @@ function SortableItem({
           aria-label="地图设置"
           icon={<Settings size={15} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           color={getActiveColor()}
           _hover={{ bg: hexToRgba(getActiveColor(), 0.1) }}
@@ -160,6 +161,7 @@ function SortableItem({
       {item.id === "cpu_temp" && !IS_STORE_BUILD && (
         <Button
           size="xs"
+          data-corner="round"
           variant="outline"
           color={getActiveColor()}
           borderColor={getActiveColor()}

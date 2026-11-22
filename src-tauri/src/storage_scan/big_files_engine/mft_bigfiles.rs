@@ -170,7 +170,7 @@ pub fn scan_top_files_via_mft(
             })
         })
         .collect();
-    results.sort_by(|a, b| b.size.cmp(&a.size));
+    results.sort_by_key(|a| std::cmp::Reverse(a.size));
 
     let t4 = Instant::now();
     flog!(

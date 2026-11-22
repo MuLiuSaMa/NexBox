@@ -114,6 +114,7 @@ const OptimizeCard = memo(function OptimizeCard({
               }
               variant="subtle"
               borderRadius="full"
+              data-corner="round"
               px={1.5}
               lineHeight="1.2"
               flexShrink={0}
@@ -789,6 +790,7 @@ export default function SystemOptimizerPage() {
               key={cat}
               size="sm"
               borderRadius="full"
+              data-corner="round"
               onClick={() => setActiveCategory(cat)}
               bg={isActive ? activeColor : "transparent"}
               color={isActive ? contrastText : headingColor}
@@ -805,6 +807,7 @@ export default function SystemOptimizerPage() {
                 ml={2}
                 px={1.5}
                 borderRadius="full"
+                data-corner="round"
                 fontSize="2xs"
                 lineHeight="1.6"
                 bg={isActive ? "rgba(255,255,255,0.25)" : cardBg}

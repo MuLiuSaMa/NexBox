@@ -1,17 +1,5 @@
-import {
-  Box,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  VStack,
-  Text,
-  HStack,
-  Icon,
-  useColorModeValue,
-  Kbd,
-  Image,
-} from "@chakra-ui/react";
-import { Search, Home, Cpu, Wrench, Package, Crosshair, TrendingUp, Heart, Settings } from "lucide-react";
+import { Box, Input, InputGroup, InputLeftElement, VStack, Text, HStack, Icon, Kbd } from "@chakra-ui/react";
+import { Search } from "lucide-react";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -24,12 +12,12 @@ import {
   categoryOrder,
   getThirdPartyToolIcon,
   type SearchItem,
-  type SearchCategory,
 } from "@/config/search-index";
 import { invoke } from "@tauri-apps/api/core";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface GroupedResults {
   [key: string]: SearchItem[];
 }
@@ -49,11 +37,12 @@ function matchSearch(query: string, item: SearchItem, t: (key: string) => string
 }
 
 export function GlobalSearch() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const toast = useDynamicIsland("search");
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
+  const { getActiveColor, getContrastTextColor } = useThemeColor();
   const { tools } = useAppStartup();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -76,20 +65,20 @@ export function GlobalSearch() {
   // 模糊立即生效
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
 
-  const inputBg = useColorModeValue(
+  const inputBg = cm(
     liquidGlassEnabled ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.9)",
     liquidGlassEnabled ? "rgba(0,0,0,0.25)" : "rgba(17,17,17,0.95)"
   );
-  const inputBorderColor = useColorModeValue(
+  const inputBorderColor = cm(
     liquidGlassEnabled ? "rgba(255,255,255,0.2)" : "rgba(200,200,200,0.3)",
     liquidGlassEnabled ? "rgba(255,255,255,0.1)" : "rgba(51,51,51,0.5)"
   );
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const placeholderColor = useColorModeValue("gray.500", "gray.400");
-  const resultItemBg = useColorModeValue("gray.50", "gray.800");
-  const resultItemHoverBg = useColorModeValue("gray.100", "gray.700");
-  const categoryColor = useColorModeValue("gray.500", "gray.400");
-  const noResultColor = useColorModeValue("gray.400", "gray.500");
+  const textColor = cm("gray.700", "#ffffff");
+  const placeholderColor = cm("gray.500", "gray.400");
+  const resultItemHoverBg = cm("gray.100", "gray.700");
+  const kbdBg = cm("gray.100", "gray.700");
+  const categoryColor = cm("gray.500", "gray.400");
+  const noResultColor = cm("gray.400", "gray.500");
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -280,10 +269,10 @@ export function GlobalSearch() {
         {!isOpen && (
           <Box position="absolute" right={3} top="50%" transform="translateY(-50%)">
             <HStack spacing={1}>
-              <Kbd fontSize="10px" px={1} py={0.5} borderRadius="md" bg={useColorModeValue("gray.100", "gray.700")}>
+              <Kbd fontSize="10px" px={1} py={0.5} borderRadius="md" bg={kbdBg}>
                 Ctrl
               </Kbd>
-              <Kbd fontSize="10px" px={1} py={0.5} borderRadius="md" bg={useColorModeValue("gray.100", "gray.700")}>
+              <Kbd fontSize="10px" px={1} py={0.5} borderRadius="md" bg={kbdBg}>
                 K
               </Kbd>
             </HStack>

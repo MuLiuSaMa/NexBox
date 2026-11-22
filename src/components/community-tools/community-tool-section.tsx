@@ -1,35 +1,4 @@
-import {
-  Box,
-  Flex,
-  Grid,
-  Text,
-  Badge,
-  VStack,
-  HStack,
-  Divider,
-  Button,
-  Input,
-  IconButton,
-  Tooltip,
-  Icon,
-  useColorModeValue,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalCloseButton,
-  ModalFooter,
-  AlertDialog,
-  AlertDialogBody,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogContent,
-  AlertDialogOverlay,
-  AlertDialogCloseButton,
-  Progress,
-  Spinner,
-} from "@chakra-ui/react";
+import { Box, Flex, Grid, Text, Badge, VStack, HStack, Divider, Button, Input, IconButton, Tooltip, Icon, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, ModalFooter, AlertDialog, AlertDialogBody, AlertDialogFooter, AlertDialogHeader, AlertDialogContent, AlertDialogOverlay, AlertDialogCloseButton, Progress, Spinner } from "@chakra-ui/react";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -59,6 +28,7 @@ import { useCommunityTools, type CommunityTool, type SubmitCommunityToolParams }
 import { GitCodeLoginDialog } from "./gitcode-login-dialog";
 import { CommunityToolSubmitDialog } from "./community-tool-submit-dialog";
 
+import { useColorValue } from "@/hooks/use-color-value";
 const GLYPH_MAP: Record<string, React.ElementType> = {
   处理器: Cpu,
   显卡: Monitor,
@@ -112,7 +82,8 @@ function downloadSourceText(tool: CommunityTool | null): string {
 }
 
 function DetailRow({ label, value }: { label: string; value?: string | null }) {
-  const textColor = useColorModeValue("gray.600", "#cccccc");
+  const cm = useColorValue();
+  const textColor = cm("gray.600", "#cccccc");
   return (
     <HStack align="start">
       <Text w="64px" flexShrink={0} opacity={0.6}>
@@ -138,10 +109,11 @@ function CommunityToolCard({
   onAction: (tool: CommunityTool) => void;
   onDelete: (tool: CommunityTool) => void;
 }) {
-  const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
-  const bg = useColorModeValue("gray.100", "#222222");
+  const cm = useColorValue();
+  const iconColor = cm("gray.700", "#cccccc");
+  const titleColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
+  const bg = cm("gray.100", "#222222");
 
   const installed = tool.install_status === "installed";
   const GlyphIcon = glyphForCategory(tool.category);
@@ -154,6 +126,7 @@ function CommunityToolCard({
             aria-label="delete"
             icon={<Icon as={Trash2} boxSize={3} />}
             size="xs"
+            data-corner="round"
             variant="ghost"
             colorScheme="red"
             position="absolute"
@@ -209,8 +182,9 @@ function CommunityToolCard({
 }
 
 export function CommunityToolSection() {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
+  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor: _getBorderColor } = useThemeColor();
   const toast = useDynamicIsland("wrench");
   const {
     tools,
@@ -237,9 +211,9 @@ export function CommunityToolSection() {
     remove,
   } = useCommunityTools();
 
-  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
-  const iconColor = useColorModeValue("gray.700", "#cccccc");
+  const sectionTitleColor = cm("gray.800", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
+  const iconColor = cm("gray.700", "#cccccc");
 
   const [category, setCategory] = useState("all");
   const [search, setSearch] = useState("");
@@ -382,10 +356,10 @@ export function CommunityToolSection() {
         <Text fontSize="sm" fontWeight="medium" color={sectionTitleColor} whiteSpace="nowrap">
           {t("tools.community.downloadDir")}
         </Text>
-        <Text fontSize="xs" color={useColorModeValue("gray.500", "#999999")} isTruncated maxW="340px">
+        <Text fontSize="xs" color={cm("gray.500", "#999999")} isTruncated maxW="340px">
           {downloadDir}
         </Text>
-        <Button size="xs" variant="outline" color={getActiveColor()} borderColor={getActiveColor()} onClick={pickDownloadDir}>
+        <Button size="xs" data-corner="round" variant="outline" color={getActiveColor()} borderColor={getActiveColor()} onClick={pickDownloadDir}>
           {t("tools.community.changeDir")}
         </Button>
       </HStack>
@@ -413,7 +387,7 @@ export function CommunityToolSection() {
         <Flex justify="center" py={10}>
           <HStack spacing={3}>
             <Spinner color={getActiveColor()} />
-            <Text fontSize="sm" color={useColorModeValue("gray.600", "#cccccc")}>
+            <Text fontSize="sm" color={cm("gray.600", "#cccccc")}>
               正在获取社区工具...
             </Text>
           </HStack>
@@ -470,7 +444,7 @@ export function CommunityToolSection() {
 
       <AlertDialog isOpen={!!installTool} leastDestructiveRef={cancelRef as never} onClose={() => setInstallTool(null)}>
         <AlertDialogOverlay backdropFilter="blur(4px)" />
-        <AlertDialogContent bg={useColorModeValue("white", "#000000")}>
+        <AlertDialogContent bg={cm("white", "#000000")}>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
             {installTool?.name}
           </AlertDialogHeader>
@@ -494,7 +468,7 @@ export function CommunityToolSection() {
       {/* 详情弹窗：完整信息 + 下载/打开 + 进度条 */}
       <Modal isOpen={!!detailTool} onClose={() => setDetailTool(null)} isCentered size="lg" scrollBehavior="inside" closeOnOverlayClick={!installing}>
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent bg={useColorModeValue("white", "#000000")}>
+        <ModalContent bg={cm("white", "#000000")}>
           <ModalHeader fontSize="lg">
             {detailLive?.name}
             {detailLive && (
@@ -506,7 +480,7 @@ export function CommunityToolSection() {
           <ModalCloseButton isDisabled={installing} />
           <ModalBody sx={themedScrollbar}>
             {detailLive?.description ? (
-              <Text fontSize="sm" mb={3} color={useColorModeValue("gray.700", "#cccccc")}>
+              <Text fontSize="sm" mb={3} color={cm("gray.700", "#cccccc")}>
                 {detailLive.description}
               </Text>
             ) : null}
@@ -525,6 +499,7 @@ export function CommunityToolSection() {
                 {detailLive?.homepage ? (
                   <Button
                     size="xs"
+                    data-corner="round"
                     variant="link"
                     color={getActiveColor()}
                     leftIcon={<ExternalLink size={12} />}
@@ -533,7 +508,7 @@ export function CommunityToolSection() {
                     {detailLive.homepage}
                   </Button>
                 ) : (
-                  <Text color={useColorModeValue("gray.600", "#cccccc")}>-</Text>
+                  <Text color={cm("gray.600", "#cccccc")}>-</Text>
                 )}
               </HStack>
             </VStack>
@@ -548,7 +523,7 @@ export function CommunityToolSection() {
                   colorScheme="blue"
                   sx={{ "& > div": { background: getActiveColor() } }}
                 />
-                <Text fontSize="xs" color={useColorModeValue("gray.600", "#cccccc")}>
+                <Text fontSize="xs" color={cm("gray.600", "#cccccc")}>
                   {installMessage ?? "下载中..."}
                   {installPercent != null ? `  ${installPercent}%` : ""}
                 </Text>
@@ -585,7 +560,7 @@ export function CommunityToolSection() {
 
       <AlertDialog isOpen={!!deleteTool} leastDestructiveRef={cancelRef as never} onClose={() => setDeleteTool(null)}>
         <AlertDialogOverlay backdropFilter="blur(4px)" />
-        <AlertDialogContent bg={useColorModeValue("white", "#000000")}>
+        <AlertDialogContent bg={cm("white", "#000000")}>
           <AlertDialogHeader fontSize="lg" fontWeight="bold">
             {t("tools.community.deleteTitle")}
           </AlertDialogHeader>
@@ -605,12 +580,12 @@ export function CommunityToolSection() {
       {/* 删除进行中：正在提交 PR */}
       <Modal isOpen={removing} onClose={() => {}} isCentered size="sm" closeOnOverlayClick={false} closeOnEsc={false}>
         <ModalOverlay backdropFilter="blur(4px)" />
-        <ModalContent bg={useColorModeValue("white", "#000000")}>
+        <ModalContent bg={cm("white", "#000000")}>
           <ModalHeader fontSize="md">正在提交 PR</ModalHeader>
           <ModalBody pb={4}>
             <HStack spacing={3}>
               <Spinner color={getActiveColor()} />
-              <Text fontSize="sm" color={useColorModeValue("gray.600", "#cccccc")}>
+              <Text fontSize="sm" color={cm("gray.600", "#cccccc")}>
                 {removeProgress ?? "正在提交删除请求..."}
               </Text>
             </HStack>

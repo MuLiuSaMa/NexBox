@@ -39,7 +39,6 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -112,7 +111,7 @@ export default function CpuSchedulerPage() {
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
   const themeColorHex = primaryColor || "#98DDD0";
-  const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
+  const themeColorRgba = useCallback((opacity: number) => hexToRgba(themeColorHex, opacity), [themeColorHex]);
   const eCoreColor = "#F6AD55";
 
   const pCoreCheckboxSx = useMemo(() => ({
@@ -392,6 +391,7 @@ export default function CpuSchedulerPage() {
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
+            data-corner="round"
             fontWeight="600"
             fontSize="sm"
             px={6}
@@ -410,6 +410,7 @@ export default function CpuSchedulerPage() {
             }}
             _hover={{ bg: themeColorRgba(0.15) }}
             borderRadius="full"
+            data-corner="round"
             fontWeight="600"
             fontSize="sm"
             px={6}
@@ -447,10 +448,10 @@ export default function CpuSchedulerPage() {
                 <Text color={textColor} fontWeight="600" fontSize="sm">{topology.cpu_name}</Text>
               </HStack>
               <HStack spacing={2}>
-                <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full">
+                <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full" data-corner="round">
                   {topology.total_physical_cores} {t("optimization.cpuScheduler.cores")}
                 </Badge>
-                <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full">
+                <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="xs" px={2} py={1} borderRadius="full" data-corner="round">
                   {topology.total_logical_processors} {t("optimization.cpuScheduler.threads")}
                 </Badge>
               </HStack>
@@ -593,7 +594,7 @@ export default function CpuSchedulerPage() {
                   transition="background 0.15s"
                 >
                   <Box
-                    w="8px" h="8px" borderRadius="full"
+                    w="8px" h="8px" borderRadius="full" data-corner="round"
                     bg={selectedProcess?.pid === proc.pid ? themeColorHex : "transparent"}
                     flexShrink={0}
                   />
@@ -663,6 +664,7 @@ export default function CpuSchedulerPage() {
                         borderColor={themeColorHex}
                         onClick={() => applyPreset("allPCores")}
                         borderRadius="full"
+                        data-corner="round"
                       >
                         {t("optimization.cpuScheduler.presetAllPCores")}
                       </Button>
@@ -673,6 +675,7 @@ export default function CpuSchedulerPage() {
                         borderColor={eCoreColor}
                         onClick={() => applyPreset("allECores")}
                         borderRadius="full"
+                        data-corner="round"
                       >
                         {t("optimization.cpuScheduler.presetAllECores")}
                       </Button>
@@ -685,6 +688,7 @@ export default function CpuSchedulerPage() {
                     borderColor={themeColorHex}
                     onClick={() => applyPreset("allCores")}
                     borderRadius="full"
+                    data-corner="round"
                   >
                     {t("optimization.cpuScheduler.presetAllCores")}
                   </Button>
@@ -787,7 +791,7 @@ export default function CpuSchedulerPage() {
                   <VStack align="start" spacing={1}>
                     <Text color={subTextColor} fontSize="xs">{t("optimization.cpuScheduler.currentAffinity")}:</Text>
                     <HStack spacing={2}>
-                      <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="sm" px={3} py={1} borderRadius="full">
+                      <Badge bg={themeColorRgba(0.15)} color={themeColorHex} fontSize="sm" px={3} py={1} borderRadius="full" data-corner="round">
                         0x{currentMask.toString(16).toUpperCase().padStart(16, "0")}
                       </Badge>
                       <Text color={textColor} fontSize="sm" fontWeight="600">
@@ -887,6 +891,7 @@ export default function CpuSchedulerPage() {
                     px={2}
                     py={1}
                     borderRadius="full"
+                    data-corner="round"
                   >
                     {rule.preset === "allPCores" ? t("optimization.cpuScheduler.presetAllPCores") : rule.preset === "allECores" ? t("optimization.cpuScheduler.presetAllECores") : rule.preset === "allCores" ? t("optimization.cpuScheduler.presetAllCores") : "Custom"}
                   </Badge>
@@ -894,8 +899,8 @@ export default function CpuSchedulerPage() {
                   <Text color={subTextColor} fontSize="xs">0x{rule.mask.toString(16).toUpperCase().padStart(16, "0")}</Text>
                 </HStack>
                 <HStack spacing={1}>
-                  <Button size="xs" variant="ghost" color={themeColorHex} onClick={() => handleApplyRule(rule)}>{t("optimization.cpuScheduler.applyRule")}</Button>
-                  <IconButton aria-label="delete" size="xs" variant="ghost" icon={<Trash2 size={14} />} color="red.400" onClick={() => handleDeleteRule(rule.process_name)} />
+                  <Button size="xs" data-corner="round" variant="ghost" color={themeColorHex} onClick={() => handleApplyRule(rule)}>{t("optimization.cpuScheduler.applyRule")}</Button>
+                  <IconButton aria-label="delete" size="xs" data-corner="round" variant="ghost" icon={<Trash2 size={14} />} color="red.400" onClick={() => handleDeleteRule(rule.process_name)} />
                 </HStack>
               </HStack>
             ))}

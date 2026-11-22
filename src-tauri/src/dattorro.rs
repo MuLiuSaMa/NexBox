@@ -345,15 +345,15 @@ impl DattorroReverb {
     /// Reset all reverb state
     #[allow(dead_code)]
     pub fn reset(&mut self) {
-        for v in &mut self.lat1_buf { *v = 0.0; }
-        for v in &mut self.lat2_buf { *v = 0.0; }
-        for v in &mut self.lat3_buf { *v = 0.0; }
-        for v in &mut self.lat4_buf { *v = 0.0; }
-        for v in &mut self.pre_buf { *v = 0.0; }
-        for v in &mut self.tank1_buf { *v = 0.0; }
-        for v in &mut self.tank1b_buf { *v = 0.0; }
-        for v in &mut self.tank2_buf { *v = 0.0; }
-        for v in &mut self.tank2b_buf { *v = 0.0; }
+        self.lat1_buf.fill(0.0);
+        self.lat2_buf.fill(0.0);
+        self.lat3_buf.fill(0.0);
+        self.lat4_buf.fill(0.0);
+        self.pre_buf.fill(0.0);
+        self.tank1_buf.fill(0.0);
+        self.tank1b_buf.fill(0.0);
+        self.tank2_buf.fill(0.0);
+        self.tank2b_buf.fill(0.0);
         self.lat1_pos = 0;
         self.lat2_pos = 0;
         self.lat3_pos = 0;

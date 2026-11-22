@@ -134,7 +134,7 @@ fn read_if_octets() -> Option<(u64, u64)> {
                 continue;
             }
             let total = row.InOctets.saturating_add(row.OutOctets);
-            if best.map_or(true, |(bi, bo)| total > bi.saturating_add(bo)) {
+            if best.is_none_or(|(bi, bo)| total > bi.saturating_add(bo)) {
                 best = Some((row.InOctets, row.OutOctets));
             }
         }
@@ -330,6 +330,7 @@ pub struct GpuSensorData {
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub struct OverlayHardwareData {
     fps: Option<u32>,
     fps_1low: Option<u32>,
@@ -365,39 +366,6 @@ pub struct OverlayHardwareData {
     pub active_gpu_index: usize,
 }
 
-impl Default for OverlayHardwareData {
-    fn default() -> Self {
-        Self {
-            fps: None,
-            fps_1low: None,
-            fps_01low: None,
-            cpu_usage: None,
-            cpu_temp: None,
-            cpu_clock: None,
-            gpu_temp: None,
-            gpu_usage: None,
-            memory_usage: None,
-            delta_password: None,
-            game_ping: None,
-            cpu_fan_speed: None,
-            gpu_fan_speed: None,
-            gpu_power: None,
-            gpu_clock: None,
-            gpu_vram_used: None,
-            gpu_vram_total: None,
-            gpu_memory_clock: None,
-            cpu_voltage: None,
-            gpu_voltage: None,
-            cpu_power: None,
-            ssd_temp: None,
-            net_time_offset_ms: None,
-            net_down_speed: None,
-            net_up_speed: None,
-            gpu_sensors: Vec::new(),
-            active_gpu_index: 0,
-        }
-    }
-}
 
 pub static CURRENT_SETTINGS: Mutex<Option<OverlaySettings>> = Mutex::new(None);
 pub static CURRENT_HARDWARE_DATA: Mutex<Option<OverlayHardwareData>> = Mutex::new(None);
@@ -504,7 +472,7 @@ fn extract_sensor(
         if let Some(s) = sensors.iter().find(|s| {
             s.sensor_type == sensor_type
                 && s.hardware_type.eq_ignore_ascii_case(hardware_type)
-                && hardware.map_or(true, |h| s.hardware == h)
+                && hardware.is_none_or(|h| s.hardware == h)
                 && s.name.contains(name)
                 && (!skip_zero || s.value > 0.0)
         }) {
@@ -527,7 +495,7 @@ fn extract_all_avg(
         .filter(|s| {
             s.sensor_type == sensor_type
                 && s.hardware_type.eq_ignore_ascii_case(hardware_type)
-                && hardware.map_or(true, |h| s.hardware == h)
+                && hardware.is_none_or(|h| s.hardware == h)
                 && name_prefixes.iter().any(|p| s.name.starts_with(p))
         })
         .map(|s| s.value)
@@ -898,27 +866,21 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
                     let fan = extract_sensor(&response.sensors, "Fan", "SuperIO", None, &["Fan #1", "Fan #2", "CPU Fan", "CPU1 Fan", "CPUFAN"], false)
                         .or_else(|| {
                             // 取 SuperIO 下第一个非零 RPM 的风扇
-                            response.sensors.iter()
-                                .filter(|s| s.sensor_type == "Fan"
+                            response.sensors.iter().find(|s| s.sensor_type == "Fan"
                                     && s.hardware_type.eq_ignore_ascii_case("SuperIO")
                                     && s.value > 0.0)
-                                .next()
                                 .map(|s| (s.value, s.name.clone()))
                         })
                         .or_else(|| {
                             // 兜底：任意 SuperIO 风扇
-                            response.sensors.iter()
-                                .filter(|s| s.sensor_type == "Fan"
+                            response.sensors.iter().find(|s| s.sensor_type == "Fan"
                                     && s.hardware_type.eq_ignore_ascii_case("SuperIO"))
-                                .next()
                                 .map(|s| (s.value, s.name.clone()))
                         })
                         .or_else(|| {
                             // 再兜底：Motherboard 下的风扇
-                            response.sensors.iter()
-                                .filter(|s| s.sensor_type == "Fan"
+                            response.sensors.iter().find(|s| s.sensor_type == "Fan"
                                     && s.hardware_type.eq_ignore_ascii_case("Motherboard"))
-                                .next()
                                 .map(|s| (s.value, s.name.clone()))
                         });
                     fan.map(|(v, _)| v as u32)
@@ -1001,7 +963,9 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
     };
 
     let prev_data = CURRENT_HARDWARE_DATA.lock().unwrap().clone();
-    let result = if let Some(prev) = prev_data {
+    
+
+    if let Some(prev) = prev_data {
         let has_new_gpu_data = !new_data.gpu_sensors.is_empty();
         OverlayHardwareData {
             // FPS 不做 or(prev) 兜底：FPS 读取无节流，None 即真实无数据（过期/无游戏），
@@ -1036,9 +1000,7 @@ let fps_01low = crate::game_fps::get_cached_01low_fps();
         }
     } else {
         new_data
-    };
-
-    result
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -1174,7 +1136,7 @@ mod win32 {
             return true;
         }
 
-        let mut input = GdiplusStartupInput {
+        let input = GdiplusStartupInput {
             GdiplusVersion: 1,
             DebugEventCallback: 0,
             SuppressBackgroundThread: 0,
@@ -1182,7 +1144,7 @@ mod win32 {
         };
 
         let mut token_value: usize = 0;
-        let result = GdiplusStartup(&mut token_value, &mut input, ptr::null_mut());
+        let result = GdiplusStartup(&mut token_value, &input, ptr::null_mut());
 
         if result == 0 {
             *token = Some(token_value);
@@ -1898,7 +1860,7 @@ mod win32 {
             if gdiplus_ok {
                 let font_handle = crisp_font.as_ref().unwrap().handle();
                 let mut fmt: *mut GpStringFormat = ptr::null_mut();
-                if GdipCreateStringFormat(StringFormatFlagsNoWrap as i32, 0, &mut fmt) == 0 && !fmt.is_null() {
+                if GdipCreateStringFormat(StringFormatFlagsNoWrap, 0, &mut fmt) == 0 && !fmt.is_null() {
                     let mut c = 0i32;
                     for item in layout_items_tmp.iter_mut() {
                         let measure_w = |s: &str| -> i32 {
@@ -2160,11 +2122,11 @@ mod win32 {
                 let v = *pixel;
                 let a = (v >> 24) & 0xFF;
                 if a > 0 && a < 255 {
-                    let ar = a as u32;
-                    let r = ((v >> 16) & 0xFF) as u32 * 255 / ar;
-                    let g = ((v >> 8) & 0xFF) as u32 * 255 / ar;
-                    let b = (v & 0xFF) as u32 * 255 / ar;
-                    *pixel = (a as u32) << 24 | (r.clamp(0, 255) << 16) | (g.clamp(0, 255) << 8) | b.clamp(0, 255);
+                    let ar = a;
+                    let r = ((v >> 16) & 0xFF) * 255 / ar;
+                    let g = ((v >> 8) & 0xFF) * 255 / ar;
+                    let b = (v & 0xFF) * 255 / ar;
+                    *pixel = a << 24 | (r.clamp(0, 255) << 16) | (g.clamp(0, 255) << 8) | b.clamp(0, 255);
                 }
             }
         }

@@ -46,12 +46,14 @@ export default function UninstallingPage({
         setStatusText(t("uninstall_done"));
         await new Promise((r) => setTimeout(r, 500));
         onComplete();
-      } catch (err: any) {
+      } catch (err) {
         onError(String(err));
       }
     };
 
     doUninstall();
+    // 卸载流程只在挂载时执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

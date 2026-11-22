@@ -207,7 +207,7 @@ pub async fn set_nexbox_auto_start(enable: bool, minimized_start: bool) -> Resul
                 log::info!("开机自启设置成功（计划任务）");
                 return Ok(());
             }
-            return Err("开机自启设置失败：计划任务创建未生效".to_string());
+            Err("开机自启设置失败：计划任务创建未生效".to_string())
         } else {
             let mut errors: Vec<String> = Vec::new();
 
@@ -237,7 +237,7 @@ pub async fn set_nexbox_auto_start(enable: bool, minimized_start: bool) -> Resul
                 log::info!("开机自启已完全关闭");
                 return Ok(());
             }
-            return Err(format!("关闭开机自启失败：{}", errors.join("；")));
+            Err(format!("关闭开机自启失败：{}", errors.join("；")))
         }
     }
 

@@ -1,33 +1,20 @@
 import { useState, useEffect } from "react";
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Button,
-  Spinner,
-  Badge,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  Flex,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, Button, Spinner, Badge, Alert, AlertIcon, AlertTitle, AlertDescription, Flex } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
-import { useTranslation } from "react-i18next";
-import { PageBackButton } from "@/components/special/page-back-button";
+
+
 import { PageHeader } from "@/components/special/page-header";
 import { Cpu, Settings2, AlertTriangle, RefreshCw, Monitor, Eye } from "lucide-react";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import nvidiaLogo from "@/assets/nvidia.png";
-import { useBackground } from "@/contexts/background-context";
+
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface SettingOption {
   value: number;
   label: string;
@@ -136,11 +123,12 @@ const SETTING_IDS: Record<string, number> = {
 };
 
 export default function NvidiaDriverPage() {
-  const { t } = useTranslation();
+  const cm = useColorValue();
+
   const toast = useDynamicIsland("gpu");
-  const { liquidGlassEnabled } = useBackground();
+
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
-  const isDark = useColorModeValue(false, true);
+
 
   const [isLoading, setIsLoading] = useState(true);
   const [isNvidiaAvailable, setIsNvidiaAvailable] = useState<boolean | null>(null);
@@ -153,12 +141,12 @@ export default function NvidiaDriverPage() {
   const [modifiedSettings, setModifiedSettings] = useState<Record<number, number>>({});
   const [isSaving, setIsSaving] = useState(false);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBg = useColorModeValue("white", "#1a1a1a");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const sectionBg = useColorModeValue("gray.50", "#161616");
+  const headingColor = cm("gray.900", "#ffffff");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+
+  const borderColor = cm("gray.200", "#333333");
+
 
   useEffect(() => {
     loadData();
@@ -169,7 +157,7 @@ export default function NvidiaDriverPage() {
     setLoadError(null);
     try {
       // 1. 确保硬件缓存已填充，然后检测是否有 NVIDIA 显卡
-      try { await invoke("get_hardware"); } catch (_) {}
+      try { await invoke("get_hardware"); } catch {}
       const available = await invoke<boolean>("is_nvidia_gpu");
       setIsNvidiaAvailable(available);
       if (!available) {
@@ -186,7 +174,7 @@ export default function NvidiaDriverPage() {
           const diag = await invoke<NvApiDiagnostic>("diagnose_nvapi");
           setDiagnostic(diag);
           setLoadError(diag.conclusion || reason);
-        } catch (_) {
+        } catch {
           setLoadError(reason);
         }
         setIsLoading(false);
@@ -203,7 +191,7 @@ export default function NvidiaDriverPage() {
         if (info.gpu_name && info.gpu_name !== "NVIDIA GPU") {
           setGpuName(info.gpu_name);
         }
-      } catch (_) {
+      } catch {
         // 老版本 NVAPI 可能不支持
       }
 
@@ -384,7 +372,7 @@ export default function NvidiaDriverPage() {
         <VStack spacing={6} align="start">
           <PageHeader title="显卡设置（仅 NVIDIA）" mb={0} />
 
-            <Alert status="warning" borderRadius="xl" bg={useColorModeValue("orange.50", "rgba(255, 152, 0, 0.1)")}>
+            <Alert status="warning" borderRadius="xl" bg={cm("orange.50", "rgba(255, 152, 0, 0.1)")}>
             <AlertIcon />
             <Box>
               <AlertTitle>未检测到 NVIDIA 显卡</AlertTitle>
@@ -412,7 +400,7 @@ export default function NvidiaDriverPage() {
           >
             <VStack spacing={4} align="start">
               <HStack spacing={3}>
-                <Box color={useColorModeValue("orange.500", "orange.300")}>
+                <Box color={cm("orange.500", "orange.300")}>
                   <AlertTriangle size={32} />
                 </Box>
                 <VStack align="start" spacing={0}>
@@ -426,7 +414,7 @@ export default function NvidiaDriverPage() {
               </HStack>
 
               {/* 诊断结论 */}
-              <Alert status="error" borderRadius="lg" bg={useColorModeValue("red.50", "rgba(239, 68, 68, 0.1)")}>
+              <Alert status="error" borderRadius="lg" bg={cm("red.50", "rgba(239, 68, 68, 0.1)")}>
                 <AlertIcon />
                 <Box>
                   <AlertTitle fontSize="sm">诊断结果</AlertTitle>
@@ -442,7 +430,7 @@ export default function NvidiaDriverPage() {
                   w="full"
                   p={4}
                   borderRadius="lg"
-                  bg={useColorModeValue("gray.50", "#111111")}
+                  bg={cm("gray.50", "#111111")}
                   borderWidth="1px"
                   borderColor={borderColor}
                 >
@@ -535,7 +523,7 @@ export default function NvidiaDriverPage() {
                         overflowY="auto"
                         p={2}
                         borderRadius="md"
-                        bg={useColorModeValue("white", "#0a0a0a")}
+                        bg={cm("white", "#0a0a0a")}
                         borderWidth="1px"
                         borderColor={borderColor}
                       >
@@ -572,7 +560,7 @@ export default function NvidiaDriverPage() {
                             w="full"
                             p={2}
                             borderRadius="md"
-                            bg={useColorModeValue("white", "#0a0a0a")}
+                            bg={cm("white", "#0a0a0a")}
                             borderWidth="1px"
                             borderColor={dll.has_initialize ? "green.300" : borderColor}
                           >
@@ -678,7 +666,7 @@ export default function NvidiaDriverPage() {
               </Text>
             </Box>
             <Box ml="auto">
-              <Badge color={getActiveColor()} bg={hexToRgba(config.primaryColor, 0.12)} px={2} borderRadius="full">
+              <Badge color={getActiveColor()} bg={hexToRgba(config.primaryColor, 0.12)} px={2} borderRadius="full" data-corner="round">
                 NVAPI 已就绪
               </Badge>
             </Box>

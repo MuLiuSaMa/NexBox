@@ -1,28 +1,4 @@
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  Button,
-  SimpleGrid,
-  useColorModeValue,
-  Badge,
-  IconButton,
-  Switch,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Checkbox,
-  useDisclosure,
-  Tooltip,
-  Input,
-  InputGroup,
-  InputLeftElement,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, Button, SimpleGrid, Badge, IconButton, Switch, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, Checkbox, useDisclosure, Tooltip, Input, InputGroup, InputLeftElement } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useProcessIcons } from "@/hooks/use-process-icons";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -45,13 +21,13 @@ import {
   MemoryStick,
   Rocket,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import deltaforceIcon from "@/assets/deltaforce.png";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface GameOptimizeConfig {
   id: string;
   name: string;
@@ -159,11 +135,12 @@ function CoreSelectionModal({
   currentSavedMask: number;
   onSave: (mask: number) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
-  const modalBg = useColorModeValue("white", "#1a1a1a");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const modalBg = cm("white", "#1a1a1a");
+  const borderColor = cm("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
 
   const [selectedCores, setSelectedCores] = useState<number[]>([]);
 
@@ -209,10 +186,10 @@ function CoreSelectionModal({
                 CPU0 - CPU{coreCount - 1}
               </Text>
               <HStack spacing={2}>
-                <Button size="xs" variant="ghost" onClick={() => setSelectedCores(Array.from({ length: coreCount }, (_, i) => i))}>
+                <Button size="xs" data-corner="round" variant="ghost" onClick={() => setSelectedCores(Array.from({ length: coreCount }, (_, i) => i))}>
                   {t("gameProcessOptimize.affinitySettings.selectAll")}
                 </Button>
-                <Button size="xs" variant="ghost" onClick={() => setSelectedCores([])}>
+                <Button size="xs" data-corner="round" variant="ghost" onClick={() => setSelectedCores([])}>
                   {t("gameProcessOptimize.affinitySettings.clearAll")}
                 </Button>
               </HStack>
@@ -284,11 +261,12 @@ function ProcessPickerModal({
   onPick: (p: RunningProcessInfo) => void;
   icons: Record<string, string>;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
-  const modalBg = useColorModeValue("white", "#1a1a1a");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const modalBg = cm("white", "#1a1a1a");
+  const borderColor = cm("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
 
   const [query, setQuery] = useState("");
 
@@ -400,11 +378,12 @@ function FilterPickerModal({
   games: FilterGameEntry[];
   onPick: (g: FilterGameEntry) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
-  const modalBg = useColorModeValue("white", "#1a1a1a");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+  const modalBg = cm("white", "#1a1a1a");
+  const borderColor = cm("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
 
   const [query, setQuery] = useState("");
 
@@ -500,12 +479,15 @@ function GameCard({
   onDelete: (id: string) => void;
   busy: { affinity: boolean };
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#a1a1aa");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const rowBg = useColorModeValue("gray.50", "#1a1a1a");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#a1a1aa");
+  const borderColor = cm("gray.200", "#333333");
+  const rowBg = cm("gray.50", "#1a1a1a");
+  // 开关未开启时的轨道底色：提到组件顶部，避免在渲染回调里调用 hook
+  const switchTrackOffBg = cm("gray.200", "gray.600");
   const { getActiveColor } = useThemeColor();
 
   const running = status?.running ?? false;
@@ -571,7 +553,7 @@ function GameCard({
               {title}
             </Text>
             {applied && (
-              <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={1.5} py={0} borderRadius="full" whiteSpace="nowrap" flexShrink={0}>
+              <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={1.5} py={0} borderRadius="full" data-corner="round" whiteSpace="nowrap" flexShrink={0}>
                 {t("gameProcessOptimize.status.applied")}
               </Badge>
             )}
@@ -583,9 +565,9 @@ function GameCard({
           isDisabled={disabled}
           size="sm"
           sx={{
-            "& > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
+            "& > span": { bg: checked ? getActiveColor() : switchTrackOffBg },
             "& > span > span": { bg: "white" },
-            "&:hover > span": { bg: checked ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
+            "&:hover > span": { bg: checked ? getActiveColor() : switchTrackOffBg },
           }}
           aria-label={title}
         />
@@ -624,19 +606,19 @@ function GameCard({
                 {game.name}
               </Text>
               {running && (
-                <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full">
+                <Badge colorScheme="green" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full" data-corner="round">
                   {t("gameProcessOptimize.status.running")}
                 </Badge>
               )}
               {(priorityApplied || affinityApplied || ioApplied || gpuApplied || memoryApplied || gpuPrefApplied) && (
-                <Badge colorScheme="blue" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full">
+                <Badge colorScheme="blue" variant="subtle" fontSize="2xs" px={2} py={0.5} borderRadius="full" data-corner="round">
                   {t("gameProcessOptimize.status.optimized")}
                 </Badge>
               )}
             </HStack>
             <HStack spacing={1} wrap="wrap">
               {game.process_names.map(p => (
-                <Badge key={p} variant="outline" fontSize="2xs" px={2} py={0.5} borderRadius="full" color={getActiveColor()}>
+                <Badge key={p} variant="outline" fontSize="2xs" px={2} py={0.5} borderRadius="full" data-corner="round" color={getActiveColor()}>
                   {p}
                 </Badge>
               ))}
@@ -765,14 +747,15 @@ function GameCard({
 }
 
 export default function GameProcessOptimizePage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("gamepad");
   const { icons, ensureIcons } = useProcessIcons();
 
   const { liquidGlassEnabled } = useBackground();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const borderColorVal = useColorModeValue("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const borderColorVal = cm("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
 
   const [configs, setConfigs] = useState<GameOptimizeConfig[]>([]);
@@ -846,7 +829,7 @@ export default function GameProcessOptimizePage() {
     try {
       const result = await invoke<{ success: boolean; message: string }>("optimize_game_affinity", { gameId: id, mask: null });
       toast({ title: result.message, status: result.success ? "success" : "info", duration: 2000 });
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: String(e), status: "error", duration: 2000 });
     } finally {
       runBusy(id, "affinity", false);
@@ -890,7 +873,7 @@ export default function GameProcessOptimizePage() {
         status: "success",
         duration: 2000,
       });
-    } catch (e: any) {
+    } catch (e) {
       lastAutoRef.current[key] = !checked;
       toast({ title: String(e), status: "error", duration: 2000 });
     }
@@ -925,7 +908,7 @@ export default function GameProcessOptimizePage() {
         { ...EMPTY_CONFIG(`game_${Date.now()}`, info.game_name, [info.process_name]), icon: info.icon },
       ]);
       toast({ title: t("gameProcessOptimize.gameAdded"), status: "success", duration: 1500 });
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [configs, persist, toast, t, isDuplicateGame]);
@@ -936,7 +919,7 @@ export default function GameProcessOptimizePage() {
       setProcesses(list);
       ensureIcons(list.map(p => p.exe_path));
       onProcOpen();
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [onProcOpen, toast, ensureIcons]);
@@ -959,7 +942,7 @@ export default function GameProcessOptimizePage() {
       const status = await invoke<FilterStatus>("get_game_filter_status");
       setFilterGames(status.games || []);
       onFilterOpen();
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: String(e), status: "error", duration: 2000 });
     }
   }, [onFilterOpen, toast]);
@@ -1013,7 +996,7 @@ export default function GameProcessOptimizePage() {
     <Box pt={8} pb={8}>
       <PageHeader title={t("gameProcessOptimize.title")} mb={6}>
         {!isAdmin && (
-          <Badge colorScheme="orange" variant="subtle" px={3} py={1} borderRadius="full" fontSize="xs">
+          <Badge colorScheme="orange" variant="subtle" px={3} py={1} borderRadius="full" data-corner="round" fontSize="xs">
             <HStack spacing={1}>
               <ShieldAlert size={14} />
               <Text>{t("gameProcessOptimize.needsAdmin")}</Text>

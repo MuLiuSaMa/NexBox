@@ -28,7 +28,7 @@ import {
   Gamepad2,
   TerminalSquare,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -177,6 +177,7 @@ export default function VacRepairPage() {
     px: 2.5,
     py: 0.5,
     borderRadius: "full",
+    "data-corner": "round",
     fontSize: "xs",
     fontWeight: 600,
   });
@@ -245,6 +246,7 @@ export default function VacRepairPage() {
                         px={2}
                         py={0.5}
                         borderRadius="full"
+                        data-corner="round"
                       >
                         <AlertTriangle size={12} />
                         <Text fontSize="xs" fontWeight="600">{t("vacRepair.running")}</Text>
@@ -353,6 +355,7 @@ export default function VacRepairPage() {
             </HStack>
             <Button
               size="xs"
+              data-corner="round"
               variant="ghost"
               leftIcon={<Eraser size={12} />}
               onClick={clearOutput}

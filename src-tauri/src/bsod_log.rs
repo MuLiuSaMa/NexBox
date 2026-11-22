@@ -1185,8 +1185,7 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
                         c.event_msgs.push(e.clone());
                     }
                     None => {
-                        let mut c = CrashAgg::default();
-                        c.time = t;
+                        let mut c = CrashAgg { time: t, ..Default::default() };
                         c.sources.push("事件 41（Kernel-Power 非正常关机）".to_string());
                         c.note = "Kernel-Power 41 且 BugCheck 码为 0：系统是被强制断电/长按电源键/直接掉电结束的，没有留下蓝屏信息".to_string();
                         c.event_msgs.push(e.clone());
@@ -1319,7 +1318,7 @@ fn analyze(system: &SystemInfo, config: &DumpConfig, dumps: &[DumpInfo], events:
     }
 
     let hw_crashes: Vec<&CrashRecord> = crash_records.iter()
-        .filter(|c| c.bugcheck.map_or(false, |b| HARDWARE_CODES.contains(&bugcheck::base_code(b))))
+        .filter(|c| c.bugcheck.is_some_and(|b| HARDWARE_CODES.contains(&bugcheck::base_code(b))))
         .collect();
     if !hw_crashes.is_empty() {
         let mut codes: Vec<String> = hw_crashes.iter().map(|c| c.code_hex.clone()).collect();
@@ -1532,7 +1531,7 @@ fn build_explains(code: Option<u32>, args: &[u64]) -> Vec<ArgExplain> {
     let meta = code.and_then(bugcheck::lookup);
     let names: [&str; 4] = if let Some(m) = meta { m.params } else { bugcheck::GENERIC_PARAMS };
     let mut out = Vec::with_capacity(4);
-    for i in 0..4 {
+    for (i, name) in names.iter().enumerate() {
         let val = args.get(i).copied().unwrap_or(0);
         let mut note: Vec<String> = Vec::new();
         if val >= KERNEL_ADDR_MIN { note.push("内核地址".to_string()); }
@@ -1542,7 +1541,7 @@ fn build_explains(code: Option<u32>, args: &[u64]) -> Vec<ArgExplain> {
         out.push(ArgExplain {
             value: val,
             hex: format!("0x{:016X}", val),
-            meaning: names[i].to_string(),
+            meaning: name.to_string(),
             note: note.join("；"),
         });
     }

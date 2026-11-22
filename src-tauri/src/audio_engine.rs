@@ -863,7 +863,8 @@ fn audio_thread(
             if is_silent {
                 silence_packets += 1;
                 // Push silence
-                for _ in 0..num_samples { sample_buffer.push(0.0); }
+                let filled = sample_buffer.len();
+                sample_buffer.resize(filled + num_samples, 0.0);
             } else {
                 audio_packets += 1;
                 if !first_audio_logged {
@@ -1085,7 +1086,7 @@ struct MonoFxChain {
 impl MonoFxChain {
     fn new(sample_rate: f64) -> Self {
         let mut clarity_hp = BiquadFilter::new();
-        clarity_hp.set_highpass(sample_rate, 4000.0, 0.7071); // Butterworth HP
+        clarity_hp.set_highpass(sample_rate, 4000.0, std::f64::consts::FRAC_1_SQRT_2); // Butterworth HP
 
         let mut bass_peq = BiquadFilter::new();
         bass_peq.set_peaking(sample_rate, 90.0, 0.0, 2.5);
@@ -1252,7 +1253,7 @@ impl SoundEffects {
         s = self.chain_l.process_compressor(s, params.dynamics);
         if params.ambience > 0.001 {
             let (rev_l, _) = self.reverb.process(s, params.ambience);
-            s = s + rev_l * params.ambience * 0.5;
+            s += rev_l * params.ambience * 0.5;
         }
         s.clamp(-4.0, 4.0)
     }
@@ -1272,15 +1273,15 @@ impl SoundEffects {
             let mono_in = (sl + sr) * 0.5;
             let (rev_l, rev_r) = self.reverb.process(mono_in, params.ambience);
             let wet = params.ambience * 0.5;
-            sl = sl + rev_l * wet;
-            sr = sr + rev_r * wet;
+            sl += rev_l * wet;
+            sr += rev_r * wet;
         }
         (sl, sr) = self.process_width(sl, sr, params.width);
         sl = self.chain_l.process_compressor(sl, params.dynamics);
         sr = self.chain_r.process_compressor(sr, params.dynamics);
         // 喂入频谱分析器
         self.spectrum_tick = self.spectrum_tick.wrapping_add(1);
-        if self.spectrum_tick % 4 == 0 { // 降采样，每 4 帧处理一次（48kHz→12kHz 内部速率，匹配 FxSound）
+        if self.spectrum_tick.is_multiple_of(4) { // 降采样，每 4 帧处理一次（48kHz→12kHz 内部速率，匹配 FxSound）
             let bands = self.spectrum.process(sl, sr);
             if let Ok(mut lv) = spectrum_bands().write() {
                 *lv = bands;

@@ -261,18 +261,18 @@ pub fn attach_main_window_handlers<R: tauri::Runtime>(main_window: &tauri::Webvi
                 }
                 // 节约内存模式：关闭 = 销毁主窗口释放内存；被守卫拦下（音乐播放中）则回退为隐藏
                 if crate::main_window::memory_saving_enabled()
-                    && crate::main_window::destroy_main_window(&main_clone.app_handle())
+                    && crate::main_window::destroy_main_window(main_clone.app_handle())
                 {
                     return;
                 }
                 api.prevent_close();
-                main_window::save_current_position(&main_clone.app_handle());
+                main_window::save_current_position(main_clone.app_handle());
                 let _ = main_clone.hide();
-                emit_main_visibility(&main_clone.app_handle(), false);
+                emit_main_visibility(main_clone.app_handle(), false);
             }
             tauri::WindowEvent::Resized(_) => {
                 let minimized = main_clone.is_minimized().unwrap_or(false);
-                emit_main_visibility(&main_clone.app_handle(), !minimized);
+                emit_main_visibility(main_clone.app_handle(), !minimized);
             }
             _ => {}
         }
@@ -330,7 +330,7 @@ fn set_webview_memory_level<R: tauri::Runtime>(app: &tauri::AppHandle<R>, label:
         if let Some(win) = app.get_webview_window(label) {
             let _ = win.with_webview(move |webview| unsafe {
                 let controller = webview.controller();
-                if let Some(core) = controller.CoreWebView2().ok() {
+                if let Ok(core) = controller.CoreWebView2() {
                     if let Ok(c19) = core.cast::<ICoreWebView2_19>() {
                         let level = if low {
                             COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW

@@ -21,7 +21,7 @@ import { useAppStartup } from "@/contexts/app-startup-context";
 import { fetchLatestRelease, compareVersions, type ReleaseInfo } from "@/lib/update-checker";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
 
-const CURRENT_VERSION = "v10.5.5";
+const CURRENT_VERSION = "v10.6.3";
 const AUTO_UPDATE_KEY = "nexbox_auto_update";
 /** 灵动岛更新下载岛的固定 id */
 const UPDATE_ISLAND_ID = "update-download";
@@ -68,7 +68,8 @@ export function UpdateProvider({ children }: { children: ReactNode }) {
   const [isChecking, setIsChecking] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [autoUpdateLoaded, setAutoUpdateLoaded] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0); // 目标进度
+  // 目标进度：只写入不读取（真实目标值在 targetProgressRef），保留 setter 维持原有重渲染时序
+  const [, setDownloadProgress] = useState(0);
   const [displayProgress, setDisplayProgress] = useState(0); // 平滑显示的进度
   const [isDownloadComplete, setIsDownloadComplete] = useState(false);
   const [downloadedFilePath, setDownloadedFilePath] = useState<string>("");

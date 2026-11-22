@@ -149,10 +149,7 @@ impl SensorBridge {
 
     /// 检查子进程是否仍然存活
     pub fn is_alive(&mut self) -> bool {
-        match self.child.try_wait() {
-            Ok(None) => true,
-            _ => false,
-        }
+        matches!(self.child.try_wait(), Ok(None))
     }
 
     /// 优雅关闭子进程（最多等待 3 秒，超时则强制终止）
@@ -310,11 +307,10 @@ pub async fn get_lhm_cpu_status() -> Result<(Option<u16>, Option<f64>), String> 
             let mut load = None;
             let mut temp = None;
             for s in &response.sensors {
-                if s.hardware_type.eq_ignore_ascii_case("CPU") {
-                    if s.sensor_type == "Load" && (s.name == "CPU Total" || s.name == "Total") {
+                if s.hardware_type.eq_ignore_ascii_case("CPU")
+                    && s.sensor_type == "Load" && (s.name == "CPU Total" || s.name == "Total") {
                         load = Some(s.value as u16);
                     }
-                }
                 // 温度可能来自 CPU/SuperIO/Motherboard 硬件类型（老AMD A系列通过SuperIO报告）
                 if s.sensor_type == "Temperature"
                     && (s.hardware_type.eq_ignore_ascii_case("CPU")
@@ -324,11 +320,9 @@ pub async fn get_lhm_cpu_status() -> Result<(Option<u16>, Option<f64>), String> 
                         || s.name == "Tctl" || s.name == "Core"
                         || s.name == "CPU" || s.name == "CPU Core"
                         || s.name == "CPU Temperature")
-                {
-                    if temp.is_none() {
+                    && temp.is_none() {
                         temp = Some(s.value);
                     }
-                }
             }
             Ok((load, temp))
         }
@@ -423,7 +417,7 @@ pub fn read_lhm_sensors() -> Result<SensorsResponse, String> {
                         RESTART_COOLDOWN_SECS - (now - last)
                     );
                     *guard = None;
-                    return Err(format!("NexBoxMonitor 冷却中，请稍后重试"));
+                    return Err("NexBoxMonitor 冷却中，请稍后重试".to_string());
                 }
 
                 log::warn!("NexBoxMonitor 子进程已退出，尝试重启（第 {} 次）...", attempts + 1);

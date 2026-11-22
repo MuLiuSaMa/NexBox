@@ -4,7 +4,6 @@ import {
   Heading,
   VStack,
   Flex,
-  useColorModeValue,
 } from "@chakra-ui/react";
 import {
   Palette,
@@ -332,7 +331,6 @@ export default function BuiltinToolsPage() {
     } catch { /* ignore */ }
   }, []);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
 
   const content = (

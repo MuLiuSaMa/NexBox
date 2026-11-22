@@ -1,30 +1,17 @@
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  SimpleGrid,
-  useColorModeValue,
-  useColorMode,
-  Button,
-  Badge,
-  Spinner,
-  Progress,
-  Tooltip,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, SimpleGrid, useColorMode, Button, Badge, Spinner, Progress, Tooltip } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { RefreshCw, Thermometer, AlertTriangle, Star, Sparkles, Wrench, Clock, Download, Upload, Power, Shuffle, Timer } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface PartitionInfo {
   drive_letter: string;
   total_gb: number;
@@ -188,6 +175,7 @@ function OptimizeButton({
       <Button
         leftIcon={isSsd ? <Sparkles size={13} /> : <Wrench size={13} />}
         size="xs"
+        data-corner="round"
         variant="outline"
         color={getActiveColor()}
         borderColor={getActiveColor()}
@@ -205,9 +193,10 @@ function OptimizeButton({
 }
 
 function SettingCard({ title, children }: { title: string; children: React.ReactNode }) {
+  const cm = useColorValue();
   const { liquidGlassEnabled } = useBackground();
-  const cardBg = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const cardBg = cm("white", "#111111");
+  const borderColor = cm("gray.200", "#333333");
   const { colorMode } = useColorMode();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
 
@@ -235,13 +224,13 @@ function SettingCard({ title, children }: { title: string; children: React.React
 function HealthBadge({ status }: { status: string }) {
   switch (status.toLowerCase()) {
     case "healthy":
-      return <Badge colorScheme="green" px={2} py={0.5} borderRadius="full">Healthy</Badge>;
+      return <Badge colorScheme="green" px={2} py={0.5} borderRadius="full" data-corner="round">Healthy</Badge>;
     case "warning":
-      return <Badge colorScheme="yellow" px={2} py={0.5} borderRadius="full">Warning</Badge>;
+      return <Badge colorScheme="yellow" px={2} py={0.5} borderRadius="full" data-corner="round">Warning</Badge>;
     case "unhealthy":
-      return <Badge colorScheme="red" px={2} py={0.5} borderRadius="full">Unhealthy</Badge>;
+      return <Badge colorScheme="red" px={2} py={0.5} borderRadius="full" data-corner="round">Unhealthy</Badge>;
     default:
-      return <Badge colorScheme="gray" px={2} py={0.5} borderRadius="full">{status}</Badge>;
+      return <Badge colorScheme="gray" px={2} py={0.5} borderRadius="full" data-corner="round">{status}</Badge>;
   }
 }
 
@@ -290,11 +279,12 @@ function SpeedCard({
   value: string;
   secondary?: string;
 }) {
+  const cm = useColorValue();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
-  const subColor = useColorModeValue("gray.500", "gray.400");
-  const cardBg = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const subColor = cm("gray.500", "gray.400");
+  const cardBg = cm("white", "#111111");
+  const borderColor = cm("gray.200", "#333333");
   const { colorMode } = useColorMode();
   const titleColor = colorMode === "light" ? "#000000" : "#ffffff";
 
@@ -330,11 +320,12 @@ function SpeedCard({
 /** 「测速」板块：按物理硬盘选择 + 全矩阵测试（顺序 1MiB / 随机 4K / 访问时间）。
  *  后端走无缓冲 IO（CrystalDiskMark 口径）；测试文件落在该硬盘剩余空间最大的分区。 */
 function DiskSpeedTestSection({ disks }: { disks: DiskHealthInfo[] }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
-  const subColor = useColorModeValue("gray.500", "gray.400");
-  const labelColor = useColorModeValue("gray.800", "#ffffff");
-  const trackBg = useColorModeValue("gray.100", "#222222");
+  const subColor = cm("gray.500", "gray.400");
+  const labelColor = cm("gray.800", "#ffffff");
+  const trackBg = cm("gray.100", "#222222");
 
   const [diskIndex, setDiskIndex] = useState(() => {
     const boot = disks.find((d) => d.is_boot_disk);
@@ -491,6 +482,7 @@ function DiskSpeedTestSection({ disks }: { disks: DiskHealthInfo[] }) {
                 value={progress.progressPct}
                 size="sm"
                 borderRadius="full"
+                data-corner="round"
                 hasStripe
                 sx={{ "& > div": { background: getActiveColor() } }}
                 bg={trackBg}
@@ -557,6 +549,7 @@ function DiskSpeedTestSection({ disks }: { disks: DiskHealthInfo[] }) {
 }
 
 export default function DiskHealthPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled } = useBackground();
@@ -565,9 +558,11 @@ export default function DiskHealthPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const headingColor = useColorModeValue("black", "#ffffff");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("black", "#ffffff");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const progressTrackBg = cm("gray.200", "gray.600");
+  const metricCardBg = cm("gray.50", "rgba(255,255,255,0.03)");
 
   const fetchHealth = useCallback(async () => {
     setLoading(true);
@@ -717,8 +712,9 @@ export default function DiskHealthPage() {
                       value={part.usage_percent}
                       size="sm"
                       borderRadius="full"
+                      data-corner="round"
                       colorScheme={part.usage_percent > 90 ? "red" : part.usage_percent > 75 ? "yellow" : "green"}
-                      bg={useColorModeValue("gray.200", "gray.600")}
+                      bg={progressTrackBg}
                     />
                   </Box>
                 ))}
@@ -739,7 +735,7 @@ export default function DiskHealthPage() {
                       )}
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <HStack justify="center" mb={1}>
                         <Thermometer size={14} />
                         <Text fontSize="xs" color={subTextColor}>{t("diskHealth.temperature")}</Text>
@@ -774,7 +770,7 @@ export default function DiskHealthPage() {
                       )}
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <HStack justify="center" mb={1}>
                         <Clock size={14} />
                         <Text fontSize="xs" color={subTextColor}>{t("diskHealth.powerOnHours")}</Text>
@@ -809,7 +805,7 @@ export default function DiskHealthPage() {
                       )}
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <HStack justify="center" mb={1}>
                         <Power size={14} />
                         <Text fontSize="xs" color={subTextColor}>{t("diskHealth.powerOnCount")}</Text>
@@ -835,7 +831,7 @@ export default function DiskHealthPage() {
                       </Text>
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <HStack justify="center" mb={1}>
                         <Download size={14} />
                         <Text fontSize="xs" color={subTextColor}>{t("diskHealth.dataRead")}</Text>
@@ -857,7 +853,7 @@ export default function DiskHealthPage() {
                       </Text>
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <HStack justify="center" mb={1}>
                         <Upload size={14} />
                         <Text fontSize="xs" color={subTextColor}>{t("diskHealth.dataWritten")}</Text>
@@ -876,7 +872,7 @@ export default function DiskHealthPage() {
                       </Text>
                     </LiquidGlassCard>
                   ) : (
-                    <Box textAlign="center" p={3} borderRadius="lg" bg={useColorModeValue("gray.50", "rgba(255,255,255,0.03)")}>
+                    <Box textAlign="center" p={3} borderRadius="lg" bg={metricCardBg}>
                       <Text fontSize="xs" color={subTextColor} mb={1}>{t("diskHealth.operationalStatus")}</Text>
                       <Text fontSize="sm" fontWeight="medium" color={textColor} noOfLines={1}>
                         {disk.operational_status}

@@ -30,15 +30,15 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
-import { Eye, EyeOff, Trash2, Plus, Move, RotateCcw, Settings } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+import { Eye, EyeOff, Trash2, Plus, Move, RotateCcw} from "lucide-react";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { CustomSelect } from "@/components/special/custom-select";
 import { HotkeyRecorder } from "@/components/hotkey-recorder";
-import { DraggableDisplayItems, DisplayItem } from "@/components/DraggableDisplayItems";
+import { DraggableDisplayItems} from "@/components/DraggableDisplayItems";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { CustomColorPicker } from "@/components/special/custom-color-picker";
 import { ThemeSwitch } from "@/components/special/theme-switch";
@@ -254,6 +254,7 @@ function CustomItemCard({ item, onUpdate, onRemove }: CustomItemCardProps) {
             aria-label="删除"
             icon={<Trash2 size={14} />}
             size="xs"
+            data-corner="round"
             variant="ghost"
             colorScheme="red"
             onClick={() => onRemove(item.id)}
@@ -285,7 +286,7 @@ export default function OverlayPanelPage() {
   const toast = useDynamicIsland("panels");
   const { overlaySettings, saveOverlaySettings, overlayHotkey, saveOverlayHotkey } = useAppStartup();
 
-  const [hardwareData, setHardwareData] = useState<HardwareData>({
+  const [, setHardwareData] = useState<HardwareData>({
     fps: null,
     fps_1low: null,
     fps_01low: null,
@@ -313,9 +314,10 @@ export default function OverlayPanelPage() {
   });
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [, setIsNvidia] = useState(true);
   const [isDragMode, setIsDragMode] = useState(false);
   const [autoApplyOnStartup, setAutoApplyOnStartup] = useState(false);
-  const [isNvidia, setIsNvidia] = useState(true);
+
   const [availableMaps, setAvailableMaps] = useState<string[]>([]);
   const [selectedMaps, setSelectedMaps] = useState<string[]>([]);
 
@@ -333,7 +335,7 @@ export default function OverlayPanelPage() {
 
   useEffect(() => {
     (async () => {
-      let v = await store.get<boolean>("nexbox_auto_overlay");
+      const v = await store.get<boolean>("nexbox_auto_overlay");
       if (v !== null && v !== undefined) {
         setAutoApplyOnStartup(v);
       } else {
@@ -380,7 +382,7 @@ export default function OverlayPanelPage() {
     }
   };
 
-  const loadHardwareData = async (requestId: number) => {
+  const loadHardwareData = async (_requestId?: number) => {
     try {
       const data = await invoke<HardwareData>("get_overlay_hardware_data");
       setHardwareData(prev => {
@@ -583,9 +585,6 @@ export default function OverlayPanelPage() {
     }
   };
 
-  const updateSettings = (newSettings: OverlaySettings) => {
-    saveOverlaySettings(newSettings);
-  };
 
   const updateDisplayItem = (id: string, enabled: boolean) => {
     const newSettings = {
@@ -645,10 +644,6 @@ export default function OverlayPanelPage() {
     saveOverlaySettings(newSettings);
   };
 
-  const formatValue = (value: number | null, suffix: string): string => {
-    if (value === null) return "--";
-    return `${value}${suffix}`;
-  };
 
   const openMapSettings = async () => {
     // Initialize selected maps from current settings
@@ -895,6 +890,7 @@ export default function OverlayPanelPage() {
                     h="20px"
                     bg="gray.500"
                     borderRadius="full"
+                    data-corner="round"
                     opacity={0.6}
                   />
                   <Text fontSize="sm" fontWeight="medium" color={subTextColor}>

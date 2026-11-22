@@ -10,20 +10,12 @@ import {
   Button,
   IconButton,
   Input,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Progress,
   useDisclosure,
   Slider,
   SliderTrack,
   SliderFilledTrack,
   SliderThumb,
-  Spinner,
+  
   Tooltip,
   SimpleGrid,
 } from "@chakra-ui/react";
@@ -33,9 +25,7 @@ import {
   LuMonitor,
   LuInfo,
   LuSettings,
-  LuChevronDown,
   LuCheck,
-  LuImage,
   LuUpload,
   LuX,
   LuDownload,
@@ -55,7 +45,7 @@ import {
 import { RiBilibiliFill, RiTiktokFill, RiGithubFill, RiGiteeFill } from "react-icons/ri";
 import { useState, useRef, useEffect, useMemo, useCallback, memo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { useBackground, MAX_BG_IMAGES } from "@/contexts/background-context";
+import { useBackground, MAX_BG_IMAGES, MIN_CAROUSEL_INTERVAL, MAX_CAROUSEL_INTERVAL, BACKGROUND_ADJUSTMENT_RANGES, DEFAULT_BACKGROUND_ADJUSTMENTS } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useThemeMode } from "@/contexts/theme-mode-context";
 
@@ -102,12 +92,19 @@ import AdvancedPage from "@/pages/AdvancedPage";
 import { store } from "@/lib/store";
 import { STARTUP_PAGES, STARTUP_PAGE_STORE_KEY } from "@/config/startup-pages";
 import { getLanguagePreference, setLanguagePreference } from "@/lib/i18n";
+import { APP_TOP_FADE_PX } from "@/config/ui-metrics";
 
+import { useColorValue } from "@/hooks/use-color-value";
 /** 限制导航栏拖拽只能沿竖直方向移动，禁止左右（向右）拖动 */
 const restrictToVerticalAxis: Modifier = ({ transform }) => ({
   ...transform,
   x: 0,
 });
+
+const MODULE_DEFAULT_NAV_ORDER = [
+  "/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer",
+  "/music", "/delta-force", "/steam", "/epic-free", "/custom",
+];
 
 const settingItems = [
   { id: "general", labelKey: "settings.general", icon: LuSettings },
@@ -186,12 +183,12 @@ function SortableNavItem({
 }
 
 function GeneralSettings() {
-  const { t, i18n } = useTranslation();
+  const cm = useColorValue();
+  const { t, i18n: _i18n } = useTranslation();
   const toast = useDynamicIsland("settings");
-  const { config, getContrastTextColor } = useThemeColor();
-  const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
+  const { config } = useThemeColor();
   // 模糊立即生效
-  const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
+
 
   const [language, setLanguage] = useState(getLanguagePreference);
   const [todayPopularityEnabled, setTodayPopularityEnabled] = useState(true);
@@ -224,70 +221,26 @@ function GeneralSettings() {
     }
   });
   const NAV_ORDER_KEY = "nexbox_nav_order";
-  const defaultNavOrder = ["/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
+  const defaultNavOrder = MODULE_DEFAULT_NAV_ORDER; // hoisted to module scope"/hardware", "/tools", "/builtin-tools", "/optimization", "/system-optimizer", "/music", "/delta-force", "/steam", "/epic-free", "/custom"];
   const [navOrder, setNavOrder] = useState<string[]>(defaultNavOrder);
   const navSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-  const dragHandleColor = useColorModeValue("gray.400", "gray.500");
-  const sortableDragBg = useColorModeValue("blue.50", "rgba(59,130,246,0.1)");
+  const dragHandleColor = cm("gray.400", "gray.500");
+  const sortableDragBg = cm("blue.50", "rgba(59,130,246,0.1)");
   const [autoStart, setAutoStart] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(true);
   const [minimizedStart, setMinimizedStart] = useState(false);
   const { autoUpdateEnabled, setAutoUpdateEnabled } = useUpdate();
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const inputBg = useColorModeValue("white", "#1a1a1a");
-  const inputBorder = useColorModeValue("gray.200", "#333333");
-  const splashLogoHoverBorder = useColorModeValue("blue.400", "blue.300");
-  const segmentedControlBg = useColorModeValue(
-    liquidGlassEnabled ? "rgba(255,255,255,0.24)" : "rgba(255,255,255,0.78)",
-    liquidGlassEnabled ? "rgba(18,18,18,0.34)" : "rgba(18,18,18,0.58)"
-  );
-  const segmentedControlBorder = useColorModeValue(
-    liquidGlassEnabled ? "rgba(255,255,255,0.34)" : "rgba(255,255,255,0.72)",
-    liquidGlassEnabled ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.08)"
-  );
-  const segmentedControlHoverBg = useColorModeValue(
-    liquidGlassEnabled ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.96)",
-    liquidGlassEnabled ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.08)"
-  );
-  const segmentedControlShadow = useColorModeValue(
-    liquidGlassEnabled ? "0 16px 34px rgba(15, 23, 42, 0.14)" : "0 10px 30px rgba(15, 23, 42, 0.08)",
-    liquidGlassEnabled ? "0 18px 38px rgba(0, 0, 0, 0.28)" : "0 12px 30px rgba(0, 0, 0, 0.24)"
-  );
-  const segmentedActiveBg = useColorModeValue(
-    `linear-gradient(135deg, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.26 : 0.2)} 0%, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.42 : 0.34)} 100%)`,
-    `linear-gradient(135deg, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.38 : 0.32)} 0%, ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.24 : 0.18)} 100%)`
-  );
-  const segmentedActiveBorder = useColorModeValue(
-    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.34 : 0.28),
-    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.5 : 0.42)
-  );
-  const segmentedActiveShadow = useColorModeValue(
-    `0 10px 24px ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.22 : 0.18)}`,
-    `0 12px 28px ${hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.3 : 0.24)}`
-  );
-  const segmentedActiveOverlayGradient = useColorModeValue(
-    liquidGlassEnabled
-      ? "linear(to-b, rgba(255,255,255,0.5), rgba(255,255,255,0.12))"
-      : "linear(to-b, rgba(255,255,255,0.42), rgba(255,255,255,0.08))",
-    liquidGlassEnabled
-      ? "linear(to-b, rgba(255,255,255,0.22), rgba(255,255,255,0.03))"
-      : "linear(to-b, rgba(255,255,255,0.16), rgba(255,255,255,0.02))"
-  );
-  const segmentedContainerGlow = useColorModeValue(
-    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.14 : 0.08),
-    hexToRgba(config.primaryColor, liquidGlassEnabled ? 0.18 : 0.1)
-  );
-  const segmentedGlassSheen = useColorModeValue(
-    "linear-gradient(135deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.08) 52%, rgba(255,255,255,0.02) 100%)",
-    "linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 52%, rgba(255,255,255,0.01) 100%)"
-  );
-  const segmentedActiveText = getContrastTextColor();
+  const titleColor = cm("gray.800", "#ffffff");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
+  const cardBorder = cm("gray.200", "#333333");
+  const inputBg = cm("white", "#1a1a1a");
+
+  const splashLogoHoverBorder = cm("blue.400", "blue.300");
+
 
   useEffect(() => {
     setLanguage(getLanguagePreference());
@@ -420,7 +373,7 @@ function GeneralSettings() {
       }
 
       // 标题用户名（空 = 使用系统用户名）
-      let uname = await store.get<string>("nexbox_home_username");
+      const uname = await store.get<string>("nexbox_home_username");
       if (uname !== null && uname !== undefined) {
         setHomeUsername(uname);
       } else {
@@ -438,7 +391,7 @@ function GeneralSettings() {
       }
 
       // 导航位置
-      let nv = await store.get<string>("nexbox_nav_position");
+      const nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
         setNavPosition(nv);
       } else {
@@ -447,7 +400,7 @@ function GeneralSettings() {
       }
 
       // 关闭行为
-      let cb = await store.get<string>("nexbox_close_behavior");
+      const cb = await store.get<string>("nexbox_close_behavior");
       if (cb) {
         setCloseBehavior(cb);
       } else {
@@ -456,7 +409,7 @@ function GeneralSettings() {
       }
 
       // 启动 Logo
-      let logo = await store.get<string>("nexbox_splash_logo");
+      const logo = await store.get<string>("nexbox_splash_logo");
       if (logo) {
         setSplashLogo(logo);
       } else {
@@ -481,7 +434,7 @@ function GeneralSettings() {
       setNavVisibility(visibilityMap);
 
       // 导航栏排序
-      let orderStr = await store.get<string>("nexbox_nav_order");
+      const orderStr = await store.get<string>("nexbox_nav_order");
       if (orderStr) {
         try {
           const parsed = JSON.parse(orderStr) as string[];
@@ -560,7 +513,9 @@ function GeneralSettings() {
       window.removeEventListener("random-image-setting-changed", handleRandomImageSync as EventListener);
       window.removeEventListener("mood-card-setting-changed", handleMoodCardSync as EventListener);
     };
-  }, []);
+      // 挂载时一次性加载全部设置
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
   const handleLanguageChange = (newLang: string) => {
     setLanguage(newLang);
@@ -1258,6 +1213,7 @@ function GeneralSettings() {
                 {splashLogo && (
                   <Button
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     mt={1.5}
                     onClick={handleSplashLogoReset}
@@ -1393,6 +1349,7 @@ function GeneralSettings() {
                     px={1.5}
                     py={0.5}
                     borderRadius="full"
+                    data-corner="round"
                     color={config.primaryColor}
                     bg={hexToRgba(config.primaryColor, 0.15)}
                   >
@@ -1472,6 +1429,7 @@ function GeneralSettings() {
 }
 
 function ThemeColorSettings() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const {
     config,
@@ -1479,11 +1437,11 @@ function ThemeColorSettings() {
     resetToDefault,
   } = useThemeColor();
   
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const presetBorderColor = useColorModeValue("gray.200", "#444444");
-  const presetActiveBorderColor = useColorModeValue("gray.400", "#666666");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
+  const cardBorder = cm("gray.200", "#333333");
+  const presetBorderColor = cm("gray.200", "#444444");
+  const presetActiveBorderColor = cm("gray.400", "#666666");
   
   const handlePresetClick = (color: string) => {
     setPrimaryColor(color);
@@ -1543,6 +1501,7 @@ function ThemeColorSettings() {
           <HStack justify="flex-end">
             <Button
               size="xs"
+              data-corner="round"
               variant="ghost"
               onClick={resetToDefault}
             >
@@ -1555,7 +1514,48 @@ function ThemeColorSettings() {
   );
 }
 
+function BackgroundAdjustmentSlider({
+  label,
+  value,
+  min,
+  max,
+  unit,
+  labelColor,
+  accentColor,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  labelColor: string;
+  accentColor: string;
+  onChange: (value: number) => void;
+}) {
+  const cm = useColorValue();
+  return (
+    <Box>
+      <HStack justify="space-between" mb={1}>
+        <Text fontSize="sm" color={labelColor}>
+          {label}
+        </Text>
+        <Text fontSize="sm" color={accentColor} fontWeight="bold">
+          {value}{unit}
+        </Text>
+      </HStack>
+      <Slider value={value} min={min} max={max} step={1} onChange={onChange}>
+        <SliderTrack bg={cm("gray.200", "gray.700")}>
+          <SliderFilledTrack bg={accentColor} />
+        </SliderTrack>
+        <SliderThumb />
+      </Slider>
+    </Box>
+  );
+}
+
 function AppearanceSettings() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const { font, setFont, fontOptions, importCustomFont, removeCustomFont, importing } = useFont();
@@ -1579,11 +1579,22 @@ function AppearanceSettings() {
     setIslandGlassMode,
     backgroundBlur,
     setBackgroundBlur,
+    backgroundOpacity,
+    backgroundBrightness,
+    backgroundContrast,
+    backgroundSaturation,
+    setBackgroundOpacity,
+    setBackgroundBrightness,
+    setBackgroundContrast,
+    setBackgroundSaturation,
+    resetBackgroundAdjustments,
     activePresetIndex,
     presetBackgrounds,
     setActivePresetIndex,
     carouselEnabled,
     setCarouselEnabled,
+    carouselInterval,
+    setCarouselInterval,
     jellyBounceEnabled,
     setJellyBounceEnabled,
     mrColorMode,
@@ -1592,18 +1603,38 @@ function AppearanceSettings() {
     setMrCustomColor,
   } = useBackground();
   const videoPreviewSrc = useMemo(() => dynamicBgVideo ? convertFileSrc(dynamicBgVideo) : null, [dynamicBgVideo]);
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const emptySlotBg = useColorModeValue("gray.100", "#1a1a1a");
-  const emptySlotBorder = useColorModeValue("gray.200", "#333333");
-  const activeSlotBorder = useColorModeValue("blue.400", "blue.300");
-  const modeButtonActiveBg = useColorModeValue("blue.500", "blue.400");
-  const modeButtonActiveColor = useColorModeValue("gray.800", "white");
-  const modeButtonInactiveBg = useColorModeValue("gray.100", "#1a1a1a");
-  const modeButtonInactiveBorder = useColorModeValue("gray.200", "#333333");
-  const glassSectionBorder = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
+  const backgroundAdjustmentsDirty =
+    backgroundOpacity !== DEFAULT_BACKGROUND_ADJUSTMENTS.opacity ||
+    backgroundBrightness !== DEFAULT_BACKGROUND_ADJUSTMENTS.brightness ||
+    backgroundContrast !== DEFAULT_BACKGROUND_ADJUSTMENTS.contrast ||
+    backgroundSaturation !== DEFAULT_BACKGROUND_ADJUSTMENTS.saturation ||
+    backgroundBlur !== 0;
+  const [carouselIntervalInput, setCarouselIntervalInput] = useState(String(carouselInterval));
+
+  useEffect(() => {
+    setCarouselIntervalInput(String(carouselInterval));
+  }, [carouselInterval]);
+
+  const commitCarouselInterval = (raw: string) => {
+    const parsed = Number.parseInt(raw, 10);
+    const next = Number.isFinite(parsed)
+      ? Math.min(MAX_CAROUSEL_INTERVAL, Math.max(MIN_CAROUSEL_INTERVAL, parsed))
+      : carouselInterval;
+    setCarouselInterval(next);
+    setCarouselIntervalInput(String(next));
+  };
+  const titleColor = cm("gray.800", "#ffffff");
+  const cardBorder = cm("gray.200", "#333333");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
+  const emptySlotBg = cm("gray.100", "#1a1a1a");
+  const emptySlotBorder = cm("gray.200", "#333333");
+  const activeSlotBorder = cm("blue.400", "blue.300");
+
+  const modeButtonActiveColor = cm("gray.800", "white");
+
+
+  const glassSectionBorder = cm("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
   const toast = useDynamicIsland("settings");
 
   const themeOptions = [
@@ -1853,6 +1884,7 @@ function AppearanceSettings() {
             px={2}
             py={0.5}
             borderRadius="full"
+            data-corner="round"
           >
             BETA
           </Badge>
@@ -1874,7 +1906,7 @@ function AppearanceSettings() {
             />
           </HStack>
           {liquidGlassEnabled && (
-            <Box mt={4} pt={3} borderTop="1px solid" borderColor={useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
+            <Box mt={4} pt={3} borderTop="1px solid" borderColor={cm("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)")}>
               <HStack justify="space-between" mb={2}>
                 <Text fontSize="sm" color={labelColor}>
                   {t("settings.appearanceSettings.liquidGlassBlurLabel")}
@@ -1888,7 +1920,7 @@ function AppearanceSettings() {
                 step={1}
                 onChange={(val) => setLiquidGlassBlur(val)}
               >
-                <SliderTrack bg={useColorModeValue("gray.200", "gray.700")}>
+                <SliderTrack bg={cm("gray.200", "gray.700")}>
                   <SliderFilledTrack bg={getActiveColor()} />
                 </SliderTrack>
                 <SliderThumb />
@@ -1958,6 +1990,7 @@ function AppearanceSettings() {
             px={2}
             py={0.5}
             borderRadius="full"
+            data-corner="round"
           >
             BETA
           </Badge>
@@ -2098,23 +2131,73 @@ function AppearanceSettings() {
 
                 {/* 自动轮播：预设壁纸与自定义图片共用同一个开关 */}
                 {(backgroundMode === "preset" || backgroundMode === "image") && (
-                  <HStack justify="space-between" w="full">
-                    <Box>
-                      <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                        {t("settings.appearanceSettings.carouselLabel")}
-                      </Text>
-                      <Text fontSize="xs" color={subLabelColor} mt={0.5}>
-                        {backgroundMode === "image"
-                          ? t("settings.appearanceSettings.carouselDescImage")
-                          : t("settings.appearanceSettings.carouselDesc")}
-                      </Text>
-                    </Box>
-                    <ThemeSwitch
-                      size="md"
-                      isChecked={carouselEnabled}
-                      onChange={() => setCarouselEnabled(!carouselEnabled)}
-                    />
-                  </HStack>
+                  <>
+                    <HStack justify="space-between" w="full">
+                      <Box>
+                        <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                          {t("settings.appearanceSettings.carouselLabel")}
+                        </Text>
+                        <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                          {backgroundMode === "image"
+                            ? t("settings.appearanceSettings.carouselDescImage")
+                            : t("settings.appearanceSettings.carouselDesc")}
+                        </Text>
+                      </Box>
+                      <ThemeSwitch
+                        size="md"
+                        isChecked={carouselEnabled}
+                        onChange={() => setCarouselEnabled(!carouselEnabled)}
+                      />
+                    </HStack>
+                    {carouselEnabled && (
+                      <Box
+                        w="full"
+                        mt={2}
+                        pt={3}
+                        borderTop="1px solid"
+                        borderColor={glassSectionBorder}
+                      >
+                        <HStack justify="space-between">
+                          <Box>
+                            <Text fontSize="sm" color={labelColor}>
+                              {t("settings.appearanceSettings.carouselIntervalLabel")}
+                            </Text>
+                            <Text fontSize="xs" color={subLabelColor} mt={0.5}>
+                              {t("settings.appearanceSettings.carouselIntervalRange", {
+                                min: MIN_CAROUSEL_INTERVAL,
+                                max: MAX_CAROUSEL_INTERVAL,
+                              })}
+                            </Text>
+                          </Box>
+                          <HStack spacing={2}>
+                            <Input
+                              value={carouselIntervalInput}
+                              onChange={(e) => setCarouselIntervalInput(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                              onBlur={() => commitCarouselInterval(carouselIntervalInput)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") commitCarouselInterval(carouselIntervalInput);
+                              }}
+                              inputMode="numeric"
+                              w="64px"
+                              h="30px"
+                              size="sm"
+                              px={2}
+                              textAlign="center"
+                              fontSize="sm"
+                              color={labelColor}
+                              borderColor={cardBorder}
+                              focusBorderColor={getActiveColor()}
+                              _hover={{ borderColor: getActiveColor() }}
+                              _focusVisible={{ boxShadow: `0 0 0 1px ${getActiveColor()}` }}
+                            />
+                            <Text fontSize="sm" color={subLabelColor}>
+                              {t("settings.appearanceSettings.carouselIntervalUnit")}
+                            </Text>
+                          </HStack>
+                        </HStack>
+                      </Box>
+                    )}
+                  </>
                 )}
 
                 {backgroundMode === "preset" && (
@@ -2152,6 +2235,7 @@ function AppearanceSettings() {
                               transform="translateX(-50%)"
                               bg="blue.500"
                               borderRadius="full"
+                              data-corner="round"
                               px={1.5}
                               py={0.5}
                             >
@@ -2216,6 +2300,7 @@ function AppearanceSettings() {
                               }}
                               bg="blackAlpha.600"
                               borderRadius="full"
+                              data-corner="round"
                               p={0.5}
                               cursor="pointer"
                               _hover={{ bg: "blackAlpha.800" }}
@@ -2231,6 +2316,7 @@ function AppearanceSettings() {
                                 transform="translateX(-50%)"
                                 bg="blue.500"
                                 borderRadius="full"
+                                data-corner="round"
                                 px={1.5}
                                 py={0.5}
                               >
@@ -2247,7 +2333,7 @@ function AppearanceSettings() {
                             justify="center"
                             cursor="pointer"
                             onClick={handleAddClick}
-                            _hover={{ bg: useColorModeValue("gray.200", "#222222") }}
+                            _hover={{ bg: cm("gray.200", "#222222") }}
                             transition="all 0.2s"
                           >
                             <LuUpload size={18} color={subLabelColor} />
@@ -2296,6 +2382,7 @@ function AppearanceSettings() {
                             onClick={() => setDynamicBgVideo(null)}
                             bg="blackAlpha.600"
                             borderRadius="full"
+                            data-corner="round"
                             p={0.5}
                             cursor="pointer"
                             _hover={{ bg: "blackAlpha.800" }}
@@ -2313,7 +2400,7 @@ function AppearanceSettings() {
                           justify="center"
                           cursor="pointer"
                           onClick={handleVideoAddClick}
-                          _hover={{ bg: useColorModeValue("gray.200", "#222222") }}
+                          _hover={{ bg: cm("gray.200", "#222222") }}
                           transition="all 0.2s"
                           flexDirection="column"
                           gap={1}
@@ -2422,28 +2509,79 @@ function AppearanceSettings() {
               </>
             )}
 
-            <Divider borderColor={cardBorder} />
-            <HStack justify="space-between">
-              <Text fontSize="sm" color={labelColor} fontWeight="medium">
-                {t("settings.appearanceSettings.backgroundBlurLabel")}
-              </Text>
-              <Text fontSize="sm" color={getActiveColor()} fontWeight="bold">{backgroundBlur}px</Text>
-            </HStack>
-            <Slider
-              value={backgroundBlur}
-              min={0}
-              max={30}
-              step={1}
-              onChange={(val) => setBackgroundBlur(val)}
-            >
-              <SliderTrack bg={useColorModeValue("gray.200", "gray.700")}>
-                <SliderFilledTrack bg={getActiveColor()} />
-              </SliderTrack>
-              <SliderThumb />
-            </Slider>
-            <Text fontSize="xs" color={subLabelColor}>
-              {t("settings.appearanceSettings.backgroundBlurHint")}
-            </Text>
+            {backgroundMode !== "none" && (
+              <>
+                <Divider borderColor={cardBorder} />
+                <HStack justify="space-between" align="center">
+                  <Text fontSize="sm" color={labelColor} fontWeight="medium">
+                    {t("settings.appearanceSettings.backgroundAdjustments")}
+                  </Text>
+                  <Button
+                    size="xs"
+                    data-corner="round"
+                    variant="ghost"
+                    leftIcon={<LuRotateCcw size={12} />}
+                    isDisabled={!backgroundAdjustmentsDirty}
+                    onClick={resetBackgroundAdjustments}
+                  >
+                    {t("settings.appearanceSettings.resetToDefault")}
+                  </Button>
+                </HStack>
+                <BackgroundAdjustmentSlider
+                  label={t("settings.appearanceSettings.backgroundOpacityLabel")}
+                  value={backgroundOpacity}
+                  min={BACKGROUND_ADJUSTMENT_RANGES.opacity.min}
+                  max={BACKGROUND_ADJUSTMENT_RANGES.opacity.max}
+                  unit="%"
+                  labelColor={labelColor}
+                  accentColor={getActiveColor()}
+                  onChange={setBackgroundOpacity}
+                />
+                <BackgroundAdjustmentSlider
+                  label={t("settings.appearanceSettings.backgroundBrightnessLabel")}
+                  value={backgroundBrightness}
+                  min={BACKGROUND_ADJUSTMENT_RANGES.brightness.min}
+                  max={BACKGROUND_ADJUSTMENT_RANGES.brightness.max}
+                  unit="%"
+                  labelColor={labelColor}
+                  accentColor={getActiveColor()}
+                  onChange={setBackgroundBrightness}
+                />
+                <BackgroundAdjustmentSlider
+                  label={t("settings.appearanceSettings.backgroundContrastLabel")}
+                  value={backgroundContrast}
+                  min={BACKGROUND_ADJUSTMENT_RANGES.contrast.min}
+                  max={BACKGROUND_ADJUSTMENT_RANGES.contrast.max}
+                  unit="%"
+                  labelColor={labelColor}
+                  accentColor={getActiveColor()}
+                  onChange={setBackgroundContrast}
+                />
+                <BackgroundAdjustmentSlider
+                  label={t("settings.appearanceSettings.backgroundSaturationLabel")}
+                  value={backgroundSaturation}
+                  min={BACKGROUND_ADJUSTMENT_RANGES.saturation.min}
+                  max={BACKGROUND_ADJUSTMENT_RANGES.saturation.max}
+                  unit="%"
+                  labelColor={labelColor}
+                  accentColor={getActiveColor()}
+                  onChange={setBackgroundSaturation}
+                />
+                <BackgroundAdjustmentSlider
+                  label={t("settings.appearanceSettings.backgroundBlurLabel")}
+                  value={backgroundBlur}
+                  min={0}
+                  max={30}
+                  unit="px"
+                  labelColor={labelColor}
+                  accentColor={getActiveColor()}
+                  onChange={setBackgroundBlur}
+                />
+                <Text fontSize="xs" color={subLabelColor}>
+                  {t("settings.appearanceSettings.backgroundAdjustmentsHint")}
+                </Text>
+              </>
+            )}
           </VStack>
         </LiquidGlassCard>
       </Box>
@@ -2453,6 +2591,7 @@ function AppearanceSettings() {
 
 function NetworkSettings() {
   const { t } = useTranslation();
+  const cm = useColorValue();
   const titleColor = useColorModeValue("gray.800", "#ffffff");
   const labelColor = useColorModeValue("gray.700", "#ffffff");
   const subLabelColor = useColorModeValue("gray.500", "#ffffff");
@@ -2483,6 +2622,8 @@ function NetworkSettings() {
 
   const allServers: { id: string; url: string; hostname?: string }[] = useMemo(
     () => [...presetServers, ...customServers],
+    // presetServers 是组件内固定字面量数组，内容不变
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [customServers],
   );
 
@@ -2649,7 +2790,7 @@ function NetworkSettings() {
                       borderRadius="md"
                       overflow="hidden"
                       flexShrink={0}
-                      bg={useColorModeValue("gray.50", "#1a1a1a")}
+                      bg={cm("gray.50", "#1a1a1a")}
                       display="flex"
                       alignItems="center"
                       justifyContent="center"
@@ -2682,6 +2823,7 @@ function NetworkSettings() {
                         aria-label={t("settings.networkSettings.remove")}
                         icon={<LuTrash2 size={13} />}
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         color={subLabelColor}
                         _hover={{ color: "#e53e3e" }}
@@ -2737,13 +2879,14 @@ const SponsorNameCard = memo(function SponsorNameCard({
   labelColor: string;
   glass?: boolean;
 }) {
+  const cm = useColorValue();
   // 名单可达数百条，若每张卡各自带 backdrop-filter，滚动时每帧都要重新模糊上百个
   // 渲染表面（外加一层遮罩辉光子树）→ 严重掉帧。这里小卡只保留半透明底色 + 细边框，
   // 背景模糊统一由外层单块玻璃面板承担。
-  const glassBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
-  const glassBorder = useColorModeValue("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
-  const solidBg = useColorModeValue("white", "#111111");
-  const solidBorder = useColorModeValue("gray.200", "#333333");
+  const glassBg = cm("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
+  const glassBorder = cm("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
+  const solidBg = cm("white", "#111111");
+  const solidBorder = cm("gray.200", "#333333");
 
   return (
     <Box
@@ -2783,11 +2926,12 @@ function SponsorListPanel({ glass, children }: { glass: boolean; children: React
 }
 
 function SponsorSettings() {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
+  const titleColor = cm("gray.800", "#ffffff");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
+  const cardBorder = cm("gray.200", "#333333");
   const { liquidGlassEnabled } = useBackground();
   const [sponsors, setSponsors] = useState<SponsorItem[]>([]);
   const [sponsorsLoading, setSponsorsLoading] = useState(true);
@@ -2852,7 +2996,7 @@ function SponsorSettings() {
               overflow="hidden"
               border="1px solid"
               borderColor={cardBorder}
-              bg={useColorModeValue("white", "#1a1a1a")}
+              bg={cm("white", "#1a1a1a")}
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -2883,7 +3027,7 @@ function SponsorSettings() {
               overflow="hidden"
               border="1px solid"
               borderColor={cardBorder}
-              bg={useColorModeValue("white", "#1a1a1a")}
+              bg={cm("white", "#1a1a1a")}
               display="flex"
               alignItems="center"
               justifyContent="center"
@@ -2953,8 +3097,9 @@ interface ThanksItem {
 
 /** 特别鸣谢单项卡片：logo + 名称 + 箭头，点击打开对应网站 */
 function ThanksItemCard({ item, onOpen }: { item: ThanksItem; onOpen: (url: string) => void }) {
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const arrowColor = useColorModeValue("gray.400", "#6b7280");
+  const cm = useColorValue();
+  const labelColor = cm("gray.700", "#ffffff");
+  const arrowColor = cm("gray.400", "#6b7280");
   const { src } = useQQIcon(item.logo);
 
   return (
@@ -2997,8 +3142,9 @@ function ThanksItemCard({ item, onOpen }: { item: ThanksItem; onOpen: (url: stri
 
 /** 站点 favicon 图标：无对应矢量图标库资源时用远程 favicon，加载失败回退为首字母，避免破图 */
 function FaviconIcon({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
+  const cm = useColorValue();
   const [failed, setFailed] = useState(false);
-  const fallbackColor = useColorModeValue("#1a202c", "#ffffff");
+  const fallbackColor = cm("#1a202c", "#ffffff");
 
   if (failed) {
     return (
@@ -3018,19 +3164,20 @@ function FaviconIcon({ src, name, size = 20 }: { src: string; name: string; size
 }
 
 function AboutSettings() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("settings");
   const { getActiveColor } = useThemeColor();
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
-  const graphicLogoSrc = useColorModeValue("/logo/NBB.webp", "/logo/NBW.webp");
-  const textLogoSrc = useColorModeValue("/logo/CNBB.webp", "/logo/CNBW.webp");
+  const titleColor = cm("gray.800", "#ffffff");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
+  const graphicLogoSrc = cm("/logo/NBB.webp", "/logo/NBW.webp");
+  const textLogoSrc = cm("/logo/CNBB.webp", "/logo/CNBW.webp");
   const changelogScrollColor = getActiveColor();
   // 卡片图标底色（浅色/深色适配）
-  const iconBg = useColorModeValue("#f1f2f4", "#262626");
+  const iconBg = cm("#f1f2f4", "#262626");
 
-  const currentVersion = "10.5.5";
+  const currentVersion = "10.6.3";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
@@ -3206,7 +3353,7 @@ function AboutSettings() {
               justifyContent="center"
               flexShrink={0}
             >
-              <LuGithub size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+              <LuGithub size={22} color={cm("#1a202c", "#ffffff")} />
             </Box>
             <VStack spacing={1} align="start" flex={1}>
               <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
@@ -3225,7 +3372,7 @@ function AboutSettings() {
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
-                  color={useColorModeValue("#1a202c", "#ffffff")}
+                  color={cm("#1a202c", "#ffffff")}
                   cursor="pointer"
                   transition="all 0.2s"
                   _hover={{ bg: "rgba(128, 128, 128, 0.18)", transform: "scale(1.1)" }}
@@ -3301,13 +3448,13 @@ function AboutSettings() {
               flexShrink={0}
             >
               {IS_STORE_BUILD ? (
-                <LuInfo size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuInfo size={22} color={cm("#1a202c", "#ffffff")} />
               ) : isChecking ? (
-                <LuRefreshCw className="animate-spin" size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuRefreshCw className="animate-spin" size={22} color={cm("#1a202c", "#ffffff")} />
               ) : hasUpdate ? (
-                <LuDownload size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuDownload size={22} color={cm("#1a202c", "#ffffff")} />
               ) : (
-                <LuCheck size={22} color={useColorModeValue("#1a202c", "#ffffff")} />
+                <LuCheck size={22} color={cm("#1a202c", "#ffffff")} />
               )}
             </Box>
             <VStack spacing={1} align="start" flex={1}>
@@ -3325,7 +3472,7 @@ function AboutSettings() {
               </Text>
             </VStack>
             {!IS_STORE_BUILD && (
-              <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+              <Box color={cm("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
                 <Text fontSize="xl" lineHeight="1">›</Text>
               </Box>
             )}
@@ -3399,7 +3546,7 @@ function AboutSettings() {
               justifyContent="center"
               flexShrink={0}
             >
-              <LuBug size={20} color={useColorModeValue("#1a202c", "#ffffff")} />
+              <LuBug size={20} color={cm("#1a202c", "#ffffff")} />
             </Box>
             <VStack spacing={1} align="start" flex={1}>
               <Text fontSize="md" fontWeight="bold" color={labelColor} noOfLines={1}>
@@ -3409,7 +3556,7 @@ function AboutSettings() {
                 nexbox.top/feedback
               </Text>
             </VStack>
-            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+            <Box color={cm("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
               <Text fontSize="xl" lineHeight="1">›</Text>
             </Box>
           </HStack>
@@ -3546,7 +3693,7 @@ function AboutSettings() {
                 {t("settings.aboutSettings.qqGroupSubtitle")}
               </Text>
             </VStack>
-            <Box color={useColorModeValue("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
+            <Box color={cm("gray.400", "#6b7280")} _groupHover={{ color: getActiveColor() }}>
               <Text fontSize="xl" lineHeight="1">›</Text>
             </Box>
           </HStack>
@@ -3614,12 +3761,13 @@ function AboutSettings() {
 }
 
 function HotkeySettings() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { overlayHotkey, saveOverlayHotkey, overlayHotkeyEnabled, saveOverlayHotkeyEnabled, crosshairHotkey, saveCrosshairHotkey, crosshairHotkeyEnabled, saveCrosshairHotkeyEnabled, filterHotkey, saveFilterHotkey, filterHotkeyEnabled, saveFilterHotkeyEnabled, autoclickerHotkey, saveAutoclickerHotkey, autoclickerHotkeyEnabled, saveAutoclickerHotkeyEnabled, musicPrevHotkey, saveMusicPrevHotkey, musicPrevHotkeyEnabled, saveMusicPrevHotkeyEnabled, musicNextHotkey, saveMusicNextHotkey, musicNextHotkeyEnabled, saveMusicNextHotkeyEnabled, musicPlayPauseHotkey, saveMusicPlayPauseHotkey, musicPlayPauseHotkeyEnabled, saveMusicPlayPauseHotkeyEnabled, hotkeysEnabled, saveHotkeysEnabled } = useAppStartup();
   const toast = useDynamicIsland("settings");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const subLabelColor = useColorModeValue("gray.500", "#ffffff");
+  const titleColor = cm("gray.800", "#ffffff");
+  const labelColor = cm("gray.700", "#ffffff");
+  const subLabelColor = cm("gray.500", "#ffffff");
   const { getHoverColor, getBorderColor } = useThemeColor();
   // 悬停主题色：背景为主题色半透明，边框为主题色
   const hotkeyHoverBg = getHoverColor();
@@ -3960,7 +4108,7 @@ export default function SettingsPage() {
   const [activeItem, setActiveItem] = useState("general");
   const [searchParams] = useSearchParams();
   const { t } = useTranslation();
-  const { config } = useThemeColor();
+  const { config: _config } = useThemeColor();
   const { jellyBounceEnabled } = useBackground();
   const isFirstRender = useRef(true);
 
@@ -3993,10 +4141,11 @@ export default function SettingsPage() {
 
   return (
     <Flex gap={6} pt={8}>
-      <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
+      {/* sticky 吸附位置避开顶部 48px 渐隐带，否则滚动时侧栏菜单会变半透明 */}
+      <Box w="180px" flexShrink={0} position="sticky" top={`${APP_TOP_FADE_PX}px`} alignSelf="flex-start">
         <VStack spacing={0.5} align="stretch">
           {settingItems.map((item) => {
-            const Icon = item.icon;
+
             const isActive = activeItem === item.id;
 
             return (

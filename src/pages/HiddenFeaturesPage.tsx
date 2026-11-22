@@ -45,7 +45,6 @@ import {
   Search,
   AlertTriangle,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -119,25 +118,25 @@ const EntryRow = memo(function EntryRow({
   let stateBadge: ReactElement;
   if (!entry.has_config) {
     stateBadge = (
-      <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2}>
+      <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round" px={2}>
         {t("hiddenFeatures.noConfig")}
       </Badge>
     );
   } else if (entry.enabled_state === 2) {
     stateBadge = (
-      <Badge variant="subtle" borderRadius="full" px={2} color="#38A169" bg={hexToRgba("#38A169", 0.12)}>
+      <Badge variant="subtle" borderRadius="full" data-corner="round" px={2} color="#38A169" bg={hexToRgba("#38A169", 0.12)}>
         {t("hiddenFeatures.stateEnabled")}
       </Badge>
     );
   } else if (entry.enabled_state === 1) {
     stateBadge = (
-      <Badge variant="subtle" borderRadius="full" px={2} color="#E53E3E" bg={hexToRgba("#E53E3E", 0.12)}>
+      <Badge variant="subtle" borderRadius="full" data-corner="round" px={2} color="#E53E3E" bg={hexToRgba("#E53E3E", 0.12)}>
         {t("hiddenFeatures.stateDisabled")}
       </Badge>
     );
   } else {
     stateBadge = (
-      <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2}>
+      <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round" px={2}>
         {t("hiddenFeatures.stateDefault")}
       </Badge>
     );
@@ -161,11 +160,11 @@ const EntryRow = memo(function EntryRow({
           <Text fontSize="xs" color={subLabelColor} fontFamily="mono">
             {entry.feature_id}
           </Text>
-          <Badge borderRadius="full" px={2} fontSize="10px" color={pc} bg={hexToRgba(pc, 0.12)}>
+          <Badge borderRadius="full" data-corner="round" px={2} fontSize="10px" color={pc} bg={hexToRgba(pc, 0.12)}>
             {PRIORITY_NAMES[entry.priority] ?? `P${entry.priority}`}
           </Badge>
           {entry.is_wexp && (
-            <Badge borderRadius="full" px={2} fontSize="10px" color="#E5A50A" bg={hexToRgba("#E5A50A", 0.12)}>
+            <Badge borderRadius="full" data-corner="round" px={2} fontSize="10px" color="#E5A50A" bg={hexToRgba("#E5A50A", 0.12)}>
               {t("hiddenFeatures.wexp")}
             </Badge>
           )}
@@ -351,6 +350,7 @@ export default function HiddenFeaturesPage() {
               <Text as="span">{t("hiddenFeatures.title")}</Text>
               <Badge
                 borderRadius="full"
+                data-corner="round"
                 px={2}
                 py={0.5}
                 fontSize="xs"
@@ -395,6 +395,7 @@ export default function HiddenFeaturesPage() {
                   px={2}
                   py={0.5}
                   borderRadius="full"
+                  data-corner="round"
                 >
                   <AlertTriangle size={12} />
                   <Text fontSize="xs" fontWeight="600">
@@ -498,6 +499,7 @@ export default function HiddenFeaturesPage() {
                       >
                         <Button
                           size="xs"
+                          data-corner="round"
                           variant={store === s ? "solid" : "ghost"}
                           bg={store === s ? primaryColor : "transparent"}
                           color={store === s ? contrastText : subLabelColor}

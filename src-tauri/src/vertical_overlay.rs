@@ -71,15 +71,13 @@ pub async fn start_vertical_overlay(
         let _ = window.set_position(tauri::PhysicalPosition { x, y });
     } else {
         // 默认：屏幕右上角
-        if let Ok(monitor) = window.current_monitor() {
-            if let Some(monitor) = monitor {
-                let screen_size = monitor.size();
-                let scale = monitor.scale_factor();
-                let win_w = init_width * scale;
-                let x = (screen_size.width as f64 - win_w - 20.0 * scale) as i32;
-                let y = (20.0 * scale) as i32;
-                let _ = window.set_position(tauri::PhysicalPosition { x, y });
-            }
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            let screen_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let win_w = init_width * scale;
+            let x = (screen_size.width as f64 - win_w - 20.0 * scale) as i32;
+            let y = (20.0 * scale) as i32;
+            let _ = window.set_position(tauri::PhysicalPosition { x, y });
         }
     }
 
@@ -306,15 +304,13 @@ pub async fn reset_vertical_overlay_position(
 
     // 移动窗口到默认位置（右上角）
     if let Some(window) = app_handle.get_webview_window("vertical-overlay") {
-        if let Ok(monitor) = window.current_monitor() {
-            if let Some(monitor) = monitor {
-                let screen_size = monitor.size();
-                let scale = monitor.scale_factor();
-                let win_w = 220.0 * scale;
-                let x = (screen_size.width as f64 - win_w - 20.0 * scale) as i32;
-                let y = (20.0 * scale) as i32;
-                let _ = window.set_position(tauri::PhysicalPosition { x, y });
-            }
+        if let Ok(Some(monitor)) = window.current_monitor() {
+            let screen_size = monitor.size();
+            let scale = monitor.scale_factor();
+            let win_w = 220.0 * scale;
+            let x = (screen_size.width as f64 - win_w - 20.0 * scale) as i32;
+            let y = (20.0 * scale) as i32;
+            let _ = window.set_position(tauri::PhysicalPosition { x, y });
         }
     }
 

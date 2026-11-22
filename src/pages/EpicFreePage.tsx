@@ -33,7 +33,7 @@ function GameCard({ game, fillHeight }: { game: EpicGame; fillHeight?: boolean }
     try {
       const { open } = await import("@tauri-apps/plugin-shell");
       await open(game.link);
-    } catch (error) {
+    } catch {
       window.open(game.link, "_blank");
     }
   };
@@ -137,10 +137,8 @@ export default function EpicFreePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const textColor = useColorModeValue("gray.800", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const bgColor = useColorModeValue("gray.50", "#0a0a0a");
 
   useEffect(() => {
     const fetchEpicGames = async () => {
@@ -169,7 +167,7 @@ export default function EpicFreePage() {
     };
 
     fetchEpicGames();
-  }, []);
+  }, [t]);
 
   const shouldFillHeight = games.length >= 1 && games.length <= 3;
 

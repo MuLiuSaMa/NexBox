@@ -198,7 +198,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
   // 后端事件：连接状态变化（修复：手机连上后弹窗仍显示离线）、配对请求、互传变更与进度
   useEffect(() => {
     if (!isOpen) return;
-    let unlisten: (() => void)[] = [];
+    const unlisten: (() => void)[] = [];
     let disposed = false;
     const sub = (ev: string, fn: (e: { payload: unknown }) => void) =>
       listen(ev, fn)
@@ -479,9 +479,9 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 bg={hexToRgba(getActiveColor(), 0.12)}
               />
               {/* 屏幕上的抽象内容条，增强"点亮的全屏"观感 */}
-              <Box position="absolute" top="26px" left="16px" right="16px" h="6px" borderRadius="full" bg={hexToRgba(getActiveColor(), 0.35)} />
-              <Box position="absolute" top="40px" left="16px" right="40px" h="5px" borderRadius="full" bg={hexToRgba(getActiveColor(), 0.2)} />
-              <Box position="absolute" top="52px" left="16px" right="28px" h="5px" borderRadius="full" bg={hexToRgba(getActiveColor(), 0.2)} />
+              <Box position="absolute" top="26px" left="16px" right="16px" h="6px" borderRadius="full" data-corner="round" bg={hexToRgba(getActiveColor(), 0.35)} />
+              <Box position="absolute" top="40px" left="16px" right="40px" h="5px" borderRadius="full" data-corner="round" bg={hexToRgba(getActiveColor(), 0.2)} />
+              <Box position="absolute" top="52px" left="16px" right="28px" h="5px" borderRadius="full" data-corner="round" bg={hexToRgba(getActiveColor(), 0.2)} />
               {/* 打孔摄像头（居中在屏内） */}
               <Box
                 position="absolute"
@@ -491,6 +491,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                 w="9px"
                 h="9px"
                 borderRadius="full"
+                data-corner="round"
                 bg={hexToRgba(getActiveColor(), 0.55)}
               />
             </Box>
@@ -507,6 +508,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                         w="6px"
                         h="6px"
                         borderRadius="full"
+                        data-corner="round"
                         bg={d.connected ? "green.400" : textColor}
                         opacity={d.connected ? 1 : 0.5}
                       />
@@ -672,6 +674,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                         <HStack spacing={2}>
                           <Button
                             size="xs"
+                            data-corner="round"
                             bg={getActiveColor()}
                             color="white"
                             _hover={{ bg: getHoverColor() }}
@@ -681,6 +684,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                           </Button>
                           <Button
                             size="xs"
+                            data-corner="round"
                             variant="ghost"
                             colorScheme="red"
                             leftIcon={<X size={12} />}
@@ -711,7 +715,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                       <Box bg="white" p={2} borderRadius="lg">
                         <QRCodeSVG value={pairQrValue} size={168} />
                       </Box>
-                      <Button size="xs" variant="outline" leftIcon={<RefreshCw size={12} />} onClick={rotateCode}>
+                      <Button size="xs" data-corner="round" variant="outline" leftIcon={<RefreshCw size={12} />} onClick={rotateCode}>
                         刷新二维码
                       </Button>
                       <Text fontSize="xs" color={textColor} opacity={0.8}>
@@ -735,6 +739,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                   w="8px"
                   h="8px"
                   borderRadius="full"
+                  data-corner="round"
                   bg={selectedDevice?.connected ? "green.400" : textColor}
                   opacity={selectedDevice?.connected ? 1 : 0.5}
                 />
@@ -758,6 +763,7 @@ export function RemoteAccessDialog({ isOpen, onClose }: { isOpen: boolean; onClo
                   </Text>
                   <Button
                     size="xs"
+                    data-corner="round"
                     bg={getActiveColor()}
                     color="white"
                     _hover={{ bg: getHoverColor() }}

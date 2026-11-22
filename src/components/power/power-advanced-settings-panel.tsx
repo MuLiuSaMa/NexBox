@@ -5,7 +5,6 @@ import {
   Heading,
   VStack,
   HStack,
-  Badge,
   Button,
   Spinner,
   Checkbox,
@@ -33,7 +32,7 @@ import { powerAdvancedSettings } from "@/config/power-advanced-settings";
 import PowerAdvancedSettingCard, {
   type PowerAdvancedSettingInfo,
 } from "@/components/power/power-advanced-setting-card";
-import { Lock, ShieldAlert, RefreshCw, Battery, Zap } from "lucide-react";
+import { Lock, ShieldAlert, RefreshCw, Battery} from "lucide-react";
 
 export interface PowerAdvancedSettingsResponse {
   schemeGuid: string;
@@ -54,13 +53,14 @@ const UNLOCK_STORE_KEY = "powerAdvancedUnlocked";
 export default function PowerAdvancedSettingsPanel() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("power");
-  const { getActiveColor, getBorderColor, getContrastTextColor, getHoverColor } = useThemeColor();
+  const { getActiveColor, getBorderColor } = useThemeColor();
+
   const primaryColor = getActiveColor();
-  const contrastText = getContrastTextColor();
+
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "rgba(200,200,200,0.85)");
-  const schemeLabel = useColorModeValue("gray.400", "rgba(200,200,200,0.5)");
+
 
   const [data, setData] = useState<PowerAdvancedSettingsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -201,7 +201,7 @@ export default function PowerAdvancedSettingsPanel() {
     setUnlockLoading(false);
   };
 
-  const lockBannerBg = useColorModeValue("rgba(0,0,0,0.02)", "rgba(0,0,0,0.2)");
+
 
   return (
     <VStack align="stretch" spacing={5}>
@@ -217,7 +217,7 @@ export default function PowerAdvancedSettingsPanel() {
         </VStack>
         <HStack spacing={3}>
           {data && (
-            <HStack spacing={1.5} px={3} py={1} borderRadius="full" border="1px solid" borderColor={getBorderColor()} bg={hexToRgba(primaryColor, 0.06)}>
+            <HStack spacing={1.5} px={3} py={1} borderRadius="full" data-corner="round" border="1px solid" borderColor={getBorderColor()} bg={hexToRgba(primaryColor, 0.06)}>
               <Battery size={13} color={primaryColor} />
               <Text fontSize="xs" color={subTextColor}>
                 {t("powerAdvanced.currentScheme")}
@@ -247,6 +247,7 @@ export default function PowerAdvancedSettingsPanel() {
               w={12}
               h={12}
               borderRadius="full"
+              data-corner="round"
               bg={hexToRgba(primaryColor, 0.12)}
               display="flex"
               alignItems="center"

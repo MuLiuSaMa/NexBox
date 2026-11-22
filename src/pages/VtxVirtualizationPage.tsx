@@ -17,7 +17,6 @@ import {
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw, ShieldCheck, ShieldOff, Cpu, AlertTriangle, RotateCcw, Wrench } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useTranslation } from "react-i18next";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -157,6 +156,7 @@ export default function VtxVirtualizationPage() {
     px: 2.5,
     py: 0.5,
     borderRadius: "full",
+    "data-corner": "round",
     fontSize: "xs",
     fontWeight: 600,
   });
@@ -212,6 +212,7 @@ export default function VtxVirtualizationPage() {
                       px={2}
                       py={0.5}
                       borderRadius="full"
+                      data-corner="round"
                     >
                       <AlertTriangle size={12} />
                       <Text fontSize="xs" fontWeight="600">{t("vtxVirtualization.notAdmin")}</Text>
@@ -231,7 +232,7 @@ export default function VtxVirtualizationPage() {
                         {status.hvci_enabled ? t("vtxVirtualization.on") : t("vtxVirtualization.off")}
                       </Box>
                     ) : (
-                      <Box as="span" bg={hexToRgba("#969696", 0.14)} color={subLabelColor} px={2.5} py={0.5} borderRadius="full" fontSize="xs" fontWeight={600}>
+                      <Box as="span" bg={hexToRgba("#969696", 0.14)} color={subLabelColor} px={2.5} py={0.5} borderRadius="full" data-corner="round" fontSize="xs" fontWeight={600}>
                         {t("vtxVirtualization.notConfigured")}
                       </Box>
                     )
@@ -247,7 +248,7 @@ export default function VtxVirtualizationPage() {
                         {status.vbs_enabled ? t("vtxVirtualization.on") : t("vtxVirtualization.off")}
                       </Box>
                     ) : (
-                      <Box as="span" bg={hexToRgba("#969696", 0.14)} color={subLabelColor} px={2.5} py={0.5} borderRadius="full" fontSize="xs" fontWeight={600}>
+                      <Box as="span" bg={hexToRgba("#969696", 0.14)} color={subLabelColor} px={2.5} py={0.5} borderRadius="full" data-corner="round" fontSize="xs" fontWeight={600}>
                         {t("vtxVirtualization.notConfigured")}
                       </Box>
                     )

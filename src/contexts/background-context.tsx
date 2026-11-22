@@ -24,6 +24,48 @@ type IslandGlassMode = "real" | "frosted";
 
 type MrColorMode = "theme" | "custom";
 
+/** 背景画面调节：不透明度 0-100，亮度 / 对比度 / 饱和度 0-200（100 = 原始画面） */
+export interface BackgroundAdjustments {
+  opacity: number;
+  brightness: number;
+  contrast: number;
+  saturation: number;
+}
+
+export const DEFAULT_BACKGROUND_ADJUSTMENTS: BackgroundAdjustments = {
+  opacity: 100,
+  brightness: 100,
+  contrast: 100,
+  saturation: 100,
+};
+
+export const BACKGROUND_ADJUSTMENT_RANGES: Record<keyof BackgroundAdjustments, { min: number; max: number }> = {
+  opacity: { min: 0, max: 100 },
+  brightness: { min: 0, max: 200 },
+  contrast: { min: 0, max: 200 },
+  saturation: { min: 0, max: 200 },
+};
+
+function clampAdjustment(key: keyof BackgroundAdjustments, value: number): number {
+  const { min, max } = BACKGROUND_ADJUSTMENT_RANGES[key];
+  return Math.round(Math.min(max, Math.max(min, value)));
+}
+
+/** 把模糊 + 亮度 / 对比度 / 饱和度拼成一条 CSS filter；全部为默认值时返回 undefined，避免多余的合成层 */
+export function buildBackgroundFilter({ blur = 0, brightness = 100, contrast = 100, saturation = 100 }: {
+  blur?: number;
+  brightness?: number;
+  contrast?: number;
+  saturation?: number;
+}): string | undefined {
+  const parts: string[] = [];
+  if (blur > 0) parts.push(`blur(${blur}px)`);
+  if (brightness !== 100) parts.push(`brightness(${brightness}%)`);
+  if (contrast !== 100) parts.push(`contrast(${contrast}%)`);
+  if (saturation !== 100) parts.push(`saturate(${saturation}%)`);
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
 interface BackgroundContextType {
   backgroundMode: BackgroundMode;
   customBgImages: string[];
@@ -34,9 +76,14 @@ interface BackgroundContextType {
   islandLiquidGlassEnabled: boolean;
   islandGlassMode: IslandGlassMode;
   backgroundBlur: number;
+  backgroundOpacity: number;
+  backgroundBrightness: number;
+  backgroundContrast: number;
+  backgroundSaturation: number;
   activePresetIndex: number;
   presetBackgrounds: PresetBackground[];
   carouselEnabled: boolean;
+  carouselInterval: number;
   jellyBounceEnabled: boolean;
   mrColorMode: MrColorMode;
   mrCustomColor: string;
@@ -51,8 +98,14 @@ interface BackgroundContextType {
   setIslandLiquidGlassEnabled: (enabled: boolean) => void;
   setIslandGlassMode: (mode: IslandGlassMode) => void;
   setBackgroundBlur: (blur: number) => void;
+  setBackgroundOpacity: (opacity: number) => void;
+  setBackgroundBrightness: (brightness: number) => void;
+  setBackgroundContrast: (contrast: number) => void;
+  setBackgroundSaturation: (saturation: number) => void;
+  resetBackgroundAdjustments: () => void;
   setActivePresetIndex: (index: number) => void;
   setCarouselEnabled: (enabled: boolean) => void;
+  setCarouselInterval: (seconds: number) => void;
   setJellyBounceEnabled: (enabled: boolean) => void;
   setMrColorMode: (mode: MrColorMode) => void;
   setMrCustomColor: (color: string) => void;
@@ -68,9 +121,14 @@ const BackgroundContext = createContext<BackgroundContextType>({
   islandLiquidGlassEnabled: false,
   islandGlassMode: "real",
   backgroundBlur: 0,
+  backgroundOpacity: DEFAULT_BACKGROUND_ADJUSTMENTS.opacity,
+  backgroundBrightness: DEFAULT_BACKGROUND_ADJUSTMENTS.brightness,
+  backgroundContrast: DEFAULT_BACKGROUND_ADJUSTMENTS.contrast,
+  backgroundSaturation: DEFAULT_BACKGROUND_ADJUSTMENTS.saturation,
   activePresetIndex: 0,
   presetBackgrounds: PRESET_BACKGROUNDS,
   carouselEnabled: false,
+  carouselInterval: 10,
   jellyBounceEnabled: false,
   mrColorMode: "theme",
   mrCustomColor: "#FF214F",
@@ -85,8 +143,14 @@ const BackgroundContext = createContext<BackgroundContextType>({
   setIslandLiquidGlassEnabled: () => {},
   setIslandGlassMode: () => {},
   setBackgroundBlur: () => {},
+  setBackgroundOpacity: () => {},
+  setBackgroundBrightness: () => {},
+  setBackgroundContrast: () => {},
+  setBackgroundSaturation: () => {},
+  resetBackgroundAdjustments: () => {},
   setActivePresetIndex: () => {},
   setCarouselEnabled: () => {},
+  setCarouselInterval: () => {},
   setJellyBounceEnabled: () => {},
   setMrColorMode: () => {},
   setMrCustomColor: () => {},
@@ -99,6 +163,11 @@ export function useBackground() {
 
 export const MAX_BG_IMAGES = 4;
 
+/** 轮播间隔范围（秒） */
+export const MIN_CAROUSEL_INTERVAL = 1;
+export const MAX_CAROUSEL_INTERVAL = 120;
+export const DEFAULT_CAROUSEL_INTERVAL = 10;
+
 export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("none");
   const [customBgImages, setCustomBgImages] = useState<string[]>([]);
@@ -109,8 +178,13 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const [islandLiquidGlassEnabled, setIslandLiquidGlassEnabled] = useState(false);
   const [islandGlassMode, setIslandGlassMode] = useState<IslandGlassMode>("real");
   const [backgroundBlur, setBackgroundBlur] = useState(0);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(DEFAULT_BACKGROUND_ADJUSTMENTS.opacity);
+  const [backgroundBrightness, setBackgroundBrightness] = useState(DEFAULT_BACKGROUND_ADJUSTMENTS.brightness);
+  const [backgroundContrast, setBackgroundContrast] = useState(DEFAULT_BACKGROUND_ADJUSTMENTS.contrast);
+  const [backgroundSaturation, setBackgroundSaturation] = useState(DEFAULT_BACKGROUND_ADJUSTMENTS.saturation);
   const [activePresetIndex, setActivePresetIndex] = useState(0);
   const [carouselEnabled, setCarouselEnabled] = useState(false);
+  const [carouselInterval, setCarouselInterval] = useState(DEFAULT_CAROUSEL_INTERVAL);
   const [jellyBounceEnabled, setJellyBounceEnabled] = useState(false);
   const [mrColorMode, setMrColorModeState] = useState<MrColorMode>("theme");
   const [mrCustomColor, setMrCustomColorState] = useState<string>("#FF214F");
@@ -140,7 +214,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     async function loadSettings() {
       try {
         // 批量读取所有设置，减少 store IO 调用次数
-        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedIslandLiquidGlass, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, savedMrColorMode, savedMrCustomColor, hasLaunched, savedIslandGlassMode] =
+        const [savedMode, savedImages, savedActiveIndex, savedDynamicVideo, savedLiquidGlass, savedLiquidGlassBlur, savedIslandLiquidGlass, savedBgBlur, savedActivePreset, savedCarousel, savedJellyBounce, savedMrColorMode, savedMrCustomColor, hasLaunched, savedIslandGlassMode, savedCarouselInterval, savedBgOpacity, savedBgBrightness, savedBgContrast, savedBgSaturation] =
           await Promise.all([
             store.get<string>("background-mode"),
             store.get<string[]>("custom-bg-images"),
@@ -157,6 +231,11 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
             store.get<string>("mr-custom-color"),
             store.get<boolean>("has-launched"),
             store.get<string>("island-glass-mode"),
+            store.get<number>("carousel-interval"),
+            store.get<number>("background-opacity"),
+            store.get<number>("background-brightness"),
+            store.get<number>("background-contrast"),
+            store.get<number>("background-saturation"),
           ]);
 
         // 透明液态玻璃已移除：旧版模式 / 增强设置一律删除，统一走毛玻璃
@@ -196,6 +275,9 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
           if (savedCarousel !== null && savedCarousel !== undefined) {
             setCarouselEnabled(savedCarousel);
           }
+          if (typeof savedCarouselInterval === "number" && Number.isFinite(savedCarouselInterval)) {
+            setCarouselInterval(Math.min(MAX_CAROUSEL_INTERVAL, Math.max(MIN_CAROUSEL_INTERVAL, Math.round(savedCarouselInterval))));
+          }
         }
 
         if (savedImages && Array.isArray(savedImages)) {
@@ -222,6 +304,18 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         if (savedBgBlur !== null && savedBgBlur !== undefined) {
           setBackgroundBlur(savedBgBlur);
         }
+        if (typeof savedBgOpacity === "number" && Number.isFinite(savedBgOpacity)) {
+          setBackgroundOpacity(clampAdjustment("opacity", savedBgOpacity));
+        }
+        if (typeof savedBgBrightness === "number" && Number.isFinite(savedBgBrightness)) {
+          setBackgroundBrightness(clampAdjustment("brightness", savedBgBrightness));
+        }
+        if (typeof savedBgContrast === "number" && Number.isFinite(savedBgContrast)) {
+          setBackgroundContrast(clampAdjustment("contrast", savedBgContrast));
+        }
+        if (typeof savedBgSaturation === "number" && Number.isFinite(savedBgSaturation)) {
+          setBackgroundSaturation(clampAdjustment("saturation", savedBgSaturation));
+        }
         if (savedJellyBounce !== null && savedJellyBounce !== undefined) {
           setJellyBounceEnabled(savedJellyBounce);
         }
@@ -237,6 +331,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     }
 
     loadSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── 显式持久化 helper ───────────────────────────────────────────────
@@ -346,6 +441,38 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     persist("background-blur", blur);
   }, [persist]);
 
+  const setBackgroundOpacityPersist = useCallback((opacity: number) => {
+    const value = clampAdjustment("opacity", opacity);
+    setBackgroundOpacity(value);
+    persist("background-opacity", value);
+  }, [persist]);
+
+  const setBackgroundBrightnessPersist = useCallback((brightness: number) => {
+    const value = clampAdjustment("brightness", brightness);
+    setBackgroundBrightness(value);
+    persist("background-brightness", value);
+  }, [persist]);
+
+  const setBackgroundContrastPersist = useCallback((contrast: number) => {
+    const value = clampAdjustment("contrast", contrast);
+    setBackgroundContrast(value);
+    persist("background-contrast", value);
+  }, [persist]);
+
+  const setBackgroundSaturationPersist = useCallback((saturation: number) => {
+    const value = clampAdjustment("saturation", saturation);
+    setBackgroundSaturation(value);
+    persist("background-saturation", value);
+  }, [persist]);
+
+  const resetBackgroundAdjustments = useCallback(() => {
+    setBackgroundOpacityPersist(DEFAULT_BACKGROUND_ADJUSTMENTS.opacity);
+    setBackgroundBrightnessPersist(DEFAULT_BACKGROUND_ADJUSTMENTS.brightness);
+    setBackgroundContrastPersist(DEFAULT_BACKGROUND_ADJUSTMENTS.contrast);
+    setBackgroundSaturationPersist(DEFAULT_BACKGROUND_ADJUSTMENTS.saturation);
+    setBackgroundBlurPersist(0);
+  }, [setBackgroundOpacityPersist, setBackgroundBrightnessPersist, setBackgroundContrastPersist, setBackgroundSaturationPersist, setBackgroundBlurPersist]);
+
   const setActivePresetIndexPersist = useCallback((index: number) => {
     setActivePresetIndex(index);
     persist("active-preset-index", index);
@@ -354,6 +481,12 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
   const setCarouselEnabledPersist = useCallback((enabled: boolean) => {
     setCarouselEnabled(enabled);
     persist("carousel-enabled", enabled);
+  }, [persist]);
+
+  const setCarouselIntervalPersist = useCallback((seconds: number) => {
+    const clamped = Math.min(MAX_CAROUSEL_INTERVAL, Math.max(MIN_CAROUSEL_INTERVAL, Math.round(seconds)));
+    setCarouselInterval(clamped);
+    persist("carousel-interval", clamped);
   }, [persist]);
 
   const setJellyBounceEnabledPersist = useCallback((enabled: boolean) => {
@@ -391,7 +524,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         } else {
           setActiveBgIndex((prev) => (prev + 1) % total);
         }
-      }, 10000);
+      }, carouselInterval * 1000);
     } else {
       if (carouselTimerRef.current) {
         clearInterval(carouselTimerRef.current);
@@ -405,7 +538,7 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
         carouselTimerRef.current = null;
       }
     };
-  }, [backgroundMode, carouselEnabled, customBgImageCount]);
+  }, [backgroundMode, carouselEnabled, carouselInterval, customBgImageCount]);
 
   const addCustomBgImage = useCallback((image: string): boolean => {
     if (customBgImages.length >= MAX_BG_IMAGES) {
@@ -443,9 +576,14 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     islandLiquidGlassEnabled,
     islandGlassMode,
     backgroundBlur,
+    backgroundOpacity,
+    backgroundBrightness,
+    backgroundContrast,
+    backgroundSaturation,
     activePresetIndex,
     presetBackgrounds: PRESET_BACKGROUNDS,
     carouselEnabled,
+    carouselInterval,
     jellyBounceEnabled,
     mrColorMode,
     mrCustomColor,
@@ -460,12 +598,18 @@ export function BackgroundProvider({ children }: { children: ReactNode }) {
     setIslandLiquidGlassEnabled: setIslandLiquidGlassEnabledPersist,
     setIslandGlassMode: setIslandGlassModePersist,
     setBackgroundBlur: setBackgroundBlurPersist,
+    setBackgroundOpacity: setBackgroundOpacityPersist,
+    setBackgroundBrightness: setBackgroundBrightnessPersist,
+    setBackgroundContrast: setBackgroundContrastPersist,
+    setBackgroundSaturation: setBackgroundSaturationPersist,
+    resetBackgroundAdjustments,
     setActivePresetIndex: setActivePresetIndexPersist,
     setCarouselEnabled: setCarouselEnabledPersist,
+    setCarouselInterval: setCarouselIntervalPersist,
     setJellyBounceEnabled: setJellyBounceEnabledPersist,
     setMrColorMode: setMrColorModePersist,
     setMrCustomColor: setMrCustomColorPersist,
-  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, islandLiquidGlassEnabled, islandGlassMode, backgroundBlur, activePresetIndex, carouselEnabled, jellyBounceEnabled, mrColorMode, mrCustomColor, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setIslandLiquidGlassEnabledPersist, setIslandGlassModePersist, setBackgroundBlurPersist, setActivePresetIndexPersist, setCarouselEnabledPersist, setJellyBounceEnabledPersist, setMrColorModePersist, setMrCustomColorPersist]);
+  }), [backgroundMode, customBgImages, activeBgIndex, dynamicBgVideo, liquidGlassEnabled, liquidGlassBlur, islandLiquidGlassEnabled, islandGlassMode, backgroundBlur, backgroundOpacity, backgroundBrightness, backgroundContrast, backgroundSaturation, activePresetIndex, carouselEnabled, carouselInterval, jellyBounceEnabled, mrColorMode, mrCustomColor, setBackgroundModePersist, setCustomBgImagesPersist, addCustomBgImage, removeCustomBgImage, setActiveBgIndexPersist, setDynamicBgVideoPersist, setLiquidGlassEnabledPersist, setLiquidGlassBlurPersist, setIslandLiquidGlassEnabledPersist, setIslandGlassModePersist, setBackgroundBlurPersist, setBackgroundOpacityPersist, setBackgroundBrightnessPersist, setBackgroundContrastPersist, setBackgroundSaturationPersist, resetBackgroundAdjustments, setActivePresetIndexPersist, setCarouselEnabledPersist, setCarouselIntervalPersist, setJellyBounceEnabledPersist, setMrColorModePersist, setMrCustomColorPersist]);
 
   return (
     <BackgroundContext.Provider value={value}>

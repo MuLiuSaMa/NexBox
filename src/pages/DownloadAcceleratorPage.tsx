@@ -31,7 +31,7 @@ import {
   FileCheck2,
   FolderOpen,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -254,7 +254,7 @@ export default function DownloadAcceleratorPage() {
     switch (status) {
       case STATUS_DOWNLOADING:
         return (
-          <Badge colorScheme="green" borderRadius="full" px={2}>
+          <Badge colorScheme="green" borderRadius="full" data-corner="round" px={2}>
             <HStack spacing={1}>
               <Loader2 size={11} className="spin" />
               <Text>{t("downloadAccel.status.downloading")}</Text>
@@ -263,7 +263,7 @@ export default function DownloadAcceleratorPage() {
         );
       case STATUS_COMPLETED:
         return (
-          <Badge bg={themeColor} color={contrastText} borderRadius="full" px={2}>
+          <Badge bg={themeColor} color={contrastText} borderRadius="full" data-corner="round" px={2}>
             <HStack spacing={1}>
               <CheckCircle2 size={11} />
               <Text>{t("downloadAccel.status.completed")}</Text>
@@ -272,7 +272,7 @@ export default function DownloadAcceleratorPage() {
         );
       case STATUS_ERROR:
         return (
-          <Badge colorScheme="red" borderRadius="full" px={2}>
+          <Badge colorScheme="red" borderRadius="full" data-corner="round" px={2}>
             <HStack spacing={1}>
               <AlertCircle size={11} />
               <Text>{t("downloadAccel.status.error")}</Text>
@@ -281,13 +281,13 @@ export default function DownloadAcceleratorPage() {
         );
       case STATUS_PREPARING:
         return (
-          <Badge colorScheme="blue" borderRadius="full" px={2}>
+          <Badge colorScheme="blue" borderRadius="full" data-corner="round" px={2}>
             {t("downloadAccel.status.preparing")}
           </Badge>
         );
       case STATUS_PAUSED:
         return (
-          <Badge colorScheme="orange" borderRadius="full" px={2}>
+          <Badge colorScheme="orange" borderRadius="full" data-corner="round" px={2}>
             {t("downloadAccel.status.paused")}
           </Badge>
         );
@@ -371,6 +371,7 @@ export default function DownloadAcceleratorPage() {
                   aria-label="pause"
                   icon={<Pause size={14} />}
                   size="xs"
+                  data-corner="round"
                   variant="ghost"
                   onClick={() => handlePause(task.id)}
                 />
@@ -382,6 +383,7 @@ export default function DownloadAcceleratorPage() {
                   aria-label="resume"
                   icon={<Play size={14} />}
                   size="xs"
+                  data-corner="round"
                   variant="ghost"
                   colorScheme="green"
                   onClick={() => handleResume(task.id)}
@@ -395,6 +397,7 @@ export default function DownloadAcceleratorPage() {
                     aria-label="open file"
                     icon={<FileCheck2 size={14} />}
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     onClick={async () => {
                       try {
@@ -416,6 +419,7 @@ export default function DownloadAcceleratorPage() {
                     aria-label="open folder"
                     icon={<FolderOpen size={14} />}
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     onClick={async () => {
                       try {
@@ -439,6 +443,7 @@ export default function DownloadAcceleratorPage() {
                 aria-label="cancel"
                 icon={<X size={14} />}
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 colorScheme="red"
                 onClick={() => handleCancel(task.id)}
@@ -453,6 +458,7 @@ export default function DownloadAcceleratorPage() {
           value={pct}
           size="sm"
           borderRadius="full"
+          data-corner="round"
           hasStripe={active}
           sx={{
             "& > div": {
@@ -512,6 +518,7 @@ export default function DownloadAcceleratorPage() {
         <Tooltip label={t("downloadAccel.resetLearnedTip")} hasArrow>
           <Button
             size="xs"
+            data-corner="round"
             variant="ghost"
             color={subTextColor}
             leftIcon={<RotateCcw size={12} />}

@@ -371,7 +371,7 @@ fn parse_login_users(steam_dir: &str, is_running: bool) -> Vec<SteamUser> {
     log::info!("[Steam] Parsed {} users from loginusers.vdf", users.len());
 
     // 按 MostRecent 排序，当前用户排第一
-    users.sort_by(|a, b| b.most_recent.cmp(&a.most_recent));
+    users.sort_by_key(|a| std::cmp::Reverse(a.most_recent));
 
     // 如果 Steam 正在运行但 loginusers.vdf 中没有标记 MostRecent，
     // 尝试从注册表 ActiveProcess\ActiveUser 读取当前活跃用户
@@ -387,7 +387,7 @@ fn parse_login_users(steam_dir: &str, is_running: bool) -> Vec<SteamUser> {
                 }
             }
             // 重新排序
-            users.sort_by(|a, b| b.most_recent.cmp(&a.most_recent));
+            users.sort_by_key(|a| std::cmp::Reverse(a.most_recent));
         }
     }
 
@@ -754,7 +754,7 @@ fn scan_installed_games(libraries: &[SteamLibrary]) -> Vec<SteamGame> {
     games.retain(|g| seen.insert(g.app_id));
 
     // 按名称排序
-    games.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    games.sort_by_key(|a| a.name.to_lowercase());
     log::info!("[Steam] Total unique installed games: {}", games.len());
     games
 }
@@ -2019,9 +2019,9 @@ fn extract_appinfo_fields(
 }
 
 /// appinfo 解析结果缓存（按文件修改时间失效）
-static APPINFO_CACHE: std::sync::OnceLock<
-    std::sync::Mutex<Option<(std::time::SystemTime, std::collections::HashMap<u32, (String, String)>)>>,
-> = std::sync::OnceLock::new();
+type AppinfoCacheMap = std::collections::HashMap<u32, (String, String)>;
+type AppinfoCache = std::sync::OnceLock<std::sync::Mutex<Option<(std::time::SystemTime, AppinfoCacheMap)>>>;
+static APPINFO_CACHE: AppinfoCache = std::sync::OnceLock::new();
 
 /// 获取 appinfo 应用目录（带进程内缓存）
 fn load_appinfo_names(steam_dir: &str) -> std::collections::HashMap<u32, (String, String)> {
@@ -2039,7 +2039,7 @@ fn load_appinfo_names(steam_dir: &str) -> std::collections::HashMap<u32, (String
         }
     }
     let map = parse_appinfo_file(&path);
-    let t = mtime.unwrap_or_else(|| std::time::SystemTime::now());
+    let t = mtime.unwrap_or_else(std::time::SystemTime::now);
     *lock = Some((t, map.clone()));
     map
 }
@@ -2139,7 +2139,7 @@ pub async fn get_steam_inventory() -> SteamInventoryData {
 
     // 3) 名称为空的用 appinfo 目录补充，仍无则退化为 "App {id}"
     let appinfo = load_appinfo_names(&steam_dir);
-    for (_id, g) in merged.iter_mut() {
+    for g in merged.values_mut() {
         if g.name.is_empty() {
             if let Some((n, _)) = appinfo.get(&g.app_id) {
                 g.name = n.clone();

@@ -1,24 +1,5 @@
-import {
-  Box,
-  Flex,
-  Text,
-  HStack,
-  VStack,
-  Badge,
-  Button,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  Slider,
-  SliderTrack,
-  SliderFilledTrack,
-  SliderThumb,
-  Input,
-  Portal,
-  useColorModeValue,
-} from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { Box, Flex, Text, HStack, VStack, Badge, Button, Menu, MenuButton, MenuList, MenuItem, Slider, SliderTrack, SliderFilledTrack, SliderThumb, Input, Portal } from "@chakra-ui/react";
+
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
@@ -28,6 +9,7 @@ import { hexToRgba } from "@/lib/color-utils";
 import type { PowerAdvancedSettingDef } from "@/config/power-advanced-settings";
 import { CheckCircle2, ChevronDown, MinusCircle, Sparkles } from "lucide-react";
 
+import { useColorValue } from "@/hooks/use-color-value";
 export interface PowerAdvancedSettingInfo {
   id: string;
   acValue: number | null;
@@ -64,7 +46,7 @@ function StateBadge({ state }: { state: "recommended" | "default" | "custom" }) 
   } as const;
   const p = palette[state];
   return (
-    <Badge borderRadius="full" px={2.5} py={0.5} fontSize="xs" fontWeight="bold" color={p.color} bg={p.bg} border="1px solid" borderColor={hexToRgba(p.color, 0.25)}>
+    <Badge borderRadius="full" data-corner="round" px={2.5} py={0.5} fontSize="xs" fontWeight="bold" color={p.color} bg={p.bg} border="1px solid" borderColor={hexToRgba(p.color, 0.25)}>
       <HStack spacing={1}>
         {p.icon}
         <Text>
@@ -89,12 +71,13 @@ function PercentControl({
   disabled: boolean;
   onChange: (v: number) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const trackBg = useColorModeValue("gray.200", "rgba(255,255,255,0.1)");
+  const trackBg = cm("gray.200", "rgba(255,255,255,0.1)");
   const { getActiveColor, getBorderColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const contrastText = useColorModeValue("#1A202C", "#ffffff");
-  const inputBg = useColorModeValue("#ffffff", "rgba(255,255,255,0.06)");
+  const contrastText = cm("#1A202C", "#ffffff");
+  const inputBg = cm("#ffffff", "rgba(255,255,255,0.06)");
   // 拖动中的临时值（仅本地更新，不触发外层重渲染）
   const [local, setLocal] = useState<number>(value);
   const [dragging, setDragging] = useState(false);
@@ -149,7 +132,7 @@ function PercentControl({
           _focus={{ borderColor: primaryColor, boxShadow: `0 0 0 1px ${primaryColor}` }}
           px={2}
         />
-        <Text fontSize="xs" color={useColorModeValue("gray.500", "rgba(200,200,200,0.6)")} flexShrink={0}>
+        <Text fontSize="xs" color={cm("gray.500", "rgba(200,200,200,0.6)")} flexShrink={0}>
           {t("powerAdvanced.percentUnit")}
         </Text>
       </HStack>
@@ -169,15 +152,16 @@ function SelectControl({
   disabled: boolean;
   onChange: (v: number) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor, getBorderColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const textColor = useColorModeValue("#1A202C", "#ffffff");
+  const textColor = cm("#1A202C", "#ffffff");
   const current = options.find((o) => o.value === value);
-  const menuBg = useColorModeValue("#ffffff", "#1a1a1a");
-  const menuBorder = useColorModeValue("gray.200", "rgba(255,255,255,0.12)");
-  const hoverBg = useColorModeValue("gray.100", "rgba(255,255,255,0.08)");
-  const buttonBg = useColorModeValue("#ffffff", "rgba(255,255,255,0.06)");
+  const menuBg = cm("#ffffff", "#1a1a1a");
+  const menuBorder = cm("gray.200", "rgba(255,255,255,0.12)");
+  const hoverBg = cm("gray.100", "rgba(255,255,255,0.08)");
+  const buttonBg = cm("#ffffff", "rgba(255,255,255,0.06)");
   return (
     <Menu isLazy matchWidth>
       <MenuButton
@@ -250,14 +234,15 @@ const PowerAdvancedSettingCard = memo(function PowerAdvancedSettingCard({
   onApply,
   onApplyPreset,
 }: SettingCardProps) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const contrastText = getContrastTextColor();
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "rgba(200,200,200,0.85)");
-  const labelColor = useColorModeValue("gray.500", "rgba(200,200,200,0.6)");
-  const schemeLabel = useColorModeValue("gray.400", "rgba(200,200,200,0.5)");
+
+  const headingColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "rgba(200,200,200,0.85)");
+  const labelColor = cm("gray.500", "rgba(200,200,200,0.6)");
+  const schemeLabel = cm("gray.400", "rgba(200,200,200,0.5)");
   const disabled = locked || !info.supported || applying;
   const Icon = def.icon;
 
@@ -303,7 +288,7 @@ const PowerAdvancedSettingCard = memo(function PowerAdvancedSettingCard({
         </Text>
 
         {!info.supported ? (
-          <Text fontSize="xs" color={useColorModeValue("orange.600", "orange.300")}>
+          <Text fontSize="xs" color={cm("orange.600", "orange.300")}>
             {t("powerAdvanced.notSupported")}
           </Text>
         ) : (

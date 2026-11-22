@@ -91,6 +91,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
       audio.addEventListener("ended", handleEnded);
     }
+    // 故意不依赖 handleEnded：该 effect 只在挂载时创建 audio 元素，若把 handleEnded 加进依赖，
+    // 播放模式/索引变化会让 effect 重跑并执行 cleanup（把 audio 元素移除），导致播放被中断。
 
     return () => {
       if (audioRef.current && audioRef.current.parentNode) {
@@ -100,6 +102,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
         audioRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSettings = async () => {

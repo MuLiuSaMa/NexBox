@@ -405,7 +405,7 @@ pub async fn minimize_to_tray<R: Runtime>(window: Window<R>) -> Result<(), Strin
         return Ok(());
     }
     window.hide().map_err(|e| e.to_string())?;
-    crate::emit_main_visibility(&window.app_handle(), false);
+    crate::emit_main_visibility(window.app_handle(), false);
     Ok(())
 }
 

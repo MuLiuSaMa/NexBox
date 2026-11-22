@@ -35,7 +35,7 @@ extern "system" {
     ) -> BOOL;
 }
 
-pub const FSCTL_ENUM_USN_DATA: DWORD = (9 << 16) | (0 << 14) | (44 << 2) | 3;
+pub const FSCTL_ENUM_USN_DATA: DWORD = (9 << 16) | (44 << 2) | 3;
 pub const ERROR_HANDLE_EOF: DWORD = 38;
 pub const USN_BUFFER_SIZE: usize = 1024 * 1024;
 const MFT_METADATA_MAX: u64 = 25;
@@ -170,7 +170,7 @@ pub fn enumerate_usn_records_v2(
                 });
             }
             processed += 1;
-            if processed % 10_000 == 0 && !cb(processed) {
+            if processed.is_multiple_of(10_000) && !cb(processed) {
                 return Err("扫描已取消".into());
             }
             offset += rlen;
@@ -323,7 +323,7 @@ impl NtfsFileMetadataReader {
         let volume_path = format!("\\\\.\\{}:", drive_letter);
         let volume = fs::OpenOptions::new()
             .read(true)
-            .share_mode((FILE_SHARE_READ | FILE_SHARE_WRITE) as u32)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
             .open(&volume_path)
             .map_err(|error| format!("打开 NTFS 卷失败: {}", error))?;
 
@@ -411,7 +411,7 @@ impl NtfsFileMetadataReader {
                 {
                     let record_id = logical_record_id + records_before_chunk + record_index as u64;
                     if !looks_like_active_file(record_bytes) {
-                        if record_id % 100_000 == 0 && !progress_cb(record_id as usize) {
+                        if record_id.is_multiple_of(100_000) && !progress_cb(record_id as usize) {
                             return Err("扫描已取消".into());
                         }
                         continue;
@@ -430,7 +430,7 @@ impl NtfsFileMetadataReader {
                         }
                     }
 
-                    if record_id % 100_000 == 0 && !progress_cb(record_id as usize) {
+                    if record_id.is_multiple_of(100_000) && !progress_cb(record_id as usize) {
                         return Err("扫描已取消".into());
                     }
                 }

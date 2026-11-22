@@ -353,11 +353,10 @@ impl DeleteEngine {
                     #[cfg(windows)]
                     {
                         let path_str = path.to_string_lossy();
-                        if windows_api::remove_protection_attributes(&path_str).is_ok() {
-                            if fs::remove_file(path).is_ok() {
+                        if windows_api::remove_protection_attributes(&path_str).is_ok()
+                            && fs::remove_file(path).is_ok() {
                                 return Ok((size, false));
                             }
-                        }
                     }
                     #[cfg(not(windows))]
                     {

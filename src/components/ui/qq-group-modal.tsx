@@ -1,18 +1,4 @@
-import {
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalCloseButton,
-  VStack,
-  HStack,
-  Text,
-  Box,
-  Spinner,
-  useToast,
-  useColorModeValue,
-} from "@chakra-ui/react";
+import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, VStack, HStack, Text, Box, Spinner, useToast } from "@chakra-ui/react";
 import { FaQq } from "react-icons/fa6";
 import { LuCopy, LuExternalLink } from "react-icons/lu";
 import { useTranslation } from "react-i18next";
@@ -20,6 +6,7 @@ import { useQQGroups, openExternal, QqGroup } from "@/hooks/use-qq-groups";
 import { QqGroupIcon } from "@/components/ui/qq-group-icon";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface QqGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,16 +16,18 @@ interface QqGroupModalProps {
 
 /** 官方 QQ 群弹窗：主题色适配，获取 gitee 上的群号列表 */
 export function QqGroupModal({ isOpen, onClose, onJoin }: QqGroupModalProps) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useToast();
   const { getActiveColor } = useThemeColor();
   const { groups, loading } = useQQGroups();
 
-  const modalBg = useColorModeValue("white", "#171717");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#9ca3af");
-  const numberColor = useColorModeValue("gray.500", "#9ca3af");
-  const borderColor = useColorModeValue("gray.200", "#2d2d2d");
+  const modalBg = cm("white", "#171717");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#9ca3af");
+  const numberColor = cm("gray.500", "#9ca3af");
+  const borderColor = cm("gray.200", "#2d2d2d");
+  const qqIconFallbackColor = cm("#ffffff", "#1a1a1a");
 
   const copyNumber = async (group: QqGroup) => {
     try {
@@ -125,7 +114,7 @@ export function QqGroupModal({ isOpen, onClose, onJoin }: QqGroupModalProps) {
                       {group.icon ? (
                         <QqGroupIcon url={group.icon} size={32} />
                       ) : (
-                        <FaQq color={useColorModeValue("#ffffff", "#1a1a1a")} size={16} />
+                        <FaQq color={qqIconFallbackColor} size={16} />
                       )}
                     </Box>
                     <VStack spacing={0} align="start">

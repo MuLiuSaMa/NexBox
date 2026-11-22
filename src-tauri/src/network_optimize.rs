@@ -247,7 +247,7 @@ fn route_interface_name(ip: std::net::Ipv4Addr) -> Option<String> {
     let mut node = buffer.as_ptr() as *const IP_ADAPTER_ADDRESSES;
     while !node.is_null() {
         let adapter = unsafe { &*node };
-        if unsafe { adapter.u.s().IfIndex } as u32 == best_if {
+        if unsafe { adapter.u.s().IfIndex } == best_if {
             let name = adapter.FriendlyName;
             let mut len = 0usize;
             unsafe {
@@ -352,7 +352,7 @@ Write-Output 'OK'
 
     let ps_path = get_powershell_path();
     let result = Command::new(&ps_path)
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("执行命令失败: {}", e))?;

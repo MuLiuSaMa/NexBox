@@ -241,6 +241,7 @@ export default function MousePollingPage() {
           px={3}
           py={1}
           borderRadius="full"
+          data-corner="round"
           fontSize="sm"
         >
           {testing ? t("mousePolling.testing") : t("mousePolling.stopped")}
@@ -273,6 +274,7 @@ export default function MousePollingPage() {
               <HStack spacing={2}>
                 <Badge
                   borderRadius="full"
+                  data-corner="round"
                   px={3}
                   py={1}
                   fontSize="sm"

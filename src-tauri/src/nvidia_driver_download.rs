@@ -419,7 +419,7 @@ fn build_entries(
         .chain(laptop_map.keys())
         .cloned()
         .collect();
-    versions.sort_by(|a, b| version_cmp(&b, &a));
+    versions.sort_by(|a, b| version_cmp(b, a));
     versions.dedup();
 
     let mut entries: Vec<DriverEntry> = Vec::new();
@@ -690,7 +690,7 @@ fn detect_is_laptop() -> bool {
         if let Some(row) = rows.first() {
             if let Some(code) = row
                 .get("PCSystemType")
-                .and_then(|v| crate::wmi_query::v_u16(v))
+                .and_then(crate::wmi_query::v_u16)
             {
                 if LAPTOP_CODES.contains(&code) {
                     return true;

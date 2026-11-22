@@ -615,7 +615,7 @@ export default function HardwarePage() {
     { label: t("hardware.voltageCaps") || "电压能力", value: cpu.voltage_caps || "--" },
   ];
 
-  const buildGpuSpecs = (gpu: GpuInfo, idx: number): SpecItem[] => {
+  const buildGpuSpecs = (gpu: GpuInfo, _idx: number): SpecItem[] => {
     const specs: SpecItem[] = [
       { label: t("hardware.model"), value: gpu.name },
       { label: t("hardware.vendor"), value: gpu.vendor },

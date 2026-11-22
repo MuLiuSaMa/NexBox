@@ -22,11 +22,11 @@ import {
   Network,
   Server,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
-import { useBackground } from "@/contexts/background-context";
+
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useNavPosition } from "@/components/ui/main-layout";
 
@@ -71,13 +71,13 @@ function StageBadge({ stage }: { stage: Stage }) {
   const info = map[stage];
   if (stage === "idle") {
     return (
-      <Badge px={2} py={0.5} borderRadius="full" fontSize="xs" color={getActiveColor()} bg={`${getActiveColor()}22`}>
+      <Badge px={2} py={0.5} borderRadius="full" data-corner="round" fontSize="xs" color={getActiveColor()} bg={`${getActiveColor()}22`}>
         {info.label}
       </Badge>
     );
   }
   return (
-    <Badge colorScheme={info.cs} px={2} py={0.5} borderRadius="full" fontSize="xs">
+    <Badge colorScheme={info.cs} px={2} py={0.5} borderRadius="full" data-corner="round" fontSize="xs">
       {info.label}
     </Badge>
   );
@@ -444,7 +444,7 @@ export default function SpeedTestPage() {
     }
   }, []);
 
-  const headingColor = useColorModeValue("#000000", "#ffffff");
+
   const subColor = useColorModeValue("gray.500", "#888888");
 
   // 内容铺满可视区:按导航位置扣除 MainLayout 的上下内边距

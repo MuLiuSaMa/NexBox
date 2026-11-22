@@ -519,6 +519,7 @@ export default function SensorMonitorPage() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       unlisten?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 创建 fetch 函数（每次独立闭包，由 visibility 监听管理生命周期）
@@ -697,6 +698,7 @@ export default function SensorMonitorPage() {
                 aria-label="清除搜索"
                 icon={<X size={16} />}
                 size="xs"
+                data-corner="round"
                 position="absolute"
                 right={2}
                 top="50%"

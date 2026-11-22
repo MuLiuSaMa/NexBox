@@ -10,6 +10,8 @@ interface LiquidGlassCardProps extends BoxProps {
   isDashed?: boolean;
   /** 强制启用液态玻璃效果（忽略全局开关） */
   forceGlass?: boolean;
+  /** 液态玻璃下使用更亮的白色描边（工具索引页卡片） */
+  whiteBorder?: boolean;
   /** 是否显示玻璃边框辉光（白边），默认 true */
   glow?: boolean;
 }
@@ -19,6 +21,7 @@ export function LiquidGlassCard({
   className,
   isDashed = false,
   forceGlass = false,
+  whiteBorder = false,
   glow = true,
   ...props
 }: LiquidGlassCardProps) {
@@ -34,8 +37,16 @@ export function LiquidGlassCard({
     forceGlass ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0.25)"
   );
   const glassBorderColor = useColorModeValue(
-    forceGlass ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.2)",
-    forceGlass ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.1)"
+    whiteBorder
+      ? "rgba(255,255,255,0.8)"
+      : forceGlass
+        ? "rgba(255,255,255,0.35)"
+        : "rgba(255,255,255,0.2)",
+    whiteBorder
+      ? "rgba(255,255,255,0.45)"
+      : forceGlass
+        ? "rgba(255,255,255,0.16)"
+        : "rgba(255,255,255,0.1)"
   );
   const glowColor = useColorModeValue("rgba(255,255,255,0.8)", "rgba(255,255,255,0.5)");
   const defaultBg = useColorModeValue("white", "#111111");
@@ -51,13 +62,16 @@ export function LiquidGlassCard({
   }, [glassOn, effectiveBlur]);
 
   const cardStyles = useMemo(() => {
-    const base: any = {
+    const base: BoxProps & { WebkitBackdropFilter?: string } = {
       bg: glassOn ? glassBgColor : defaultBg,
       borderRadius: "3xl" as const,
       border: isDashed ? "1px dashed" : "1px solid",
       borderColor: glassOn ? glassBorderColor : defaultBorder,
       backdropFilter,
       WebkitBackdropFilter: backdropFilter,
+      // 独立合成层：backdrop-filter 的取景会按全局栅格分块，卡片跨在分块边界上时
+      // 会露出 1px 竖缝。把卡片本身提升为独立图层后，取景以卡片自身为起点。
+      transform: glassOn ? "translateZ(0)" : undefined,
       transition: "background 0.45s, border-color 0.45s, backdrop-filter 0.45s",
     };
     return base;

@@ -88,6 +88,7 @@ function SortableGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean
           px={1.5}
           py={0.5}
           borderRadius="full"
+          data-corner="round"
           zIndex={1}
         >
           {tool.badge || "BETA"}
@@ -125,6 +126,7 @@ function SortableGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean
       minH={compact ? undefined : "200px"}
       p={compact ? 4 : 6}
       position="relative"
+      whiteBorder
       glow={!compact}
     >
       {cardContent}
@@ -216,6 +218,7 @@ function StaticGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean }
           px={1.5}
           py={0.5}
           borderRadius="full"
+          data-corner="round"
           zIndex={1}
         >
           {tool.badge || "BETA"}
@@ -257,6 +260,7 @@ function StaticGridCard({ tool, compact }: { tool: ViewItem; compact?: boolean }
             cursor="pointer"
             p={compact ? 4 : 6}
             position="relative"
+            whiteBorder
             glow={!compact}
           >
             {cardContent}
@@ -300,7 +304,8 @@ export function ViewGrid({ tools, onReorder, compact = false }: ViewGridProps) {
     })
   );
 
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // 仅需 setter：activeId 本身未参与渲染（保留状态调用避免改动拖拽流程）
+  const [, setActiveId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Custom modifier: keep the dragged card inside the grid container

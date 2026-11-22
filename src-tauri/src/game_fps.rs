@@ -475,6 +475,7 @@ mod etw {
     static PROCESS_HANDLE: AtomicU64 = AtomicU64::new(0);
 
     /// 每进程去重/信源状态（仅由 ProcessTrace 回调线程独占读写，无需锁）
+    #[derive(Default)]
     struct EtwProcState {
         /// 最近一次被计数的 Present（同帧去重基准）
         last_present_ticks: i64,
@@ -484,15 +485,7 @@ mod etw {
         last_win32k_ticks: i64,
     }
 
-    impl Default for EtwProcState {
-        fn default() -> Self {
-            Self {
-                last_present_ticks: 0,
-                last_history_ticks: 0,
-                last_win32k_ticks: 0,
-            }
-        }
-    }
+    
 
     /// ETW 回调运行时状态（全部由 ProcessTrace 回调线程独占，无需锁）
     struct EtwRuntime {
@@ -742,10 +735,7 @@ mod etw {
 
         let h = &(*record).EventHeader;
         let pid = h.ProcessId;
-        if pid <= 0 || pid == 4 || pid == *SELF_PID.get_or_init(|| std::process::id()) {
-            return;
-        }
-        if pid == 0 {
+        if pid == 0 || pid == 4 || pid == *SELF_PID.get_or_init(std::process::id) {
             return;
         }
 

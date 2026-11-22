@@ -153,7 +153,7 @@ pub fn resolve_shortcut_target(lnk_path: &str) -> Option<String> {
     }
 
     // 回退 ANSI 本地路径
-    if local_base_path_off + 1 <= li.len() {
+    if local_base_path_off < li.len() {
         let mut p = local_base_path_off;
         let mut ansi = Vec::new();
         while p < li.len() {
@@ -180,33 +180,31 @@ fn scan_registry_key(
     is_disabled: bool,
 ) {
     if let Ok(key) = root.open_subkey_with_flags(subkey_path, KEY_READ) {
-        for value_result in key.enum_values() {
-            if let Ok((name, value)) = value_result {
-                if name.is_empty() || name == "(默认)" || name == "(Default)" {
-                    continue;
-                }
-                let raw_path = match String::from_reg_value(&value) {
-                    Ok(s) => s,
-                    Err(_) => continue,
-                };
-                if raw_path.trim().is_empty() {
-                    continue;
-                }
-                let item_name = name;
-                let expanded = expand_env_vars(&raw_path);
-                let display_path = sanitize_path(&expanded);
-                items.push(StartupItem {
-                    name: item_name.clone(),
-                    file_location: display_path,
-                    location_type: location_type.to_string(),
-                    item_type: "Registry".to_string(),
-                    reg_key_path: Some(format!("{}", subkey_path)),
-                    reg_value_name: Some(item_name),
-                    folder_path: None,
-                    raw_registry_value: Some(raw_path),
-                    is_disabled,
-                });
+        for (name, value) in key.enum_values().flatten() {
+            if name.is_empty() || name == "(默认)" || name == "(Default)" {
+                continue;
             }
+            let raw_path = match String::from_reg_value(&value) {
+                Ok(s) => s,
+                Err(_) => continue,
+            };
+            if raw_path.trim().is_empty() {
+                continue;
+            }
+            let item_name = name;
+            let expanded = expand_env_vars(&raw_path);
+            let display_path = sanitize_path(&expanded);
+            items.push(StartupItem {
+                name: item_name.clone(),
+                file_location: display_path,
+                location_type: location_type.to_string(),
+                item_type: "Registry".to_string(),
+                reg_key_path: Some(subkey_path.to_string()),
+                reg_value_name: Some(item_name),
+                folder_path: None,
+                raw_registry_value: Some(raw_path),
+                is_disabled,
+            });
         }
     }
 }
@@ -318,7 +316,7 @@ fn draw_hicon_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>> {
                 return None;
             }
 
-            let old = SelectObject(hdc, hbmp as *mut std::ffi::c_void);
+            let old = SelectObject(hdc, hbmp);
             DrawIconEx(
                 hdc, 0, 0, hicon, size, size, 0, std::ptr::null_mut(), 0x0003, // DI_NORMAL
             );

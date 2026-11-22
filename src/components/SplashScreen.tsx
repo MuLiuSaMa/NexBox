@@ -85,6 +85,7 @@ export function SplashScreen() {
           bg="rgba(255,255,255,0.15)"
           h="2px"
           borderRadius="full"
+          data-corner="round"
           overflow="hidden"
         >
           <Box

@@ -144,7 +144,7 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      let saved = await store.get<boolean>("nexbox_home_hardware_model_enabled");
+      const saved = await store.get<boolean>("nexbox_home_hardware_model_enabled");
       if (saved !== null && saved !== undefined) {
         setHomeHardwareModelEnabled(saved);
       } else {
@@ -164,7 +164,7 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      let saved = await store.get<boolean>("nexbox_game_win_key_card_enabled");
+      const saved = await store.get<boolean>("nexbox_game_win_key_card_enabled");
       if (saved !== null && saved !== undefined) {
         setGameWinKeyCardEnabled(saved);
       } else {
@@ -184,7 +184,7 @@ export default function HomePage() {
 
   useEffect(() => {
     (async () => {
-      let saved = await store.get<boolean>("nexbox_mood_card_enabled");
+      const saved = await store.get<boolean>("nexbox_mood_card_enabled");
       if (saved !== null && saved !== undefined) {
         setMoodCardEnabled(saved);
       } else {

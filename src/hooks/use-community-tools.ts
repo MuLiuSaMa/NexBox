@@ -49,7 +49,7 @@ export interface SubmitCommunityToolParams {
   downloadFilter?: string | null;
 }
 
-const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 
 /** 打开外部链接：优先 tauri shell，失败回退 window.open */
 async function openExternal(url: string) {

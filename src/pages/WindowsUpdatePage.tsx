@@ -16,7 +16,6 @@ import { useTranslation } from "react-i18next";
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Wrench, FileText, BarChart3, ShieldBan, PauseCircle, PlayCircle, Ban, RotateCcw } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 
 interface UpdateState {
@@ -283,6 +282,7 @@ export default function WindowsUpdatePage() {
           variant="subtle"
           colorScheme={isGood ? "green" : "red"}
           borderRadius="full"
+          data-corner="round"
           px={3}
           py={1}
           fontSize="xs"
@@ -426,6 +426,7 @@ export default function WindowsUpdatePage() {
                   variant="subtle"
                   colorScheme={pauseEnabled ? "orange" : "gray"}
                   borderRadius="full"
+                  data-corner="round"
                   px={3}
                   py={1}
                   fontSize="xs"
@@ -512,6 +513,7 @@ export default function WindowsUpdatePage() {
                   variant="subtle"
                   colorScheme={defenderDisabled ? "green" : "gray"}
                   borderRadius="full"
+                  data-corner="round"
                   px={3}
                   py={1}
                   fontSize="xs"

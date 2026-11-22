@@ -253,6 +253,7 @@ export function BleDeviceDialog({ isOpen, onClose }: BleDeviceDialogProps) {
                           </VStack>
                           <Button
                             size="xs"
+                            data-corner="round"
                             colorScheme="blue"
                             isLoading={connectingAddress === device.address}
                             onClick={() => handleConnect(device.address, device.name)}

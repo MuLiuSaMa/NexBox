@@ -333,3 +333,71 @@ input.lyrics-vol-slider::-webkit-slider-thumb {
   cursor: pointer;
 }
 
+
+/* ============================================================
+   连续曲率圆角（continuous curvature / superellipse）
+   ------------------------------------------------------------
+   圆弧换成曲率连续的超椭圆，转角观感更柔和。
+
+   两个旋钮：
+   · --nb-corner-shape  曲率强度
+       squircle           = superellipse(2)  标准连续曲率
+       superellipse(2.5)  = 更接近 Apple 连续圆角
+       superellipse(1.6)  = 更接近圆弧
+   · --nb-r             圆角基准单位（theme.ts 的 radii 全部由它派生）
+       4px = 原设计尺度（sm 2 / md 6 / lg 8 / xl 12 / 2xl 16 / 3xl 24）
+       8px = 当前设置，整体放大 2 倍
+
+   corner-shape 只改变角的曲率，不改变每个角的 r×r 角框与切线点，
+   所以两个旋钮都不会产生任何布局位移。
+
+   正圆与胶囊（头像、开关、滑条、标签、xs 胶囊按钮、灵动岛）不参与：
+   元素加 data-corner="round"，或依赖下面的组件选择器。
+
+   兼容：corner-shape 需要 Chromium 139+（WebView2 157+）。旧运行时
+   整块忽略 @supports，观感与改动前一致。
+   ============================================================ */
+:root {
+  --nb-corner-shape: squircle;
+  /* 圆角基准单位：4px = 原设计尺度，8px = 整体放大 2 倍 */
+  --nb-r: 8px;
+}
+
+@supports (corner-shape: squircle) {
+  *,
+  *::before,
+  *::after {
+    corner-shape: var(--nb-corner-shape, squircle);
+  }
+
+  /* 正圆 / 胶囊：保留原有端帽，不做连续曲率 */
+  [data-corner="round"],
+  /* 边框型加载圈（Chakra Spinner 是 border + 圆角实现的圆弧，连续曲率会把它掰成折角） */
+  .chakra-spinner,
+  .chakra-avatar,
+  .chakra-avatar__img,
+  .chakra-avatar__initials,
+  .chakra-switch__track,
+  .chakra-switch__thumb,
+  .chakra-slider__thumb,
+  .chakra-radio__control,
+  .chakra-tabs__tab,
+  .chakra-stepper__indicator,
+  [role="tooltip"],
+  [role="progressbar"] div,
+  [data-corner="round"] [role="progressbar"],
+  [data-corner="round"] [role="progressbar"] *,
+  .chakra-radio__control::before,
+  .chakra-switch__thumb::before,
+  .chakra-slider__thumb::before,
+  [data-corner="round"]::before,
+  [data-corner="round"]::after {
+    corner-shape: round;
+  }
+
+  /* 表单滑块拇指（UA 伪元素）保持正圆 */
+  input[type="range"]::-webkit-slider-thumb,
+  input[type="range"]::-moz-range-thumb {
+    corner-shape: round;
+  }
+}

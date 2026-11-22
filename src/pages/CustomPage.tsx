@@ -208,6 +208,7 @@ function AddToolModal({
                       px={1.5}
                       py={0.5}
                       borderRadius="full"
+                      data-corner="round"
                     >
                       {count}
                     </Box>
@@ -343,6 +344,7 @@ function DraggableCard({
             right="2px"
             zIndex={5}
             borderRadius="full"
+            data-corner="round"
             minW="20px"
             h="20px"
             bg={settingBtnBg}
@@ -378,6 +380,7 @@ function DraggableCard({
                 variant="solid"
                 colorScheme="red"
                 borderRadius="full"
+                data-corner="round"
                 data-card-action
                 onClick={(e) => {
                   e.stopPropagation();
@@ -445,7 +448,8 @@ export default function CustomPage() {
 
   const [config, setConfig] = useState<CustomDashboardConfig>(() => loadConfig());
   const [zOrderMap, setZOrderMap] = useState<Record<string, number>>({});
-  const [zOrderCounter, setZOrderCounter] = useState(0);
+  const [, setZOrderCounter] = useState(0);
+
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // 从 store 加载配置（覆盖旧 localStorage 数据）
@@ -624,6 +628,7 @@ export default function CustomPage() {
               <IconButton
                 aria-label="clear"
                 size="xs"
+                data-corner="round"
                 variant="ghost"
                 colorScheme="red"
                 icon={<Icon as={Trash2} boxSize={4} />}

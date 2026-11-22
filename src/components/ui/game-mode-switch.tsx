@@ -177,6 +177,7 @@ export function GameModeSwitch() {
         px={3}
         py="5px"
         borderRadius="full"
+        data-corner="round"
         bg={trackBg}
         border="1px solid"
         borderColor={borderColor}
@@ -199,6 +200,7 @@ export function GameModeSwitch() {
           w="26px"
           h="26px"
           borderRadius="full"
+          data-corner="round"
           ml={0.5}
           color={textColor}
           cursor="pointer"

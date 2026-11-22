@@ -131,6 +131,7 @@ export function AnnouncementCard() {
             h="8px"
             bg="red.500"
             borderRadius="full"
+            data-corner="round"
           />
         )}
       </Box>

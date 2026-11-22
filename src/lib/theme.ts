@@ -57,6 +57,21 @@ const theme = extendTheme({
     heading: 'var(--app-font-family, Inter), system-ui, sans-serif',
     body: 'var(--app-font-family, Inter), system-ui, sans-serif',
   },
+  /**
+   * 圆角尺度：全部由 index.css 的 --nb-r 基准单位派生，
+   * 改一个变量就能整体放大／缩小，比例与原设计一致（--nb-r: 4px 即原尺度）。
+   */
+  radii: {
+    none: "0",
+    sm: "calc(var(--nb-r) * 0.5)",
+    base: "calc(var(--nb-r) * 1)",
+    md: "calc(var(--nb-r) * 1.5)",
+    lg: "calc(var(--nb-r) * 2)",
+    xl: "calc(var(--nb-r) * 3)",
+    "2xl": "calc(var(--nb-r) * 4)",
+    "3xl": "calc(var(--nb-r) * 6)",
+    full: "9999px",
+  },
   colors: {
     brand: {
       50: "#eef2ff",
@@ -72,7 +87,7 @@ const theme = extendTheme({
     },
   },
   styles: {
-    global: (props: any) => ({
+    global: (props: { colorMode: string }) => ({
       body: {
         bg: props.colorMode === 'dark' ? '#000000' : '#f7fafc',
         color: props.colorMode === 'dark' ? '#e0e0e0' : '#1a202c',
@@ -126,13 +141,13 @@ const theme = extendTheme({
         borderColor: "var(--nexbox-tooltip-border, rgba(0,0,0,0.10))",
         maxW: "xs",
         zIndex: "tooltip",
-      } as any,
+      },
       // 全局兜底：点一下提示框即关闭、关闭零延迟，避免部分情况下悬浮提示常驻不消失
       defaultProps: {
         closeOnMouseDown: true,
         closeDelay: 0,
         openDelay: 150,
-      } as any,
+      },
     },
   },
 });

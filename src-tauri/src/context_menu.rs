@@ -234,7 +234,7 @@ fn draw_hicon_to_png(hicon: *mut std::ffi::c_void, size: i32) -> Option<Vec<u8>>
             return None;
         }
 
-        let old = SelectObject(hdc, hbmp as *mut std::ffi::c_void);
+        let old = SelectObject(hdc, hbmp);
         DrawIconEx(
             hdc, 0, 0, hicon, size, size, 0, std::ptr::null_mut(), 0x0003,
         );
@@ -465,7 +465,7 @@ pub async fn restore_context_menu_item(item: ContextMenuItem) -> Result<bool, St
 
     // 若目标已有同名 verb，清掉
     if root
-        .open_subkey_with_flags(&format!("{shell_path}\\{}", item.verb), KEY_READ)
+        .open_subkey_with_flags(format!("{shell_path}\\{}", item.verb), KEY_READ)
         .is_ok()
     {
         delete_key(&root, shell_path, &item.verb)?;
@@ -589,7 +589,7 @@ fn resolve_clsid_name(root: &RegKey, ns_path: &str, clsid: &str) -> String {
         }
     }
     // 4) NameSpace 子键 (Default)
-    if let Ok(k) = root.open_subkey_with_flags(&format!("{ns_path}\\{clsid}"), KEY_READ) {
+    if let Ok(k) = root.open_subkey_with_flags(format!("{ns_path}\\{clsid}"), KEY_READ) {
         let def = read_string(&k, "").trim().to_string();
         if !def.is_empty() && !is_internal_name(&def) {
             return zh_display_name(&friendly_name(&def));
@@ -684,7 +684,7 @@ fn move_clsid(hive: &str, current_ns: &str, target_ns: &str, clsid: &str) -> Res
 
     // 若目标已有同名 clsid，清掉
     if root
-        .open_subkey_with_flags(&format!("{target_ns}\\{clsid}"), KEY_READ)
+        .open_subkey_with_flags(format!("{target_ns}\\{clsid}"), KEY_READ)
         .is_ok()
     {
         delete_key(&root, target_ns, clsid)?;
@@ -801,7 +801,7 @@ pub async fn scan_drives() -> Vec<DriveItem> {
 #[cfg(target_os = "windows")]
 fn get_drive_type(root: &str) -> u32 {
     use windows_sys::Win32::Storage::FileSystem::GetDriveTypeW;
-    unsafe { GetDriveTypeW(translate_to_wide(root).as_ptr() as *const u16) }
+    unsafe { GetDriveTypeW(translate_to_wide(root).as_ptr()) }
 }
 #[cfg(not(target_os = "windows"))]
 fn get_drive_type(_root: &str) -> u32 {

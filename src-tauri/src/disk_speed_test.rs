@@ -6,6 +6,7 @@
 //! - 顺序 1MiB：写 2 遍 / 读 2 遍 → 带宽 + IOPS（1MiB 块）
 //! - 随机 4K（Q1T1）：按时间窗（各 4s）随机 4096 块读写 → 带宽 + IOPS
 //! - 访问时间：由随机 4K 循环推导（平均单次 IO 耗时 = 耗时 ÷ 操作数），机械盘≈寻道、SSD≈裸延迟
+//!
 //! 无缓冲 IO 要求缓冲地址与读写大小按扇区（4096）对齐。
 //! 任务骨架（RUNNING/STOP 守卫 + 事件进度 + stop/cleanup）与 speedtest.rs 一致。
 
@@ -221,6 +222,8 @@ mod bench {
 
     /// 顺序 1MiB 测速：写/读 SEQ_PASSES 遍，返回 (总字节数, 总耗时)。
     /// 每块之间检查 STOP；进度节流 200ms（与 downloader.rs 同口径）。
+    // 参数即一次顺序 IO 的完整上下文，与同模块 run_random 签名保持对称
+    #[allow(clippy::too_many_arguments)]
     fn run_sequential(
         app: &AppHandle,
         file: &mut File,

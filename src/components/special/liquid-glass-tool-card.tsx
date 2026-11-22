@@ -23,7 +23,7 @@ export function LiquidGlassToolCard({
   ...props
 }: LiquidGlassToolCardProps) {
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const { mouseX, mouseY, isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
+  const { isHovering, handleMouseMove, handleMouseLeave, handleMouseEnter } = useGlowEffect();
 
   const defaultBg = useColorModeValue("white", "#111111");
   const defaultHoverBg = useColorModeValue("gray.100", "#222222");

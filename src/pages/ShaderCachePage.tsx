@@ -22,7 +22,6 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 
 interface ShaderCacheDir {
@@ -120,6 +119,7 @@ function VendorCard({
             </Text>
             <Badge
               borderRadius="full"
+              data-corner="round"
               px={2}
               py={0.5}
               fontSize="10px"
@@ -153,6 +153,7 @@ function VendorCard({
           aria-label={isExpanded ? "collapse" : "expand"}
           icon={isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           color={mutedColor}
           flexShrink={0}
@@ -212,8 +213,6 @@ export default function ShaderCachePage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("layers");
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const tipBg = useColorModeValue(
     "rgba(59,130,246,0.05)",
     "rgba(59,130,246,0.1)"

@@ -60,7 +60,7 @@ import VacRepairPage from "./pages/VacRepairPage";
 import TimeSyncPage from "./pages/TimeSyncPage";
 import ScreenTestPage from "./pages/ScreenTestPage";
 import BsodLogPage from "./pages/BsodLogPage";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useNavigate } from "react-router-dom";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
@@ -139,6 +139,25 @@ function App() {
   const { isStartupComplete } = useAppStartup();
   const location = useLocation();
 
+  // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
+  // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
+  useEffect(() => {
+    (async () => {
+      try {
+        const autostart = await invoke<boolean>("is_autostart_mode");
+        if (autostart) await invoke("minimize_to_tray");
+      } catch (e) {
+        console.error("autostart hide check failed:", e);
+      }
+    })();
+  }, []);
+
+  // 节约内存(实验性)模式：主窗口销毁后重建时以不可见方式创建，
+  // 前端挂载即回报就绪，由后端完成显示握手（正常启动该命令为 no-op）
+  useEffect(() => {
+    invoke("main_window_ready").catch(() => {});
+  }, []);
+
   // 桌面灵动岛独立窗口：只负责渲染，状态真源在主窗口（见 IslandRemoteBridge）
   if (location.pathname === "/dynamic-island") {
     return <DynamicIslandWindowPage />;
@@ -165,25 +184,6 @@ function App() {
   if (location.pathname === "/mood") {
     return <MoodPage />;
   }
-
-  // 开机自启(--autostart)模式：后端已离屏预热加载本窗口，前端初始化完成后隐藏到托盘，
-  // 复用 minimize_to_tray 正确更新后端可见性并触发 EcoQoS。
-  useEffect(() => {
-    (async () => {
-      try {
-        const autostart = await invoke<boolean>("is_autostart_mode");
-        if (autostart) await invoke("minimize_to_tray");
-      } catch (e) {
-        console.error("autostart hide check failed:", e);
-      }
-    })();
-  }, []);
-
-  // 节约内存(实验性)模式：主窗口销毁后重建时以不可见方式创建，
-  // 前端挂载即回报就绪，由后端完成显示握手（正常启动该命令为 no-op）
-  useEffect(() => {
-    invoke("main_window_ready").catch(() => {});
-  }, []);
 
   return (
     <MusicProvider>

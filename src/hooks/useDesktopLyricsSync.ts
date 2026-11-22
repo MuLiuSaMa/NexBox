@@ -98,7 +98,7 @@ export function useDesktopLyricsSync() {
 
   // 注册监听器 + 请求数据（合并为一次 effect，确保 listener 就绪后再 request）
   useEffect(() => {
-    let unlistenFns: UnlistenFn[] = [];
+    const unlistenFns: UnlistenFn[] = [];
     let cancelled = false;
 
     const setup = async () => {

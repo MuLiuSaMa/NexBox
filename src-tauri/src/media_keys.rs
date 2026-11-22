@@ -101,7 +101,7 @@ mod imp {
         }
         if let Some(win) = app.get_webview_window("main") {
             if let Ok(hwnd) = win.hwnd() {
-                let hwnd = hwnd.0 as *mut core::ffi::c_void;
+                let hwnd = hwnd.0;
                 // GWLP_WNDPROC = -4
                 let prev = unsafe { SetWindowLongPtrW(hwnd, -4, wnd_proc as *const () as isize) };
                 if prev != 0 {
@@ -269,15 +269,14 @@ mod imp {
         wparam: usize,
         lparam: isize,
     ) -> isize {
-        if msg == WM_APPCOMMAND {
-            if ENABLED.load(Ordering::SeqCst) {
+        if msg == WM_APPCOMMAND
+            && ENABLED.load(Ordering::SeqCst) {
                 if let Some(action) = appcommand_action(lparam) {
                     emit_control(action);
                     // 已处理：返回 TRUE(1)，阻止继续向 DefaultWindowProc / 壳钩子冒泡
                     return 1;
                 }
             }
-        }
         let orig = ORIGINAL_WNDPROC.lock().unwrap().unwrap_or(0);
         if orig != 0 {
             let p: unsafe extern "system" fn(
@@ -309,7 +308,7 @@ mod imp {
                 ID_STOP => "stop",
                 _ => "",
             };
-            if action != "" {
+            if !action.is_empty() {
                 if ENABLED.load(Ordering::SeqCst) {
                     emit_control(action);
                 } else {

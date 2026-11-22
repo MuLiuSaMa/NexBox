@@ -86,6 +86,7 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
           px={1.5}
           py={0.5}
           borderRadius="full"
+          data-corner="round"
           zIndex={1}
         >
           {tool.badge || "BETA"}
@@ -160,7 +161,7 @@ function SortableListItem({ tool, activeDrag }: { tool: ViewItem; activeDrag: bo
         >
           <PressTilt color={tool.color}>
             {liquidGlassEnabled ? (
-              <LiquidGlassCard w="full" cursor="pointer" p={4} pl={10} position="relative">
+              <LiquidGlassCard w="full" cursor="pointer" p={4} pl={10} position="relative" whiteBorder>
                 {cardContent}
               </LiquidGlassCard>
             ) : (
@@ -252,6 +253,7 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
               px={1.5}
               py={0.5}
               borderRadius="full"
+              data-corner="round"
               zIndex={1}
             >
               {tool.badge || "BETA"}
@@ -296,7 +298,7 @@ export function ViewList({ tools, onReorder }: ViewListProps) {
           <Link key={tool.id} to={tool.path} style={{ width: "100%" }}>
             <PressTilt color={tool.color}>
               {liquidGlassEnabled ? (
-                <LiquidGlassCard w="full" cursor="pointer" p={4} position="relative">
+                <LiquidGlassCard w="full" cursor="pointer" p={4} position="relative" whiteBorder>
                   {listCardContent(tool)}
                 </LiquidGlassCard>
               ) : (

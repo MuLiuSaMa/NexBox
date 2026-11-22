@@ -16,7 +16,7 @@ import {
   Tooltip,
 } from "@chakra-ui/react";
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+
 import { Store } from "@tauri-apps/plugin-store";
 import { useTranslation } from "react-i18next";
 import {
@@ -36,10 +36,6 @@ import { LiquidGlassCard } from "./special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useMusicPlayer } from "@/contexts/music-context";
 
-interface MusicFile {
-  name: string;
-  path: string;
-}
 
 type PlayMode = "list" | "shuffle" | "one";
 
@@ -90,7 +86,7 @@ export function MusicPlayer() {
     if (localPlayMode !== playMode) {
       setLocalPlayMode(playMode);
     }
-  }, [playMode]);
+  }, [playMode, localPlayMode]);
 
   const loadLocalSettings = async () => {
     try {

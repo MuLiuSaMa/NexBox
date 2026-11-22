@@ -116,6 +116,7 @@ export function HomeAdCards({ ads }: { ads: HomeAd[] }) {
               w="5px"
               h="5px"
               borderRadius="full"
+              data-corner="round"
               bg={i === index ? activeColor : "rgba(255,255,255,0.6)"}
               transition="background 0.2s"
             />

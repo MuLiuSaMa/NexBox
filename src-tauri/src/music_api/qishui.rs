@@ -203,14 +203,11 @@ impl QishuiAuthRuntime {
         // 等待页面就绪（bridge 可用）
         for _ in 0..60 {
             let ready_js = "JSON.stringify({state: document.readyState, bridge: typeof window.__qishuiNewSeq !== 'undefined'})";
-            match self.eval_oneshot(&win, ready_js, 5).await {
-                Ok(raw) => {
-                    let trimmed = raw.trim().trim_matches('"');
-                    if trimmed.contains("complete") && trimmed.contains("true") {
-                        break;
-                    }
+            if let Ok(raw) = self.eval_oneshot(&win, ready_js, 5).await {
+                let trimmed = raw.trim().trim_matches('"');
+                if trimmed.contains("complete") && trimmed.contains("true") {
+                    break;
                 }
-                Err(_) => {}
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
@@ -889,12 +886,10 @@ fn qishui_map_media(raw: &serde_json::Value) -> Option<Song> {
     let album = album_link.map(|a| json_str(a, &["name", "title"])).unwrap_or_default();
 
     let mut cover = String::new();
-    for src in [display, Some(base), album_link, Some(track), Some(media), Some(raw)] {
-        if let Some(s) = src {
-            cover = qishui_pick_image(s, &["cover_url", "url_cover", "cover"], "~c5_375x375.jpg");
-            if !cover.is_empty() {
-                break;
-            }
+    for s in [display, Some(base), album_link, Some(track), Some(media), Some(raw)].into_iter().flatten() {
+        cover = qishui_pick_image(s, &["cover_url", "url_cover", "cover"], "~c5_375x375.jpg");
+        if !cover.is_empty() {
+            break;
         }
     }
 
@@ -1327,7 +1322,7 @@ pub async fn qishui_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, Stri
                 let cards = qishui_collection_cards(body);
                 let collected: Vec<Playlist> = cards
                     .iter()
-                    .filter_map(|node| qishui_map_playlist_node(node))
+                    .filter_map(qishui_map_playlist_node)
                     .collect();
                 log::info!("[Qishui] collection: {} 歌单", collected.len());
                 for pl in collected {
@@ -1342,15 +1337,15 @@ pub async fn qishui_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, Stri
     // 封面兜底：歌单自带封面常为 .png/需签名，易失效，改用第一首曲目封面。
     // 只补空封面且限量 10 次 —— 合并收藏后条目翻倍，无脑逐条请求会招来 429。
     let mut filled = 0usize;
-    for i in 0..out.len() {
+    for item in out.iter_mut() {
         if filled >= 10 {
             break;
         }
-        if !out[i].cover.is_empty() {
+        if !item.cover.is_empty() {
             continue;
         }
         filled += 1;
-        let pid = out[i].id.clone();
+        let pid = item.id.clone();
         if let Ok(detail) = qishui_luna_get(
             &cookie,
             "/luna/pc/playlist/detail",
@@ -1362,7 +1357,7 @@ pub async fn qishui_user_playlists(app: AppHandle) -> Result<Vec<Playlist>, Stri
             if let Some(first) = raw.first() {
                 if let Some(song) = qishui_map_media(first) {
                     if !song.cover.is_empty() {
-                        out[i].cover = song.cover;
+                        item.cover = song.cover;
                     }
                 }
             }

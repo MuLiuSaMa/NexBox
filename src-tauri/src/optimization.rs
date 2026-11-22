@@ -10,7 +10,11 @@ use sysinfo::System;
 use tauri::Manager;
 use winreg::enums::*;
 use winreg::RegKey;
-use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
+use windows_sys::core::GUID as WinGuid;
+use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, LocalFree, HANDLE};
+use windows_sys::Win32::System::Power::{
+    PowerDuplicateScheme, PowerWriteACValueIndex, PowerWriteDCValueIndex,
+};
 use windows_sys::Win32::System::ProcessStatus::{
     EmptyWorkingSet, K32EnumProcesses, K32GetProcessImageFileNameW, K32GetProcessMemoryInfo,
     PROCESS_MEMORY_COUNTERS,
@@ -214,7 +218,7 @@ pub(crate) fn enable_se_debug_privilege() {
         };
         let name: Vec<u16> = "SeDebugPrivilege\0".encode_utf16().collect();
         if LookupPrivilegeValueW(std::ptr::null(), name.as_ptr(), &mut luid) != 0 {
-            let mut tp = TOKEN_PRIVILEGES {
+            let tp = TOKEN_PRIVILEGES {
                 PrivilegeCount: 1,
                 Privileges: [LUID_AND_ATTRIBUTES {
                     Luid: luid,
@@ -224,7 +228,7 @@ pub(crate) fn enable_se_debug_privilege() {
             AdjustTokenPrivileges(
                 token,
                 0,
-                &mut tp,
+                &tp,
                 0,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -551,7 +555,7 @@ fn run_bcdedit_admin(args: &str) -> Result<String, String> {
     );
     
     let result = Command::new("powershell")
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &ps_script])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
@@ -622,11 +626,7 @@ pub async fn optimize_memory() -> Result<OptimizationResult, String> {
         });
 
         let after = get_memory_info();
-        let freed = if after.available > before.available {
-            after.available - before.available
-        } else {
-            0
-        };
+        let freed = after.available.saturating_sub(before.available);
 
         Ok(OptimizationResult {
             success: true,
@@ -663,7 +663,7 @@ pub async fn kill_wallpaper_engine() -> Result<ProcessKillResult, String> {
 
         for name in process_names {
             let result = Command::new("powershell")
-                .args(&[
+                .args([
                     "-NoProfile",
                     "-ExecutionPolicy",
                     "Bypass",
@@ -808,7 +808,7 @@ pub async fn optimize_ace_processes() -> Result<AceOptimizeResult, String> {
     let mut system = System::new();
     system.refresh_processes();
 
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
@@ -859,7 +859,7 @@ pub async fn set_ace_efficiency_mode() -> Result<AceEfficiencyResult, String> {
     let mut system = System::new();
     system.refresh_processes();
 
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
@@ -994,7 +994,7 @@ pub async fn optimize_privacy_services() -> Result<PrivacyServiceOptimizeResult,
 
     for service in target_services {
         let result = Command::new("powershell")
-            .args(&[
+            .args([
                 "-NoProfile",
                 "-ExecutionPolicy",
                 "Bypass",
@@ -1040,7 +1040,7 @@ pub async fn optimize_privacy_services() -> Result<PrivacyServiceOptimizeResult,
 pub async fn flush_dns() -> Result<DnsFlushResult, String> {
     if cfg!(target_os = "windows") {
         let result = Command::new("ipconfig")
-            .args(&["/flushdns"])
+            .args(["/flushdns"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
@@ -1136,7 +1136,7 @@ fn get_current_memory_limit() -> Option<u64> {
     }
 
     let result = Command::new("bcdedit")
-        .args(&["/enum", "{current}"])
+        .args(["/enum", "{current}"])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 
@@ -1320,7 +1320,7 @@ fn enable_profile_single_process_privilege() -> bool {
             CloseHandle(token);
             return false;
         }
-        let mut tp = TOKEN_PRIVILEGES {
+        let tp = TOKEN_PRIVILEGES {
             PrivilegeCount: 1,
             Privileges: [LUID_AND_ATTRIBUTES {
                 Luid: luid,
@@ -1330,7 +1330,7 @@ fn enable_profile_single_process_privilege() -> bool {
         let ok = AdjustTokenPrivileges(
             token,
             0,
-            &mut tp,
+            &tp,
             0,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
@@ -1546,11 +1546,7 @@ pub(crate) fn clean_standby_memory_inner() -> u64 {
     }
 
     let after = get_memory_info();
-    if after.available > before.available {
-        after.available - before.available
-    } else {
-        0
-    }
+    after.available.saturating_sub(before.available)
 }
 
 /// 按勾选项执行内存清理，返回释放的 MB。items 支持：
@@ -1601,11 +1597,7 @@ fn clean_items_inner(items: &[String]) -> u64 {
     });
 
     let after = get_memory_info();
-    if after.available > before.available {
-        after.available - before.available
-    } else {
-        0
-    }
+    after.available.saturating_sub(before.available)
 }
 
 /// 进程名是否在受保护名单内（小写比较，不含 .exe）
@@ -1658,7 +1650,7 @@ pub(crate) fn trim_working_set_inner() -> u64 {
             .map(|n| n.get())
             .unwrap_or(4)
             .clamp(1, 8);
-        let chunk_size = (targets.len() + worker_count - 1) / worker_count;
+        let chunk_size = targets.len().div_ceil(worker_count);
         let freed: Mutex<u64> = Mutex::new(0);
 
         std::thread::scope(|s| {
@@ -2160,7 +2152,7 @@ fn detect_and_optimize_ace_processes() -> Vec<String> {
     let mut system = System::new();
     system.refresh_processes();
 
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
 
@@ -2351,12 +2343,11 @@ pub async fn boost_delta_force_priority() -> Result<ProcessOptimizeResult, Strin
     system.refresh_processes();
 
     let mut boosted = false;
-    for (_, process) in system.processes() {
-        if process.name().eq_ignore_ascii_case(target) {
-            if set_process_realtime_priority(process.pid().as_u32()) {
+    for process in system.processes().values() {
+        if process.name().eq_ignore_ascii_case(target)
+            && set_process_realtime_priority(process.pid().as_u32()) {
                 boosted = true;
             }
-        }
     }
 
     if boosted {
@@ -2412,7 +2403,7 @@ pub async fn boost_delta_force_affinity() -> Result<PriorityResult, String> {
 
     let mut found = false;
     let mut applied = false;
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         if process.name().eq_ignore_ascii_case(target) {
             found = true;
             if set_process_affinity(process.pid().as_u32(), mask) {
@@ -2479,7 +2470,7 @@ pub async fn limit_ace_priority() -> Result<AcePartialResult, String> {
     let mut system = System::new();
     system.refresh_processes();
 
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
@@ -2529,7 +2520,7 @@ fn restrict_ace_affinity_impl(mask: u64, ok_template: &str) -> Result<AcePartial
     let mut system = System::new();
     system.refresh_processes();
 
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
@@ -2641,7 +2632,7 @@ pub async fn boost_delta_force_affinity_with_mask(mask: u64) -> Result<PriorityR
 
     let mut found = false;
     let mut applied = false;
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         if process.name().eq_ignore_ascii_case(target) {
             found = true;
             if set_process_affinity(process.pid().as_u32(), mask) {
@@ -2686,18 +2677,17 @@ pub async fn optimize_all_game_processes() -> Result<AllGameOptimizeResult, Stri
 
     // 1) DeltaForce: 提升优先级为 RealTime
     let mut delta_boosted = false;
-    for (_, process) in system.processes() {
-        if process.name().eq_ignore_ascii_case(delta_target) {
-            if set_process_realtime_priority(process.pid().as_u32()) {
+    for process in system.processes().values() {
+        if process.name().eq_ignore_ascii_case(delta_target)
+            && set_process_realtime_priority(process.pid().as_u32()) {
                 delta_boosted = true;
             }
-        }
     }
 
     // 2) ACE: 优先级降为 Idle + 限制亲和性为 CPU0
     let mut ace_found: u32 = 0;
     let mut ace_count: u32 = 0;
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         let name_lower = name.to_lowercase();
         if ACE_PROCESS_NAMES.iter().any(|n| n.to_lowercase() == name_lower) {
@@ -2976,9 +2966,254 @@ fn run_powercfg(args: &[&str]) -> std::io::Result<std::process::Output> {
     let powercfg_args = args.join(" ");
     let full_cmd = format!("chcp 65001 >nul && powercfg {}", powercfg_args);
     Command::new("cmd")
-        .args(&["/C", &full_cmd])
+        .args(["/C", &full_cmd])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
+}
+
+/// powercfg 直连（不经过 cmd）时输出是控制台代码页，中文系统为 GBK。
+/// 按 UTF-8 解码会得到乱码，这里显式按 GBK 解码。
+fn decode_console_output(bytes: &[u8]) -> String {
+    if bytes.is_empty() {
+        return String::new();
+    }
+    let (text, _, _) = encoding_rs::GBK.decode(bytes);
+    text.to_string()
+}
+
+/// 读取本机支持的电源子组 -> 设置项集合（全部小写）。
+/// `.pow` 里若含有本机 PowerSettings 中不存在的子组/设置项，`powercfg /import` 会直接拒绝导入。
+fn get_supported_power_settings() -> std::collections::HashMap<String, std::collections::HashSet<String>> {
+    let mut map = std::collections::HashMap::new();
+    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+    let Ok(root) = hklm.open_subkey(r"SYSTEM\CurrentControlSet\Control\Power\PowerSettings") else {
+        return map;
+    };
+    for sub in root.enum_keys().flatten() {
+        let mut sets = std::collections::HashSet::new();
+        if let Ok(key) = root.open_subkey(&sub) {
+            for s in key.enum_keys().flatten() {
+                sets.insert(s.to_lowercase());
+            }
+        }
+        map.insert(sub.to_lowercase(), sets);
+    }
+    map
+}
+
+/// 调用 powercfg 导入单个 `.pow`，失败时返回解码后的错误信息。
+fn run_powercfg_import(file_path: &Path) -> Result<(), String> {
+    let output = Command::new("powercfg")
+        .args(["/import", &file_path.to_string_lossy()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("执行导入命令失败: {}", e))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = decode_console_output(&output.stderr);
+    let stdout = decode_console_output(&output.stdout);
+    if !stderr.trim().is_empty() {
+        Err(stderr.trim().to_string())
+    } else if !stdout.trim().is_empty() {
+        Err(stdout.trim().to_string())
+    } else {
+        Err("未知错误".to_string())
+    }
+}
+
+/// `powercfg /import` 失败后的兜底：从 `.pow` 的注册表 hive 中读出本机支持的设置项，
+/// 复制一份系统自带计划，再把每项值写进去。
+/// Win11 26H2 起原样导入会逐项严格校验，第三方计划常因个别项被拒绝而整体失败；
+/// 重建时这些项会被跳过，其余调校照常生效。
+struct PowerPlanSource {
+    name: String,
+    description: String,
+    settings: Vec<(WinGuid, WinGuid, Option<u32>, Option<u32>)>,
+}
+
+fn parse_power_guid(text: &str) -> Option<WinGuid> {
+    let uuid = uuid::Uuid::parse_str(text).ok()?;
+    let (data1, data2, data3, data4) = uuid.as_fields();
+    Some(WinGuid { data1, data2, data3, data4: *data4 })
+}
+
+fn power_guid_text(guid: &WinGuid) -> String {
+    uuid::Uuid::from_fields(guid.data1, guid.data2, guid.data3, &guid.data4).to_string()
+}
+
+/// 内置计划把名称存成 `@powrprof.dll,-19,显示名` 这类间接字符串，写入前要还原成显示名。
+fn plain_power_plan_text(raw: &str) -> String {
+    let text = raw.trim();
+    match text.strip_prefix('@').and_then(|rest| rest.rsplit_once(',')) {
+        Some((_, display)) => display.trim().to_string(),
+        None => text.to_string(),
+    }
+}
+
+/// 设置项的值既可能是 REG_DWORD，也可能是类型写坏的 4 字节 REG_BINARY。
+fn read_power_index(key: &RegKey, name: &str) -> Option<u32> {
+    let value = key.get_raw_value(name).ok()?;
+    let bytes: [u8; 4] = value.bytes.as_slice().try_into().ok()?;
+    match value.vtype {
+        REG_DWORD | REG_BINARY => Some(u32::from_le_bytes(bytes)),
+        _ => None,
+    }
+}
+
+fn read_power_plan_source(
+    file_path: &Path,
+    supported: &std::collections::HashMap<String, std::collections::HashSet<String>>,
+) -> Result<PowerPlanSource, String> {
+    let mount_name = format!("NexBoxPP{}", std::process::id());
+    let load_target = format!("HKLM\\{}", mount_name);
+    let load = Command::new("reg")
+        .args(["load", &load_target, &file_path.to_string_lossy()])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("载入电源计划文件失败: {}", e))?;
+    if !load.status.success() {
+        return Err(format!(
+            "载入电源计划文件失败: {}",
+            decode_console_output(&load.stderr).trim()
+        ));
+    }
+
+    let read = (|| -> Result<PowerPlanSource, String> {
+        let root = RegKey::predef(HKEY_LOCAL_MACHINE)
+            .open_subkey(&mount_name)
+            .map_err(|e| format!("读取电源计划内容失败: {}", e))?;
+        let raw_name = root
+            .get_value::<String, _>("FriendlyName")
+            .map_err(|e| format!("读取电源计划名称失败: {}", e))?;
+        let raw_description = root.get_value::<String, _>("Description").unwrap_or_default();
+
+        let mut settings = Vec::new();
+        for group in root.enum_keys().flatten() {
+            let Some(supported_settings) = supported.get(&group.to_lowercase()) else {
+                continue;
+            };
+            let Ok(group_key) = root.open_subkey(&group) else {
+                continue;
+            };
+            for setting in group_key.enum_keys().flatten() {
+                if !supported_settings.contains(&setting.to_lowercase()) {
+                    continue;
+                }
+                let Ok(setting_key) = group_key.open_subkey(&setting) else {
+                    continue;
+                };
+                let ac = read_power_index(&setting_key, "ACSettingIndex");
+                let dc = read_power_index(&setting_key, "DCSettingIndex");
+                if ac.is_none() && dc.is_none() {
+                    continue;
+                }
+                let (Some(group_guid), Some(setting_guid)) =
+                    (parse_power_guid(&group), parse_power_guid(&setting))
+                else {
+                    continue;
+                };
+                settings.push((group_guid, setting_guid, ac, dc));
+            }
+        }
+
+        Ok(PowerPlanSource {
+            name: plain_power_plan_text(&raw_name),
+            description: plain_power_plan_text(&raw_description),
+            settings,
+        })
+    })();
+
+    let _ = Command::new("reg")
+        .args(["unload", &load_target])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output();
+
+    read
+}
+
+fn duplicate_power_scheme(source: &WinGuid) -> Result<WinGuid, String> {
+    let mut duplicated: *mut WinGuid = std::ptr::null_mut();
+    let status = unsafe { PowerDuplicateScheme(std::ptr::null_mut(), source, &mut duplicated) };
+    if status != 0 || duplicated.is_null() {
+        return Err(format!("复制基础电源计划失败（错误码 {}）", status));
+    }
+    let guid = unsafe { *duplicated };
+    unsafe { LocalFree(duplicated as *mut std::ffi::c_void) };
+    Ok(guid)
+}
+
+/// 优先复制“卓越性能/高性能”，第三方计划默认继承的正是这类模板。
+fn pick_base_power_scheme(plans: &[(String, String, bool)]) -> Option<String> {
+    ["卓越性能", "Ultimate Performance", "高性能", "High performance"]
+        .iter()
+        .find_map(|name| find_plan_guid_by_name(plans, name))
+        .or_else(|| plans.iter().find(|(_, _, active)| *active).map(|(guid, _, _)| guid.clone()))
+        .or_else(|| plans.first().map(|(guid, _, _)| guid.clone()))
+}
+
+fn rebuild_power_plan_from_file(file_path: &Path) -> Result<(), String> {
+    let supported = get_supported_power_settings();
+    if supported.is_empty() {
+        return Err("无法读取本机电源设置列表".to_string());
+    }
+    let source = read_power_plan_source(file_path, &supported)?;
+    if source.settings.is_empty() {
+        return Err("电源计划文件中没有本机支持的设置项".to_string());
+    }
+
+    let base =
+        pick_base_power_scheme(&get_system_plans_internal()).ok_or("系统中没有可复制的电源计划")?;
+    let base_guid = parse_power_guid(&base).ok_or("基础电源计划 GUID 无效")?;
+    let new_guid = duplicate_power_scheme(&base_guid)?;
+    let new_guid_text = power_guid_text(&new_guid);
+
+    for (group, setting, ac, dc) in &source.settings {
+        unsafe {
+            if let Some(index) = ac {
+                PowerWriteACValueIndex(std::ptr::null_mut(), &new_guid, group, setting, *index);
+            }
+            if let Some(index) = dc {
+                PowerWriteDCValueIndex(std::ptr::null_mut(), &new_guid, group, setting, *index);
+            }
+        }
+    }
+
+    let mut rename = Command::new("powercfg");
+    rename.args(["/changename", new_guid_text.as_str(), source.name.as_str()]);
+    if !source.description.is_empty() {
+        rename.arg(source.description.as_str());
+    }
+    let rename = rename
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map_err(|e| format!("重命名电源计划失败: {}", e))?;
+    if !rename.status.success() {
+        let _ = Command::new("powercfg")
+            .args(["/delete", new_guid_text.as_str()])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        return Err(format!(
+            "重命名电源计划失败: {}",
+            decode_console_output(&rename.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// 导入 `.pow`：先按原样导入，失败后按本机支持的设置重建一份计划。
+fn import_plan_file(file_path: &Path) -> Result<(), String> {
+    match run_powercfg_import(file_path) {
+        Ok(()) => Ok(()),
+        Err(first_err) => rebuild_power_plan_from_file(file_path).map_err(|retry_err| {
+            format!(
+                "{}\n（已尝试按本机支持的设置重建电源计划，仍失败: {}）",
+                first_err, retry_err
+            )
+        }),
+    }
 }
 
 fn get_system_plans_internal() -> Vec<(String, String, bool)> {
@@ -3154,50 +3389,36 @@ pub async fn import_power_plan(app: tauri::AppHandle, plan_id: String) -> Result
         return Err(format!("电源计划文件不存在: {}", plan_id));
     }
 
-    let file_path_str = file_path.to_string_lossy().to_string();
-    let result = Command::new("powercfg")
-        .args(["/import", &file_path_str])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output();
+    import_plan_file(&file_path).map_err(|e| {
+        format!("导入电源计划失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", e)
+    })?;
 
-    match result {
-        Ok(output) => {
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                return Err(format!("导入电源计划失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg));
-            }
+    std::thread::sleep(std::time::Duration::from_millis(800));
 
-            std::thread::sleep(std::time::Duration::from_millis(800));
+    let system_plans_after = get_system_plans_internal();
 
-            let system_plans_after = get_system_plans_internal();
-            
-            let mut new_guid: Option<String> = None;
-            for (guid, _, _) in &system_plans_after {
-                if !guids_before.contains(guid) {
-                    new_guid = Some(guid.clone());
-                    break;
-                }
-            }
-
-            if let Some(guid) = new_guid {
-                Ok(PowerPlanOperationResult {
-                    success: true,
-                    message: format!("电源计划 '{}' 导入成功", display_name),
-                    guid: Some(guid),
-                })
-            } else if let Some(guid) = find_plan_guid_by_name(&system_plans_after, &display_name) {
-                Ok(PowerPlanOperationResult {
-                    success: true,
-                    message: format!("电源计划 '{}' 导入成功", display_name),
-                    guid: Some(guid),
-                })
-            } else {
-                Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name))
-            }
+    let mut new_guid: Option<String> = None;
+    for (guid, _, _) in &system_plans_after {
+        if !guids_before.contains(guid) {
+            new_guid = Some(guid.clone());
+            break;
         }
-        Err(e) => Err(format!("执行导入命令失败: {}", e)),
+    }
+
+    if let Some(guid) = new_guid {
+        Ok(PowerPlanOperationResult {
+            success: true,
+            message: format!("电源计划 '{}' 导入成功", display_name),
+            guid: Some(guid),
+        })
+    } else if let Some(guid) = find_plan_guid_by_name(&system_plans_after, &display_name) {
+        Ok(PowerPlanOperationResult {
+            success: true,
+            message: format!("电源计划 '{}' 导入成功", display_name),
+            guid: Some(guid),
+        })
+    } else {
+        Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name))
     }
 }
 
@@ -3240,8 +3461,8 @@ pub async fn activate_power_plan(guid: String) -> Result<PowerPlanOperationResul
                     }),
                 }
             } else {
-                let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+                let stderr = decode_console_output(&output.stderr);
+                let stdout = decode_console_output(&output.stdout);
                 let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
                 Err(format!("电源计划激活失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg))
             }
@@ -3273,40 +3494,26 @@ pub async fn import_and_activate_power_plan(app: tauri::AppHandle, plan_id: Stri
                 return Err(format!("电源计划文件不存在: {}", plan_id));
             }
 
-            let file_path_str = file_path.to_string_lossy().to_string();
-            let import_result = Command::new("powercfg")
-                .args(["/import", &file_path_str])
-                .creation_flags(CREATE_NO_WINDOW)
-                .output();
+            import_plan_file(&file_path).map_err(|e| {
+                format!("导入失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", e)
+            })?;
+            std::thread::sleep(std::time::Duration::from_millis(800));
+            let system_plans_after = get_system_plans_internal();
 
-            let g = match import_result {
-                Ok(output) => {
-                    if !output.status.success() {
-                        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-                        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-                        let err_msg = if !stderr.trim().is_empty() { stderr.trim().to_string() } else if !stdout.trim().is_empty() { stdout.trim().to_string() } else { "未知错误".to_string() };
-                        return Err(format!("导入失败: {}\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", err_msg));
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(800));
-                    let system_plans_after = get_system_plans_internal();
-                    
-                    let mut new_guid: Option<String> = None;
-                    for (guid, _, _) in &system_plans_after {
-                        if !guids_before.contains(guid) {
-                            new_guid = Some(guid.clone());
-                            break;
-                        }
-                    }
-
-                    if let Some(g) = new_guid {
-                        g
-                    } else if let Some(g) = find_plan_guid_by_name(&system_plans_after, &display_name) {
-                        g
-                    } else {
-                        return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name));
-                    }
+            let mut new_guid: Option<String> = None;
+            for (guid, _, _) in &system_plans_after {
+                if !guids_before.contains(guid) {
+                    new_guid = Some(guid.clone());
+                    break;
                 }
-                Err(e) => return Err(format!("导入失败: {}", e)),
+            }
+
+            let g = if let Some(g) = new_guid {
+                g
+            } else if let Some(g) = find_plan_guid_by_name(&system_plans_after, &display_name) {
+                g
+            } else {
+                return Err(format!("电源计划 '{}' 导入后未在系统中找到，可能导入失败。\n如果您是笔记本，请先点击「笔记本电源计划解锁」，然后重启电脑重试", display_name));
             };
             (g, false)
         }
@@ -3338,7 +3545,7 @@ fn run_ps_script(script: &str) -> Result<std::process::Output, String> {
     let script_path = tmp_dir.join(format!("nexbox_{}.ps1", std::process::id()));
     fs::write(&script_path, script).map_err(|e| format!("写入临时脚本失败: {}", e))?;
     let result = Command::new(&ps_path)
-        .args(&["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &script_path.to_string_lossy()])
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &script_path.to_string_lossy()])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("执行命令失败: {}", e));
@@ -3376,7 +3583,7 @@ fn to_wide(s: &str) -> Vec<u16> {
 fn clear_service_failure_actions(service_name: &str) -> Result<(), String> {
     // sc.exe failure <svc> reset=0 actions=""
     let result = std::process::Command::new("sc.exe")
-        .args(&["failure", service_name, "reset=", "0", "actions=", ""])
+        .args(["failure", service_name, "reset=", "0", "actions=", ""])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
         .map_err(|e| format!("执行 sc.exe 失败: {}", e))?;
@@ -3454,7 +3661,7 @@ fn set_service_start_reg(service_name: &str, start_type: u32) -> Result<(), Stri
     let mut last_msg = String::new();
     for attempt in 1..=3 {
         let output = std::process::Command::new("cmd.exe")
-            .args(&["/c", &cmd])
+            .args(["/c", &cmd])
             .creation_flags(CREATE_NO_WINDOW)
             .output()
             .map_err(|e| format!("执行 cmd/reg 失败: {}", e))?;
@@ -3490,7 +3697,7 @@ unsafe fn control_service(service_name: &str, control: u32) -> Result<(), String
 
     let scm = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
     if scm.is_null() {
-        return Err(format!("无法打开 SCM (服务控制)"));
+        return Err("无法打开 SCM (服务控制)".to_string());
     }
 
     let svc_name = to_wide(service_name);
@@ -3565,7 +3772,7 @@ unsafe fn control_service(service_name: &str, control: u32) -> Result<(), String
 /// Helper: kill a process by name.
 fn kill_process(name: &str) {
     let _ = std::process::Command::new("taskkill")
-        .args(&["/f", "/im", name])
+        .args(["/f", "/im", name])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
 }
@@ -3639,16 +3846,14 @@ fn schtasks_wu_tasks(enable: bool) -> Result<(), String> {
         // Skip tasks already in the desired state (fast path, no schtasks call).
         if enable && is_disabled {
             log::info!("计划任务 {} 已禁用，需启用", task_path);
-        } else if enable && is_ready {
-            already += 1;
-            continue;
-        } else if !enable && is_disabled {
+        } else if (enable && is_ready) || (!enable && is_disabled) {
+            // 两个分支原本完全等价（都表示「已是目标状态」），合并为一个条件
             already += 1;
             continue;
         }
 
         let result = std::process::Command::new("schtasks")
-            .args(&["/change", "/tn", task_path, sch_action])
+            .args(["/change", "/tn", task_path, sch_action])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
@@ -3886,7 +4091,7 @@ fn cleanup_software_distribution() {
     // No PowerShell: clear the folder via cmd rd /s /q (ignore failures — files may be in use).
     let cmd = format!("rd /s /q \"{}\"", path);
     let _ = std::process::Command::new("cmd.exe")
-        .args(&["/c", &cmd])
+        .args(["/c", &cmd])
         .creation_flags(CREATE_NO_WINDOW)
         .output();
     log::info!("已清理 SoftwareDistribution 文件夹");
@@ -4036,7 +4241,7 @@ fn get_service_start(service_name: &str) -> Option<u32> {
 
     // Fallback: use reg query via cmd.exe for reliable reading of ACL-protected keys
     let output = std::process::Command::new("cmd.exe")
-        .args(&[
+        .args([
             "/c",
             &format!(
                 "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\{}\" /v Start",
@@ -4081,7 +4286,7 @@ fn are_update_dlls_renamed() -> bool {
 pub async fn check_windows_update_state() -> Result<serde_json::Value, String> {
     let services_to_check = ["wuauserv", "UsoSvc", "WaaSMedicSvc"];
     let services_disabled = services_to_check.iter().all(|svc| {
-            get_service_start(svc).map_or(false, |st| st == 4)
+            get_service_start(svc) == Some(4)
         });
     log::info!(
         "check_windows_update_state: services_disabled={} (wuauserv={:?} UsoSvc={:?} WaaSMedicSvc={:?})",
@@ -4097,7 +4302,7 @@ pub async fn check_windows_update_state() -> Result<serde_json::Value, String> {
         r"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU"
     ).and_then(|key| {
         key.get_value::<u32, _>("NoAutoUpdate")
-    }).map_or(false, |v| v == 1);
+    }).is_ok_and(|v| v == 1);
 
     let scheduler_disabled = check_schtasks_wu_disabled();
     let dlls_renamed = are_update_dlls_renamed();
@@ -4412,7 +4617,7 @@ fn read_reg_file(name: &str, is_restore: bool) -> Result<String, String> {
     if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
         // UTF-16LE 编码（部分 .reg 文件使用此编码）
         let u16s: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
+            .as_chunks::<2>().0.iter()
             .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
         Ok(String::from_utf16_lossy(&u16s))
@@ -4522,9 +4727,8 @@ fn apply_reg_content(content: &str) -> Result<(), String> {
                     let name = name.replace("\\\"", "\"");
                     let value = &rest[eq_pos + 2..];
 
-                    if value.starts_with("dword:") {
+                    if let Some(hex_str) = value.strip_prefix("dword:") {
                         // DWORD 值
-                        let hex_str = &value[6..];
                         let val = u32::from_str_radix(hex_str, 16)
                             .map_err(|e| format!("解析 dword 值失败: {}", e))?;
                         key.set_value(&name, &val)
@@ -4990,6 +5194,96 @@ fn filter_restore_content(
     (out, skipped)
 }
 
+/// NVIDIA Display Container LS 的内部服务名（对应进程 NVDisplay.Container.exe）
+const NVIDIA_DISPLAY_CONTAINER_SERVICE: &str = "NVDisplay.ContainerLocalSystem";
+
+/// 621.14 / 621.24 驱动会把这个二进制日志整文件反复重写，空闲时也能每秒写数 MB。
+fn nvidia_display_log_path() -> PathBuf {
+    let program_data = env::var("ProgramData")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(r"C:\ProgramData"));
+    program_data
+        .join("NVIDIA Corporation")
+        .join("nvtopps")
+        .join("nct")
+        .join("nvlog.nvlgstg")
+}
+
+/// 查询服务当前是否在运行。用于重置日志后恢复原状：原本没启动就不擅自启动。
+unsafe fn is_service_running(service_name: &str) -> bool {
+    use windows_sys::Win32::System::Services::{
+        CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatus,
+        SC_MANAGER_CONNECT, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START_PENDING,
+    };
+
+    let scm = OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT);
+    if scm.is_null() {
+        return false;
+    }
+    let name = to_wide(service_name);
+    let svc = OpenServiceW(scm, name.as_ptr(), SERVICE_QUERY_STATUS);
+    if svc.is_null() {
+        CloseServiceHandle(scm);
+        return false;
+    }
+    let mut status: windows_sys::Win32::System::Services::SERVICE_STATUS = std::mem::zeroed();
+    let ok = QueryServiceStatus(svc, &mut status);
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+    ok != 0
+        && (status.dwCurrentState == SERVICE_RUNNING
+            || status.dwCurrentState == SERVICE_START_PENDING)
+}
+
+/// 重置 NVIDIA 显示容器日志：停服务 → 删除膨胀的 nvlog.nvlgstg → 若原本在运行则重启。
+/// 这是 621.14/621.24 狂写 SSD 的社区缓解方案（文件越大每次重写越慢越费盘），
+/// 并非永久修复；NVIDIA 出正式修复驱动前需要重做。
+fn reset_nvidia_display_log() -> Result<String, String> {
+    use windows_sys::Win32::System::Services::{SERVICE_CONTROL_STOP, SERVICE_START};
+
+    let path = nvidia_display_log_path();
+    let before_bytes = fs::metadata(&path).ok().map(|m| m.len()).unwrap_or(0);
+    let was_running = unsafe { is_service_running(NVIDIA_DISPLAY_CONTAINER_SERVICE) };
+
+    if was_running {
+        unsafe { control_service(NVIDIA_DISPLAY_CONTAINER_SERVICE, SERVICE_CONTROL_STOP) }?;
+    }
+
+    // 服务释放文件句柄可能有短暂延迟，重试几次
+    let mut removed = false;
+    for _ in 0..6 {
+        match fs::remove_file(&path) {
+            Ok(()) => {
+                removed = true;
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                removed = true;
+                break;
+            }
+            Err(_) => thread::sleep(Duration::from_millis(250)),
+        }
+    }
+    if !removed {
+        log::warn!("无法删除 NVIDIA 显示容器日志: {}", path.display());
+    }
+
+    if was_running {
+        unsafe { control_service(NVIDIA_DISPLAY_CONTAINER_SERVICE, SERVICE_START) }?;
+    }
+
+    log::info!(
+        "已重置 NVIDIA 显示容器日志: {} (原 {:.1} MB, 服务原状态={})",
+        path.display(),
+        before_bytes as f64 / 1024.0 / 1024.0,
+        was_running
+    );
+    Ok(format!(
+        "已重置显示容器日志（{:.1} MB）",
+        before_bytes as f64 / 1024.0 / 1024.0
+    ))
+}
+
 /// 应用单个注册表优化（读取 aq_registry/<name>.reg 并通过 winreg 写入）
 /// vendor 为显卡厂商过滤（nvidia/amd/intel），非显卡项传 None。
 #[tauri::command]
@@ -5017,9 +5311,25 @@ pub async fn apply_registry_tweak(
                 return Err(e);
             }
         }
+        // 「禁用 NVIDIA 驱动日志」同时重置显示容器日志，缓解 621.14/621.24 狂写 SSD
+        let log_fix = if name == "disableDriverLog" {
+            match reset_nvidia_display_log() {
+                Ok(msg) => Some(msg),
+                Err(e) => {
+                    log::warn!("重置 NVIDIA 显示容器日志失败: {}", e);
+                    Some(format!("日志重置失败: {}", e))
+                }
+            }
+        } else {
+            None
+        };
+
         Ok(PerfTweakResult {
             success: true,
-            message: "优化已应用".to_string(),
+            message: match log_fix {
+                Some(msg) => format!("优化已应用；{}", msg),
+                None => "优化已应用".to_string(),
+            },
         })
     })
     .await
@@ -5181,12 +5491,24 @@ pub async fn batch_apply_registry_tweaks(
 
     tokio::task::spawn_blocking(move || {
         let vendors = vendors.unwrap_or_default();
+        // 批量应用里若包含「禁用 NVIDIA 驱动日志」，一并重置显示容器日志
+        let log_fix_suffix = if names.iter().any(|n| n == "disableDriverLog") {
+            match reset_nvidia_display_log() {
+                Ok(msg) => format!("；{}", msg),
+                Err(e) => {
+                    log::warn!("批量重置 NVIDIA 显示容器日志失败: {}", e);
+                    format!("；日志重置失败: {}", e)
+                }
+            }
+        } else {
+            String::new()
+        };
         let (success_count, failed) = batch_apply_reg_files(&names, &vendors, false);
 
         if failed.is_empty() {
             return Ok(PerfTweakResult {
                 success: true,
-                message: format!("成功应用 {} 项优化", success_count),
+                message: format!("成功应用 {} 项优化{}", success_count, log_fix_suffix),
             });
         }
 
@@ -5212,9 +5534,10 @@ pub async fn batch_apply_registry_tweaks(
                     return Ok(PerfTweakResult {
                         success: true,
                         message: format!(
-                            "成功应用 {} 项优化（其中 {} 项通过管理员权限写入）",
+                            "成功应用 {} 项优化（其中 {} 项通过管理员权限写入）{}",
                             names.len(),
-                            denied.len()
+                            denied.len(),
+                            log_fix_suffix
                         ),
                     })
                 }
@@ -5222,11 +5545,12 @@ pub async fn batch_apply_registry_tweaks(
                     return Ok(PerfTweakResult {
                         success: failed.len() < names.len(),
                         message: format!(
-                            "成功 {} 项，失败 {} 项: {}；提权重试失败: {}",
+                            "成功 {} 项，失败 {} 项: {}；提权重试失败: {}{}",
                             success_count,
                             failed.len(),
                             failed.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>().join(", "),
-                            elevated_err
+                            elevated_err,
+                            log_fix_suffix
                         ),
                     })
                 }
@@ -5237,10 +5561,11 @@ pub async fn batch_apply_registry_tweaks(
         Ok(PerfTweakResult {
             success: failed.len() < names.len(),
             message: format!(
-                "成功 {} 项，失败 {} 项: {}",
+                "成功 {} 项，失败 {} 项: {}{}",
                 success_count,
                 failed.len(),
-                failed_names.join(", ")
+                failed_names.join(", "),
+                log_fix_suffix
             ),
         })
     })
@@ -5414,8 +5739,10 @@ pub fn restart_graphics_driver() -> Result<PerfTweakResult, String> {
     let mut devices: Vec<SP_DEVINFO_DATA> = Vec::new();
     let mut index = 0u32;
     loop {
-        let mut dev_info = SP_DEVINFO_DATA::default();
-        dev_info.cbSize = size_of::<SP_DEVINFO_DATA>() as u32;
+        let mut dev_info = SP_DEVINFO_DATA {
+            cbSize: size_of::<SP_DEVINFO_DATA>() as u32,
+            ..Default::default()
+        };
         match unsafe { SetupDiEnumDeviceInfo(devs, index, &mut dev_info) } {
             Ok(()) => {
                 devices.push(dev_info);
@@ -5716,9 +6043,9 @@ fn recommend_pagefile(physical_mb: u64, current_pagefile_mb: u64) -> PagefileRec
         max = init;
     }
 
-    let verdict = if current_pagefile_mb < (init as u64 / 2) {
+    let verdict = if current_pagefile_mb < (init / 2) {
         "low"
-    } else if current_pagefile_mb > (max as u64 * 3 / 2) {
+    } else if current_pagefile_mb > (max * 3 / 2) {
         "high"
     } else {
         "ok"

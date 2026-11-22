@@ -14,7 +14,7 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { MousePointer2, Keyboard, Mouse } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -44,14 +44,15 @@ export default function PeripheralOptimizePage() {
   const [selectedMouse, setSelectedMouse] = useState<number | null>(null);
   const [selectedKeyboard, setSelectedKeyboard] = useState<number | null>(null);
   const [selectedMouseQueue, setSelectedMouseQueue] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+
   const [isApplying, setIsApplying] = useState(false);
   const [isReverting, setIsReverting] = useState(false);
+  const [, setIsLoading] = useState(true);
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const cardBg = useColorModeValue("white", "#111111");
   const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
+
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
@@ -176,6 +177,7 @@ export default function PeripheralOptimizePage() {
             px={1.5}
             py={0.5}
             borderRadius="full"
+            data-corner="round"
             bg={themeColorHex}
             color={contrastText}
           >
@@ -187,6 +189,7 @@ export default function PeripheralOptimizePage() {
             w="16px"
             h="16px"
             borderRadius="full"
+            data-corner="round"
             border="2px solid"
             borderColor={isSelected ? themeColorHex : subTextColor}
             bg={isSelected ? themeColorHex : "transparent"}
@@ -195,7 +198,7 @@ export default function PeripheralOptimizePage() {
             justifyContent="center"
           >
             {isSelected && (
-              <Box w="5px" h="5px" borderRadius="full" bg="#1a1a1a" />
+              <Box w="5px" h="5px" borderRadius="full" data-corner="round" bg="#1a1a1a" />
             )}
           </Box>
           <Text color={headingColor} fontSize="xl" fontWeight="700">

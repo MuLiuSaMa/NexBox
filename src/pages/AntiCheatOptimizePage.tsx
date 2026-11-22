@@ -1,26 +1,15 @@
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  Button,
-  SimpleGrid,
-  useColorModeValue,
-  Badge,
-  Switch,
-  Tooltip,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, Button, SimpleGrid, Badge, Switch, Tooltip } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Gauge, Cpu, Zap, Settings2, Shield, Info } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface AcGroup {
   key: string;
   name: string;
@@ -66,7 +55,6 @@ function ActionItem({
   title,
   description,
   state,
-  needsAdmin,
   onApply,
   onRestore,
   badge,
@@ -80,11 +68,12 @@ function ActionItem({
   onRestore?: () => void;
   badge?: string;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const rowBg = useColorModeValue("gray.50", "#171717");
-  const borderColor = useColorModeValue("gray.200", "#333333");
+  const textColor = cm("gray.700", "#ffffff");
+  const rowBg = cm("gray.50", "#171717");
+  const borderColor = cm("gray.200", "#333333");
   const st = state ?? EMPTY;
   const applied = st.modifiedCount > 0;
   const hasProcess = st.foundCount > 0;
@@ -114,7 +103,7 @@ function ActionItem({
             </Tooltip>
           )}
           {badge && (
-            <Badge colorScheme="purple" variant="subtle" fontSize="2xs" px={1.5} borderRadius="full" whiteSpace="nowrap">
+            <Badge colorScheme="purple" variant="subtle" fontSize="2xs" px={1.5} borderRadius="full" data-corner="round" whiteSpace="nowrap">
               {badge}
             </Badge>
           )}
@@ -123,11 +112,11 @@ function ActionItem({
       <HStack spacing={1} flexShrink={0}>
         {blocked && (
           <Tooltip label={t("optimization.aceOptimize.status.needsAdmin")}>
-            <Box w={2} h={2} borderRadius="full" bg="orange.400" />
+            <Box w={2} h={2} borderRadius="full" data-corner="round" bg="orange.400" />
           </Tooltip>
         )}
         {onRestore && (
-          <Button size="xs" variant="ghost" colorScheme="red" onClick={onRestore} isLoading={st.running} loadingText="" px={2}>
+          <Button size="xs" data-corner="round" variant="ghost" colorScheme="red" onClick={onRestore} isLoading={st.running} loadingText="" px={2}>
             {t("optimization.aceOptimize.restore")}
           </Button>
         )}
@@ -152,13 +141,15 @@ function ActionItem({
 }
 
 export default function AntiCheatOptimizePage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("shield");
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const iconBg = useColorModeValue("white", "#222222");
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const borderColor = cm("gray.200", "#333333");
+  const iconBg = cm("white", "#222222");
+  const switchTrackOffBg = cm("gray.200", "gray.600");
   const { getActiveColor } = useThemeColor();
   const { liquidGlassEnabled } = useBackground();
 
@@ -229,7 +220,7 @@ export default function AntiCheatOptimizePage() {
       const result = await invoke<{ success: boolean; message: string; count?: number; found_count?: number }>(cmd, { groupKey: g.key });
       setOpt(g.key, field, { running: false, message: result.message, foundCount: result.found_count ?? 0, modifiedCount: result.count ?? 0 });
       toast({ title: result.message, status: result.success ? "success" : "info", duration: 2200 });
-    } catch (e: any) {
+    } catch (e) {
       setOpt(g.key, field, { running: false, message: String(e), foundCount: 0, modifiedCount: 0 });
       toast({ title: String(e), status: "error", duration: 2200 });
     }
@@ -241,7 +232,7 @@ export default function AntiCheatOptimizePage() {
       await invoke("anticheat_set_auto_detect", { groupKey: g.key, enabled });
       setAutoDetect((p) => ({ ...p, [g.key]: { ...(p[g.key] ?? { enabled: false, is_running: false, last_check: null, total_optimized: 0, currently_optimized: [] }), enabled } }));
       toast({ title: enabled ? "已启用自动检测" : "已禁用自动检测", status: "success", duration: 2200 });
-    } catch (e: any) {
+    } catch (e) {
       toast({ title: String(e), status: "error", duration: 2200 });
     } finally {
       setAutoDetectLoading((p) => ({ ...p, [g.key]: false }));
@@ -285,7 +276,7 @@ export default function AntiCheatOptimizePage() {
                 isDisabled={autoDetectLoading[g.key]}
                 size="sm"
                 sx={{
-                  "& > span": { bg: ad?.enabled ? getActiveColor() : useColorModeValue("gray.200", "gray.600") },
+                  "& > span": { bg: ad?.enabled ? getActiveColor() : switchTrackOffBg },
                   "& > span > span": { bg: "white" },
                 }}
                 aria-label="auto detect"

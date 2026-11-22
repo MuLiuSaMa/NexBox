@@ -7,7 +7,7 @@ import CompletePage from "./pages/CompletePage";
 
 export default function App() {
   const [step, setStep] = useState(1);
-  const [error, setError] = useState("");
+
 
   const handleStartUninstall = useCallback(() => {
     setStep(2);

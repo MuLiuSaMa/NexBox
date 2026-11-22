@@ -455,7 +455,7 @@ fn find_nvapi64_candidates() -> Vec<(String, u64)> {
     }
 
     // Sort by file size descending (biggest = most likely real NVIDIA DLL)
-    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.sort_by_key(|a| std::cmp::Reverse(a.1));
     files
 }
 
@@ -1257,10 +1257,14 @@ pub struct NvapiDiagnostic {
     pub is_64bit_process: bool,
 }
 
+/// try_load_and_check 的返回：
+/// (路径, 文件大小, 诊断信息列表, 可初始化, 含 DRS 接口, 初始化状态码, 初始化错误)
+type NvapiCheckResult = (String, u64, Vec<String>, bool, bool, i32, Option<String>);
+
 /// Check a candidate nvapi64.dll.
 /// Since static linking is used, this simply checks if the file exists,
 /// reports its size, and attempts a static-link NVAPI call to verify.
-fn try_load_and_check(path: &str) -> Result<(String, u64, Vec<String>, bool, bool, i32, Option<String>), String> {
+fn try_load_and_check(path: &str) -> Result<NvapiCheckResult, String> {
     let meta = std::fs::metadata(path).map_err(|_| "文件不存在".to_string())?;
     let size = meta.len();
 
@@ -2375,7 +2379,7 @@ fn inject_nv_modes_registry(device_name: &str, width: u32, height: u32, refresh_
 
     for adapter in video_key.enum_keys().filter_map(|r| r.ok()) {
         let adapter_key = match hklm.open_subkey_with_flags(
-            &format!(r"{}\{}", video_path, adapter), KEY_READ,
+            format!(r"{}\{}", video_path, adapter), KEY_READ,
         ) {
             Ok(k) => k,
             Err(_) => continue,
@@ -2423,7 +2427,7 @@ fn inject_nv_modes_registry(device_name: &str, width: u32, height: u32, refresh_
         // NV_Modes doesn't exist yet — create it under the first suitable NVIDIA target
         for adapter in video_key.enum_keys().filter_map(|r| r.ok()) {
             let adapter_key = match hklm.open_subkey_with_flags(
-                &format!(r"{}\{}", video_path, adapter), KEY_READ,
+                format!(r"{}\{}", video_path, adapter), KEY_READ,
             ) {
                 Ok(k) => k,
                 Err(_) => continue,

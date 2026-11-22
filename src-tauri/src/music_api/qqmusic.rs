@@ -257,11 +257,11 @@ pub fn decode_qq_cookie_value(value: &str) -> String {
 
     // 策略 1: Hex 解码 (QQ音乐 Cookie 最常见的编码方式)
     // 例如: e4b8ade69687 → 中文
-    if raw.len() >= 4 && raw.len() % 2 == 0 && raw.chars().all(|c| c.is_ascii_hexdigit()) {
+    if raw.len() >= 4 && raw.len().is_multiple_of(2) && raw.chars().all(|c| c.is_ascii_hexdigit()) {
         if let Ok(bytes) = hex::decode(raw) {
             if let Ok(text) = String::from_utf8(bytes) {
                 let trimmed = text.trim().to_string();
-                if !trimmed.is_empty() && trimmed.chars().any(|c| !c.is_ascii()) {
+                if !trimmed.is_empty() && !trimmed.is_ascii() {
                     candidates.push(trimmed);
                 }
             }
@@ -319,9 +319,8 @@ pub fn decode_qq_cookie_value(value: &str) -> String {
     // 策略 4: Unicode 转义 \uXXXX
     for item in candidates.clone() {
         if item.contains("\\u") {
-            // 简单处理 \uXXXX 转义
-            let replaced = item.replace("\\u", "\\u");
-            if let Ok(v) = serde_json::from_str::<String>(&format!("\"{}\"", replaced)) {
+            // 简单处理 \uXXXX 转义（交给 serde_json 反序列化把 \uXXXX 解成字符）
+            if let Ok(v) = serde_json::from_str::<String>(&format!("\"{}\"", item)) {
                 let trimmed = v.trim().to_string();
                 if !trimmed.is_empty() {
                     candidates.push(trimmed);
@@ -332,7 +331,7 @@ pub fn decode_qq_cookie_value(value: &str) -> String {
 
     // 策略 5: Latin1 → UTF-8 (处理乱码 Ã×× 之类)
     for item in candidates.clone() {
-        if item.chars().any(|c| c == '\u{c3}' || c == '\u{c2}' || (c >= '\u{c0}' && c <= '\u{ff}' && c >= '\u{80}')) {
+        if item.chars().any(|c| c == '\u{c3}' || c == '\u{c2}' || (('\u{c0}'..='\u{ff}').contains(&c) && c >= '\u{80}')) {
             let bytes: Vec<u8> = item.chars().map(|c| c as u8).collect();
             if let Ok(utf8_text) = String::from_utf8(bytes) {
                 let trimmed = utf8_text.trim().to_string();
@@ -348,13 +347,13 @@ pub fn decode_qq_cookie_value(value: &str) -> String {
         let mut s = 0.0;
         // 惩罚: 替换字符、百分号、反斜杠u、乱码字符
         s += text.matches('\u{FFFD}').count() as f64 * 80.0;
-        s += text.matches(|c: char| c == '%').count() as f64 * 10.0;
+        s += text.matches('%').count() as f64 * 10.0;
         s += text.matches("\\u").count() as f64 * 8.0;
-        s += text.matches(|c: char| c == '\u{c3}' || c == '\u{c2}').count() as f64 * 34.0;
-        s += text.matches(|c: char| c >= '\u{80}' && c <= '\u{9f}').count() as f64 * 42.0;
-        s += text.matches(|c: char| (c >= '\0' && c <= '\u{8}') || (c >= '\u{e}' && c <= '\u{1f}') || c == '\u{7f}').count() as f64 * 50.0;
+        s += text.matches(['\u{c3}', '\u{c2}']).count() as f64 * 34.0;
+        s += text.matches(|c: char| ('\u{80}'..='\u{9f}').contains(&c)).count() as f64 * 42.0;
+        s += text.matches(|c: char| ('\0'..='\u{8}').contains(&c) || ('\u{e}'..='\u{1f}').contains(&c) || c == '\u{7f}').count() as f64 * 50.0;
         // 奖励: 中文字符
-        s -= text.matches(|c: char| c >= '\u{4e00}' && c <= '\u{9fff}').count() as f64 * 2.0;
+        s -= text.matches(|c: char| ('\u{4e00}'..='\u{9fff}').contains(&c)).count() as f64 * 2.0;
         s + (text.len().min(80) as f64) * 0.02
     }
 
@@ -791,7 +790,7 @@ async fn smartbox_search(keywords: &str, limit: u32) -> Result<Vec<Song>, String
                 .unwrap_or("")
                 .to_string();
             let name = strip_html_tags(
-                &item.get("name")
+                item.get("name")
                     .or_else(|| item.get("title"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
@@ -1237,7 +1236,6 @@ pub async fn song_url(mid: &str, media_mid: &str, quality: &str, cookie: &str) -
         reason: Some("QQ_URL_UNAVAILABLE".into()),
         message: Some(restriction_msg.into()),
         fee: None,
-        ..Default::default()
     })
 }
 
@@ -1290,7 +1288,7 @@ fn decode_qq_lyric_text(text: &str) -> String {
         if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(&compact) {
             if let Ok(text) = String::from_utf8(decoded) {
                 let text = text.trim_start_matches('\u{feff}');
-                if text.contains('[') || text.chars().any(|c| c >= '\u{4e00}' && c <= '\u{9fff}') {
+                if text.contains('[') || text.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c)) {
                     return decode_html_entities(&text.replace("\r\n", "\n")).trim().to_string();
                 }
             }
@@ -1448,7 +1446,7 @@ pub async fn login_info(cookie: &str) -> Result<LoginInfo, String> {
                 .or_else(|| user.get("hostname"))
                 .or_else(|| user.get("title"))
                 .and_then(|v| v.as_str())
-                .map(|s| decode_qq_cookie_value(s))
+                .map(decode_qq_cookie_value)
                 .unwrap_or_default();
             avatar = user.get("headpic")
                 .or_else(|| user.get("avatar"))
@@ -1532,7 +1530,7 @@ pub async fn login_info(cookie: &str) -> Result<LoginInfo, String> {
                             .or_else(|| creator.get("hostname"))
                             .or_else(|| creator.get("title"))
                             .and_then(|v| v.as_str())
-                            .map(|s| decode_qq_cookie_value(s))
+                            .map(decode_qq_cookie_value)
                             .unwrap_or_default();
                     }
                     if avatar.is_empty() {
@@ -1700,10 +1698,7 @@ fn parse_qq_membership_signal(value: &Value) -> Option<i32> {
 fn parse_qq_expiry_ms(value: &Value) -> i64 {
     let raw = match value {
         Value::Number(n) => n.as_i64().unwrap_or(0),
-        Value::String(s) => {
-            if let Ok(n) = s.trim().parse::<i64>() { n }
-            else { 0 }
-        }
+        Value::String(s) => s.trim().parse::<i64>().unwrap_or_default(),
         _ => return 0,
     };
     if raw <= 0 { return 0; }
@@ -1760,7 +1755,7 @@ fn assess_qq_vip_object(obj: &Value) -> Option<QqVipResult> {
     let mut evidence = false;
     let mut vip_expiry_values: Vec<i64> = Vec::new();
     let mut svip_expiry_values: Vec<i64> = Vec::new();
-    let now_ms = now_ms() as i64;
+    let now_ms = now_ms();
 
     for (key, val) in map {
         let normalized = canonical_qq_vip_key(key);
@@ -1985,7 +1980,7 @@ async fn fetch_qq_vip_multi_probe(cookie: &str, uin: &str, music_key: &str) -> Q
 
     let results: Vec<QqVipResult> = futures_util::future::join_all(futures).await
         .into_iter()
-        .filter_map(|r| r)
+        .flatten()
         .collect();
 
     if !results.is_empty() {
@@ -2277,7 +2272,7 @@ pub async fn user_playlists(cookie: &str) -> Result<Vec<Playlist>, String> {
     // 对照 Mineradio: 先过滤掉 created+collected 中的"我喜欢"歌单，再添加 liked_card
     // created.concat(collected).filter(pl => !isQQFavoritePlaylist(pl))
     // base.unshift(likedCard)
-    let mut base: Vec<Playlist> = created.into_iter().chain(collected.into_iter())
+    let mut base: Vec<Playlist> = created.into_iter().chain(collected)
         .filter(|pl| pl.id != QQ_LIKED_PLAYLIST_ID)
         .collect();
     base.insert(0, liked_card);
@@ -2366,7 +2361,7 @@ async fn playlist_tracks_legacy(pid: &str, cookie: &str) -> Result<(Playlist, Ve
         .unwrap_or_default();
 
     let tracks: Vec<Song> = raw_tracks.iter()
-        .map(|raw| map_qq_playlist_track(raw))
+        .map(map_qq_playlist_track)
         .filter(|s| !s.name.is_empty() && (s.mid.is_some() || !s.id.is_empty()))
         .collect();
 
@@ -2451,7 +2446,7 @@ async fn playlist_tracks_legacy_range(pid: &str, start: usize, count: usize, coo
         .unwrap_or_default();
 
     let tracks: Vec<Song> = raw_tracks.iter()
-        .map(|raw| map_qq_playlist_track(raw))
+        .map(map_qq_playlist_track)
         .filter(|s| !s.name.is_empty() && (s.mid.is_some() || !s.id.is_empty()))
         .collect();
 
@@ -2502,7 +2497,7 @@ async fn liked_playlist_tracks(cookie: &str, start: usize, count: usize) -> Resu
                 .cloned()
                 .unwrap_or_default();
             let tracks: Vec<Song> = raw_tracks.iter()
-                .map(|raw| map_qq_playlist_track(raw))
+                .map(map_qq_playlist_track)
                 .filter(|s| !s.name.is_empty() && (s.mid.is_some() || !s.id.is_empty()))
                 .collect();
             let total = data.get("total_song_num")
@@ -2724,12 +2719,10 @@ pub async fn get_rank_list(cookie: &str) -> Result<Vec<Playlist>, String> {
         if !cookie.is_empty() {
             // CGI 也尝试带 cookie
         }
-        let url = format!(
-            "https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?\
+        let url = "https://c.y.qq.com/v8/fcg-bin/fcg_v8_toplist_cp.fcg?\
             g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&\
             notice=0&platform=yqq&needNewCode=0&\
-            type=top&page=index&format=json&tpl=3"
-        );
+            type=top&page=index&format=json&tpl=3".to_string();
 
         log::info!("[QQRank] fetching rank list from CGI (page=index)");
         match request_text(&url, "GET", &headers, None, 10000).await {
@@ -2810,12 +2803,10 @@ pub async fn get_rank_list(cookie: &str) -> Result<Vec<Playlist>, String> {
 /// QQ 音乐推荐歌单 (歌单广场-推荐分类)
 /// 接口: fcg_get_diss_by_tag categoryId=10000000 (推荐)
 pub async fn recommend_playlists() -> Result<Vec<Playlist>, String> {
-    let url = format!(
-        "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?\
+    let url = "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg?\
         g_tk=5381&loginUin=0&hostUin=0&inCharset=utf8&outCharset=utf-8&\
         notice=0&platform=yqq&needNewCode=0&\
-        categoryId=10000000&sin=0&size=20&order=play&format=json"
-    );
+        categoryId=10000000&sin=0&size=20&order=play&format=json".to_string();
     let headers = vec![
         (REFERER.as_str(), QQ_HEADERS_REFERER),
         (USER_AGENT.as_str(), QQ_HEADERS_UA),
@@ -3069,7 +3060,7 @@ pub async fn artist_search(keywords: &str, limit: u32, _cookie: &str) -> Result<
                 id: None,
                 mid: if !mid.is_empty() { Some(mid.clone()) } else { None },
                 name,
-                pic_url: Some(qq_singer_avatar(&item.get("mid").and_then(|v| v.as_str()).unwrap_or(""), 300)),
+                pic_url: Some(qq_singer_avatar(item.get("mid").and_then(|v| v.as_str()).unwrap_or(""), 300)),
                 music_size: None,
             }
         }).filter(|a| !a.name.is_empty())
@@ -3222,7 +3213,7 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
                         return None;
                     }
                     let name = strip_html_tags(
-                        &item.get("dissname")
+                        item.get("dissname")
                             .or_else(|| item.get("name"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("")
@@ -3307,7 +3298,7 @@ pub async fn playlist_search(keywords: &str, limit: u32, cookie: &str) -> Result
                         return None;
                     }
                     let name = strip_html_tags(
-                        &item.get("dissname")
+                        item.get("dissname")
                             .or_else(|| item.get("name"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("")

@@ -15,7 +15,7 @@ export default function App() {
   const [defaultDir, setDefaultDir] = useState("");
   const [isExisting, setIsExisting] = useState(false);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState("");
+
 
   // 启动时获取默认（或已装）安装目录，并检测电脑上是否已安装
   useEffect(() => {

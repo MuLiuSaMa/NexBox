@@ -213,11 +213,7 @@ pub async fn download_file(
             file.write_all(&chunk).map_err(|e| e.to_string())?;
             downloaded += chunk.len() as u64;
 
-            let progress = if total_size > 0 {
-                (downloaded * 100) / total_size
-            } else {
-                0
-            };
+            let progress = (downloaded * 100).checked_div(total_size).unwrap_or(0);
 
             // 节流：至少间隔 200ms 且进度前进时才向前端推送，避免高频事件导致 UI 数字跳闪
             if progress != last_emitted && last_emit.elapsed().as_millis() >= 200 {

@@ -56,7 +56,7 @@ import {
   LuLibrary,
   LuClock3,
   LuDownload,
-  LuCloudDownload,
+  
 } from "react-icons/lu";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -228,18 +228,19 @@ function getDriveLabel(path: string): string {
 
 // ======================== 组件 ========================
 
-function StatusBadge({ running, activeColor, t }: { running: boolean; activeColor: string; t: (k: string) => string }) {
+function StatusBadge({ running, activeColor: _activeColor, t }: { running: boolean; activeColor: string; t: (k: string) => string }) {
   return (
     <Badge
       colorScheme={running ? "green" : "gray"}
       variant="subtle"
       borderRadius="full"
+      data-corner="round"
       px={3}
       py={1}
       fontSize="xs"
     >
       <HStack spacing={1.5}>
-        <Box w={2} h={2} borderRadius="full" bg={running ? "green.400" : "gray.400"} />
+        <Box w={2} h={2} borderRadius="full" data-corner="round" bg={running ? "green.400" : "gray.400"} />
         <Text>{running ? t("steam.running") : t("steam.notRunning")}</Text>
       </HStack>
     </Badge>
@@ -262,7 +263,7 @@ function UserCard({
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { colorMode } = useColorMode();
-  const { getActiveColor } = useThemeColor();
+    const { getActiveColor } = useThemeColor();
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
@@ -281,13 +282,14 @@ function UserCard({
           alt={displayName}
           boxSize="36px"
           borderRadius="full"
+          data-corner="round"
           objectFit="cover"
           onError={(e) => {
             (e.target as HTMLImageElement).style.display = "none";
           }}
         />
       ) : isAvatarLoading ? (
-        <Box boxSize="36px" borderRadius="full" bg={`${activeColor}15`} display="flex" alignItems="center" justifyContent="center">
+        <Box boxSize="36px" borderRadius="full" data-corner="round" bg={`${activeColor}15`} display="flex" alignItems="center" justifyContent="center">
           <Spinner size="sm" color={activeColor} thickness="2px" speed="0.8s" />
         </Box>
       ) : (
@@ -332,7 +334,7 @@ function UserCard({
           />
         </Tooltip>
         {user.most_recent && (
-          <Box w="16px" h="16px" borderRadius="full" bg={activeColor} />
+          <Box w="16px" h="16px" borderRadius="full" data-corner="round" bg={activeColor} />
         )}
       </HStack>
     </HStack>
@@ -499,8 +501,7 @@ const GameCard = memo(function GameCard({
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
-  const { colorMode } = useColorMode();
-  const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+  
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -625,8 +626,7 @@ const InventoryGameCard = memo(function InventoryGameCard({
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor } = useThemeColor();
-  const { colorMode } = useColorMode();
-  const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
+
   const subTextColor = useColorModeValue("gray.500", "#ffffff");
   const cardBg = useColorModeValue("white", "#1a1a1a");
   const borderColor = useColorModeValue("gray.200", "#333333");
@@ -768,11 +768,12 @@ function LibraryCard({ lib, gameCount, gameSize }: { lib: SteamLibrary; gameCoun
           <Text>{sizeText}</Text>
         </HStack>
         {/* 磁盘占用进度条 - 始终显示，最小宽度 2px */}
-        <Box mt={2} w="100%" h={1.5} bg={progressBg} borderRadius="full" overflow="hidden">
+        <Box mt={2} w="100%" h={1.5} bg={progressBg} borderRadius="full" data-corner="round" overflow="hidden">
           <Box
             h="100%"
             bg={activeColor}
             borderRadius="full"
+            data-corner="round"
             minW="2px"
             w={`${Math.min(usedPercent, 100).toFixed(1)}%`}
           />
@@ -801,7 +802,7 @@ export default function SteamPage() {
   const { t } = useTranslation();
   const toast = useDynamicIsland("gamepad");
   const { liquidGlassEnabled } = useBackground();
-  const { getActiveColor, getBorderColor } = useThemeColor();
+  const { getActiveColor } = useThemeColor();
   const { colorMode } = useColorMode();
 
   const [loading, setLoading] = useState(true);
@@ -827,7 +828,7 @@ export default function SteamPage() {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
   const activeColor = getActiveColor();
-  const borderColorTheme = getBorderColor();
+
   const headerColor = colorMode === "light" ? "#000000" : "#ffffff";
   const adaptiveTitle = useAdaptiveTextColor();
   const textColor = useColorModeValue("gray.800", "#ffffff");
@@ -1236,7 +1237,7 @@ export default function SteamPage() {
               <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("steam.accounts")}
               </Text>
-              <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+              <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round">
                 {data.users.length}
               </Badge>
             </HStack>
@@ -1289,7 +1290,7 @@ export default function SteamPage() {
               <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("steam.libraries")}
               </Text>
-              <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+              <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round">
                 {data.libraries.length}
               </Badge>
             </HStack>
@@ -1348,10 +1349,10 @@ export default function SteamPage() {
               <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
                 {t("steam.inventoryGames")}
               </Text>
-              <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+              <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round">
                 {inventory.stats.total}
               </Badge>
-              <Badge colorScheme="orange" variant="subtle" borderRadius="full">
+              <Badge colorScheme="orange" variant="subtle" borderRadius="full" data-corner="round">
                 {t("steam.inventorySourceCache")}
               </Badge>
               {loadingInventory && <Spinner size="sm" color={activeColor} thickness="2px" speed="0.8s" />}
@@ -1428,7 +1429,7 @@ export default function SteamPage() {
         <Text fontSize="lg" fontWeight="bold" color={adaptiveTitle.text} textShadow={adaptiveTitle.shadow}>
           {t("steam.installedGames")}
         </Text>
-        <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+        <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round">
           {filteredGames.length}
           {searchText && ` / ${data?.games.length ?? 0}`}
         </Badge>
@@ -1459,11 +1460,11 @@ export default function SteamPage() {
                   </Text>
                 )}
                 {group.label && (
-                  <Badge colorScheme="teal" variant="subtle" borderRadius="full">
+                  <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round">
                     {group.label}
                   </Badge>
                 )}
-                <Badge colorScheme="gray" variant="subtle" borderRadius="full">
+                <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round">
                   {group.games.length} {t("steam.games")}
                 </Badge>
                 <Text fontSize="xs" color={subTextColor}>

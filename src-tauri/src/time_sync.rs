@@ -4,7 +4,6 @@ use serde::Serialize;
 
 /// ===== 时间校准（NTP v4 客户端，纯 UDP 实现，不新增依赖） =====
 /// 提供公共 NTP 服务器列表、延迟/偏差检测与系统时间校准（需管理员权限）。
-
 struct ServerConfig {
     id: &'static str,
     name: &'static str,
@@ -76,7 +75,7 @@ fn make_request_packet() -> [u8; 48] {
     req[0] = 0x23; // LI=0, VN=4, Mode=3(Client)
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
     let secs = (now.as_secs() + 2_208_988_800) as u32; // Unix → NTP 纪元（1900 年）
-    let frac = now.subsec_nanos() as u32;
+    let frac = now.subsec_nanos();
     req[40..44].copy_from_slice(&secs.to_be_bytes());
     req[44..48].copy_from_slice(&frac.to_be_bytes());
     req
@@ -249,7 +248,7 @@ fn set_system_time_utc(unix_secs: f64) -> Result<(), String> {
                 let _ = CloseHandle(token);
                 return false;
             }
-            let mut tp = TOKEN_PRIVILEGES {
+            let tp = TOKEN_PRIVILEGES {
                 PrivilegeCount: 1,
                 Privileges: [LUID_AND_ATTRIBUTES {
                     Luid: luid,
@@ -259,7 +258,7 @@ fn set_system_time_utc(unix_secs: f64) -> Result<(), String> {
             let ok = AdjustTokenPrivileges(
                 token,
                 0,
-                &mut tp,
+                &tp,
                 std::mem::size_of::<TOKEN_PRIVILEGES>() as u32,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),

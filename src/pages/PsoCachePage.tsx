@@ -23,7 +23,7 @@ import {
   CheckCircle2,
   ShieldAlert,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 
 interface PsoScanResult {
@@ -69,7 +69,7 @@ export default function PsoCachePage() {
     "rgba(59,130,246,0.2)",
     "rgba(59,130,246,0.25)"
   );
-  const tipTitleColor = useColorModeValue("blue.700", "blue.300");
+
   const tipTextColor = useColorModeValue(
     "gray.600",
     "rgba(200,200,200,0.85)"
@@ -396,6 +396,7 @@ export default function PsoCachePage() {
         <HStack mb={3}>
           <Badge
             borderRadius="full"
+            data-corner="round"
             px={3}
             py={1}
             fontSize="xs"

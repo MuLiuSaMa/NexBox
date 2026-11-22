@@ -1,31 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  SimpleGrid,
-  IconButton,
-  Button,
-  Badge,
-  Spinner,
-  Tooltip,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  useColorModeValue,
-  useClipboard,
-  useToast,
-  Collapse,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, SimpleGrid, IconButton, Button, Badge, Spinner, Tooltip, Tabs, TabList, Tab, TabPanels, TabPanel, Table, Thead, Tbody, Tr, Th, Td, useClipboard, useToast, Collapse } from "@chakra-ui/react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import {
@@ -38,12 +12,13 @@ import {
   ChevronRight,
   Search as IconSearch,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ---------------------------------------------------------------------------
 // 与后端 BsodEvidence 保持一致的 TS 类型
 // ---------------------------------------------------------------------------
@@ -188,8 +163,9 @@ function formatBytes(b: number): string {
 // 概览卡片：单个 metric
 // ---------------------------------------------------------------------------
 function MetricCard({ value, label, color }: { value: string | number; label: string; color: string }) {
-  const headingColor = useColorModeValue("black", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const cm = useColorValue();
+  const headingColor = cm("black", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
   return (
     <LiquidGlassCard p={4} textAlign="center">
       <Text fontSize="3xl" fontWeight="bold" color={color === "auto" ? headingColor : color}>
@@ -204,11 +180,12 @@ function MetricCard({ value, label, color }: { value: string | number; label: st
 // 崩溃记录展开行
 // ---------------------------------------------------------------------------
 function CrashRow({ c }: { c: CrashRecord }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const headingColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
   const toast = useToast();
   const { onCopy: copyText } = useClipboard("");
 
@@ -233,7 +210,7 @@ function CrashRow({ c }: { c: CrashRecord }) {
       </Tr>
       {open && (
         <Tr>
-          <Td colSpan={8} bg={useColorModeValue("gray.50", "#111111")}>
+          <Td colSpan={8} bg={cm("gray.50", "#111111")}>
             <VStack align="stretch" spacing={3} py={2}>
               {c.sources.length > 0 && (
                 <Box>
@@ -273,7 +250,7 @@ function CrashRow({ c }: { c: CrashRecord }) {
                       <HStack key={i} justify="space-between" align="start">
                         <Text fontSize="sm" color={headingColor} flex={1}>· {fx}</Text>
                         <Tooltip label={t("bsodLog.copy")}>
-                          <IconButton aria-label="copy" size="xs" variant="ghost" icon={<Copy size={12} />} onClick={() => doCopy(fx)} />
+                          <IconButton aria-label="copy" size="xs" data-corner="round" variant="ghost" icon={<Copy size={12} />} onClick={() => doCopy(fx)} />
                         </Tooltip>
                       </HStack>
                     ))}
@@ -309,9 +286,10 @@ function CrashRow({ c }: { c: CrashRecord }) {
 // Finding 卡片
 // ---------------------------------------------------------------------------
 function FindingCard({ f, index }: { f: Finding; index: number }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.600", "#cccccc");
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.600", "#cccccc");
   const toast = useToast();
   const [open, setOpen] = useState(f.severity === "critical" || f.severity === "high");
 
@@ -333,7 +311,7 @@ function FindingCard({ f, index }: { f: Finding; index: number }) {
           </HStack>
           <HStack spacing={2}>
             <Badge colorScheme="gray">{Math.round(f.confidence * 100)}%</Badge>
-            <IconButton aria-label="toggle" size="xs" variant="ghost"
+            <IconButton aria-label="toggle" size="xs" data-corner="round" variant="ghost"
               icon={open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               onClick={() => setOpen(!open)} />
           </HStack>
@@ -350,7 +328,7 @@ function FindingCard({ f, index }: { f: Finding; index: number }) {
                       <Box as="span" color={subTextColor}>·</Box>
                       <Text fontSize="sm" color={headingColor} flex={1}>{e}</Text>
                       <Tooltip label={t("bsodLog.copy")}>
-                        <IconButton aria-label="copy" size="xs" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(e)} />
+                        <IconButton aria-label="copy" size="xs" data-corner="round" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(e)} />
                       </Tooltip>
                     </HStack>
                   ))}
@@ -366,7 +344,7 @@ function FindingCard({ f, index }: { f: Finding; index: number }) {
                       <Box as="span" color={subTextColor}>{i + 1}.</Box>
                       <Text fontSize="sm" color={headingColor} flex={1}>{a}</Text>
                       <Tooltip label={t("bsodLog.copy")}>
-                        <IconButton aria-label="copy" size="xs" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(a)} />
+                        <IconButton aria-label="copy" size="xs" data-corner="round" variant="ghost" icon={<Copy size={12} />} onClick={() => copy(a)} />
                       </Tooltip>
                     </HStack>
                   ))}
@@ -384,12 +362,13 @@ function FindingCard({ f, index }: { f: Finding; index: number }) {
 // 主组件
 // ============================================================================
 export default function BsodLogPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor, config: themeConfig, getContrastTextColor } = useThemeColor();
   const themeColorHex = themeConfig.primaryColor;
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
-  const headingColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const headingColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
 
   const [data, setData] = useState<BsodEvidence | null>(null);
   const [loading, setLoading] = useState(false);
@@ -475,7 +454,7 @@ export default function BsodLogPage() {
                 </HStack>
                 <Text fontSize="xs" color={subTextColor}>{t("bsodLog.generatedAt")}: {data.generated_at}</Text>
               </HStack>
-              <Box borderTopWidth="1px" borderColor={useColorModeValue("gray.200", "#333")} pt={3}>
+              <Box borderTopWidth="1px" borderColor={cm("gray.200", "#333")} pt={3}>
                 <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={2} fontSize="sm">
                   <Text color={subTextColor}>{t("bsodLog.os")}: <Text as="span" color={headingColor}>{data.system.caption} {data.system.build}</Text></Text>
                   <Text color={subTextColor}>{t("bsodLog.cpu")}: <Text as="span" color={headingColor}>{data.system.cpu_name} ({data.system.cpu_cores}C/{data.system.cpu_threads}T)</Text></Text>
@@ -570,14 +549,14 @@ export default function BsodLogPage() {
                 <VStack align="stretch" spacing={3}>
                   <HStack spacing={2} flexWrap="wrap">
                     {["all", "crash", "whea", "disk"].map((g) => (
-                      <Button key={g} size="xs" variant={eventFilter === g ? "solid" : "ghost"}
+                      <Button key={g} size="xs" data-corner="round" variant={eventFilter === g ? "solid" : "ghost"}
                         colorScheme="telegram" onClick={() => setEventFilter(g)}>
                         {t(`bsodLog.eventGroups.${g}`)}
                       </Button>
                     ))}
                     <HStack spacing={1} ml="auto">
                       <IconSearch size={14} color={subTextColor} />
-                      <Box as="input" borderWidth="1px" borderColor={useColorModeValue("gray.200", "#333")}
+                      <Box as="input" borderWidth="1px" borderColor={cm("gray.200", "#333")}
                         borderRadius="md" px={2} py={1} fontSize="xs" w="220px"
                         placeholder={t("bsodLog.searchPlaceholder")} />
                     </HStack>
@@ -647,7 +626,7 @@ export default function BsodLogPage() {
                             <Td fontSize="xs" fontFamily="mono">{d.bugcheck_hex || "--"}</Td>
                             <Td fontSize="xs">{d.ok ? t("bsodLog.yes") : d.error || t("bsodLog.no")}</Td>
                             <Td>
-                              <Button size="xs" variant="ghost" leftIcon={<FolderOpen size={12} />}
+                              <Button size="xs" data-corner="round" variant="ghost" leftIcon={<FolderOpen size={12} />}
                                 onClick={() => handleReveal(d.path)}>{t("bsodLog.reveal")}</Button>
                             </Td>
                           </Tr>
@@ -687,6 +666,7 @@ function BsodTab({
       }}
       _hover={{ bg: themeColorRgba(0.15) }}
       borderRadius="full"
+      data-corner="round"
       fontWeight="600"
       fontSize="sm"
       px={5}

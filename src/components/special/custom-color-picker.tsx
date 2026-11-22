@@ -1,21 +1,15 @@
-import {
-  Box,
-  HStack,
-  Text,
-  VStack,
-  Input,
-  Portal,
-  useColorModeValue,
-} from "@chakra-ui/react";
+import { Box, HStack, Text, VStack, Input, Portal } from "@chakra-ui/react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { isValidHexColor, hexToHsv, hsvToHex, colorToHex } from "@/lib/color-utils";
 
+import { useColorValue } from "@/hooks/use-color-value";
 const SV_PANEL_W = 200;
 const SV_PANEL_H = 150;
 
 const PANEL_HEIGHT = 240;
 
 export function CustomColorPicker({ color, onChange, compact }: { color: string; onChange: (c: string) => void; compact?: boolean }) {
+  const cm = useColorValue();
   const [isOpen, setIsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
@@ -32,9 +26,10 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
   hueValueRef.current = hsv.h;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const panelBg = useColorModeValue("white", "#1a1a1a");
-  const panelShadow = useColorModeValue("0 4px 20px rgba(0,0,0,0.15)", "0 4px 20px rgba(0,0,0,0.4)");
+  const cardBorder = cm("gray.200", "#333333");
+  const panelBg = cm("white", "#1a1a1a");
+  const hexTextColor = cm("gray.700", "#e0e0e0");
+  const panelShadow = cm("0 4px 20px rgba(0,0,0,0.15)", "0 4px 20px rgba(0,0,0,0.4)");
   const [hexInput, setHexInput] = useState(colorToHex(color));
 
   useEffect(() => { setHexInput(colorToHex(color)); }, [color]);
@@ -86,6 +81,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
   }, [isOpen]);
 
   // SV panel: 2D saturation-value picker
+  // 依赖里的 hsv.h 用不到（更新内部走 hueValueRef），且会导致每次渲染重建回调
   const handleSvMouseDown = useCallback((e: React.MouseEvent) => {
     isDragging.current = "sv";
     updateSvFromMouse(e);
@@ -93,7 +89,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
     const onUp = () => { isDragging.current = null; document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
-  }, [hsv.h]);
+  }, []);
 
   const updateSvFromMouse = (e: { clientX: number; clientY: number }) => {
     const rect = svRef.current?.getBoundingClientRect();
@@ -206,6 +202,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
                   top={`${cursorY - 6}px`}
                   w="12px" h="12px"
                   borderRadius="full"
+                  data-corner="round"
                   border="2px solid white"
                   boxShadow="0 0 3px rgba(0,0,0,0.5)"
                   pointerEvents="none"
@@ -218,6 +215,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
                 w={`${SV_PANEL_W}px`}
                 h="14px"
                 borderRadius="full"
+                data-corner="round"
                 position="relative"
                 cursor="pointer"
                 onMouseDown={handleHueMouseDown}
@@ -240,7 +238,7 @@ export function CustomColorPicker({ color, onChange, compact }: { color: string;
               {/* Preview + hex */}
               <HStack spacing={2}>
                 <Box w="24px" h="24px" borderRadius="md" bg={color} flexShrink={0} />
-                <Text fontSize="xs" fontWeight="semibold" letterSpacing="0.03em" color={useColorModeValue("gray.700", "#e0e0e0")}>
+                <Text fontSize="xs" fontWeight="semibold" letterSpacing="0.03em" color={hexTextColor}>
                   {colorToHex(color)}
                 </Text>
               </HStack>

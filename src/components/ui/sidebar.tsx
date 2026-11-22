@@ -1,5 +1,5 @@
 import { Box as ChakraBox, Flex, IconButton, Text, useColorModeValue, Badge, Image, useColorMode } from "@chakra-ui/react";
-import { Home, Wrench, Settings, Settings2, Cpu, TrendingUp, Package, Music, LayoutGrid, Gamepad2 } from "lucide-react";
+import { Home, Wrench, Settings, Settings2, Cpu, TrendingUp, Package, Music, LayoutGrid} from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useBackground } from "@/contexts/background-context";
@@ -185,6 +185,7 @@ function NavButton({ item, isActive, isDropTarget, hoverBg, iconColor, activeIco
             px={1}
             py={0}
             borderRadius="full"
+            data-corner="round"
             textTransform="uppercase"
             fontWeight="bold"
           >
@@ -208,13 +209,13 @@ export function Sidebar() {
 
   useEffect(() => {
     (async () => {
-      let v = await store.get<boolean>("nexbox_sidebar_show_label");
+      const v = await store.get<boolean>("nexbox_sidebar_show_label");
       if (v !== null && v !== undefined) {
         setShowLabel(v);
       } else {
         setShowLabel(localStorage.getItem("nexbox_sidebar_show_label") !== "false");
       }
-      let nv = await store.get<string>("nexbox_nav_position");
+      const nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
         setNavPosition(nv);
       } else {
@@ -290,7 +291,7 @@ export function Sidebar() {
       setNavVisibility(initial);
 
       // 读取导航栏排序
-      let orderStr = await store.get<string>("nexbox_nav_order");
+      const orderStr = await store.get<string>("nexbox_nav_order");
       if (orderStr) {
         try {
           const parsed = JSON.parse(orderStr) as string[];
@@ -331,7 +332,7 @@ export function Sidebar() {
   useEffect(() => {
     const handler = async () => {
       try {
-        let saved = await store.get<string>("nexbox_nav_order");
+        const saved = await store.get<string>("nexbox_nav_order");
         if (saved) {
           setNavOrder(JSON.parse(saved));
         } else {
@@ -385,7 +386,7 @@ export function Sidebar() {
   const hoverBg = getHoverColor(true);
   const activeIconColor = getContrastTextColor();
 
-  const navItems: NavItem[] = [
+  const navItems = useMemo<NavItem[]>(() => [
     { path: "/", icon: Home, ariaLabel: t("sidebar.home") },
     { path: "/hardware", icon: Cpu, ariaLabel: t("sidebar.hardware") },
     // 商店版不显示工具箱入口（其全部栏目均为第三方软件获取入口，见 ToolsPage）
@@ -399,7 +400,7 @@ export function Sidebar() {
     { path: "/epic-free", icon: null, customIcon: epicGamesIcon, ariaLabel: t("sidebar.epicFree") },
     { path: "/custom", icon: LayoutGrid, ariaLabel: t("sidebar.custom") },
     { path: "/settings", icon: Settings, ariaLabel: t("sidebar.settings") },
-  ];
+  ], [t]);
 
   // 根据保存的顺序排序 navItems（首页和设置固定首尾）
   const sortedNavItems = useMemo(() => {

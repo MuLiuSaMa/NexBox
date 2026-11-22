@@ -1,30 +1,4 @@
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Button,
-  Badge,
-  Spinner,
-  IconButton,
-  Tabs,
-  TabList,
-  TabPanels,
-  TabPanel,
-  Tab,
-  Input,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalFooter,
-  ModalBody,
-  ModalCloseButton,
-  useDisclosure,
-  FormControl,
-  FormLabel,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, Button, Badge, Spinner, IconButton, Tabs, TabList, TabPanels, TabPanel, Tab, Input, Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton, useDisclosure, FormControl, FormLabel } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
@@ -47,7 +21,6 @@ import {
   Upload,
   Save,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -55,6 +28,7 @@ import { useThemeColor } from "@/contexts/theme-color-context";
 import { store } from "@/lib/store";
 import { fitEngineGains, interpolateCurveToLayout } from "@/lib/eq-curve";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ===== 类型定义 =====
 interface DriverStatus {
   installed: boolean;
@@ -143,6 +117,8 @@ const EQ_STORE_PREAMP = "eq-preamp";
 const EQ_STORE_FX = "eq-effects";
 const EQ_STORE_DEVICE = "eq-device";
 const EQ_STORE_LAYOUT = "eq-band-layout";
+// 默认 FX 参数：提到模块级保持引用稳定（避免作为 effect 依赖时因每次渲染新建对象而反复触发）
+const defaultFx = { clarity: 0, ambience: 0, width: 0, dynamics: 0, bass: 0 };
 
 // ===== 辅助函数 =====
 /** 将任意来源的 EQ 频段曲线映射到目标波段布局（对数轴线性插值，切换波段音色不变） */
@@ -176,11 +152,12 @@ function getPresetIcon(name: string) {
 
 // ===== 折线：直接连接 10 个调节旋钮（无弧度） =====
 function FrequencyResponseCurve({ bands }: { bands: EqBand[] }) {
+  const cm = useColorValue();
   const ref = useRef<HTMLCanvasElement>(null);
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
-  const fillColor = useColorModeValue("rgba(49,130,206,0.10)", "rgba(99,179,237,0.08)");
-  const zeroColor = useColorModeValue("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
+  const fillColor = cm("rgba(49,130,206,0.10)", "rgba(99,179,237,0.08)");
+  const zeroColor = cm("rgba(0,0,0,0.08)", "rgba(255,255,255,0.08)");
 
   useEffect(() => {
     const canvas = ref.current;
@@ -253,10 +230,11 @@ function FreqKnob({
 }: {
   freq: number; minFreq: number; maxFreq: number; onChange: (f: number) => void;
 }) {
+  const cm = useColorValue();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
-  const bgColor = useColorModeValue("#ddd", "#444");
+  const bgColor = cm("#ddd", "#444");
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -333,7 +311,7 @@ function FreqKnob({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [isDragging, minFreq, maxFreq, START, RANGE]);
+  }, [isDragging, minFreq, maxFreq, START, RANGE, onChange]);
 
   return (
     <canvas
@@ -362,15 +340,16 @@ function EqBandSlider({
   label?: string;
   compact?: boolean;
 }) {
-  const labelColor = useColorModeValue("gray.600", "#ffffff");
-  const valueColor = useColorModeValue("gray.800", "#e0e0e0");
+  const cm = useColorValue();
+  const labelColor = cm("gray.600", "#ffffff");
+  const valueColor = cm("gray.800", "#e0e0e0");
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
 
   const gain = band.gain;
   const gainPercent = ((gain + 12) / 24) * 100;
-  const sTrackBg = useColorModeValue("gray.200", "#333333");
-  const sZeroBg = useColorModeValue("gray.400", "#555555");
+  const sTrackBg = cm("gray.200", "#333333");
+  const sZeroBg = cm("gray.400", "#555555");
 
   return (
     <VStack spacing={1} align="center" w="full" minW={compact ? 0 : undefined}>
@@ -395,6 +374,7 @@ function EqBandSlider({
           w="6px"
           h="full"
           borderRadius="full"
+          data-corner="round"
           bg={sTrackBg}
         />
         {/* 0dB 基准线 */}
@@ -407,6 +387,7 @@ function EqBandSlider({
           h="2px"
           bg={sZeroBg}
           borderRadius="full"
+          data-corner="round"
         />
         {/* 填充 */}
         <Box
@@ -415,6 +396,7 @@ function EqBandSlider({
           transform="translateX(-50%)"
           w="6px"
           borderRadius="full"
+          data-corner="round"
           bg={activeColor}
           top={gain >= 0 ? `${100 - gainPercent}%` : "50%"}
           height={`${Math.abs(gainPercent - 50)}%`}
@@ -429,6 +411,7 @@ function EqBandSlider({
           w={compact ? "12px" : "16px"}
           h={compact ? "12px" : "16px"}
           borderRadius="full"
+          data-corner="round"
           bg={activeColor}
           cursor="pointer"
           _active={{ transform: "translate(-50%, -50%) scale(0.85)" }}
@@ -464,17 +447,18 @@ function EqBandSlider({
 
 // ===== 主页面组件 =====
 export default function AudioEqPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("audio");
 
-  const headingColor = useColorModeValue("#1A202C", "#ffffff");
-  const labelColor = useColorModeValue("gray.700", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
-  const presetIconColor = useColorModeValue("#4A5568", "#aaaaaa");
-  const iconBg = useColorModeValue("gray.100", "#222222");
-  const warningBg = useColorModeValue("orange.50", "rgba(237, 137, 54, 0.1)");
-  const warningColor = useColorModeValue("orange.600", "orange.300");
-  const switcherBg = useColorModeValue("gray.100", "#2a2a2a");
+  const headingColor = cm("#1A202C", "#ffffff");
+  const labelColor = cm("gray.700", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
+  const presetIconColor = cm("#4A5568", "#aaaaaa");
+  const iconBg = cm("gray.100", "#222222");
+  const warningBg = cm("orange.50", "rgba(237, 137, 54, 0.1)");
+  const warningColor = cm("orange.600", "orange.300");
+  const switcherBg = cm("gray.100", "#2a2a2a");
   const { getActiveColor } = useThemeColor();
   const activeColor = getActiveColor();
 
@@ -496,12 +480,14 @@ export default function AudioEqPage() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [presetName, setPresetName] = useState("");
   const [preamp, setPreamp] = useState(0);
-  const defaultFx = { clarity: 0, ambience: 0, width: 0, dynamics: 0, bass: 0 };
   const [fx, setFx] = useState(defaultFx);
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState("");
 
   const { isOpen: saveModalOpen, onOpen: onSaveModalOpen, onClose: onSaveModalClose } = useDisclosure();
+  const saveModalBg = cm("white", "#1a1a1a");
+  const saveModalBorder = cm("gray.100", "#333");
+  const sliderThumbBorder = cm("white", "#222");
   const CUSTOM_PRESET_ID = "__custom__";
   const selectedPresetIdRef = useRef<string>("");
   const lastEngineSyncRef = useRef(0); // 后端同步节流时间戳
@@ -596,7 +582,7 @@ export default function AudioEqPage() {
       try {
         const status = await invoke<EngineStatus>("get_eq_engine_status");
         setEngineStatus(status);
-      } catch (e) {
+      } catch {
         // ignore
       }
     }, 3000);
@@ -1112,29 +1098,29 @@ ${bandsStr}`;
 
               <HStack spacing={2}>
                 {engineStatus.running && (
-                  <Badge colorScheme="green" px={2} py={1} borderRadius="full" variant="subtle">
+                  <Badge colorScheme="green" px={2} py={1} borderRadius="full" data-corner="round" variant="subtle">
                     <HStack spacing={1}>
-                      <Box w={2} h={2} borderRadius="full" bg="green.400" />
+                      <Box w={2} h={2} borderRadius="full" data-corner="round" bg="green.400" />
                       <Text fontSize="xs">{t("audioEq.running")}</Text>
                     </HStack>
                   </Badge>
                 )}
                 {driverStatus?.needs_reboot ? (
-                  <Badge colorScheme="orange" px={2} py={1} borderRadius="full" variant="subtle">
+                  <Badge colorScheme="orange" px={2} py={1} borderRadius="full" data-corner="round" variant="subtle">
                     <HStack spacing={1}>
                       <AlertTriangle size={12} />
                       <Text fontSize="xs">{t("audioEq.needsReboot")}</Text>
                     </HStack>
                   </Badge>
                 ) : driverStatus?.installed ? (
-                  <Badge colorScheme="green" px={2} py={1} borderRadius="full" variant="subtle">
+                  <Badge colorScheme="green" px={2} py={1} borderRadius="full" data-corner="round" variant="subtle">
                     <HStack spacing={1}>
                       <CheckCircle size={12} />
                       <Text fontSize="xs">{t("audioEq.installed")}</Text>
                     </HStack>
                   </Badge>
                 ) : (
-                  <Badge colorScheme="gray" px={2} py={1} borderRadius="full" variant="subtle">
+                  <Badge colorScheme="gray" px={2} py={1} borderRadius="full" data-corner="round" variant="subtle">
                     <HStack spacing={1}>
                       <XCircle size={12} />
                       <Text fontSize="xs">{t("audioEq.notInstalled")}</Text>
@@ -1323,7 +1309,7 @@ ${bandsStr}`;
                   </Text>
                   <HStack spacing={2}>
                     {/* 波段数切换器 */}
-                    <HStack spacing={0} p="2px" borderRadius="full" bg={switcherBg}>
+                    <HStack spacing={0} p="2px" borderRadius="full" data-corner="round" bg={switcherBg}>
                       {BAND_LAYOUTS.map((l) => {
                         const active = l.count === bandLayout.count;
                         return (
@@ -1333,6 +1319,7 @@ ${bandsStr}`;
                             px={2}
                             py="2px"
                             borderRadius="full"
+                            data-corner="round"
                             fontSize="xs"
                             fontWeight={active ? "bold" : "medium"}
                             bg={active ? activeColor : "transparent"}
@@ -1348,7 +1335,7 @@ ${bandsStr}`;
                         );
                       })}
                     </HStack>
-                    <Button leftIcon={<RefreshCw size={14} />} size="xs" variant="ghost" onClick={handleResetBands}>
+                    <Button leftIcon={<RefreshCw size={14} />} size="xs" data-corner="round" variant="ghost" onClick={handleResetBands}>
                       {t("audioEq.reset")}
                     </Button>
                   </HStack>
@@ -1410,8 +1397,8 @@ ${bandsStr}`;
                         <Box w="full" h="6px" borderRadius="3px" bg="#8884" position="relative" overflow="visible">
                           <Box h="full" borderRadius="3px" bg={activeColor} w={`${fx[key] * 100}%`} transition="width 0.12s ease-out" />
                           <Box position="absolute" top="50%" left={`${fx[key] * 100}%`} transform="translate(-50%, -50%)"
-                            w="16px" h="16px" borderRadius="full" bg={activeColor}
-                            border="2px solid" borderColor={useColorModeValue("white", "#222")}
+                            w="16px" h="16px" borderRadius="full" data-corner="round" bg={activeColor}
+                            border="2px solid" borderColor={sliderThumbBorder}
                             boxShadow="0 1px 4px rgba(0,0,0,0.3)" pointerEvents="none" transition="left 0.12s ease-out" />
                         </Box>
                         <input type="range" min={0} max={10} step={1} value={Math.round(fx[key] * 10)}
@@ -1488,7 +1475,7 @@ ${bandsStr}`;
                               </HStack>
                             </Box>
                             <IconButton aria-label={t("audioEq.deletePreset") ?? "删除"}
-                              icon={<Trash2 size={12} />} size="xs" variant="ghost" color={descColor}
+                              icon={<Trash2 size={12} />} size="xs" data-corner="round" variant="ghost" color={descColor}
                               _hover={{ color: "red.400", bg: "transparent" }}
                               onClick={(e) => { e.stopPropagation(); handleDeleteSavedPreset(preset.id, preset.name); }} ml={1} />
                           </HStack>
@@ -1542,7 +1529,7 @@ ${bandsStr}`;
                                   </HStack>
                                 </Box>
                                 <IconButton aria-label={t("audioEq.deletePreset") ?? "删除"}
-                                  icon={<Trash2 size={12} />} size="xs" variant="ghost" color={descColor}
+                                  icon={<Trash2 size={12} />} size="xs" data-corner="round" variant="ghost" color={descColor}
                                   _hover={{ color: "red.400", bg: "transparent" }}
                                   onClick={(e) => { e.stopPropagation(); handleDeletePreset(preset.id, preset.name); }} ml={1} />
                               </HStack>
@@ -1638,7 +1625,7 @@ ${bandsStr}`;
       {/* 保存为预设 模态框 */}
       <Modal isOpen={saveModalOpen} onClose={onSaveModalClose} isCentered size="sm">
         <ModalOverlay bg="blackAlpha.600" />
-        <ModalContent bg={useColorModeValue("white", "#1a1a1a")} border="1px solid" borderColor={useColorModeValue("gray.100", "#333")}>
+        <ModalContent bg={saveModalBg} border="1px solid" borderColor={saveModalBorder}>
           <ModalHeader fontSize="md" color={headingColor}>保存为预设</ModalHeader>
           <ModalCloseButton color={descColor} />
           <ModalBody>

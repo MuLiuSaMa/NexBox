@@ -2,6 +2,7 @@
 //!
 //! 后台每 2 秒轮询一次系统进程，当检测到内置/自定义名单中的游戏进程运行时：
 //! - 自动开启当前选中的滤镜（复用 `display_filter::apply_filter_to_display`）
+//!
 //! 当所有名单内游戏进程退出时：
 //! - 自动恢复默认显示（仅关闭由自动任务开启的滤镜，不误关用户手动开启的滤镜）
 //!
@@ -502,7 +503,7 @@ pub(crate) fn running_game_pids(system: &System) -> HashSet<u32> {
     if games.is_empty() {
         return pids;
     }
-    for (_, process) in system.processes() {
+    for process in system.processes().values() {
         let name = process.name().to_string();
         if games
             .iter()

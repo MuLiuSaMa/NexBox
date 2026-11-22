@@ -5,40 +5,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useLocation } from "react-router-dom";
 import { useAppStartup } from "@/contexts/app-startup-context";
 import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
-import {
-  Box,
-  VStack,
-  HStack,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  InputRightElement,
-  Button,
-  Text,
-  Spinner,
-  useColorModeValue,
-  IconButton,
-  Tooltip,
-  Menu,
-  MenuButton,
-  MenuList,
-  MenuItem,
-  Image as ChakraImage,
-  Heading,
-  Portal,
-  Fade,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  PopoverBody,
-  Switch,
-  SimpleGrid,
-  Progress,
-  Drawer,
-  DrawerOverlay,
-  DrawerContent,
-  DrawerBody,
-} from "@chakra-ui/react";
+import { Box, VStack, HStack, Input, InputGroup, InputLeftElement, InputRightElement, Button, Text, Spinner, IconButton, Tooltip, Menu, MenuButton, MenuList, MenuItem, Image as ChakraImage, Heading, Portal, Fade, Popover, PopoverTrigger, PopoverContent, PopoverBody, Switch, SimpleGrid, Progress, Drawer, DrawerOverlay, DrawerContent, DrawerBody } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import {
   Search,
@@ -86,7 +53,7 @@ import {
 import { PageBackButton } from "@/components/special/page-back-button";
 import { useMusicStore, coverProxyUrl, stopTimeSync } from "@/stores/music-store";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider, PlayHistoryEntry } from "@/types/music";
+import type { Song, Playlist, Artist, MusicComment, Album, Mv, MusicProvider, PlayHistoryEntry, PlaybackQuality } from "@/types/music";
 import { MusicLoginSection } from "@/components/MusicLoginSection";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -106,6 +73,7 @@ import { useCoverColor, useCoverEdgeColor } from "@/hooks/use-cover-color";
 import { isOverlayOpen } from "@/hooks/use-esc-back";
 import { motion, AnimatePresence, type Variants } from "framer-motion";
 
+import { useColorValue } from "@/hooks/use-color-value";
 // ═══════════════════════════════════════════════
 // 动画变体定义
 // ═══════════════════════════════════════════════
@@ -235,118 +203,13 @@ const SkipForwardBtn = ({ size = 24 }: { size?: number }) => (
 // ═══════════════════════════════════════════════
 // 音质选项配置
 // ═══════════════════════════════════════════════
-const QUALITY_OPTIONS: { value: string; label: string; desc: string; svip: boolean }[] = [
+const QUALITY_OPTIONS: { value: PlaybackQuality; label: string; desc: string; svip: boolean }[] = [
   { value: "jymaster", label: "超清母带", desc: "SVIP 专属", svip: true },
   { value: "hires",    label: "高清臻音", desc: "1999k", svip: false },
   { value: "lossless", label: "无损",     desc: "1411k", svip: false },
   { value: "exhigh",   label: "极高",     desc: "999k", svip: false },
   { value: "standard", label: "标准",     desc: "128k", svip: false },
 ];
-
-// ═══════════════════════════════════════════════
-// LRC 解析工具：将 [mm:ss.xx] 格式的歌词文本解析为行数组
-// ═══════════════════════════════════════════════
-interface LyricLine {
-  time: number; // 秒
-  text: string;
-  translation?: string;
-}
-
-function parseLrc(lyric: string, translation?: string): LyricLine[] {
-  if (!lyric) return [];
-  const lines: LyricLine[] = [];
-  const transMap = new Map<number, string>();
-
-  // 解析翻译歌词
-  if (translation) {
-    const transLines = translation.split("\n");
-    for (const line of transLines) {
-      const match = line.match(/\[(\d+):(\d+(?:\.\d+)?)\]/);
-      if (match) {
-        const time = parseInt(match[1]) * 60 + parseFloat(match[2]);
-        const text = line.replace(/\[\d+:\d+(?:\.\d+)?\]/, "").trim();
-        if (text) transMap.set(time, text);
-      }
-    }
-  }
-
-  // 解析主歌词
-  const mainLines = lyric.split("\n");
-  for (const line of mainLines) {
-    const matches = [...line.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-    if (matches.length === 0) continue;
-    const text = line.replace(/\[\d+:\d+(?:\.\d+)?\]/g, "").trim();
-    if (!text) continue;
-    for (const m of matches) {
-      const time = parseInt(m[1]) * 60 + parseFloat(m[2]);
-      lines.push({ time, text, translation: transMap.get(time) });
-    }
-  }
-
-  lines.sort((a, b) => a.time - b.time);
-  return lines;
-}
-
-// ═══════════════════════════════════════════════
-// 歌词滚动组件：超长歌词轮播显示
-// ═══════════════════════════════════════════════
-function LyricMarquee({ text, isActive, isTranslation, fontSize, activeColor, textColor, subTextColor }: {
-  text: string; isActive: boolean; isTranslation?: boolean; fontSize: number;
-  activeColor: string; textColor: string; subTextColor: string;
-}) {
-  const textRef = useRef<HTMLSpanElement>(null);
-  const [overflows, setOverflows] = useState(false);
-
-  useEffect(() => {
-    if (textRef.current) {
-      const parent = textRef.current.parentElement;
-      if (parent) setOverflows(textRef.current.scrollWidth > parent.clientWidth);
-    }
-  }, [text]);
-
-  return (
-    <Box
-      overflow="hidden"
-      whiteSpace="nowrap"
-      textAlign="center"
-      w="100%"
-    >
-      {isActive && overflows ? (
-        <Box
-          as="span"
-          display="inline-block"
-          whiteSpace="nowrap"
-          fontSize={`${fontSize}px`}
-          fontWeight="bold"
-          color={isTranslation ? subTextColor : activeColor}
-          textAlign="center"
-          sx={{
-            animation: `lyricScroll ${Math.max(text.length * 0.08, 3)}s linear infinite`,
-            "@keyframes lyricScroll": {
-              "0%": { transform: "translateX(0)" },
-              "100%": { transform: "translateX(-50%)" },
-            },
-          }}
-        >
-          {text}&nbsp;&nbsp;&nbsp;{text}
-        </Box>
-      ) : (
-        <Box
-          as="span"
-          ref={textRef}
-          display="inline-block"
-          whiteSpace="nowrap"
-          fontSize={`${isTranslation ? fontSize - 2 : fontSize}px`}
-          fontWeight={isActive ? "bold" : "normal"}
-          color={isTranslation ? subTextColor : (isActive ? activeColor : textColor)}
-          sx={overflows ? { textOverflow: "ellipsis", overflow: "hidden", maxWidth: "100%" } : {}}
-        >
-          {text}
-        </Box>
-      )}
-    </Box>
-  );
-}
 
 // ═══════════════════════════════════════════════
 // ProgressSection — 独立的进度条组件
@@ -477,7 +340,7 @@ interface CommentPanelProps {
   textColor: string;
   hoverBg: string;
   loginInfo: { logged_in: boolean; nickname?: string; avatar?: string } | null;
-  scrollbarSx: any;
+  scrollbarSx: ReturnType<typeof scrollbarSx>;
 }
 
 const CommentPanel = memo(function CommentPanel({
@@ -536,7 +399,7 @@ const CommentPanel = memo(function CommentPanel({
   const renderCommentRow = (c: MusicComment) => (
     <VStack key={c.comment_id} spacing={1} align="stretch" p={3} borderRadius="md" _hover={{ bg: hoverBg }} transition="background 0.15s">
       <HStack spacing={2}>
-        <Box w="28px" h="28px" borderRadius="full" overflow="hidden" flexShrink={0} bg="gray.600">
+        <Box w="28px" h="28px" borderRadius="full" data-corner="round" overflow="hidden" flexShrink={0} bg="gray.600">
           <ChakraImage
             src={coverProxyUrl(c.avatar, proxyPort)}
             alt=""
@@ -614,7 +477,7 @@ const CommentPanel = memo(function CommentPanel({
           <Text color={subTextColor} fontSize="xs" textAlign="center" px={4} wordBreak="break-all">
             {commentError}
           </Text>
-          <Button size="xs" variant="ghost" color={activeColor} onClick={() => useMusicStore.getState().loadComments(song.id, 1)}>
+          <Button size="xs" data-corner="round" variant="ghost" color={activeColor} onClick={() => useMusicStore.getState().loadComments(song.id, 1)}>
             重试
           </Button>
         </VStack>
@@ -638,6 +501,7 @@ const CommentPanel = memo(function CommentPanel({
           {comments.has_more && (
             <Button
               size="xs"
+              data-corner="round"
               variant="ghost"
               w="100%"
               mt={2}
@@ -824,6 +688,7 @@ function CoverBleedLayer({ coverUrl, scrim }: { coverUrl: string; scrim: string 
 }
 
 const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerProps) {
+  const cm = useColorValue();
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const volume = useMusicStore((s) => s.volume);
@@ -845,7 +710,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const playbackQuality = useMusicStore((s) => s.playbackQuality);
   const currentQuality = useMusicStore((s) => s.currentQuality);
-  const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const lyricsFontSize = useMusicStore((s) => s.lyricsFontSize);
   const lyricsHighlightColor = useMusicStore((s) => s.lyricsHighlightColor);
   const vinylColorMode = useMusicStore((s) => s.vinylColorMode);
@@ -985,7 +849,6 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
   const modernBgFinal = dynamicEnabled ? modernBgDynamic : modernBgGradient;
   const modernTextColor = coverColor.isLight ? "#1a1a2e" : "#f0f0f0";
   const modernSubTextColor = coverColor.isLight ? "#4a4a5e" : "#b0b0b0";
-  const modernBorderColor = coverColor.isLight ? "rgba(0,0,0,0.12)" : "rgba(255,255,255,0.15)";
   const modernHoverBg = coverColor.isLight ? "rgba(0,0,0,0.06)" : "rgba(255,255,255,0.12)";
 
   // 本地导入歌曲没有沉浸模式：沉浸样式对无歌词的本地歌曲回退为通透；
@@ -1028,11 +891,10 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
     return hsvToHex(h, Math.min(92, Math.max(48, s)), Math.min(66, Math.max(34, v)));
   }, [vinylColorMode, vinylCustomColor, coverColor.hex]);
 
-  const bgColor = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
-  const glassBorderColor = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const sliderTrackBg = useColorModeValue("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
+  const bgColor = cm("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const sliderTrackBg = cm("rgba(0,0,0,0.1)", "rgba(255,255,255,0.9)");
 
   // 文字颜色覆写（现代/封面渐染/音域回响；封面渐染按封面右缘色判断明暗，音域回响固定亮色，透明彩胶固定深灰）
   const effectiveTextColor = isModern ? modernTextColor : isCover ? coverTextColor : isSpectrum ? "#f0f0f0" : isVinyl ? "#333338" : textColor;
@@ -1422,6 +1284,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 w="100%"
                 h="100%"
                 borderRadius="50%"
+                data-corner="round"
                 sx={{
                   background:
                     "radial-gradient(circle at center, #1a1a1a 0%, #0a0a0a 100%)",
@@ -1437,6 +1300,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 w="100%"
                 h="100%"
                 borderRadius="50%"
+                data-corner="round"
                 pointerEvents="none"
                 sx={{
                   background:
@@ -1457,6 +1321,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   w={{ base: "150px", md: "200px", lg: "220px" }}
                   h={{ base: "150px", md: "200px", lg: "220px" }}
                   borderRadius="50%"
+                  data-corner="round"
                   overflow="hidden"
                   sx={{
                     animation: "vinylSpin 12s linear infinite",
@@ -1544,6 +1409,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                   : { color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }
               }
               borderRadius="full"
+              data-corner="round"
             >
               歌词
             </Button>
@@ -1559,6 +1425,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                     : { color: effectiveSubTextColor, _hover: { bg: effectiveHoverBg } }
                 }
                 borderRadius="full"
+                data-corner="round"
               >
                 评论
               </Button>
@@ -1778,6 +1645,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                 lineHeight="1.4"
                 px={1}
                 borderRadius="full"
+                data-corner="round"
                 pointerEvents="none"
                 boxShadow="0 1px 3px rgba(0,0,0,0.35)"
               >
@@ -1999,7 +1867,7 @@ const ExpandedPlayer = memo(function ExpandedPlayer({ onClose }: ExpandedPlayerP
                               bg={opt.value === playbackQuality ? `${activeColor}22` : "transparent"}
                               _hover={locked ? {} : { bg: "rgba(0,0,0,0.05)" }}
                               borderRadius="md"
-                              onClick={() => { if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any); }}
+                              onClick={() => { if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value); }}
                             >
                               <Text fontSize="sm" fontWeight={opt.value === playbackQuality ? "bold" : "normal"} color={menuText}>{opt.label}</Text>
                               <Text fontSize="xs" color={menuMuted}>{opt.desc}</Text>
@@ -2181,6 +2049,7 @@ const PlayerProgress = memo(function PlayerProgress({
 // 这样搜索框等组件完全不受播放影响
 // ═══════════════════════════════════════════════
 const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () => void; hidden?: boolean }) {
+  const cm = useColorValue();
   const currentSong = useMusicStore((s) => s.currentSong);
   const isPlaying = useMusicStore((s) => s.isPlaying);
   const volume = useMusicStore((s) => s.volume);
@@ -2197,23 +2066,22 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
   const proxyPort = useMusicStore((s) => s.proxyPort);
   const playbackQuality = useMusicStore((s) => s.playbackQuality);
   const currentQuality = useMusicStore((s) => s.currentQuality);
-  const currentBitrate = useMusicStore((s) => s.currentBitrate);
   const loginInfo = useMusicStore((s) => s.loginInfo);
   const desktopLyricsVisible = useMusicStore((s) => s.desktopLyricsVisible);
   const queuePanelOpen = useMusicStore((s) => s.queuePanelOpen);
   const [dlSettingsOpen, setDlSettingsOpen] = useState(false);
 
-  const { getActiveColor, getHoverColor, getContrastTextColor, getBorderColor } = useThemeColor();
+  const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
   const activeColor = getActiveColor();
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const dropdownBg = useColorModeValue("white", "#1a1a1a");
-  const sliderTrackBg = useColorModeValue("rgba(255,255,255,0.9)", "#333333");
+  const borderColor = cm("gray.200", "#333333");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const dropdownBg = cm("white", "#1a1a1a");
+  const sliderTrackBg = cm("rgba(255,255,255,0.9)", "#333333");
 
   const ModeIcon = playMode === "one" ? Repeat1 : playMode === "shuffle" ? Shuffle : playMode === "heartbeat" ? HeartPulse : Repeat;
 
@@ -2337,7 +2205,7 @@ const PlayerBar = memo(function PlayerBar({ onExpand, hidden }: { onExpand?: () 
                       <MenuItem
                         key={opt.value}
                         onClick={() => {
-                          if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value as any);
+                          if (!locked) useMusicStore.getState().setPlaybackQuality(opt.value);
                         }}
                         bg={opt.value === playbackQuality ? `${activeColor}33` : undefined}
                         opacity={locked ? 0.4 : 1}
@@ -2482,11 +2350,12 @@ const PROVIDER_TAG_META: Record<string, { name: string; logo?: string; color: st
 
 /** 来源平台胶囊标签：小 logo + 平台名，品牌色底色随主题调不透明度 */
 const ProviderTag = memo(function ProviderTag({ provider }: { provider: string }) {
+  const cm = useColorValue();
   const meta = PROVIDER_TAG_META[provider];
   const color = meta?.color ?? "#718096";
-  const bg = useColorModeValue(`${color}1a`, `${color}26`);
+  const bg = cm(`${color}1a`, `${color}26`);
   return (
-    <HStack spacing={1} flexShrink={0} px={1.5} py={0.5} borderRadius="full" bg={bg} lineHeight="1.4">
+    <HStack spacing={1} flexShrink={0} px={1.5} py={0.5} borderRadius="full" data-corner="round" bg={bg} lineHeight="1.4">
       {meta?.logo ? (
         <Box
           as="img"
@@ -2495,6 +2364,7 @@ const ProviderTag = memo(function ProviderTag({ provider }: { provider: string }
           w="12px"
           h="12px"
           borderRadius="full"
+          data-corner="round"
           objectFit="cover"
           bg="white"
           flexShrink={0}
@@ -2555,6 +2425,7 @@ const SongRow = memo(function SongRow({
   onToggleLike,
   onArtistClick,
 }: SongRowProps) {
+  const cm = useColorValue();
   return (
     <HStack
       key={`${song.provider}-${song.id}-${index}`}
@@ -2617,7 +2488,7 @@ const SongRow = memo(function SongRow({
           as="span"
           fontSize="10px"
           color={subTextColor}
-          bg={useColorModeValue("gray.100", "rgba(255,255,255,0.08)")}
+          bg={cm("gray.100", "rgba(255,255,255,0.08)")}
           px={1.5}
           py={0.5}
           borderRadius="sm"
@@ -2634,6 +2505,7 @@ const SongRow = memo(function SongRow({
         title="添加到播放队列"
         icon={<ListPlus size={14} />}
         size="xs"
+        data-corner="round"
         variant="ghost"
         sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
         onClick={(e) => {
@@ -2647,6 +2519,7 @@ const SongRow = memo(function SongRow({
           title={isLiked ? "取消红心" : "红心"}
           icon={<Heart size={14} fill={isLiked ? "#e53e3e" : "none"} color={isLiked ? "#e53e3e" : "currentColor"} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           sx={{ color: subTextColor, _hover: { bg: hoverBg } }}
           onClick={(e) => {
@@ -2660,6 +2533,7 @@ const SongRow = memo(function SongRow({
         title="播放"
         icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
         size="xs"
+        data-corner="round"
         variant="ghost"
         sx={{ color: activeColor, _hover: { bg: hoverBg } }}
         onClick={(e) => {
@@ -2713,6 +2587,7 @@ const LocalSongRow = memo(function LocalSongRow({
   onTogglePlay,
   onRemove,
 }: LocalSongRowProps) {
+  const cm = useColorValue();
   return (
     <HStack
       spacing={3}
@@ -2734,7 +2609,7 @@ const LocalSongRow = memo(function LocalSongRow({
         display="flex"
         alignItems="center"
         justifyContent="center"
-        bg={useColorModeValue("gray.200", "rgba(255,255,255,0.08)")}
+        bg={cm("gray.200", "rgba(255,255,255,0.08)")}
       >
         {song.cover ? (
           <ChakraImage
@@ -2772,6 +2647,7 @@ const LocalSongRow = memo(function LocalSongRow({
           aria-label="Add to queue"
           icon={<ListPlus size={14} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
           onClick={(e) => {
@@ -2785,6 +2661,7 @@ const LocalSongRow = memo(function LocalSongRow({
           aria-label="Remove"
           icon={<Trash2 size={14} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
           onClick={(e) => {
@@ -2798,6 +2675,7 @@ const LocalSongRow = memo(function LocalSongRow({
           aria-label="Play"
           icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           sx={{ color: activeColor, _hover: { bg: hoverBg } }}
           onClick={(e) => {
@@ -2894,6 +2772,7 @@ const HistorySongRow = memo(function HistorySongRow({
         title="添加到播放队列"
         icon={<ListPlus size={14} />}
         size="xs"
+        data-corner="round"
         variant="ghost"
         sx={{ color: subTextColor, _hover: { bg: hoverBg, color: activeColor } }}
         onClick={(e) => {
@@ -2906,6 +2785,7 @@ const HistorySongRow = memo(function HistorySongRow({
         title="从历史移除"
         icon={<X size={14} />}
         size="xs"
+        data-corner="round"
         variant="ghost"
         sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
         onClick={(e) => {
@@ -2918,6 +2798,7 @@ const HistorySongRow = memo(function HistorySongRow({
         title="播放"
         icon={isCurrent && isPlaying ? <PauseIcon size={14} /> : <PlayBtn size={14} />}
         size="xs"
+        data-corner="round"
         variant="ghost"
         sx={{ color: activeColor, _hover: { bg: hoverBg } }}
         onClick={(e) => {
@@ -3045,6 +2926,7 @@ const SortableQueueRow = memo(function SortableQueueRow({
           aria-label="Remove from queue"
           icon={<X size={13} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           flexShrink={0}
           sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
@@ -3147,6 +3029,7 @@ const PlayQueueDrawer = memo(function PlayQueueDrawer({
               aria-label="Clear queue"
               icon={<Trash2 size={14} />}
               size="xs"
+              data-corner="round"
               variant="ghost"
               isDisabled={playQueue.length === 0}
               sx={{ color: subTextColor, _hover: { bg: hoverBg, color: "#e53e3e" } }}
@@ -3158,6 +3041,7 @@ const PlayQueueDrawer = memo(function PlayQueueDrawer({
               aria-label="Close queue"
               icon={<X size={14} />}
               size="xs"
+              data-corner="round"
               variant="ghost"
               sx={{ color: subTextColor, _hover: { bg: hoverBg, color: textColor } }}
               onClick={close}
@@ -3209,6 +3093,7 @@ interface QishuiFeedMode {
 const QISHUI_FEED_ICONS = [Sparkles, Disc3, Waves, TrendingUp, AudioWaveform, MusicIcon];
 
 function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvider) => void }) {
+  const cm = useColorValue();
   const searchProvider = useMusicStore((s) => s.searchProvider);
   const loginInfos = useMusicStore((s) => s.loginInfos);
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
@@ -3220,15 +3105,15 @@ function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvi
   const effectiveBlur = liquidGlassEnabled ? liquidGlassBlur : 0;
   const glassTransition = "background 0.45s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.45s cubic-bezier(0.4, 0, 0.2, 1), backdrop-filter 0.45s cubic-bezier(0.4, 0, 0.2, 1)";
   // 未开启液态玻璃：不透明背景（hover 用不透明色，不透明不透视）
-  const plainBg = useColorModeValue("#ffffff", "#1a1a1a");
-  const plainHoverBg = useColorModeValue("#f0f0f0", "#2a2a2a");
-  const plainBorder = useColorModeValue("gray.200", "#333333");
+  const plainBg = cm("#ffffff", "#1a1a1a");
+  const plainHoverBg = cm("#f0f0f0", "#2a2a2a");
+  const plainBorder = cm("gray.200", "#333333");
   // 开启液态玻璃：半透明背景，hover 时提高不透明度（更实，不透明）
-  const glassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
-  const glassHoverBg = useColorModeValue("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
-  const glassBorder = useColorModeValue("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#a0a0a0");
+  const glassBg = cm("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassHoverBg = cm("rgba(255,255,255,0.35)", "rgba(0,0,0,0.35)");
+  const glassBorder = cm("rgba(255,255,255,0.25)", "rgba(255,255,255,0.12)");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#a0a0a0");
 
   // 已登录平台排在前面，未登录排后面（组内保持原有顺序）
   const sortedProviders = useMemo(() => {
@@ -3293,6 +3178,7 @@ function SearchProviderSwitcher({ onSwitch }: { onSwitch?: (provider: MusicProvi
                     w="9px"
                     h="9px"
                     borderRadius="full"
+                    data-corner="round"
                     border="2px solid"
                     borderColor={active ? activeColor : (liquidGlassEnabled ? glassBg : plainBg)}
                     bg={loggedIn ? "#38a169" : "#a0a0a0"}
@@ -3375,6 +3261,7 @@ const SearchBox = memo(function SearchBox({
   onUnifiedSearch,
   onArtistClick,
 }: SearchBoxProps) {
+  const cm = useColorValue();
   // ── 非受控 input：用 ref 跟踪值，不使用 value prop ──
   // 这样即使组件重渲染，input 也不会丢失焦点
   const inputRef = useRef<HTMLInputElement>(null);
@@ -3406,15 +3293,14 @@ const SearchBox = memo(function SearchBox({
   const hoverBg = getHoverColor(false);
   const themeBorder = getBorderColor();
 
-  const bgColor = useColorModeValue("white", "#111111");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
-  const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
-  const dropdownBg = useColorModeValue("white", "#1a1a1a");
-  const glassInputBg = useColorModeValue("rgba(255,255,255,0.15)", "rgba(0,0,0,0.25)");
-  const dropdownBorder = useColorModeValue("gray.200", "#333333");
+  const bgColor = cm("white", "#111111");
+  const borderColor = cm("gray.200", "#333333");
+  const textColor = cm("gray.800", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const itemHoverBg = cm("gray.50", "rgba(255,255,255,0.05)");
+  const itemActiveBg = cm(`${activeColor}22`, "rgba(255,255,255,0.08)");
+  const dropdownBg = cm("white", "#1a1a1a");
+  const glassInputBg = cm("rgba(255,255,255,0.15)", "rgba(0,0,0,0.25)");
 
   // 点击外部关闭搜索下拉/历史
   useEffect(() => {
@@ -3527,7 +3413,7 @@ const SearchBox = memo(function SearchBox({
         ? { title: "已添加到播放队列", status: "success", duration: 1500 }
         : { title: "歌曲已在播放队列中", status: "info", duration: 1500 },
     );
-  }, []);
+  }, [showToast]);
   const onTogglePlay = useCallback(() => {
     useMusicStore.getState().togglePlay();
   }, []);
@@ -3617,7 +3503,7 @@ const SearchBox = memo(function SearchBox({
               >
                 <HStack justify="space-between" px={2} py={1}>
                   <Text fontSize="xs" color={subTextColor} fontWeight="semibold">搜索历史</Text>
-                  <Button size="xs" variant="ghost" color="red.400" onClick={clearSearchHistory} _hover={{ color: "red.300", bg: "rgba(255,0,0,0.08)" }}>
+                  <Button size="xs" data-corner="round" variant="ghost" color="red.400" onClick={clearSearchHistory} _hover={{ color: "red.300", bg: "rgba(255,0,0,0.08)" }}>
                     全部清除
                   </Button>
                 </HStack>
@@ -3637,6 +3523,7 @@ const SearchBox = memo(function SearchBox({
                       <Text fontSize="sm" color={textColor} flex={1} noOfLines={1}>{kw}</Text>
                       <IconButton
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         aria-label="删除搜索历史"
                         icon={<X size={12} />}
@@ -3738,6 +3625,7 @@ const SearchBox = memo(function SearchBox({
 // Main MusicPage
 // ═══════════════════════════════════════════════
 export default function MusicPage() {
+  const cm = useColorValue();
   // ── 使用独立选择器，每个字段用 Object.is 比较 ──
   // 比 useShallow 更可靠：播放时 timeupdate 只改 currentTime，
   // 这些选择器都不会触发重渲染
@@ -3896,7 +3784,7 @@ export default function MusicPage() {
     if (mvVideoRef.current) {
       mvVideoRef.current.volume = mvVolume;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [mvVolume]);
 
   const closeMvPlayer = useCallback(() => {
@@ -3924,17 +3812,17 @@ export default function MusicPage() {
   const contrastText = getContrastTextColor();
   const hoverBg = getHoverColor(false);
 
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.800", "#ffffff");
+  const borderColor = cm("gray.200", "#333333");
+  const textColor = cm("gray.800", "#ffffff");
   const adaptiveTitle = useAdaptiveTextColor();
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const itemHoverBg = useColorModeValue("gray.50", "rgba(255,255,255,0.05)");
-  const itemActiveBg = useColorModeValue(`${activeColor}22`, "rgba(255,255,255,0.08)");
-  const dropdownBg = useColorModeValue("white", "#1a1a1a");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const itemHoverBg = cm("gray.50", "rgba(255,255,255,0.05)");
+  const itemActiveBg = cm(`${activeColor}22`, "rgba(255,255,255,0.08)");
+  const dropdownBg = cm("white", "#1a1a1a");
 
   // 汽水引导条配色（签名依赖缺失提示）
-  const qishuiNoticeBg = useColorModeValue(`${activeColor}0d`, `${activeColor}1a`);
-  const qishuiNoticeBorder = useColorModeValue(`${activeColor}33`, `${activeColor}55`);
+  const qishuiNoticeBg = cm(`${activeColor}0d`, `${activeColor}1a`);
+  const qishuiNoticeBorder = cm(`${activeColor}33`, `${activeColor}55`);
 
   // memoize scrollbarSx，避免每次渲染创建新对象导致子组件不必要重渲染
   const memoScrollbarSx = useMemo(() => scrollbarSx(activeColor), [activeColor]);
@@ -4396,7 +4284,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
         ? { title: "已添加到播放队列", status: "success", duration: 1500 }
         : { title: "歌曲已在播放队列中", status: "info", duration: 1500 },
     );
-  }, []);
+  }, [toast]);
   const onTogglePlay = useCallback(() => {
     useMusicStore.getState().togglePlay();
   }, []);
@@ -4567,6 +4455,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
               px={1.5}
               py={0.5}
               borderRadius="full"
+              data-corner="round"
               fontSize="2xs"
               lineHeight="1.4"
               bg={`${activeColor}26`}
@@ -4606,8 +4495,8 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
   // 歌手详情视图
   // ═══════════════════════════════════════════════
   if (viewMode === "artistDetail") {
-    const artistTabBarBg = useColorModeValue("gray.100", "rgba(255,255,255,0.04)");
-    const artistTabActiveBg = useColorModeValue("white", "rgba(255,255,255,0.1)");
+    const artistTabBarBg = cm("gray.100", "rgba(255,255,255,0.04)");
+    const artistTabActiveBg = cm("white", "rgba(255,255,255,0.1)");
 
     const renderAlbumItem = (album: Album) => (
       <HStack
@@ -4726,8 +4615,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 w="56px"
                 h="56px"
                 borderRadius="full"
+                data-corner="round"
                 objectFit="cover"
-                fallback={<Box w="56px" h="56px" borderRadius="full" bg="gray.700" />}
+                fallback={<Box w="56px" h="56px" borderRadius="full" data-corner="round" bg="gray.700" />}
               />
               <VStack spacing={0} align="start">
                 <Text fontSize="xl" fontWeight="bold" color={textColor}>
@@ -4766,6 +4656,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 _hover: { bg: artistTab === tab.key ? artistTabActiveBg : artistTabBarBg },
               }}
               borderRadius="full"
+              data-corner="round"
             >
               {tab.label}
               {tab.count != null && <Text ml={1} fontSize="xs" color={subTextColor}>({tab.count})</Text>}
@@ -5043,6 +4934,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                         w="64px"
                         h="64px"
                         borderRadius="full"
+                        data-corner="round"
                         bg="rgba(0,0,0,0.6)"
                         display="flex"
                         alignItems="center"
@@ -5226,8 +5118,8 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
     const isLoading = searching || searchingArtists || searchingPlaylists;
     const hasAnyResults = searchResults.length > 0 || playlistSearchResults.length > 0 || artistSearchResults.length > 0;
 
-    const tabBarBg = useColorModeValue("gray.100", "rgba(255,255,255,0.04)");
-    const tabActiveBg = useColorModeValue("white", "rgba(255,255,255,0.1)");
+    const tabBarBg = cm("gray.100", "rgba(255,255,255,0.04)");
+    const tabActiveBg = cm("white", "rgba(255,255,255,0.1)");
 
     const tabs: { key: "songs" | "playlists" | "artists"; label: string; icon: React.ReactNode; count: number }[] = [
       { key: "songs", label: "单曲", icon: <MusicIcon size={14} />, count: searchResults.length },
@@ -5277,6 +5169,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
             <Box flex={1} />
             <Button
               size="xs"
+              data-corner="round"
               leftIcon={<PlayBtn size={12} />}
               variant="solid"
               bg={activeColor}
@@ -5472,6 +5365,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                                 aria-label={pl.subscribed ? "取消收藏" : "收藏歌单"}
                                 icon={<Heart size={14} fill={pl.subscribed ? "#e53e3e" : "none"} />}
                                 size="xs"
+                                data-corner="round"
                                 variant="ghost"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -5490,6 +5384,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                               aria-label="Play"
                               icon={<PlayBtn size={14} />}
                               size="xs"
+                              data-corner="round"
                               variant="ghost"
                               sx={{ color: activeColor, _hover: { bg: hoverBg } }}
                               onClick={(e) => {
@@ -5536,7 +5431,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                             }
                           >
                             <VStack spacing={2} align="center">
-                              <Box w="60px" h="60px" borderRadius="full" overflow="hidden" flexShrink={0}>
+                              <Box w="60px" h="60px" borderRadius="full" data-corner="round" overflow="hidden" flexShrink={0}>
                                 <ChakraImage
                                   src={coverProxyUrl(artist.pic_url || "", proxyPort)}
                                   alt=""
@@ -5567,6 +5462,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                       <HStack justify="center" pt={2}>
                         <Button
                           size="xs"
+                          data-corner="round"
                           variant="ghost"
                           onClick={handleShowAllArtists}
                           sx={{ color: activeColor, _hover: { bg: hoverBg } }}
@@ -5726,9 +5622,9 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
             px={2.5}
             py={0.5}
             borderRadius="md"
-            bg={useColorModeValue("gray.100", "rgba(255,255,255,0.08)")}
+            bg={cm("gray.100", "rgba(255,255,255,0.08)")}
             border="1px solid"
-            borderColor={useColorModeValue("gray.200", "rgba(255,255,255,0.12)")}
+            borderColor={cm("gray.200", "rgba(255,255,255,0.12)")}
           >
             <Text fontSize="xs" color={subTextColor} fontWeight="medium" whiteSpace="nowrap">
               当前平台：{providerName}
@@ -5765,6 +5661,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 <Box flex={1} />
                 <Button
                   size="xs"
+                  data-corner="round"
                   leftIcon={<PlayBtn size={12} />}
                   variant="solid"
                   bg={activeColor}
@@ -5801,6 +5698,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                         aria-label="清除歌单内搜索"
                         icon={<X size={14} />}
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         onClick={() => handlePlaylistSearchChange("")}
                         sx={{ color: subTextColor, _hover: { bg: hoverBg } }}
@@ -5852,6 +5750,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 <Box flex={1} />
                 <Button
                   size="xs"
+                  data-corner="round"
                   leftIcon={<PlayBtn size={12} />}
                   variant="solid"
                   bg={activeColor}
@@ -5933,6 +5832,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 <Box flex={1} />
                 <Button
                   size="xs"
+                  data-corner="round"
                   leftIcon={<PlayBtn size={12} />}
                   variant="solid"
                   bg={activeColor}
@@ -5981,6 +5881,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 </Text>
                 <Button
                   size="xs"
+                  data-corner="round"
                   leftIcon={importingLocal ? <Spinner size="xs" /> : <FolderOpen size={14} />}
                   variant="solid"
                   flexShrink={0}
@@ -5997,6 +5898,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                 </Button>
                 <Button
                   size="xs"
+                  data-corner="round"
                   leftIcon={importingLocal ? <Spinner size="xs" /> : <FolderPlus size={14} />}
                   variant="outline"
                   flexShrink={0}
@@ -6031,7 +5933,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
-                    bg={useColorModeValue(`${activeColor}1a`, `${activeColor}26`)}
+                    bg={cm(`${activeColor}1a`, `${activeColor}26`)}
                   >
                     <FileMusic size={22} color={activeColor} />
                   </Box>
@@ -6067,7 +5969,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                     display="flex"
                     alignItems="center"
                     justifyContent="center"
-                    bg={useColorModeValue(`${activeColor}1a`, `${activeColor}26`)}
+                    bg={cm(`${activeColor}1a`, `${activeColor}26`)}
                   >
                     <History size={22} color={activeColor} />
                   </Box>
@@ -6118,6 +6020,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                       ) : (
                         <Button
                           size="xs"
+                          data-corner="round"
                           bg={activeColor}
                           color={contrastText}
                           _hover={{ opacity: 0.9 }}
@@ -6157,6 +6060,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                             </Text>
                             <Button
                               size="xs"
+                              data-corner="round"
                               variant="ghost"
                               color={activeColor}
                               onClick={() => useMusicStore.getState().openLoginWindow(playbackSource)}
@@ -6213,6 +6117,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   <Box flex={1} />
                   <Button
                     size="xs"
+                    data-corner="round"
                     leftIcon={<PlayBtn size={12} />}
                     variant="solid"
                     bg={activeColor}
@@ -6261,6 +6166,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   <Box flex={1} />
                   <Button
                     size="xs"
+                    data-corner="round"
                     leftIcon={<PlayBtn size={12} />}
                     variant="solid"
                     bg={activeColor}
@@ -6297,7 +6203,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                       听歌模式
                     </Text>
                   </HStack>
-                  <Button size="xs" variant="ghost" onClick={loadQishuiFeedModes} sx={{ color: activeColor, _hover: { bg: hoverBg } }}>
+                  <Button size="xs" data-corner="round" variant="ghost" onClick={loadQishuiFeedModes} sx={{ color: activeColor, _hover: { bg: hoverBg } }}>
                     刷新
                   </Button>
                 </HStack>
@@ -6326,6 +6232,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           ) : (
                             <Button
                               size="xs"
+                              data-corner="round"
                               bg={activeColor}
                               color={contrastText}
                               _hover={{ opacity: 0.9 }}
@@ -6346,6 +6253,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           {qishuiFeedError.includes("登录") && (
                             <Button
                               size="xs"
+                              data-corner="round"
                               bg={activeColor}
                               color={contrastText}
                               _hover={{ opacity: 0.9 }}
@@ -6356,6 +6264,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           )}
                           <Button
                             size="xs"
+                            data-corner="round"
                             variant="ghost"
                             color={activeColor}
                             onClick={loadQishuiFeedModes}
@@ -6370,6 +6279,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                           </Text>
                           <Button
                             size="xs"
+                            data-corner="round"
                             variant="ghost"
                             color={activeColor}
                             onClick={loadQishuiFeedModes}
@@ -6442,6 +6352,7 @@ const chartIsGrid = playbackSource === "kugou" || playbackSource === "qqmusic";
                   </HStack>
                   <Button
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     onClick={() => storeActions.loadRecommendations()}
                     sx={{ color: activeColor, _hover: { bg: hoverBg } }}

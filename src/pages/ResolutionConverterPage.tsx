@@ -1,30 +1,17 @@
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  useColorModeValue,
-  SimpleGrid,
-  useBreakpointValue,
-  Button,
-  Spinner,
-  Badge,
-  Input,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, VStack, HStack, SimpleGrid, Button, Spinner, Input } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { Monitor } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { CustomSelect } from "@/components/special/custom-select";
 
+import { useColorValue } from "@/hooks/use-color-value";
 type ResolutionType = "1K" | "1.5K" | "2K" | "2.5K" | "3K" | "4K" | "custom";
 
 interface ResolutionInfo {
@@ -96,10 +83,10 @@ function ResolutionCard({
   onApply?: () => void;
   isApplying?: boolean;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
 
   const aspectRatioBox = useMemo(() => {
     const maxWidth = 120;
@@ -130,6 +117,7 @@ function ResolutionCard({
           px={3}
           py={1}
           borderRadius="full"
+          data-corner="round"
         >
           {resolution.ratioLabel}
         </Text>
@@ -244,14 +232,13 @@ function ResolutionSelector({
   selected: ResolutionType;
   onSelect: (type: ResolutionType) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
-  const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
   const primaryColor = getActiveColor();
   const contrastText = getContrastTextColor();
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const buttonBg = useColorModeValue("gray.100", "#222222");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
   const activeBg = primaryColor;
 
   const options: { type: ResolutionType; label: string; subLabel: string }[] = [
@@ -307,6 +294,7 @@ function ResolutionSelector({
 }
 
 export default function ResolutionConverterPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { liquidGlassEnabled } = useBackground();
   const { getActiveColor, getContrastTextColor } = useThemeColor();
@@ -370,11 +358,13 @@ export default function ResolutionConverterPage() {
     return list;
   }, [displayModes, selectedResKey]);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
+  const headingColor = cm("gray.900", "#ffffff");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardBorder = cm("gray.200", "#333333");
+  const inputBg = cm("white", "#1a1a1a");
+  const injectedRowBg = cm("gray.50", "#1a1a1a");
 
   const resolutions = useMemo(() => {
     if (selectedResolution === "custom") return [];
@@ -397,7 +387,8 @@ export default function ResolutionConverterPage() {
   }, [selectedResolution, t]);
 
   // === 显示器分辨率管理 ===
-  async function loadDisplayModes(deviceName: string) {
+  // 用 useCallback 包起来，供 useEffect 安全地列入依赖（避免每次渲染重复拉取）
+  const loadDisplayModes = useCallback(async (deviceName: string) => {
     setIsLoadingModes(true);
     try {
       const modes = await invoke<DisplayMode[]>("get_nvidia_display_modes", { deviceName });
@@ -422,16 +413,16 @@ export default function ResolutionConverterPage() {
     } finally {
       setIsLoadingModes(false);
     }
-  }
+  }, [t, toast]);
 
-  async function loadInjectedResolutions() {
+  const loadInjectedResolutions = useCallback(async () => {
     try {
       const list = await invoke<InjectedResolution[]>("get_injected_resolutions");
       setInjectedResolutions(list);
     } catch (e) {
       console.error("加载注入分辨率列表失败:", e);
     }
-  }
+  }, []);
 
   function handleDisplayChange(value: string) {
     const idx = Number(value);
@@ -496,7 +487,7 @@ export default function ResolutionConverterPage() {
     } finally {
       setApplyingResKey("");
     }
-  }, [displays, selectedDisplayIdx, t, toast]);
+  }, [displays, selectedDisplayIdx, t, toast, loadInjectedResolutions]);
 
   function handleApplyResolution() {
     if (!selectedResKey || !selectedRateKey) return;
@@ -528,7 +519,7 @@ export default function ResolutionConverterPage() {
       })();
     }, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadDisplayModes, loadInjectedResolutions]);
 
   const header = (
     <PageHeader
@@ -566,7 +557,7 @@ export default function ResolutionConverterPage() {
                     value={customWidth}
                     onChange={(e) => setCustomWidth(e.target.value)}
                     placeholder={t("resolutionConverter.widthInputPlaceholder")}
-                    bg={useColorModeValue("white", "#1a1a1a")}
+                    bg={inputBg}
                   />
                 </Box>
                 <Box>
@@ -578,7 +569,7 @@ export default function ResolutionConverterPage() {
                     value={customHeight}
                     onChange={(e) => setCustomHeight(e.target.value)}
                     placeholder={t("resolutionConverter.heightInputPlaceholder")}
-                    bg={useColorModeValue("white", "#1a1a1a")}
+                    bg={inputBg}
                   />
                 </Box>
                 <Box>
@@ -590,7 +581,7 @@ export default function ResolutionConverterPage() {
                     value={customRefreshRate}
                     onChange={(e) => setCustomRefreshRate(e.target.value)}
                     placeholder={t("resolutionConverter.refreshRateInputPlaceholder")}
-                    bg={useColorModeValue("white", "#1a1a1a")}
+                    bg={inputBg}
                   />
                 </Box>
               </SimpleGrid>
@@ -795,13 +786,14 @@ export default function ResolutionConverterPage() {
                 justify="space-between"
                 p={3}
                 borderRadius="lg"
-                bg={useColorModeValue("gray.50", "#1a1a1a")}
+                bg={injectedRowBg}
               >
                 <Text color={textColor} fontWeight="500" fontSize="sm">
                   {r.width} × {r.height}
                 </Text>
                 <Button
                   size="xs"
+                  data-corner="round"
                   variant="ghost"
                   colorScheme="red"
                   onClick={async () => {

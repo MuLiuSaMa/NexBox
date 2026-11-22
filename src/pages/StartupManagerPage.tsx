@@ -1,26 +1,4 @@
-import {
-  Box,
-  Flex,
-  Text,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Spinner,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-  IconButton,
-  Tooltip,
-  Badge,
-  Tabs,
-  TabList,
-  TabPanels,
-  TabPanel,
-  Tab,
-} from "@chakra-ui/react";
+import { Box, Flex, Text, VStack, HStack, Spinner, Table, Thead, Tbody, Tr, Th, Td, IconButton, Tooltip, Badge, Tabs, TabList, TabPanels, TabPanel, Tab } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -35,11 +13,11 @@ import {
   Search,
   FileCode,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface StartupItem {
   name: string;
   file_location: string;
@@ -62,23 +40,21 @@ interface ServiceItem {
 }
 
 export default function StartupManagerPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("rocket");
   const { liquidGlassEnabled } = useBackground();
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const tableBg = liquidGlassEnabled
-    ? "rgba(255,255,255,0.7)"
-    : useColorModeValue("#ffffff", "#1a1a1a");
-  const tableBorder = liquidGlassEnabled
-    ? "rgba(255,255,255,0.3)"
-    : useColorModeValue("gray.200", "#333333");
-  const pathColor = useColorModeValue("gray.500", "#888888");
+  const headingColor = cm("gray.900", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const tableBorderBaseColor = cm("gray.200", "#333333");
+  const tableBorder = liquidGlassEnabled ? "rgba(255,255,255,0.3)" : tableBorderBaseColor;
+  const pathColor = cm("gray.500", "#888888");
   const hoverBg = `${themeConfig.primaryColor}1F`;
-  const deleteColor = useColorModeValue("red.500", "red.400");
-  const enableColor = useColorModeValue("teal.600", "teal.300");
+  const deleteColor = cm("red.500", "red.400");
+  const enableColor = cm("teal.600", "teal.300");
+  const serviceAdminHintColor = cm("orange.600", "orange.300");
   const tabTextColor = getContrastTextColor();
 
   const [items, setItems] = useState<StartupItem[]>([]);
@@ -88,7 +64,8 @@ export default function StartupManagerPage() {
   const [icons, setIcons] = useState<Record<string, string>>({});
   // Windows 系统服务（自启动 + 已禁用）
   const [services, setServices] = useState<ServiceItem[]>([]);
-  const [servicesScanning, setServicesScanning] = useState(false);
+  // 仅需 setter：servicesScanning 本身未参与渲染
+  const [, setServicesScanning] = useState(false);
   const [togglingServices, setTogglingServices] = useState<Set<string>>(new Set());
   const [isAppAdmin, setIsAppAdmin] = useState(false);
 
@@ -411,6 +388,7 @@ export default function StartupManagerPage() {
                             colorScheme="gray"
                             variant="subtle"
                             borderRadius="full"
+                            data-corner="round"
                             px={2}
                             fontSize="xs"
                             flexShrink={0}
@@ -503,7 +481,7 @@ export default function StartupManagerPage() {
             </HStack>
 
             {!isAppAdmin && (
-              <Text color={useColorModeValue("orange.600", "orange.300")} fontSize="xs">
+              <Text color={serviceAdminHintColor} fontSize="xs">
                 {t("optimization.startupManager.serviceAdminRequired")}
               </Text>
             )}
@@ -573,11 +551,11 @@ export default function StartupManagerPage() {
                     </Td>
                     <Td px={4} py={3}>
                       {svc.is_running ? (
-                        <Badge colorScheme="teal" variant="subtle" borderRadius="full" px={2} fontSize="xs">
+                        <Badge colorScheme="teal" variant="subtle" borderRadius="full" data-corner="round" px={2} fontSize="xs">
                           {t("optimization.startupManager.stateRunning")}
                         </Badge>
                       ) : (
-                        <Badge colorScheme="gray" variant="subtle" borderRadius="full" px={2} fontSize="xs">
+                        <Badge colorScheme="gray" variant="subtle" borderRadius="full" data-corner="round" px={2} fontSize="xs">
                           {t("optimization.startupManager.stateStopped")}
                         </Badge>
                       )}

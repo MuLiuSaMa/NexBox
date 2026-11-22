@@ -385,7 +385,7 @@ async fn download_package(
         let chunk = chunk.map_err(|error| format!("下载 {} 失败: {}", package.file_name, error))?;
         file.write_all(&chunk).map_err(|error| format!("写入安装包失败: {}", error))?;
         downloaded += chunk.len() as u64;
-        let completed = if total == 0 { 0 } else { ((downloaded * span as u64) / total) as u8 };
+        let completed = (downloaded * span as u64).checked_div(total).unwrap_or(0) as u8;
         emit_progress(window, runtime_id, "downloading", base_progress.saturating_add(completed), package.file_name);
     }
     file.flush().map_err(|error| format!("写入安装包失败: {}", error))?;

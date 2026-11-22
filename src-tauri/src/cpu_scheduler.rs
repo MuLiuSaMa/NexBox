@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use sysinfo::{Pid, ProcessRefreshKind, System};
 use tauri::AppHandle;
 use tauri_plugin_store::StoreExt;
-use log;
 
 // LOGICAL_PROCESSOR_RELATIONSHIP 常量
 const RELATION_PROCESSOR_CORE: i32 = 0;
@@ -149,7 +148,7 @@ fn get_cpu_topology_win32() -> Result<CpuTopology, String> {
     }
 
     // 分配 8 字节对齐的 buffer
-    let alloc_units = ((buffer_size as usize) + 7) / 8;
+    let alloc_units = (buffer_size as usize).div_ceil(8);
     let mut buffer_aligned: Vec<u64> = vec![0u64; alloc_units];
     let success = unsafe {
         GetLogicalProcessorInformationEx(
@@ -376,7 +375,7 @@ pub async fn get_process_list() -> Result<Vec<ProcessInfo>, String> {
 
     let mut processes: Vec<ProcessInfo> = Vec::new();
 
-    for (_, proc_) in sys.processes() {
+    for proc_ in sys.processes().values() {
         let name = proc_.name().to_string();
         if name.is_empty() || is_protected_process(&name) {
             continue;
@@ -611,12 +610,11 @@ pub async fn apply_rule_by_name(app: AppHandle, process_name: String) -> Result<
     sys.refresh_processes_specifics(ProcessRefreshKind::new());
 
     let mut count = 0u32;
-    for (_, proc_) in sys.processes() {
-        if proc_.name() == process_name {
-            match set_process_affinity(proc_.pid().as_u32(), mask).await {
-                Ok(_) => count += 1,
-                Err(_) => {}
-            }
+    for proc_ in sys.processes().values() {
+        if proc_.name() == process_name
+            && set_process_affinity(proc_.pid().as_u32(), mask).await.is_ok()
+        {
+            count += 1
         }
     }
 
@@ -660,7 +658,7 @@ pub async fn apply_all_saved_rules(app: &AppHandle) {
         };
 
         let mut found = false;
-        for (_, proc_) in sys.processes() {
+        for proc_ in sys.processes().values() {
             if proc_.name() == process_name.as_str() {
                 found = true;
                 match set_process_affinity(proc_.pid().as_u32(), mask).await {
@@ -808,7 +806,7 @@ fn apply_core_isolation_sync(
     };
     let mut modified_processes: Vec<IsolationModifiedProcess> = Vec::new();
 
-    for (_, proc_) in sys.processes() {
+    for proc_ in sys.processes().values() {
         let name = proc_.name().to_string();
         if name.is_empty() || is_protected_process(&name) {
             continue;

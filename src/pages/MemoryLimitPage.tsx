@@ -1,21 +1,4 @@
-import {
-  Box,
-  VStack,
-  Text,
-  HStack,
-  useColorModeValue,
-  Button,
-  Badge,
-  Alert,
-  AlertIcon,
-  AlertDescription,
-  Tabs,
-  TabList,
-  Tab,
-  TabPanels,
-  TabPanel,
-  Input,
-} from "@chakra-ui/react";
+import { Box, VStack, Text, HStack, Button, Badge, Alert, AlertIcon, AlertDescription, Tabs, TabList, Tab, TabPanels, TabPanel, Input } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
@@ -23,12 +6,13 @@ import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 import { AlertTriangle, Cpu } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect} from "react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 
+import { useColorValue } from "@/hooks/use-color-value";
 interface MemoryLimitOption {
   id: string;
   label: string;
@@ -51,6 +35,7 @@ interface MemoryLimitResult {
 }
 
 export default function MemoryLimitPage() {
+  const cm = useColorValue();
   const [memoryStatus, setMemoryStatus] = useState<MemoryLimitStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isApplying, setIsApplying] = useState(false);
@@ -62,27 +47,29 @@ export default function MemoryLimitPage() {
   const { liquidGlassEnabled } = useBackground();
   const toast = useDynamicIsland("memory");
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const cardBg = useColorModeValue("white", "#111111");
-  const cardBorder = useColorModeValue("gray.200", "#333333");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const { getActiveColor, getContrastTextColor } = useThemeColor();
+  const headingColor = cm("gray.900", "#ffffff");
+  const cardBg = cm("white", "#111111");
+  const cardBorder = cm("gray.200", "#333333");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const contrastText = getContrastTextColor();
+
   const themeColorHex = primaryColor || "#98DDD0";
   const themeColorRgba = (opacity: number) => hexToRgba(themeColorHex, opacity);
 
   // Mode-adaptive: white in light mode, black in dark mode
-  const restoreBg = useColorModeValue("#FFFFFF", "#1A202C");
-  const restoreColor = useColorModeValue("#1A202C", "#FFFFFF");
-  const restoreHoverBg = useColorModeValue("#F7FAFC", "#2D3748");
-  const restoreBorder = useColorModeValue("gray.300", "gray.700");
+  const restoreBg = cm("#FFFFFF", "#1A202C");
+  const restoreColor = cm("#1A202C", "#FFFFFF");
+  const restoreHoverBg = cm("#F7FAFC", "#2D3748");
+  const restoreBorder = cm("gray.300", "gray.700");
 
-  const isInitialLoad = useRef(true);
+
 
   useEffect(() => {
     loadMemoryStatus(true);
+    // 初始加载仅需执行一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadMemoryStatus = async (initialLoad = false) => {
@@ -292,6 +279,7 @@ export default function MemoryLimitPage() {
                   px={3}
                   py={1}
                   borderRadius="full"
+                  data-corner="round"
                   fontWeight="600"
                 >
                   {formatMemory(memoryStatus?.current_limit_mb || null)}
@@ -368,7 +356,7 @@ export default function MemoryLimitPage() {
           <Alert
             status="warning"
             borderRadius="xl"
-            bg={useColorModeValue("orange.50", "rgba(255, 165, 0, 0.1)")}
+            bg={cm("orange.50", "rgba(255, 165, 0, 0.1)")}
             borderLeft="4px solid"
             borderColor="orange.400"
           >

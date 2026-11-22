@@ -20,9 +20,9 @@ pub fn aes_ecb_encrypt_pkcs7(input: &[u8], key: &[u8; 16]) -> Vec<u8> {
     let cipher = Aes128::new(GenericArray::from_slice(key));
     let mut buffer = input.to_vec();
     let pad_len = 16 - (buffer.len() % 16);
-    buffer.extend(std::iter::repeat(pad_len as u8).take(pad_len));
+    buffer.extend(std::iter::repeat_n(pad_len as u8, pad_len));
 
-    for chunk in buffer.chunks_exact_mut(16) {
+    for chunk in buffer.as_chunks_mut::<16>().0 {
         cipher.encrypt_block(GenericArray::from_mut_slice(chunk));
     }
 
@@ -109,6 +109,7 @@ fn weapi_random_secret_key() -> String {
 /// 1. 第一层 AES-CBC(presetKey) 加密 payload
 /// 2. 第二层 AES-CBC(随机 secretKey) 加密第一层结果的 base64 字符串
 /// 3. encSecKey = 裸 RSA 加密 secretKey 逆序
+///
 /// 返回 (params, encSecKey)
 pub fn encrypt_weapi_payload(payload_text: &str) -> (String, String) {
     let secret_key = weapi_random_secret_key();

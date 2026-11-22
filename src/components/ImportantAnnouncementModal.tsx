@@ -6,7 +6,6 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-  Button,
   useColorModeValue,
   Text,
   VStack,

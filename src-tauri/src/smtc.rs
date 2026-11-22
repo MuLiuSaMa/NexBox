@@ -168,7 +168,7 @@ mod imp {
             .hwnd()
             .map_err(|e| format!("获取主窗口 HWND 失败: {e}"))?;
         // Tauri hwnd() 返回的元组结构 `.0` 即裸窗口句柄
-        let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as *mut core::ffi::c_void);
+        let hwnd = windows::Win32::Foundation::HWND(hwnd.0);
 
         // 通过 Interop 激活工厂获取 ISystemMediaTransportControlsInterop 并绑定窗口
         let interop: ISystemMediaTransportControlsInterop =

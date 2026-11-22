@@ -8,7 +8,7 @@ pub use wmi::Variant;
 fn create_connection() -> Result<WMIConnection, String> {
     let com_con =
         COMLibrary::new().map_err(|e| format!("COM初始化失败: {}", e))?;
-    WMIConnection::new(com_con.into()).map_err(|e| format!("WMI连接失败: {}", e))
+    WMIConnection::new(com_con).map_err(|e| format!("WMI连接失败: {}", e))
 }
 
 /// 执行 WQL 查询，返回行列表（每行是 属性名 → Variant）
@@ -21,7 +21,7 @@ pub fn wmi_query(wql: &str) -> Result<Vec<HashMap<String, Variant>>, String> {
 /// 在指定命名空间执行 WQL 查询（如 ROOT\WMI 读取 SMART），返回行列表
 pub fn wmi_query_ns(namespace: &str, wql: &str) -> Result<Vec<HashMap<String, Variant>>, String> {
     let com_con = COMLibrary::new().map_err(|e| format!("COM初始化失败: {}", e))?;
-    let con = WMIConnection::with_namespace_path(namespace, com_con.into())
+    let con = WMIConnection::with_namespace_path(namespace, com_con)
         .map_err(|e| format!("WMI连接失败({}): {}", namespace, e))?;
     con.raw_query(wql)
         .map_err(|e| format!("WMI查询失败({}): {}", namespace, e))
@@ -101,7 +101,7 @@ pub fn v_u16_arr(v: &Variant) -> Vec<u16> {
         Variant::UI1(n) => vec![*n as u16],
         Variant::UI2(n) => vec![*n],
         Variant::UI4(n) => vec![*n as u16],
-        Variant::Array(arr) => arr.iter().filter_map(|e| v_u16(e)).collect(),
+        Variant::Array(arr) => arr.iter().filter_map(v_u16).collect(),
         _ => vec![],
     }
 }

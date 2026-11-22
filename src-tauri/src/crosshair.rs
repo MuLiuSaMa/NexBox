@@ -304,7 +304,7 @@ mod win32 {
             return true;
         }
 
-        let mut input = GdiplusStartupInput {
+        let input = GdiplusStartupInput {
             GdiplusVersion: 1,
             DebugEventCallback: 0,
             SuppressBackgroundThread: 0,
@@ -312,7 +312,7 @@ mod win32 {
         };
 
         let mut token_value: usize = 0;
-        let result = GdiplusStartup(&mut token_value, &mut input, ptr::null_mut());
+        let result = GdiplusStartup(&mut token_value, &input, ptr::null_mut());
 
         if result == 0 {
             *token = Some(token_value);
@@ -464,6 +464,8 @@ mod win32 {
         GdipFillEllipse(graphics, brush, center_x - r, center_y - r, r * 2.0, r * 2.0);
     }
 
+    // 参数即一次绘制调用的全部图元句柄与几何，拆结构体会改动所有调用点
+    #[allow(clippy::too_many_arguments)]
     unsafe fn draw_style_dot_box(
         graphics: *mut GpGraphics,
         pen: *mut GpPen,
@@ -713,7 +715,7 @@ mod win32 {
         } else {
             let outline_extra = if settings.outline_enabled { settings.outline_thickness.max(0) } else { 0 };
             let extent = settings.size + settings.gap + settings.thickness + outline_extra;
-            ((extent * 2 + 16) as i32).max(64)
+            (extent * 2 + 16).max(64)
         };
 
         let screen_dc = GetDC(ptr::null_mut());
@@ -855,7 +857,7 @@ mod win32 {
         } else {
             let outline_extra = if settings.outline_enabled { settings.outline_thickness.max(0) } else { 0 };
             let extent = settings.size + settings.gap + settings.thickness + outline_extra;
-            ((extent * 2 + 16) as i32).max(64)
+            (extent * 2 + 16).max(64)
         };
 
         let hwnd = CreateWindowExW(
@@ -1202,7 +1204,7 @@ pub async fn get_crosshair_presets(app: tauri::AppHandle) -> Result<Vec<Crosshai
     }
 
     // 按文件名排序，保持一致性
-    presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    presets.sort_by_key(|a| a.name.to_lowercase());
     Ok(presets)
 }
 

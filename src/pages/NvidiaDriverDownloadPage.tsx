@@ -1,22 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Box,
-  Text,
-  VStack,
-  HStack,
-  useColorModeValue,
-  Button,
-  Spinner,
-  Badge,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  Flex,
-  Input,
-  InputGroup,
-  InputLeftElement,
-} from "@chakra-ui/react";
+import { Box, Text, VStack, HStack, Button, Spinner, Badge, Alert, AlertIcon, AlertTitle, AlertDescription, Flex, Input, InputGroup, InputLeftElement } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -29,14 +12,12 @@ import {
   Cpu,
   AlertTriangle,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import nvidiaLogo from "@/assets/nvidia.png";
-import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { hexToRgba } from "@/lib/color-utils";
 
+import { useColorValue } from "@/hooks/use-color-value";
 /** 单个驱动版本在某个设备类型下的信息 */
 interface DriverClassInfo {
   id: string;
@@ -63,11 +44,26 @@ interface GpuDetection {
 }
 
 export default function NvidiaDriverDownloadPage() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const toast = useDynamicIsland("download");
-  const { liquidGlassEnabled } = useBackground();
   const { config, getActiveColor, getContrastTextColor } = useThemeColor();
-  const isDark = useColorModeValue(false, true);
+  const isDark = cm(false, true);
+  // 错误提示底色：提到组件顶部，避免在 JSX 条件分支里调用 hook
+  const errorAlertBg = cm("red.50", "rgba(239, 68, 68, 0.1)");
+  // 驱动列表项：默认底色 / 悬停底色（提到组件顶部，避免在 map 回调里调用 hook）
+  const driverItemBorder = cm(
+    "rgba(255,255,255,0.5)",
+    "rgba(255,255,255,0.14)"
+  );
+  const driverItemBg = cm(
+    "rgba(255,255,255,0.35)",
+    "rgba(255,255,255,0.07)"
+  );
+  const driverItemHoverBg = cm(
+    "rgba(255,255,255,0.5)",
+    "rgba(255,255,255,0.12)"
+  );
 
   const [drivers, setDrivers] = useState<DriverEntry[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -76,11 +72,11 @@ export default function NvidiaDriverDownloadPage() {
   const [error, setError] = useState<string | null>(null);
   const [detection, setDetection] = useState<GpuDetection | null>(null);
 
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
-  const textColor = useColorModeValue("gray.700", "#ffffff");
-  const subTextColor = useColorModeValue("gray.500", "#ffffff");
-  const borderColor = useColorModeValue("gray.200", "#333333");
-  const inputBg = useColorModeValue("white", "#1a1a1a");
+  const headingColor = cm("gray.900", "#ffffff");
+  const textColor = cm("gray.700", "#ffffff");
+  const subTextColor = cm("gray.500", "#ffffff");
+  const borderColor = cm("gray.200", "#333333");
+  const inputBg = cm("white", "#1a1a1a");
 
   // 1. 初始化：自动检测当前 GPU（不阻塞页面渲染，检测完成后填充信息卡）
   useEffect(() => {
@@ -239,6 +235,7 @@ export default function NvidiaDriverDownloadPage() {
                   bg={hexToRgba(config.primaryColor, 0.12)}
                   px={2}
                   borderRadius="full"
+                  data-corner="round"
                   fontSize="xs"
                 >
                   {t("nvidiaDriverDownload.detected")}
@@ -257,7 +254,7 @@ export default function NvidiaDriverDownloadPage() {
           <Alert
             status="error"
             borderRadius="xl"
-            bg={useColorModeValue("red.50", "rgba(239, 68, 68, 0.1)")}
+            bg={errorAlertBg}
           >
             <AlertIcon />
             <Box>
@@ -297,6 +294,7 @@ export default function NvidiaDriverDownloadPage() {
                       fontSize="xs"
                       px={2}
                       borderRadius="full"
+                      data-corner="round"
                     >
                       {t("nvidiaDriverDownload.totalDrivers", {
                         count: drivers.length,
@@ -367,24 +365,15 @@ export default function NvidiaDriverDownloadPage() {
                         p={3}
                         borderRadius="lg"
                         borderWidth="1px"
-                        borderColor={useColorModeValue(
-                          "rgba(255,255,255,0.5)",
-                          "rgba(255,255,255,0.14)"
-                        )}
-                        bg={useColorModeValue(
-                          "rgba(255,255,255,0.35)",
-                          "rgba(255,255,255,0.07)"
-                        )}
+                        borderColor={driverItemBorder}
+                        bg={driverItemBg}
                         sx={{
                           backdropFilter: "blur(14px) saturate(1.3)",
                           WebkitBackdropFilter: "blur(14px) saturate(1.3)",
                         }}
                         _hover={{
                           borderColor: getActiveColor(),
-                          bg: useColorModeValue(
-                            "rgba(255,255,255,0.5)",
-                            "rgba(255,255,255,0.12)"
-                          ),
+                          bg: driverItemHoverBg,
                           opacity: 1,
                         }}
                         transition="all 0.2s"
@@ -421,6 +410,7 @@ export default function NvidiaDriverDownloadPage() {
                                 variant="subtle"
                                 px={1.5}
                                 borderRadius="full"
+                                data-corner="round"
                               >
                                 {driver.branch}
                               </Badge>
@@ -431,6 +421,7 @@ export default function NvidiaDriverDownloadPage() {
                                   variant="subtle"
                                   px={1.5}
                                   borderRadius="full"
+                                  data-corner="round"
                                 >
                                   {t("nvidiaDriverDownload.latest")}
                                 </Badge>

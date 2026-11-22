@@ -8,7 +8,7 @@ interface ThemeSwitchProps {
   isChecked?: boolean;
   onChange?: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isDisabled?: boolean;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function ThemeSwitch({ size = "md", isChecked, onChange, isDisabled, ...props }: ThemeSwitchProps) {

@@ -17,7 +17,7 @@ import { store } from "@/lib/store";
 const FEEDBACK_URL = "https://nexbox.top/feedback";
 const DOCS_URL = "https://docs.nexbox.top";
 /** 本地兜底的 QQ 群图标 */
-const LOCAL_QQ_ICON = "/icons/qq.webp";
+
 
 /**
  * 主页「手机远程」（手机控制）卡片展示开关：
@@ -216,7 +216,7 @@ export function RemoteAccessCard() {
   useEffect(() => {
     refresh();
     const timer = setInterval(refresh, 4000);
-    let unlisten: (() => void)[] = [];
+    const unlisten: (() => void)[] = [];
     let disposed = false;
     const sub = (ev: string) =>
       listen(ev, () => refresh())
@@ -309,6 +309,7 @@ export function RemoteAccessCard() {
             <HStack spacing={1} flexShrink={0}>
               <Button
                 size="xs"
+                data-corner="round"
                 bg={getActiveColor()}
                 color="white"
                 _hover={{ bg: getActiveColor() }}
@@ -316,13 +317,14 @@ export function RemoteAccessCard() {
               >
                 允许
               </Button>
-              <Button size="xs" variant="ghost" colorScheme="red" onClick={(e) => resolve(e, requests[0].id, false)}>
+              <Button size="xs" data-corner="round" variant="ghost" colorScheme="red" onClick={(e) => resolve(e, requests[0].id, false)}>
                 拒绝
               </Button>
             </HStack>
           ) : isConnected ? (
             <Button
               size="xs"
+              data-corner="round"
               variant="ghost"
               colorScheme="red"
               flexShrink={0}

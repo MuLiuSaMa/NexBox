@@ -13,7 +13,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { RefreshCw, ChevronRight, Gamepad2 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { Surface } from "@/components/df/surface";
 import { useBackground } from "@/contexts/background-context";
@@ -65,6 +64,7 @@ function StreamerCard({
           <Box
             boxSize="50px"
             borderRadius="full"
+            data-corner="round"
             overflow="hidden"
             bg={avatarBg}
             border="2px solid"
@@ -108,6 +108,7 @@ function StreamerCard({
               px={1.5}
               py={0}
               borderRadius="full"
+              data-corner="round"
               bg={`${primaryColor}22`}
               color={textColor}
               fontWeight="500"

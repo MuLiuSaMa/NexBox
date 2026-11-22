@@ -19,7 +19,7 @@ import { listen } from "@tauri-apps/api/event";
 import { store } from "@/lib/store";
 import { useTranslation } from "react-i18next";
 import { Keyboard, Zap } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useBackground } from "@/contexts/background-context";
@@ -230,6 +230,7 @@ export default function AutoClickerPage() {
           px={3}
           py={1}
           borderRadius="full"
+          data-corner="round"
           fontSize="sm"
         >
           {running ? t("autoclicker.running") : t("autoclicker.stopped")}
@@ -290,7 +291,7 @@ export default function AutoClickerPage() {
             <HStack spacing={3} mt={3}>
               <MouseHotkeyRecorder value={hotkey} onChange={saveHotkey} />
               <HStack spacing={2}>
-                <Box w={2} h={2} borderRadius="full" bg={running ? themeColor : "gray.400"} />
+                <Box w={2} h={2} borderRadius="full" data-corner="round" bg={running ? themeColor : "gray.400"} />
                 <Text fontSize="sm" color={running ? themeColor : textColor}>
                   {running ? t("autoclicker.running") : t("autoclicker.stopped")}
                 </Text>

@@ -1,18 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Box,
-  Text,
-  HStack,
-  VStack,
-  Badge,
-  Wrap,
-  WrapItem,
-  useColorModeValue,
-  IconButton,
-  SimpleGrid,
-} from "@chakra-ui/react";
+import { Box, Text, HStack, VStack, Badge, Wrap, WrapItem, IconButton, SimpleGrid } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import {
@@ -23,9 +12,9 @@ import {
 import { Surface } from "@/components/df/surface";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
+import { useColorValue } from "@/hooks/use-color-value";
 import {
   streamerAsset,
-  EQUIPMENT_CATEGORY_LABEL,
   type Equipment,
   type StreamerEntry,
 } from "@/lib/streamer-data";
@@ -37,6 +26,7 @@ function PlatformMark({ platform }: { platform: string }) {
     <Box
       boxSize="22px"
       borderRadius="full"
+      data-corner="round"
       bg="#000"
       border="2px solid"
       borderColor="white"
@@ -76,10 +66,11 @@ function useOpenExternal() {
 
 /** 单个外设卡片 */
 function EquipmentTile({ item, compact }: { item: Equipment; compact?: boolean }) {
-  const textColor = useColorModeValue("#000000", "#ffffff");
-  const subTextColor = useColorModeValue("gray.600", "#a0a0a0");
-  const tileBg = useColorModeValue("gray.50", "#181818");
-  const borderColor = useColorModeValue("gray.200", "#2c2c2c");
+  const cm = useColorValue();
+  const textColor = cm("#000000", "#ffffff");
+  const subTextColor = cm("gray.600", "#a0a0a0");
+  const tileBg = cm("gray.50", "#181818");
+  const borderColor = cm("gray.200", "#2c2c2c");
   const openExternal = useOpenExternal();
   const { t } = useTranslation();
 
@@ -165,16 +156,20 @@ export function StreamerProfileCard({
   entry: StreamerEntry;
   order: number;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
   const primaryColor = getActiveColor();
-  const textColor = useColorModeValue("#000000", "#ffffff");
-  const subTextColor = useColorModeValue("gray.600", "#a0a0a0");
-  const labelColor = useColorModeValue("gray.500", "#8a8a8a");
-  const borderColor = useColorModeValue("gray.200", "#2c2c2c");
+  const textColor = cm("#000000", "#ffffff");
+  const subTextColor = cm("gray.600", "#a0a0a0");
+  const labelColor = cm("gray.500", "#8a8a8a");
+  const borderColor = cm("gray.200", "#2c2c2c");
+  const avatarBg = cm("gray.100", "#1f1f1f");
+  const badgeBg = cm("gray.100", "#242424");
+  const featuredBg = cm("gray.50", "#181818");
 
   const profile = entry.profile;
-  const equipment = profile?.equipment ?? [];
+  const equipment = useMemo(() => profile?.equipment ?? [], [profile?.equipment]);
 
   // 首个外设（通常是鼠标）单独大卡展示，其余按 2 列分页
   const featured = equipment[0];
@@ -198,10 +193,11 @@ export function StreamerProfileCard({
               <Box
                 boxSize="96px"
                 borderRadius="full"
+                data-corner="round"
                 overflow="hidden"
                 border="3px solid"
                 borderColor={`${primaryColor}66`}
-                bg={useColorModeValue("gray.100", "#1f1f1f")}
+                bg={avatarBg}
               >
                 {entry.avatar ? (
                   <img
@@ -236,7 +232,8 @@ export function StreamerProfileCard({
                   px={2.5}
                   py={0.5}
                   borderRadius="full"
-                  bg={useColorModeValue("gray.100", "#242424")}
+                  data-corner="round"
+                  bg={badgeBg}
                   color={subTextColor}
                   fontWeight="500"
                 >
@@ -250,7 +247,8 @@ export function StreamerProfileCard({
                     px={2.5}
                     py={0.5}
                     borderRadius="full"
-                    bg={useColorModeValue("gray.100", "#242424")}
+                    data-corner="round"
+                    bg={badgeBg}
                     color={subTextColor}
                     fontWeight="500"
                   >
@@ -284,7 +282,7 @@ export function StreamerProfileCard({
 
             {featured && (
               <Box
-                bg={useColorModeValue("gray.50", "#181818")}
+                bg={featuredBg}
                 border="1px solid"
                 borderColor={borderColor}
                 borderRadius="lg"
@@ -350,6 +348,7 @@ export function StreamerProfileCard({
                 <IconButton
                   aria-label="prev"
                   size="xs"
+                  data-corner="round"
                   variant="ghost"
                   color={subTextColor}
                   icon={<ChevronLeft size={15} />}
@@ -362,6 +361,7 @@ export function StreamerProfileCard({
                 <IconButton
                   aria-label="next"
                   size="xs"
+                  data-corner="round"
                   variant="ghost"
                   color={subTextColor}
                   icon={<ChevronRight size={15} />}

@@ -160,7 +160,7 @@ function compileShader(
   return shader;
 }
 
-export function MRBackground({ blur = 0, colors }: { blur?: number; colors: MRBackgroundColors }) {
+export function MRBackground({ filter, opacity = 1, colors }: { filter?: string; opacity?: number; colors: MRBackgroundColors }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [fallback, setFallback] = useState(false);
   // 颜色变化时刷新派生配色，无需重建 WebGL 上下文
@@ -346,6 +346,7 @@ export function MRBackground({ blur = 0, colors }: { blur?: number; colors: MRBa
         zIndex={0}
         overflow="hidden"
         bg="linear-gradient(135deg, #0b0207 0%, #05070c 45%, #02101a 100%)"
+        style={{ filter, opacity }}
       />
     );
   }
@@ -360,6 +361,7 @@ export function MRBackground({ blur = 0, colors }: { blur?: number; colors: MRBa
       zIndex={0}
       overflow="hidden"
       bg="#05070c"
+      style={{ filter, opacity, willChange: filter ? "filter" : undefined }}
     >
       <canvas
         ref={canvasRef}
@@ -367,8 +369,6 @@ export function MRBackground({ blur = 0, colors }: { blur?: number; colors: MRBa
           width: "100%",
           height: "100%",
           display: "block",
-          filter: blur > 0 ? `blur(${blur}px)` : undefined,
-          willChange: blur > 0 ? "filter" : undefined,
         }}
       />
     </Box>

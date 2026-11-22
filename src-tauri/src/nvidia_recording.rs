@@ -272,7 +272,7 @@ pub async fn scan_nvidia_recordings(app: tauri::AppHandle) -> Result<RecordingSc
             .unwrap_or(usize::MAX);
         (f.custom, idx)
     });
-    videos.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms));
+    videos.sort_by_key(|a| std::cmp::Reverse(a.modified_ms));
 
     info!(
         "[NvidiaRecording] 扫描完成: {} 个目录, {} 个视频",
@@ -667,14 +667,16 @@ fn generate_thumbnail(
         let _ = unsafe { DeleteObject(hbm) };
         return Err("获取屏幕 DC 失败".to_string());
     }
-    let mut bmi = BITMAPINFO::default();
-    bmi.bmiHeader = BITMAPINFOHEADER {
-        biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-        biWidth: w,
-        biHeight: -h,
-        biPlanes: 1,
-        biBitCount: 32,
-        biCompression: BI_RGB.0,
+    let mut bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: w,
+            biHeight: -h,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
         ..Default::default()
     };
     let mut buf = vec![0u8; (w * h * 4) as usize];
@@ -697,7 +699,7 @@ fn generate_thumbnail(
 
     // 4) BGRA -> RGBA 并编码 PNG
     let mut rgba = vec![0u8; buf.len()];
-    for (i, px) in buf.chunks_exact(4).enumerate() {
+    for (i, px) in buf.as_chunks::<4>().0.iter().enumerate() {
         rgba[i * 4] = px[2];
         rgba[i * 4 + 1] = px[1];
         rgba[i * 4 + 2] = px[0];

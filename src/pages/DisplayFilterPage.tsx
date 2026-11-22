@@ -67,7 +67,6 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
 import { PageHeader } from "@/components/special/page-header";
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
@@ -119,6 +118,28 @@ interface IccPresetInfo {
   id: string;
   name: string;
   description: string;
+}
+
+/** 滤镜类 Tauri 命令的统一返回（对应 src-tauri display_filter.rs::FilterResult） */
+interface FilterCommandResult {
+  success: boolean;
+  message?: string;
+  degraded?: boolean;
+  skipped_stale?: boolean;
+  settings: FilterSettings;
+  preview_filter?: string | null;
+  preview_tint_color?: string | null;
+  preview_tint_opacity?: number | null;
+  /** 仅 import_icc_profile 返回 */
+  preset?: IccPresetInfo;
+}
+
+/** check_gamma_support 返回（对应 src-tauri display_filter.rs::GammaSupportInfo） */
+interface GammaSupportInfoPayload {
+  supported: boolean;
+  caps_value: number;
+  hdr_enabled: boolean;
+  reason: string;
 }
 
 interface UserFilterPresetInfo {
@@ -288,6 +309,7 @@ const PresetCard = memo(function PresetCard({
               px={1.5}
               py={0.5}
               borderRadius="full"
+              data-corner="round"
               fontSize="9px"
               fontWeight="700"
               pointerEvents="none"
@@ -303,6 +325,7 @@ const PresetCard = memo(function PresetCard({
               aria-label={t("displayFilter.exportIcc")}
               icon={<Download size={14} />}
               size="xs"
+              data-corner="round"
               variant="ghost"
               position="absolute"
               top={1}
@@ -419,7 +442,7 @@ export default function DisplayFilterPage() {
 
   useEffect(() => {
     (async () => {
-      let v = await store.get<boolean>("nexbox_auto_apply");
+      const v = await store.get<boolean>("nexbox_auto_apply");
       if (v !== null && v !== undefined) {
         setAutoApplyOnStartup(v);
       } else {
@@ -450,7 +473,7 @@ export default function DisplayFilterPage() {
   // 恢复「使用多个滤镜」开关状态
   useEffect(() => {
     (async () => {
-      let v = await store.get<boolean>("nexbox_multi_filter");
+      const v = await store.get<boolean>("nexbox_multi_filter");
       if (v !== null && v !== undefined) {
         setMultiFilterEnabled(v);
       } else {
@@ -469,7 +492,8 @@ export default function DisplayFilterPage() {
     b_gamma: number;
     shadow: number;
   } | null>(null);
-  const [hasChanges, setHasChanges] = useState(false);
+  // 改动标记：当前仅写入不读取（UI 不再提示未保存），保留 setter 维持原有重渲染时序
+  const [, setHasChanges] = useState(false);
   const [inputVersion, setInputVersion] = useState(0);
   /** 拖动滑块时递增，用于触发实时预览重算（editValuesRef 是 ref，不会自己触发渲染） */
   const [liveVersion, setLiveVersion] = useState(0);
@@ -754,7 +778,7 @@ export default function DisplayFilterPage() {
   // 将当前选中组合同步到后端（主开关开启时即时应用；空组合 = 清除叠加）
   const syncStackToBackend = useCallback(async (ids: string[]) => {
     try {
-      const result: any = await invoke("apply_filter_stack", {
+      const result = await invoke<FilterCommandResult>("apply_filter_stack", {
         displayIndex: activeDisplayIndexRef.current,
         presetIds: ids,
       });
@@ -925,7 +949,7 @@ export default function DisplayFilterPage() {
       if (willEnable) {
         console.log("%c[FilterToggle] 检测 Gamma Ramp 支持状态...", "color: #2196F3");
         try {
-          const supportInfo: any = await invoke("check_gamma_support", {
+          const supportInfo = await invoke<GammaSupportInfoPayload>("check_gamma_support", {
             displayIndex: activeDisplayIndex,
           });
           console.log("%c[FilterToggle] Gamma Ramp 检测结果:", "color: #2196F3", {
@@ -949,12 +973,12 @@ export default function DisplayFilterPage() {
         displayIndex: activeDisplayIndex,
         presetIds: selectedStackIds,
       });
-      const result: any = useStack
-        ? await invoke("apply_filter_stack", {
+      const result = useStack
+        ? await invoke<FilterCommandResult>("apply_filter_stack", {
             displayIndex: activeDisplayIndex,
             presetIds: selectedStackIds,
           })
-        : await invoke("toggle_filter", { displayIndex: activeDisplayIndex });
+        : await invoke<FilterCommandResult>("toggle_filter", { displayIndex: activeDisplayIndex });
 
       console.log("%c[FilterToggle] toggle_filter 返回:", "color: #4CAF50", {
         success: result.success,
@@ -1025,7 +1049,7 @@ export default function DisplayFilterPage() {
     setInputVersion(v => v + 1);
     
     try {
-      const result: any = await invoke("apply_preset", {
+      const result = await invoke<FilterCommandResult>("apply_preset", {
         displayIndex: activeDisplayIndex,
         presetId: preset.id,
         isActive: settings.is_active,
@@ -1120,7 +1144,7 @@ export default function DisplayFilterPage() {
       
       // 应用已保存的自定义滤镜设置
       try {
-        const result: any = await invoke("set_filter_settings", {
+        const result = await invoke<FilterCommandResult>("set_filter_settings", {
           displayIndex: activeDisplayIndex,
           temperature: savedCustom.temperature,
           brightness: savedCustom.brightness,
@@ -1228,7 +1252,7 @@ export default function DisplayFilterPage() {
     liveApplyBusyRef.current = true;
     liveApplyLastKeyRef.current = key;
     try {
-      const result: any = await invoke("set_filter_settings", {
+      const result = await invoke<FilterCommandResult>("set_filter_settings", {
         displayIndex: activeDisplayIndex,
         temperature: Math.max(1000, Math.min(10000, e.temperature)),
         brightness: Math.max(50, Math.min(150, e.brightness)),
@@ -1308,7 +1332,7 @@ export default function DisplayFilterPage() {
     setIccTintOpacity(0);
 
     try {
-      const result: any = await invoke("apply_user_filter_preset", {
+      const result = await invoke<FilterCommandResult>("apply_user_filter_preset", {
         displayIndex: activeDisplayIndex,
         id: preset.id,
         isActive: settings.is_active,
@@ -1396,7 +1420,7 @@ export default function DisplayFilterPage() {
     setActiveIccId(null);
     try {
       // Apply the 去曝光Pro ICC as display baseline
-      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_DeExposurePro", isActive: settings.is_active });
+      const result = await invoke<FilterCommandResult>("apply_icc_preset", { displayIndex: activeDisplayIndex, id: "builtin_NexBox_DeExposurePro", isActive: settings.is_active });
       if (result.success) {
         const rs = result.settings;
         setSettings(prev => ({
@@ -1477,7 +1501,7 @@ export default function DisplayFilterPage() {
         return;
       }
 
-      const result: any = await invoke("import_icc_profile", { path: filePath });
+      const result = await invoke<FilterCommandResult>("import_icc_profile", { path: filePath });
       if (result.success && result.preset) {
         setIccPresets(prev => [...prev, result.preset]);
         toast({
@@ -1506,7 +1530,7 @@ export default function DisplayFilterPage() {
     setActivePresetId(""); // 取消内置预设选中状态
     setManualPresetChange(true);
     try {
-      const result: any = await invoke("apply_icc_preset", { displayIndex: activeDisplayIndex, id, isActive: settings.is_active });
+      const result = await invoke<FilterCommandResult>("apply_icc_preset", { displayIndex: activeDisplayIndex, id, isActive: settings.is_active });
       if (result.success) {
         // 存储 ICC 预览参数
         setIccPreviewFilter(result.preview_filter || null);
@@ -1565,7 +1589,7 @@ export default function DisplayFilterPage() {
     if (!deleteIccId) return;
     setIsLoading(true);
     try {
-      const result: any = await invoke("delete_icc_preset", { id: deleteIccId });
+      const result = await invoke<FilterCommandResult>("delete_icc_preset", { id: deleteIccId });
       if (result.success) {
         setIccPresets(prev => prev.filter(p => p.id !== deleteIccId));
         if (activeIccId === deleteIccId) {
@@ -1774,6 +1798,8 @@ export default function DisplayFilterPage() {
 
   const currentModeParams = modeParams[settings.mode] || modeParams[0];
 
+  // 输入框改写回调：当前面板已改用滑块，暂时保留实现，避免删除可复用的逻辑
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleInputChange = (key: keyof typeof editValuesRef.current, value: string) => {
     const isGamma = key === "r_gamma" || key === "g_gamma" || key === "b_gamma";
     const numValue = isGamma ? (parseFloat(value) || 1.0) : (parseInt(value) || 0);
@@ -1802,6 +1828,8 @@ export default function DisplayFilterPage() {
     b_gamma: "#4488FF",
   };
 
+  // 以下三个调节项组件当前页面未直接使用（面板已改为内联滑块），保留实现避免删除可复用 UI
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const GammaSliderItem = ({
     channelKey,
     label,
@@ -1854,7 +1882,7 @@ export default function DisplayFilterPage() {
         >
           <HStack w="full" justify="space-between">
             <HStack spacing={1.5}>
-              <Box w={2.5} h={2.5} borderRadius="full" bg={dotColor} />
+              <Box w={2.5} h={2.5} borderRadius="full" data-corner="round" bg={dotColor} />
               <Text color={subTextColor} fontSize="xs" fontWeight="500">
                 {label}
               </Text>
@@ -1893,7 +1921,7 @@ export default function DisplayFilterPage() {
             focusThumbOnChange={false}
             size="sm"
           >
-            <SliderTrack bg={sliderBg} h="3px" borderRadius="full">
+            <SliderTrack bg={sliderBg} h="3px" borderRadius="full" data-corner="round">
               <SliderFilledTrack bg={dotColor} />
             </SliderTrack>
             <SliderThumb boxSize="12px" bg={dotColor} />
@@ -1903,6 +1931,7 @@ export default function DisplayFilterPage() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const SliderInputItem = ({
     label,
     value,
@@ -1970,6 +1999,7 @@ export default function DisplayFilterPage() {
                 <Box
                   w={2.5} h={2.5}
                   borderRadius="full"
+                  data-corner="round"
                   bg={dotColor}
                   border="1px solid"
                   borderColor={cardBorder}
@@ -2013,7 +2043,7 @@ export default function DisplayFilterPage() {
             focusThumbOnChange={false}
             size="sm"
           >
-            <SliderTrack bg={sliderBg} h="3px" borderRadius="full">
+            <SliderTrack bg={sliderBg} h="3px" borderRadius="full" data-corner="round">
               <SliderFilledTrack bg={primaryColor} />
             </SliderTrack>
             <SliderThumb boxSize="12px" bg={primaryColor} />
@@ -2023,6 +2053,7 @@ export default function DisplayFilterPage() {
     );
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const EditableItem = ({ 
     label, 
     value, 
@@ -2064,7 +2095,8 @@ export default function DisplayFilterPage() {
             <Box 
               w={3} 
               h={3} 
-              borderRadius="full" 
+              borderRadius="full"
+              data-corner="round" 
               bg={getTemperatureColor(colorValue)}
               border="1px solid"
               borderColor={cardBorder}
@@ -2130,7 +2162,8 @@ export default function DisplayFilterPage() {
             <Box 
               w={3} 
               h={3} 
-              borderRadius="full" 
+              borderRadius="full"
+              data-corner="round" 
               bg={getTemperatureColor(colorValue)}
               border="1px solid"
               borderColor={cardBorder}
@@ -2274,7 +2307,7 @@ export default function DisplayFilterPage() {
               onChange={(v) => { onChange(v); onCommit?.(v); }}
               onChangeEnd={(v) => onCommit?.(v)}
             >
-              <SliderTrack bg={sliderBg} h="4px" borderRadius="full">
+              <SliderTrack bg={sliderBg} h="4px" borderRadius="full" data-corner="round">
                 <SliderFilledTrack bg={primaryColor} />
               </SliderTrack>
               <SliderThumb boxSize="14px" bg={primaryColor} />
@@ -2282,7 +2315,7 @@ export default function DisplayFilterPage() {
           </VStack>
         );
       },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
     [sliderBg, primaryColor, subTextColor]
   );
 
@@ -2661,6 +2694,7 @@ export default function DisplayFilterPage() {
                           px={1.5}
                           py={0.5}
                           borderRadius="full"
+                          data-corner="round"
                           fontSize="9px"
                           fontWeight="700"
                           pointerEvents="none"
@@ -2675,6 +2709,7 @@ export default function DisplayFilterPage() {
                         aria-label={t("displayFilter.delete")}
                         icon={<Trash2 size={14} />}
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         position="absolute"
                         top={1}
@@ -2942,6 +2977,7 @@ export default function DisplayFilterPage() {
                         px={1.5}
                         py={0.5}
                         borderRadius="full"
+                        data-corner="round"
                         fontSize="9px"
                         fontWeight="700"
                         pointerEvents="none"
@@ -2957,6 +2993,7 @@ export default function DisplayFilterPage() {
                         aria-label={t("displayFilter.deleteIcc")}
                         icon={<Trash2 size={14} />}
                         size="xs"
+                        data-corner="round"
                         variant="ghost"
                         position="absolute"
                         top={1}
@@ -3003,7 +3040,7 @@ export default function DisplayFilterPage() {
               {t("displayFilter.previewTitle")}
             </Text>
             {!settings.is_active && (
-              <Text color="#F1C40F" fontSize="xs" fontWeight="500" bg={hexToRgba("#F1C40F", 0.15)} px={2} py={0.5} borderRadius="full">
+              <Text color="#F1C40F" fontSize="xs" fontWeight="500" bg={hexToRgba("#F1C40F", 0.15)} px={2} py={0.5} borderRadius="full" data-corner="round">
                 {t("displayFilter.previewDisabledNote")}
               </Text>
             )}
@@ -3137,6 +3174,7 @@ export default function DisplayFilterPage() {
               w="32px"
               h="32px"
               borderRadius="full"
+              data-corner="round"
               bg={cardBg}
               border="2px solid"
               borderColor={primaryColor}
@@ -3209,12 +3247,12 @@ export default function DisplayFilterPage() {
               </Text>
 
               {activeIccId && (
-                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={`${primaryColor}20`} px={1} py={0.5} borderRadius="full">
+                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={`${primaryColor}20`} px={1} py={0.5} borderRadius="full" data-corner="round">
                   ICC
                 </Text>
               )}
               {settings.stacked && !activeIccId && (
-                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={hexToRgba(primaryColor, 0.2)} px={1} py={0.5} borderRadius="full">
+                <Text fontSize="9px" fontWeight="700" color={primaryColor} bg={hexToRgba(primaryColor, 0.2)} px={1} py={0.5} borderRadius="full" data-corner="round">
                   {t("displayFilter.stackedMode")}
                 </Text>
               )}

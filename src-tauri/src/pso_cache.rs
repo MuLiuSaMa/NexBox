@@ -330,7 +330,7 @@ fn detect_running() -> Vec<String> {
     let mut sys = System::new();
     sys.refresh_processes();
     let mut set: HashSet<String> = HashSet::new();
-    for (_, p) in sys.processes() {
+    for p in sys.processes().values() {
         let name = p.name().to_string().to_ascii_lowercase();
         set.insert(name.trim_end_matches(".exe").to_string());
     }

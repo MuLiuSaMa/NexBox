@@ -1,19 +1,4 @@
-import {
-  Box,
-  Flex,
-  Grid,
-  Text,
-  Heading,
-  Icon,
-  useColorModeValue,
-  Badge,
-  Button,
-  VStack,
-  HStack,
-  Divider,
-  IconButton,
-  Tooltip,
-} from "@chakra-ui/react";
+import { Box, Flex, Grid, Text, Heading, Icon, Badge, VStack, HStack, Divider, IconButton, Tooltip } from "@chakra-ui/react";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { usePeripheralDrivers, usePeripheralDriverIcon, openDriverLink, type PeripheralDriver } from "@/hooks/use-peripheral-drivers";
 import { LiquidGlassToolCard } from "@/components/special/liquid-glass-tool-card";
@@ -61,7 +46,9 @@ import { useAppStartup } from "@/contexts/app-startup-context";
 import { Image } from "@chakra-ui/react";
 import { store } from "@/lib/store";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
+import { APP_TOP_FADE_PX } from "@/config/ui-metrics";
 import { CommunityToolSection } from "@/components/community-tools/community-tool-section";
+import { useColorValue } from "@/hooks/use-color-value";
 const CUSTOM_TOOLS_KEY = "custom-added-tools";
 
 const toolIcons = import.meta.glob<{ default: string }>(
@@ -92,7 +79,7 @@ interface ThirdPartyTool {
   check_executable: string | null;
 }
 
-const handleToolClick = async (toolId: string) => {
+const handleToolClick = async (_toolId: string) => {
 };
 
 interface ToolCard {
@@ -104,7 +91,7 @@ interface ToolCard {
   type: "builtin" | "thirdparty";
 }
 
-const getTools = (t: (key: string) => string): ToolCard[] => [
+const getTools = (_t: (key: string) => string): ToolCard[] => [
 ];
 
 const getCategoryLabels = (t: (key: string) => string): Record<string, string> => ({
@@ -128,10 +115,11 @@ function ToolCardComponent({
   tool: ToolCard;
   categoryLabels: Record<string, string>;
 }) {
-  const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
-  const { getActiveColor } = useThemeColor();
+  const cm = useColorValue();
+  const iconColor = cm("gray.700", "#cccccc");
+  const titleColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
+
 
   return (
     <LiquidGlassToolCard
@@ -145,7 +133,7 @@ function ToolCardComponent({
           align="center"
           justify="center"
           borderRadius="lg"
-          bg={useColorModeValue("gray.100", "#222222")}
+          bg={cm("gray.100", "#222222")}
         >
           <Icon as={tool.icon} boxSize={6} color={iconColor} />
         </Flex>
@@ -182,14 +170,15 @@ function ThirdPartyToolCard({
   onAddCustomTool?: (toolId: string, filePath: string) => void;
   onRemoveCustomTool?: (toolId: string) => void;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const [installed, setInstalled] = useState(initialInstalled);
   const [isAdding, setIsAdding] = useState(false);
   const toast = useDynamicIsland("wrench");
 
-  const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
+  const iconColor = cm("gray.700", "#cccccc");
+  const titleColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
   const { getActiveColor } = useThemeColor();
 
   const isCustomAdded = !!customToolPath;
@@ -355,6 +344,7 @@ function ThirdPartyToolCard({
               aria-label={t("tools.customAdded.remove")}
               icon={<Icon as={X} boxSize={3} />}
               size="xs"
+              data-corner="round"
               variant="ghost"
               colorScheme="red"
               onClick={handleRemoveCustom}
@@ -370,7 +360,7 @@ function ThirdPartyToolCard({
           align="center"
           justify="center"
           borderRadius="lg"
-          bg={useColorModeValue("gray.100", "#222222")}
+          bg={cm("gray.100", "#222222")}
           overflow="hidden"
         >
           {toolIconImage ? (
@@ -432,13 +422,14 @@ function ThirdPartyToolCard({
             bottom={3}
             right={3}
             borderRadius="full"
+            data-corner="round"
             variant="outline"
             colorScheme="gray"
             bg="transparent"
             isLoading={isAdding}
             isDisabled={isAdding}
             _hover={{
-              bg: useColorModeValue("gray.100", "gray.700"),
+              bg: cm("gray.100", "gray.700"),
             }}
             onClick={handleCustomButtonClick}
           />
@@ -459,6 +450,7 @@ function ToolSection({
   activeCategory: string;
   categoryLabels: Record<string, string>;
 }) {
+  const cm = useColorValue();
   const filteredTools =
     activeCategory === "all"
       ? sectionTools
@@ -466,8 +458,8 @@ function ToolSection({
 
   if (filteredTools.length === 0) return null;
 
-  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const sectionTitleColor = cm("gray.800", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
 
   return (
     <Box mb={8}>
@@ -498,13 +490,14 @@ function OfficialToolSection({
 }: {
   activeCategory: string;
 }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { getActiveColor } = useThemeColor();
-  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
-  const iconColor = useColorModeValue("gray.700", "#cccccc");
-  const titleColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#ffffff");
+  const sectionTitleColor = cm("gray.800", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
+  const iconColor = cm("gray.700", "#cccccc");
+  const titleColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#ffffff");
 
   // Official recommendation only shows when category is "all"
   if (activeCategory !== "all") return null;
@@ -723,7 +716,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -757,7 +750,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -805,7 +798,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -841,7 +834,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -877,7 +870,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -913,7 +906,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -949,7 +942,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -985,7 +978,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1021,7 +1014,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1057,7 +1050,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1093,7 +1086,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1129,7 +1122,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1165,7 +1158,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1201,7 +1194,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1237,7 +1230,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1273,7 +1266,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1309,7 +1302,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1345,7 +1338,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1381,7 +1374,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1417,7 +1410,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1453,7 +1446,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1489,7 +1482,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1525,7 +1518,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1561,7 +1554,7 @@ function OfficialToolSection({
               align={"center"}
               justify={"center"}
               borderRadius={"lg"}
-              bg={useColorModeValue("gray.100", "#222222")}
+              bg={cm("gray.100", "#222222")}
               overflow={"hidden"}
             >
               <Image
@@ -1602,16 +1595,19 @@ function ThirdPartyToolSection({
   activeCategory: string;
   categoryLabels: Record<string, string>;
 }) {
+  const cm = useColorValue();
   const { tools, initTools } = useAppStartup();
   const [customToolPaths, setCustomToolPaths] = useState<Record<string, string>>({});
 
-  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
+  const sectionTitleColor = cm("gray.800", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
 
   useEffect(() => {
     if (tools.length === 0) {
       initTools();
     }
+    // 仅在工具列表为空时初始化一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1713,11 +1709,12 @@ function brandInitialColor(id: string) {
 }
 
 function PeripheralDriverCard({ driver }: { driver: PeripheralDriver }) {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { src } = usePeripheralDriverIcon(driver.icon);
-  const iconBoxBg = useColorModeValue("gray.100", "#222222");
-  const nameColor = useColorModeValue("gray.800", "#ffffff");
-  const descColor = useColorModeValue("gray.500", "#999999");
+  const iconBoxBg = cm("gray.100", "#222222");
+  const nameColor = cm("gray.800", "#ffffff");
+  const descColor = cm("gray.500", "#999999");
   const kind = driver.kind === "download" ? "download" : "online";
   const fallbackBg = brandInitialColor(driver.id);
 
@@ -1759,11 +1756,12 @@ function PeripheralDriverCard({ driver }: { driver: PeripheralDriver }) {
 }
 
 function PeripheralDriverSection() {
+  const cm = useColorValue();
   const { t } = useTranslation();
   const { drivers, loading } = usePeripheralDrivers();
-  const sectionTitleColor = useColorModeValue("gray.800", "#ffffff");
-  const dividerColor = useColorModeValue("gray.200", "#333333");
-  const subTextColor = useColorModeValue("gray.500", "#999999");
+  const sectionTitleColor = cm("gray.800", "#ffffff");
+  const dividerColor = cm("gray.200", "#333333");
+  const subTextColor = cm("gray.500", "#999999");
 
   return (
     <Box>
@@ -1798,8 +1796,9 @@ function PeripheralDriverSection() {
 }
 
 export default function ToolsPage() {
+
   const { t } = useTranslation();
-  const headingColor = useColorModeValue("gray.900", "#ffffff");
+
   const adaptiveTitle = useAdaptiveTextColor();
   const { config } = useThemeColor();
 
@@ -1823,8 +1822,9 @@ export default function ToolsPage() {
 
   return (
     <Flex gap={6} pt={8}>
+      {/* sticky 吸附位置避开顶部 48px 渐隐带，否则滚动时侧栏菜单会变半透明 */}
       {!IS_STORE_BUILD && (
-        <Box w="180px" flexShrink={0} position="sticky" top={8} alignSelf="flex-start">
+        <Box w="180px" flexShrink={0} position="sticky" top={`${APP_TOP_FADE_PX}px`} alignSelf="flex-start">
           <VStack spacing={0.5} align="stretch">
             {menuItems.map((item) => (
               <LiquidGlassMenuItem

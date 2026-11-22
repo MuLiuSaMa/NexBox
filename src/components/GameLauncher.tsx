@@ -232,6 +232,7 @@ function SortableGameItem({
           aria-label="删除"
           icon={<Icon as={X} boxSize={3} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           opacity={0}
           _groupHover={{ opacity: 1 }}
@@ -466,6 +467,8 @@ export default function GameLauncher() {
       loadingIcons.current.add(game.id);
       fetchIcon(game);
     });
+    // fetchIcon 声明在 effect 之后，图标提取只在 games 首次加载时触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [games]);
 
   const fetchIcon = async (game: GameShortcut) => {
@@ -655,6 +658,7 @@ export default function GameLauncher() {
           aria-label="添加游戏"
           icon={<Icon as={Plus} boxSize={4} />}
           size="xs"
+          data-corner="round"
           variant="ghost"
           onClick={onOpen}
         />

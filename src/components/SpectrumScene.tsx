@@ -32,7 +32,6 @@ const METEOR_MAX = 20;
 const TRAIL_MAX = 200;
 const FLOATING_COUNT = 80;
 const TERRAIN_BASE_SIZE = 168;
-const MAX_KICK_DEFORM = 0.75;
 
 // 模块级零值频段：smoother.step 只读 target，可安全复用（避免暂停/无信号时每帧 new 对象）
 const ZERO_BANDS = zeroBands();
@@ -375,7 +374,6 @@ export default function SpectrumScene({ audioRef, isPlaying, coverColor, active 
     scene.add(root);
 
     // ── 共享 dummy ──
-    const dummyObj = new THREE.Object3D();
     const dummyPos = new THREE.Vector3();
     const dummyQuat = new THREE.Quaternion();
     const dummyScale = new THREE.Vector3();
@@ -866,7 +864,7 @@ export default function SpectrumScene({ audioRef, isPlaying, coverColor, active 
     // active=false：释放 WebGL 场景（renderer.dispose + forceContextLoss）
     sceneCleanupRef.current?.();
     sceneCleanupRef.current = null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [active]);
 
   return (
@@ -892,7 +890,6 @@ function deriveTheme(rgb: [number, number, number]): TerrainTheme {
   const primary = new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255);
   const accent = new THREE.Color("#33e6ff");
   const cool = new THREE.Color("#0066ff");
-  const warm = new THREE.Color("#ff3c19");
   // 封面色权重提高：切歌时场景色调明显跟随（底色不再被压到几乎不变）
   const base1 = primary.clone().lerp(new THREE.Color("#05070c"), 0.68);
   const base2 = base1.clone().lerp(accent, 0.22);

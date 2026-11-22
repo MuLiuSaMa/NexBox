@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text, HStack, VStack, useColorModeValue, useDisclosure } from "@chakra-ui/react";
+import { Text, HStack, VStack, useColorModeValue, useDisclosure } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { FaImage } from "react-icons/fa6";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";

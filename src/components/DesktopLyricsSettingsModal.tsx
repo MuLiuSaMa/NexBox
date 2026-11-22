@@ -23,7 +23,6 @@ import {
   HStack,
   VStack,
   Box,
-  Tooltip,
   useColorModeValue,
   ButtonGroup,
   Switch,
@@ -147,7 +146,7 @@ function DesktopLyricsSettingsModalInner({
 
   const { getActiveColor, getHoverColor } = useThemeColor();
   const themeColor = getActiveColor();
-  const themeHover = getHoverColor();
+
 
   // 滚动条适配主题色
   const modalBodySx = {

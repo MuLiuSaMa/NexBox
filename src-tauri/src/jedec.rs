@@ -2036,8 +2036,8 @@ fn lookup_registry(code: u16) -> Option<&'static str> {
 
 fn is_hex(s: &str) -> bool {
     !s.is_empty()
-        && s.chars().all(|c| {
-            (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+        && s.chars().all(|c: char| {
+            c.is_ascii_digit() || ('a'..='f').contains(&c) || ('A'..='F').contains(&c)
         })
 }
 
@@ -2079,8 +2079,8 @@ fn jedec_vendor_from_extended_code(full_code: u16) -> Option<&'static str> {
 
 /// 解析一组 [bank][vendor] 打包值：高/低字节各去奇校验位后，先按大端再按小端查表。
 fn decode_packed(code: u16) -> Option<&'static str> {
-    let hi = ((code >> 8) & 0x7F) as u16;
-    let lo = (code & 0x7F) as u16;
+    let hi = (code >> 8) & 0x7F;
+    let lo = code & 0x7F;
     let packed = (hi << 8) | lo;
     if let Some(v) = jedec_vendor_from_extended_code(packed) {
         return Some(v);

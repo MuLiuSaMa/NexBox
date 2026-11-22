@@ -651,7 +651,7 @@ fn read_ata_smart_wmi(pnp_id: &str, threshold: bool) -> Result<[u8; 512], String
     for row in rows {
         let inst = row
             .get("InstanceName")
-            .and_then(|v| crate::wmi_query::v_str(v))
+            .and_then(crate::wmi_query::v_str)
             .unwrap_or_default()
             .to_uppercase();
         if !inst.starts_with(&pnp_upper) {
@@ -736,7 +736,7 @@ pub fn read_disk_smart(
             let is_threshold_correct = ths.iter().any(|t| t.threshold_value != 0);
             let (status, life) = check_ata_status(&attrs, &ths, is_ssd, is_threshold_correct, THRESHOLD_FF);
             // HDD 无寿命属性，按状态映射健康度百分比（GOOD=100 / CAUTION=50 / BAD=0）
-            let life_percent = life.map(|l| l.clamp(0, 100) as u8).or_else(|| {
+            let life_percent = life.map(|l| l.clamp(0, 100) as u8).or({
                 if is_ssd {
                     None
                 } else {
@@ -798,13 +798,12 @@ pub fn read_disk_smart(
 /// 按 CDI NVMeInterpreter.cpp NVMeSmartToATASmart 的映射，将 NVMe log 解析为属性数组
 fn parse_nvme_attributes(raw: &[u8; 512]) -> Vec<SmartAttribute> {
     // 仅构造 CheckDiskStatus 需要的属性（Id 对应 NVMe 原始字节）
-    let mut attrs = Vec::new();
     // Id=1 Critical Warning（raw[0]）
-    attrs.push(SmartAttribute {
+    let mut attrs = vec![SmartAttribute {
         id: 1,
         raw_value: [raw[0], 0, 0, 0, 0, 0],
         ..Default::default()
-    });
+    }];
     // Id=3 Available Spare（raw[3]）
     attrs.push(SmartAttribute {
         id: 3,

@@ -106,7 +106,7 @@ fn ensure_elevation() {
             exe.as_ptr(),
             std::ptr::null(),
             std::ptr::null(),
-            SW_SHOWNORMAL as i32,
+            SW_SHOWNORMAL,
         );
         if result as usize > 32 {
             // 提权实例已拉起，当前实例退出

@@ -186,6 +186,7 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
       width={`${TRACK_W}px`}
       height={`${geom.trackHeight}px`}
       borderRadius="999px"
+      data-corner="round"
       background={trackBg}
       zIndex={10}
       pointerEvents="none"
@@ -204,6 +205,7 @@ export function FloatingScrollbar({ targetId = "app-main-scroll" }: FloatingScro
         background={config.primaryColor}
         opacity={active ? 0.95 : 0.7}
         borderRadius="999px"
+        data-corner="round"
         pointerEvents="auto"
         cursor="default"
         onPointerEnter={() => setHover(true)}

@@ -687,10 +687,7 @@ async fn run_task(
                 // 暂停：从持久层读回真实分段布局推送前端。
                 // 推空数组会让 UI 回退成"整文件单块"，视觉上所有线程合并成一个。
                 entry.status.store(2, Ordering::Relaxed);
-                let segs = match db.load_segments(&entry.id).await {
-                    Ok(rows) => rows,
-                    Err(_) => Vec::new(),
-                };
+                let segs = db.load_segments(&entry.id).await.unwrap_or_default();
                 let dtos: Vec<SegmentDto> = segs
                     .into_iter()
                     .map(|s| SegmentDto {

@@ -166,7 +166,7 @@ function shortenMessage(text?: string): string | undefined {
   if (!text) return text;
   const t0 = text.trim();
   if (!t0) return t0;
-  let t = t0;
+  const t = t0;
 
   // 0) 盘符前缀：如 "C: 优化(TRIM)完成" → 保留盘符，精简剩余部分 → "C 已优化"
   //    （避免盘符冒号被当成句号截断，导致只显示 "C"）
@@ -1211,13 +1211,13 @@ function MusicIslandContent({ expanded, expandedVisible, foldVisible }: { expand
         )}
         {/* 行3：控制按钮 —— 整宽居中、纯图标（音乐页同套）；右下角另加「打开播放器」跳转按钮 */}
         <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 26, position: "relative" }}>
-          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("prev") : act().prevTrack(); }}>
+          <ControlButton label="上一曲" onClick={(e) => { e.stopPropagation(); if (isExternal) { act().externalControl("prev"); } else { act().prevTrack(); } }}>
             <MSkipBackIcon size={20} color={titleColor} />
           </ControlButton>
-          <ControlButton label={playing ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("play-pause") : act().togglePlay(); }}>
+          <ControlButton label={playing ? "暂停" : "播放"} onClick={(e) => { e.stopPropagation(); if (isExternal) { act().externalControl("play-pause"); } else { act().togglePlay(); } }}>
             {playing ? <MPauseIcon size={22} color={titleColor} /> : <MPlayIcon size={22} color={titleColor} />}
           </ControlButton>
-          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); isExternal ? act().externalControl("next") : act().nextTrack(); }}>
+          <ControlButton label="下一曲" onClick={(e) => { e.stopPropagation(); if (isExternal) { act().externalControl("next"); } else { act().nextTrack(); } }}>
             <MSkipForwardIcon size={20} color={titleColor} />
           </ControlButton>
           {!isExternal && (
@@ -1467,13 +1467,16 @@ export function DynamicIslandHost() {
   // 会导致同一首歌先淡入展开、再缩回扩散，看起来「加载两次才播放」。
   // 因此用「展示键(来源+曲目)」去重：仅当实际展示的曲目/来源变化时才触发 showPersistent 动画；
   // 仅 play/pause 翻转只实时驱动波形（useSongLevels），不再重复缩→扩动画。
+  // 外部曲目标题提成稳定变量：既供展示键使用，也作为 effect 依赖项
+  const externalTitle = externalTrack?.title;
+
   useEffect(() => {
     // 桌面岛窗口不跑此逻辑：它的内容完全由主窗口快照驱动，否则会与真源失步
     if (IS_ISLAND_WINDOW) return;
     const internalActive = Boolean(currentSong) && (isPlaying || !externalPlaying);
-    const useExternal = Boolean(externalTrack?.title) && !internalActive;
+    const useExternal = Boolean(externalTitle) && !internalActive;
     const key = useExternal
-      ? `ext:${externalTrack!.title}`
+      ? `ext:${externalTitle}`
       : currentSong
         ? `int:${currentSong.id}:${currentSong.name}`
         : "none";
@@ -1487,10 +1490,10 @@ export function DynamicIslandHost() {
         kind: "music",
         duration: null,
         iconKey: "music",
-        title: useExternal ? externalTrack!.title : currentSong!.name,
+        title: useExternal ? externalTitle! : currentSong!.name,
       });
     }
-  }, [currentSong, isPlaying, externalPlaying, externalTrack?.title]);
+  }, [currentSong, isPlaying, externalPlaying, externalTitle]);
 
   // 静默实时更新（如下载进度）：同 id 时同步 displayed 内容，不触发动画
   useEffect(() => {
@@ -1833,6 +1836,7 @@ export function DynamicIslandHost() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={islandGlassClass}
+        data-corner={displayed?.kind === "music" || expanded ? undefined : "round"}
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
           background: islandBg,

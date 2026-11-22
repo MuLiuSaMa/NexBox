@@ -13,7 +13,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Server, ShieldCheck, RefreshCw } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { useThemeColor } from "@/contexts/theme-color-context";
@@ -221,6 +221,7 @@ export default function TimeSyncPage() {
                 px={2}
                 py={0.5}
                 borderRadius="full"
+                data-corner="round"
                 fontSize="xs"
                 colorScheme={isAdmin ? "green" : "orange"}
               >
@@ -342,7 +343,7 @@ export default function TimeSyncPage() {
                       {card.syncedMsg}
                     </Text>
                   ) : (
-                    <Badge flexShrink={0} px={1.5} py={0.5} borderRadius="full" fontSize="10px" colorScheme={badgeScheme}>
+                    <Badge flexShrink={0} px={1.5} py={0.5} borderRadius="full" data-corner="round" fontSize="10px" colorScheme={badgeScheme}>
                       {badgeText}
                     </Badge>
                   )}

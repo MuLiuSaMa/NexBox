@@ -146,7 +146,7 @@ pub async fn exec_action(app: &tauri::AppHandle, key: &str, args: &Value) -> Res
                 if crate::vertical_overlay::is_vertical_overlay_active() {
                     let _ = crate::vertical_overlay::stop_vertical_overlay(app.clone()).await;
                 }
-                v(crate::overlay_panel::toggle_overlay(&app))
+                v(crate::overlay_panel::toggle_overlay(app))
             }
         }
         // 准心切换：直接调已有命令（内部同步置位 CROSSHAIR_ACTIVE，回读即准确）

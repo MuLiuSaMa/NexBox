@@ -20,7 +20,7 @@ import {
   Shield,
   Target,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { LiquidGlassButton } from "@/components/special/liquid-glass-button";
@@ -104,7 +104,7 @@ function ResultCard({
 }) {
   const { liquidGlassEnabled } = useBackground();
   const textColor = useColorModeValue("#000000", "#ffffff");
-  const subTextColor = useColorModeValue("#000000", "#ffffff");
+
   const cardBg = useColorModeValue("white", "#111111");
   const borderColor = useColorModeValue("gray.200", "#333333");
   const { getActiveColor } = useThemeColor();
@@ -344,7 +344,7 @@ function SlotScroller({
       task: pickOne(tasks),
     });
     setSpinKey((k) => k + 1);
-  }, [onlyClassified, skipAnimation, noPistol]);
+  }, [onlyClassified, noPistol]);
 
   // 各物品的候选图池（用于滚动定格动画），与 generate 中的过滤逻辑保持一致。
   // 装备图池跟随抽到的地图难度，避免动画里滚出本该被排除的 6 套 / 5 级弹药图。

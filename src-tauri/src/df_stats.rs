@@ -651,7 +651,7 @@ fn wx_client() -> &'static Mutex<reqwest::Client> {
 fn jar_add_wegame_cookie(name: &str, value: &str) {
     let jar = df_jar();
     let url = url::Url::parse("https://www.wegame.com.cn/").unwrap_or_else(|_| url::Url::parse("https://wegame.com.cn/").unwrap());
-    let _ = jar.add_cookie_str(
+    jar.add_cookie_str(
         &format!(r#"{name}={value}; Domain=.wegame.com.cn; Path=/; Secure"#),
         &url,
     );
@@ -759,7 +759,7 @@ pub async fn df_stats_qr_gen() -> Result<serde_json::Value, String> {
 #[tauri::command]
 pub async fn df_stats_qr_wx_gen() -> Result<serde_json::Value, String> {
     let client = wx_client().lock().unwrap().clone();
-    let redir = urlencoding(&WX_REDIRECT);
+    let redir = urlencoding(WX_REDIRECT);
     let login_url = format!(
         "https://open.weixin.qq.com/connect/qrconnect?appid={WX_APPID}&redirect_uri={redir}&response_type=code&scope=snsapi_login&state=dfstats#wechat_redirect"
     );
@@ -1489,8 +1489,8 @@ pub async fn df_stats_do_collect(
     tasks.push(("collectibles", "GetCollectibles", serde_json::json!({"from_src":"df_web","openid":openid,"area":36,"account_type":account_type})));
     tasks.push(("daily_stats", "GetDailyStats", serde_json::json!({"from_src":"df_web","openid":openid,"area":36,"account_type":account_type})));
     // 赛季列表 + 干员/地图/皮肤字典（S1-S11 筛选用）
-    out.insert("seasons".to_string(), fetch_season_list(&client).await);
-    for (kind, v) in fetch_rainbow_dicts(&client).await {
+    out.insert("seasons".to_string(), fetch_season_list(client).await);
+    for (kind, v) in fetch_rainbow_dicts(client).await {
         out.insert(kind, v);
     }
 

@@ -661,7 +661,7 @@ impl<'a> DisplayOps<'a> {
         let states = lock.as_ref()?;
         let state = states.get(idx)?;
         let mut state = state.lock().unwrap();
-        Some(f(&mut *state))
+        Some(f(&mut state))
     }
 
     /// **退出准入的原子边界**：在同一状态锁内先检查退出标志，通过后才允许
@@ -680,7 +680,7 @@ impl<'a> DisplayOps<'a> {
             return None;
         }
         let mut state = state.lock().unwrap();
-        Some(f(&mut *state))
+        Some(f(&mut state))
     }
 
     /// 退出第一步：在**同一状态锁保护下**置位退出标志并使所有已有任务失效。
@@ -697,7 +697,7 @@ impl<'a> DisplayOps<'a> {
                 state.filter_active = false;
                 state.icc_active = false;
                 state.active_icc_id = None;
-                bump_operation_generation(&mut *state)
+                bump_operation_generation(&mut state)
             })
             .collect()
     }
@@ -830,7 +830,7 @@ impl<'a> DisplayOps<'a> {
         let slot = self.ramps.lock().unwrap();
         let cell = slot.get(idx)?;
         let guard = cell.lock().unwrap();
-        guard.clone()
+        *guard
     }
 
     /// 确认恢复成功后清除保存的原始 ramp。
@@ -915,6 +915,8 @@ impl<'a> DisplayOps<'a> {
         let num_displays = cleanup_generations.len();
         let mut summary = CleanupSummary::default();
 
+        // i 同时用于 op_lock/with_state/restore 等按显示器寻址，不能降级为纯数组索引迭代器
+        #[allow(clippy::needless_range_loop)]
         for i in 0..num_displays {
             // 迭代索引来自 begin_shutdown 返回的长度，恒有效；仍防御性处理 None。
             let operation_lock = self.op_lock(i);
@@ -985,7 +987,7 @@ where F: FnOnce(&mut DisplayState) -> R {
     let states = lock.as_ref().unwrap();
     let idx = idx.min(states.len() - 1);
     let mut state = states[idx].lock().unwrap();
-    f(&mut *state)
+    f(&mut state)
 }
 
 /// 当前连接的显示器数量（与 DISPLAY_STATES 键位一致，至少为 1）。
@@ -1035,7 +1037,7 @@ pub(crate) fn auto_register_owned(
         session_counter,
         slot,
         &global_ops(),
-        |i| display_topology(i),
+        display_topology,
         None,
     )
 }
@@ -1046,6 +1048,8 @@ pub(crate) fn auto_register_owned(
 /// 控制锁保持到条件开启与归属登记**完成之后**才释放；锁内短暂取得状态锁/归属锁，
 /// 不跨物理写屏或 await。
 /// `before_enable` 测试钩子：在条件开启前于控制锁内调用（生产传 None）。
+// 参数对应一次登记调用的完整上下文，拆成结构体反而破坏调用方签名一致性
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn auto_register_owned_with(
     guard: std::sync::MutexGuard<'_, AutoControlState>,
     idx: usize,
@@ -1395,11 +1399,11 @@ pub(crate) fn auto_rollback_failed_apply_global(
 
 /// 生产便捷封装：使用全局协调层实例 + 全局设备拓扑。
 pub(crate) fn auto_restore_decision_global(slot: &AutoOwnershipSlot, session: u64) -> AutoRestoreDecision {
-    auto_restore_decision(slot, session, &global_ops(), |idx| display_topology(idx))
+    auto_restore_decision(slot, session, &global_ops(), display_topology)
 }
 
 fn resolve_display_index(display_index: Option<usize>) -> usize {
-    display_index.unwrap_or_else(|| get_active_index())
+    display_index.unwrap_or_else(get_active_index)
 }
 
 // ─── Tool invocation layer (xcalib + icc_gen, via std::process::Command) ───
@@ -1605,12 +1609,11 @@ fn is_hdr_enabled() -> bool {
     {
         for name_result in video_settings.enum_values() {
             let (name, value) = match name_result { Ok(v) => v, Err(_) => continue };
-            if name.starts_with("EnableHdrForMonitor") {
-                if value.vtype == winreg::enums::REG_DWORD && value.bytes.len() >= 4 {
+            if name.starts_with("EnableHdrForMonitor")
+                && value.vtype == winreg::enums::REG_DWORD && value.bytes.len() >= 4 {
                     let val = u32::from_le_bytes([value.bytes[0], value.bytes[1], value.bytes[2], value.bytes[3]]);
                     if val == 1 { return true; }
                 }
-            }
         }
     }
     false
@@ -1947,21 +1950,21 @@ fn apply_shadow_lift(ramp: &mut [[u16; 256]; 3], shadow: f64) {
     // 提亮：gamma > 1（等价 output = input^(1/gamma)）；压暗：gamma < 1。强度上限 ±0.6。
     let gamma = if s > 0.0 { 1.0 + 0.6 * s } else { 1.0 / (1.0 + 0.6 * (-s)) };
     let inv = 1.0 / gamma;
-    for c in 0..3 {
-        for i in 0..256 {
-            let x = ramp[c][i] as f64 / 65535.0;
+    for row in ramp.iter_mut() {
+        for v in row.iter_mut() {
+            let x = *v as f64 / 65535.0;
             let lifted = x.powf(inv);
             // 暗部权重：x=0 时为 1，x=1 时为 0（平方使高光几乎不受影响）
             let weight = (1.0 - x) * (1.0 - x);
             let y = x + (lifted - x) * weight;
-            ramp[c][i] = (y.clamp(0.0, 1.0) * 65535.0).round() as u16;
+            *v = (y.clamp(0.0, 1.0) * 65535.0).round() as u16;
         }
     }
     // 单调约束 + 端点固定（与 build_gamma_ramp 保持一致）
-    for c in 0..3 {
+    for row in ramp.iter_mut() {
         for i in 1..256 {
-            if ramp[c][i] < ramp[c][i - 1] {
-                ramp[c][i] = ramp[c][i - 1];
+            if row[i] < row[i - 1] {
+                row[i] = row[i - 1];
             }
         }
     }
@@ -1999,6 +2002,8 @@ fn build_gamma_ramp(
     let (r_gamma, g_gamma, b_gamma) = custom_gamma.unwrap_or((gamma, gamma, gamma));
     let mut ramp = [[0u16; 256]; 3];
 
+    // i 同时用于三通道写入与像素值计算，无法退化为单数组索引迭代
+    #[allow(clippy::needless_range_loop)]
     for i in 0..256 {
         let input = i as f64 / 255.0;
 
@@ -2038,9 +2043,9 @@ fn build_gamma_ramp(
     }
 
     // Monotonic constraint
-    for channel in 0..3 {
+    for row in ramp.iter_mut() {
         for i in 1..256 {
-            if ramp[channel][i] < ramp[channel][i - 1] { ramp[channel][i] = ramp[channel][i - 1]; }
+            if row[i] < row[i - 1] { row[i] = row[i - 1]; }
         }
     }
     ramp[0][0] = 0; ramp[1][0] = 0; ramp[2][0] = 0;
@@ -2116,14 +2121,14 @@ fn derive_params_from_icc_ramp(ramp: &[[u16; 256]; 3]) -> (i32, i32, i32, i32, f
     // 对比度：暗部(32..96)与亮部(160..224)增益之比，比值越大对比度越高
     let mut dark_sum = 0.0; let mut dark_count = 0u32;
     let mut light_sum = 0.0; let mut light_count = 0u32;
-    for c in 0..3 {
+    for row in ramp.iter() {
         for i in 32..96 {
             let identity = (i as u32 * 256) as u16;
-            if identity > 0 { dark_sum += ramp[c][i as usize] as f64 / identity as f64; dark_count += 1; }
+            if identity > 0 { dark_sum += row[i as usize] as f64 / identity as f64; dark_count += 1; }
         }
         for i in 160..224 {
             let identity = (i as u32 * 256) as u16;
-            if identity > 0 { light_sum += ramp[c][i as usize] as f64 / identity as f64; light_count += 1; }
+            if identity > 0 { light_sum += row[i as usize] as f64 / identity as f64; light_count += 1; }
         }
     }
     let dark_avg = if dark_count > 0 { dark_sum / dark_count as f64 } else { 1.0 };
@@ -2215,24 +2220,24 @@ fn parse_icc_file(file_path: &str) -> Result<IccPreset, String> {
         if curve_type == b"curv" {
             let count = read_u32_be(&data, off + 8) as usize;
             if off + 12 + count * 2 > data.len() { return Err("曲线数据长度超出文件范围".to_string()); }
-            if count == 0 { for i in 0..256 { ramp[i] = (i * 257) as u16; } }
+            if count == 0 { for (i, v) in ramp.iter_mut().enumerate() { *v = (i * 257) as u16; } }
             else if count == 1 {
                 let gamma = read_u16_be(&data, off + 12) as f64 / 256.0;
-                for i in 0..256 { ramp[i] = ((i as f64 / 255.0).powf(gamma) * 65535.0).clamp(0.0, 65535.0) as u16; }
+                for (i, v) in ramp.iter_mut().enumerate() { *v = ((i as f64 / 255.0).powf(gamma) * 65535.0).clamp(0.0, 65535.0) as u16; }
             } else {
-                for i in 0..256 {
+                for (i, v) in ramp.iter_mut().enumerate() {
                     let src_idx = (i as f64 / 255.0 * (count - 1) as f64) as usize;
                     let frac = (i as f64 / 255.0 * (count - 1) as f64) - src_idx as f64;
                     let v0 = read_u16_be(&data, off + 12 + src_idx * 2);
                     let v1 = if src_idx + 1 < count { read_u16_be(&data, off + 12 + (src_idx + 1) * 2) } else { v0 };
-                    ramp[i] = ((v0 as f64 + (v1 as f64 - v0 as f64) * frac) as u16).min(65535);
+                    *v = (v0 as f64 + (v1 as f64 - v0 as f64) * frac) as u16;
                 }
             }
         } else if curve_type == b"para" {
             if off + 16 > data.len() { return Err("参数化曲线数据不完整".to_string()); }
             let func_type = read_u16_be(&data, off + 8);
             let params_offset = off + 12;
-            for i in 0..256 {
+            for (i, v) in ramp.iter_mut().enumerate() {
                 let x = i as f64 / 255.0;
                 let y = match func_type {
                     0 => { let g = read_s15fixed16(&data, params_offset); x.powf(g) }
@@ -2242,7 +2247,7 @@ fn parse_icc_file(file_path: &str) -> Result<IccPreset, String> {
                     4 => { let g = read_s15fixed16(&data, params_offset); let a = read_s15fixed16(&data, params_offset + 4); let b = read_s15fixed16(&data, params_offset + 8); let c = read_s15fixed16(&data, params_offset + 12); let d = read_s15fixed16(&data, params_offset + 16); let e = read_s15fixed16(&data, params_offset + 20); let f = read_s15fixed16(&data, params_offset + 24); if x >= d { (a * x + b).max(0.0).powf(g) + e } else { c * x + f } }
                     _ => return Err(format!("不支持的参数化曲线函数类型: {}", func_type)),
                 };
-                ramp[i] = (y.clamp(0.0, 1.0) * 65535.0).clamp(0.0, 65535.0) as u16;
+                *v = (y.clamp(0.0, 1.0) * 65535.0).clamp(0.0, 65535.0) as u16;
             }
         } else {
             return Err(format!("不支持的曲线类型: {:?}（仅支持 'curv' 和 'para'）", std::str::from_utf8(curve_type).unwrap_or("?")));
@@ -2265,9 +2270,9 @@ fn parse_icc_file(file_path: &str) -> Result<IccPreset, String> {
         let data_end = data_start + channels * entries * entry_size;
         if data_end > data.len() { return Err("vcgt 数据超出文件范围".to_string()); }
         let mut ramp = [[0u16; 256]; 3];
-        for ch in 0..3 {
+        for (ch, row) in ramp.iter_mut().enumerate() {
             let ch_start = data_start + ch * entries * entry_size;
-            for i in 0..entries { ramp[ch][i] = read_u16_be(&data, ch_start + i * entry_size); }
+            for (i, v) in row.iter_mut().enumerate().take(entries) { *v = read_u16_be(&data, ch_start + i * entry_size); }
         }
         Ok(ramp)
     };
@@ -2303,7 +2308,7 @@ fn parse_icc_file(file_path: &str) -> Result<IccPreset, String> {
 fn push_u32_be(buf: &mut Vec<u8>, val: u32) { buf.extend_from_slice(&val.to_be_bytes()); }
 fn push_u16_be(buf: &mut Vec<u8>, val: u16) { buf.extend_from_slice(&val.to_be_bytes()); }
 fn push_s15fixed16(buf: &mut Vec<u8>, val: f64) { buf.extend_from_slice(&((val * 65536.0).round() as i32).to_be_bytes()); }
-fn pad_to_4(buf: &mut Vec<u8>) { while buf.len() % 4 != 0 { buf.push(0); } }
+fn pad_to_4(buf: &mut Vec<u8>) { while !buf.len().is_multiple_of(4) { buf.push(0); } }
 
 fn build_icc_profile(ramp: &[[u16; 256]; 3], description: &str) -> Vec<u8> {
     let mut blocks: Vec<([u8; 4], Vec<u8>)> = Vec::new();
@@ -2344,7 +2349,7 @@ fn build_icc_profile(ramp: &[[u16; 256]; 3], description: &str) -> Vec<u8> {
     // vcgt
     { let mut d = Vec::new(); d.extend_from_slice(b"vcgt"); d.extend_from_slice(&[0u8; 4]);
       push_u32_be(&mut d, 0); push_u16_be(&mut d, 3); push_u16_be(&mut d, 256); push_u16_be(&mut d, 2);
-      for ch in 0..3 { for i in 0..256 { push_u16_be(&mut d, ramp[ch][i]); } }
+      for row in ramp.iter() { for v in row.iter() { push_u16_be(&mut d, *v); } }
       blocks.push((*b"vcgt", d)); }
 
     let num_tags = blocks.len();
@@ -2397,7 +2402,7 @@ pub struct IccPreset {
 impl IccPreset {
     fn to_ramp_array(&self) -> [[u16; 256]; 3] {
         let mut ramp = [[0u16; 256]; 3];
-        for c in 0..3 { for i in 0..256 { ramp[c][i] = self.ramp[c][i]; } }
+        for (c, row) in ramp.iter_mut().enumerate() { for (i, v) in row.iter_mut().enumerate() { *v = self.ramp[c][i]; } }
         ramp
     }
 }
@@ -2546,12 +2551,12 @@ fn save_user_filter_presets_to_file(presets: &[UserFilterPreset]) -> Result<(), 
 pub async fn get_displays() -> Result<Vec<DisplayInfo>, String> {
     #[cfg(target_os = "windows")]
     {
-        let displays = tauri::async_runtime::spawn_blocking(|| enumerate_displays_inner())
+        let displays = tauri::async_runtime::spawn_blocking(enumerate_displays_inner)
             .await.map_err(|e| format!("枚举显示器失败: {}", e))?;
 
         if !displays.is_empty() && displays.iter().all(|d| d.width <= 0 || d.height <= 0) {
             tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-            let retry = tauri::async_runtime::spawn_blocking(|| enumerate_displays_inner())
+            let retry = tauri::async_runtime::spawn_blocking(enumerate_displays_inner)
                 .await.map_err(|e| format!("枚举显示器重试失败: {}", e))?;
             if retry.iter().any(|d| d.width > 0 && d.height > 0) { return Ok(retry); }
         }
@@ -2625,7 +2630,7 @@ fn enumerate_screen_modes_inner() -> Vec<ScreenModeInfo> {
             let mut dm: DEVMODEW = std::mem::zeroed();
             dm.dmSize = std::mem::size_of::<DEVMODEW>() as u16;
             if EnumDisplaySettingsW(wide.as_ptr(), ENUM_CURRENT_SETTINGS, &mut dm) != 0 {
-                refresh_rate = dm.dmDisplayFrequency.max(0) as u32;
+                refresh_rate = dm.dmDisplayFrequency as u32;
             }
 
             let model = get_monitor_model_name(&device_name);
@@ -2765,7 +2770,7 @@ pub async fn download_icc_tools(window: Window) -> Result<String, String> {
             let chunk = chunk.map_err(|e| format!("下载滤镜工具包失败: {}", e))?;
             file.write_all(&chunk).map_err(|e| format!("写入临时文件失败: {}", e))?;
             downloaded += chunk.len() as u64;
-            let percent = if total == 0 { 0 } else { ((downloaded * 100) / total) as u8 };
+            let percent = (downloaded * 100).checked_div(total).unwrap_or(0) as u8;
             if percent != last_percent {
                 last_percent = percent;
                 emit_icc_tools_progress(&window, "downloading", percent, format!("下载中 {}%", percent));
@@ -2905,7 +2910,7 @@ impl<'a> DisplayOps<'a> {
                 }
                 // 用户导入 ICC —— 从保存的 ramp 重新应用
                 if let Some(ramp) = self
-                    .with_state(idx, |s| s.icc_ramp.clone())
+                    .with_state(idx, |s| s.icc_ramp)
                     .ok_or_else(|| format!("apply_filter[{}]: 显示器状态不存在，已拒绝操作", idx))?
                 {
                     let icc_data = build_icc_profile(&ramp, "NexBox ICC Preset");
@@ -3013,6 +3018,8 @@ pub(crate) fn restore_display_default_if_current(idx: usize, generation: u64) ->
 }
 
 #[tauri::command]
+// 参数来自一次 IPC 调用（前端 filter settings 全量下发），拆结构体会破坏现有 command 签名
+#[allow(clippy::too_many_arguments)]
 pub async fn set_filter_settings(
     display_index: Option<usize>,
     temperature: i32, brightness: i32, contrast: i32, saturation: i32,
@@ -3386,8 +3393,8 @@ fn preset_id_to_builtin_icc(preset_id: &str) -> Option<String> {
 /// 从恒等 ramp 出发，对每个滤镜 f：composed[i] = f[composed[i] / 257]（最近邻插值）。
 fn compose_ramps(ramps: &[[[u16; 256]; 3]]) -> [[u16; 256]; 3] {
     let mut composed = [[0u16; 256]; 3];
-    for c in 0..3 {
-        for i in 0..256 { composed[c][i] = (i * 257) as u16; }
+    for row in composed.iter_mut() {
+        for (i, v) in row.iter_mut().enumerate() { *v = (i * 257) as u16; }
     }
     for ramp in ramps {
         let mut next = [[0u16; 256]; 3];
@@ -3400,9 +3407,9 @@ fn compose_ramps(ramps: &[[[u16; 256]; 3]]) -> [[u16; 256]; 3] {
         composed = next;
     }
     // 单调约束 + 端点固定（与 build_gamma_ramp 一致）
-    for c in 0..3 {
+    for row in composed.iter_mut() {
         for i in 1..256 {
-            if composed[c][i] < composed[c][i - 1] { composed[c][i] = composed[c][i - 1]; }
+            if row[i] < row[i - 1] { row[i] = row[i - 1]; }
         }
     }
     composed[0][0] = 0; composed[1][0] = 0; composed[2][0] = 0;
@@ -4007,6 +4014,8 @@ pub async fn get_custom_filter_settings(display_index: Option<usize>) -> Result<
 }
 
 #[tauri::command]
+// 参数来自一次 IPC 调用，拆结构体反而破坏签名一致性
+#[allow(clippy::too_many_arguments)]
 pub async fn save_custom_filter_settings(
     display_index: Option<usize>, temperature: i32, brightness: i32,
     contrast: i32, saturation: i32,
@@ -4070,6 +4079,8 @@ pub async fn get_user_filter_presets() -> Result<Vec<UserFilterPresetInfo>, Stri
 }
 
 #[tauri::command]
+// 参数来自一次 IPC 调用，拆结构体反而破坏签名一致性
+#[allow(clippy::too_many_arguments)]
 pub async fn save_user_filter_preset(
     id: Option<String>, name: String,
     temperature: i32, brightness: i32, contrast: i32, saturation: i32,
@@ -4284,7 +4295,7 @@ pub async fn apply_icc_preset(
         save_all_filter_states();
 
         Ok(with_display_state(idx, |state| FilterResult {
-            success: true, message: format!("ICC 预设已应用"),
+            success: true, message: "ICC 预设已应用".to_string(),
             skipped_stale: false,
             degraded: false,
             settings: Some(FilterSettings::from_display_state(state)),
@@ -4785,7 +4796,7 @@ mod coordination_tests {
         let apply_pos = order.iter().position(|o| *o == Op::ApplyIcc).unwrap();
         let write_pos = order.iter().position(|o| *o == Op::Write).unwrap();
         assert!(apply_pos < write_pos, "必须先应用后恢复: {:?}", order);
-        assert_eq!(ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), false, "恢复完成后标记应清除");
+        assert!(!ctx.ops.with_state(0, |s| s.restore_pending).unwrap(), "恢复完成后标记应清除");
     }
 
     // ─── 场景 7：退出后提交新应用 → 被拒绝，不发生物理写屏 ───
@@ -5583,7 +5594,7 @@ mod coordination_tests {
             let guard = state.lock().unwrap();
             auto_update_control_state_with(guard, &slot, true).unwrap()
         };
-        assert!(reopen.0 == false, "无 Restoring 归属");
+        assert!(!reopen.0, "无 Restoring 归属");
         let current_generation = reopen.1; // 9
         // 旧线程（N=7）尝试登记：即使当前 enabled=true，代次不匹配 → 拒绝。
         let guard = state.lock().unwrap();
@@ -5748,10 +5759,9 @@ mod coordination_tests {
     /// 构造最小 ICC：头部 + 1 个标签。
     fn make_min_icc(tag: &[u8; 4], tag_data: &[u8]) -> Vec<u8> {
         let data_off = 132u32 + 12; // tag 表从 132，数据紧随其后（144）。
-        let mut buf = Vec::new();
         // 头部 128 字节：大小(0)、magic(36)、... 其余填充 0。
-        buf.resize(128, 0u8);
-        buf[0..4].copy_from_slice(&((data_off + tag_data.len() as u32)).to_be_bytes());
+        let mut buf = vec![0u8; 128];
+        buf[0..4].copy_from_slice(&(data_off + tag_data.len() as u32).to_be_bytes());
         buf[36..40].copy_from_slice(b"acsp");
         // 标签表（128 起）：tag_count=1（用 extend 追加，不做越界切片）。
         buf.extend_from_slice(&1u32.to_be_bytes());
@@ -5826,8 +5836,7 @@ mod coordination_tests {
         let r_trc_off = data_off + vcgt_bad.len() as u32;
         let g_trc_off = r_trc_off + trc.len() as u32;
         let b_trc_off = g_trc_off + trc.len() as u32;
-        let mut buf = Vec::new();
-        buf.resize(128, 0u8);
+        let mut buf = vec![0; 128];
         buf[0..4].copy_from_slice(&(b_trc_off + trc.len() as u32).to_be_bytes());
         buf[36..40].copy_from_slice(b"acsp");
         buf.extend_from_slice(&tag_count.to_be_bytes());
@@ -5860,8 +5869,7 @@ mod coordination_tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("missing.icc");
         // 仅一个无关标签（如 desc），无 vcgt/TRC。
-        let mut buf = Vec::new();
-        buf.resize(128, 0u8);
+        let mut buf = vec![0; 128];
         buf[36..40].copy_from_slice(b"acsp");
         // tag_count=1（extend 追加，不做越界切片）。
         buf.extend_from_slice(&1u32.to_be_bytes());

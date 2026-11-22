@@ -177,7 +177,7 @@ pub async fn get_random_image(
         let mut msg = body.trim().to_string();
         if msg.len() > 200 {
             msg.truncate(200);
-            msg.push_str("…");
+            msg.push('…');
         }
         (status.to_string(), msg)
     };

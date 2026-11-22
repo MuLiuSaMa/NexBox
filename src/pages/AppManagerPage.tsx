@@ -1,6 +1,5 @@
 import {
   Box,
-  Flex,
   Text,
   VStack,
   HStack,
@@ -10,7 +9,6 @@ import {
   Image,
   Skeleton,
   Grid,
-  GridItem,
   IconButton,
   Tooltip,
   useColorModeValue,
@@ -38,14 +36,14 @@ import {
   FolderOpen,
   AppWindow,
 } from "lucide-react";
-import { PageBackButton } from "@/components/special/page-back-button";
+
 import { PageHeader } from "@/components/special/page-header";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
 import { CustomSelect } from "@/components/special/custom-select";
 import { useDynamicIsland } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { useBackground } from "@/contexts/background-context";
-import { useAdaptiveTextColor } from "@/hooks/use-adaptive-text-color";
+
 
 interface InstalledApp {
   name: string;
@@ -119,7 +117,7 @@ export default function AppManagerPage() {
   const toast = useDynamicIsland("rocket");
   const { config: themeConfig, getContrastTextColor } = useThemeColor();
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
-  const adaptiveTitle = useAdaptiveTextColor();
+
 
   const headingColor = useColorModeValue("gray.900", "#ffffff");
   const subTextColor = useColorModeValue("gray.500", "#a0a0a0");

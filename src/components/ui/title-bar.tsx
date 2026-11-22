@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Flex, HStack, IconButton, Image, useColorModeValue } from "@chakra-ui/react";
+import { Box, Flex, HStack, IconButton, useColorModeValue } from "@chakra-ui/react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { LuMinus, LuSquare, LuCopy, LuX } from "react-icons/lu";
@@ -17,7 +17,7 @@ export function TitleBar() {
   const minimizeHoverBg = useColorModeValue("gray.100", "gray.700");
   const closeHoverBg = useColorModeValue("red.50", "red.900");
   const bgColor = useColorModeValue("whiteAlpha.800", "blackAlpha.800");
-  const logoSrc = useColorModeValue("/logo/NexBoxW.webp", "/logo/NexBoxB.webp");
+
 
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [searchBarVisible, setSearchBarVisible] = useState(true);
@@ -40,7 +40,7 @@ export function TitleBar() {
   useEffect(() => {
     (async () => {
       // nexbox_search_bar_enabled
-      let sv = await store.get<boolean>("nexbox_search_bar_enabled");
+      const sv = await store.get<boolean>("nexbox_search_bar_enabled");
       if (sv !== null && sv !== undefined) {
         setSearchBarVisible(sv);
       } else {
@@ -48,7 +48,7 @@ export function TitleBar() {
         setSearchBarVisible(ls === null ? true : ls === "true");
       }
       // nexbox_game_mode_enabled（顶栏游戏模式切换条显示）
-      let gm = await store.get<boolean>("nexbox_game_mode_enabled");
+      const gm = await store.get<boolean>("nexbox_game_mode_enabled");
       if (gm !== null && gm !== undefined) {
         setGameModeVisible(gm);
       } else {
@@ -56,7 +56,7 @@ export function TitleBar() {
         setGameModeVisible(ls === null ? true : ls === "true");
       }
       // nexbox_nav_position
-      let nv = await store.get<string>("nexbox_nav_position");
+      const nv = await store.get<string>("nexbox_nav_position");
       if (nv === "top" || nv === "left") {
         setNavPosition(nv);
       } else {
@@ -96,9 +96,6 @@ export function TitleBar() {
     };
   }, []);
 
-  const getCloseBehavior = useCallback((): string => {
-    return "ask"; // 默认值，实际值在 useEffect 中异步加载
-  }, []);
 
   // 存储 close_behavior 的引用，供 handleClose 使用
   const closeBehaviorRef = useRef<string>("ask");
@@ -261,6 +258,7 @@ export function TitleBar() {
               aria-label="最小化"
               variant="solid"
               borderRadius="full"
+              data-corner="round"
               bg={bgColor}
               backdropFilter="blur(10px)"
               color={iconColor}
@@ -278,6 +276,7 @@ export function TitleBar() {
               aria-label={isMaximized ? "还原" : "最大化"}
               variant="solid"
               borderRadius="full"
+              data-corner="round"
               bg={bgColor}
               backdropFilter="blur(10px)"
               color={iconColor}
@@ -295,6 +294,7 @@ export function TitleBar() {
               aria-label="关闭"
               variant="solid"
               borderRadius="full"
+              data-corner="round"
               bg={bgColor}
               backdropFilter="blur(10px)"
               color={iconColor}

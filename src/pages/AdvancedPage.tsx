@@ -6,7 +6,6 @@ import {
   Badge,
   Button,
   Input,
-  IconButton,
   Spinner,
   Divider,
   useColorModeValue,
@@ -27,7 +26,6 @@ import { useTranslation } from "react-i18next";
 import { useDynamicIsland, setIslandExternalRequested } from "@/components/ui/dynamic-island";
 import { useThemeColor } from "@/contexts/theme-color-context";
 import { LiquidGlassCard } from "@/components/special/liquid-glass-card";
-import { CustomSelect } from "@/components/special/custom-select";
 import { ThemeSwitch } from "@/components/special/theme-switch";
 import { PawnioInstallModal } from "@/components/PawnioInstallModal";
 import { IS_STORE_BUILD } from "@/lib/build-flags";
@@ -370,6 +368,7 @@ export default function AdvancedPage() {
                       color={isPawnioInstalled ? accent : undefined}
                       fontSize="xs"
                       borderRadius="full"
+                      data-corner="round"
                       px={2.5}
                       py={0.5}
                       textTransform="none"
@@ -526,7 +525,7 @@ export default function AdvancedPage() {
               <Text fontSize="sm" color={labelColor} fontWeight="medium">
                 {t("settings.advanced.memorySavingTitle", "节约内存（缩小到托盘时销毁窗口）")}
               </Text>
-              <Badge fontSize="0.6rem" colorScheme="purple" variant="subtle" px={2} py={0.5} borderRadius="full">
+              <Badge fontSize="0.6rem" colorScheme="purple" variant="subtle" px={2} py={0.5} borderRadius="full" data-corner="round">
                 BETA
               </Badge>
             </HStack>
@@ -584,6 +583,7 @@ export default function AdvancedPage() {
                   </VStack>
                   <Button
                     size="xs"
+                    data-corner="round"
                     variant="ghost"
                     color={subLabelColor}
                     leftIcon={<LuTrash2 size={13} />}

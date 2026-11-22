@@ -29,6 +29,7 @@ export function MiniMusicPlayer() {
           <Box
             bg={bgColor}
             borderRadius="full"
+            data-corner="round"
             border="1px solid"
             borderColor={borderColor}
             boxShadow="md"
@@ -45,6 +46,7 @@ export function MiniMusicPlayer() {
               icon={<StopCircle size={20} color="#98DDD0" />}
               variant="ghost"
               borderRadius="full"
+              data-corner="round"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();

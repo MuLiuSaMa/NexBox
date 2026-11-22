@@ -180,6 +180,7 @@ fn schedule_reboot_delete(path: &Path) -> bool {
 /// 强制删除目录内容：
 /// - 文件：先尝试 DeleteFileW，失败则 MoveFileExW 调度重启删除
 /// - 目录：递归处理后 RemoveDirectoryW，仍存在则调度重启删除
+///
 /// 返回 (已删除字节数, 调度重启删除的文件数)
 fn force_delete_contents(path: &Path, deleted_bytes: &mut u64, reboot_count: &mut u64) {
     if let Ok(entries) = fs::read_dir(path) {
@@ -215,6 +216,7 @@ fn force_delete_contents(path: &Path, deleted_bytes: &mut u64, reboot_count: &mu
 /// 强制清理单个缓存目录：
 /// 1. 先尝试常规 remove_dir_all（最快）
 /// 2. 失败则逐文件强制删除 + MoveFileEx 调度重启删除
+///
 /// 返回 (已删除字节数, 重启删除项数)
 fn force_clean_one_dir(dir_path: &Path) -> (u64, u64) {
     if !dir_path.exists() {

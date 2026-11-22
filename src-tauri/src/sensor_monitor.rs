@@ -64,7 +64,7 @@ pub async fn open_sensor_monitor(app_handle: AppHandle) -> Result<(), String> {
 /// 使用 spawn_blocking 避免阻塞 Tauri 异步运行时
 #[tauri::command]
 pub async fn get_all_sensors() -> Result<SensorsResponse, String> {
-    match tauri::async_runtime::spawn_blocking(|| read_lhm_sensors()).await {
+    match tauri::async_runtime::spawn_blocking(read_lhm_sensors).await {
         Ok(result) => result,
         Err(e) => Err(format!("传感器查询任务失败: {}", e)),
     }

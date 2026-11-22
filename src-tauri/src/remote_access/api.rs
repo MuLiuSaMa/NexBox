@@ -65,6 +65,8 @@ fn json_err(status: StatusCode, msg: &str) -> Response {
 }
 
 /// 校验 Bearer 令牌，命中返回 device_id；否则返回错误响应。
+// 直接返回 axum Response 便于调用点 `return r`；装箱会改动所有调用点契约
+#[allow(clippy::result_large_err)]
 fn authorize(headers: &HeaderMap) -> Result<String, Response> {
     if !super::is_enabled() {
         return Err(json_err(StatusCode::NOT_FOUND, "closed"));
@@ -269,6 +271,8 @@ async fn action(
 // ───────────────────────── 音乐封面 ─────────────────────────
 
 /// 封面端点的鉴权：query token 优先（方便手机端图片加载器直接拼 URL），回退 Bearer。
+// 与 authorize 保持同一错误契约（直接返回 Response），装箱会改动所有调用点
+#[allow(clippy::result_large_err)]
 fn authorize_cover(headers: &HeaderMap, token_q: Option<&str>) -> Result<String, Response> {
     if !super::is_enabled() {
         return Err(json_err(StatusCode::NOT_FOUND, "closed"));

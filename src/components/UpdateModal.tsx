@@ -93,10 +93,11 @@ export function UpdateModal() {
             </Box>
             {isDownloading && !isDownloadComplete && (
               <Box w="full">
-                <Box w="full" h="6px" borderRadius="full" bg={notesBg} overflow="hidden">
+                <Box w="full" h="6px" borderRadius="full" data-corner="round" bg={notesBg} overflow="hidden">
                   <Box
                     h="full"
                     borderRadius="full"
+                    data-corner="round"
                     bg={activeColor}
                     width={`${Math.max(0, Math.min(100, downloadProgress))}%`}
                     transition="width 0.15s"

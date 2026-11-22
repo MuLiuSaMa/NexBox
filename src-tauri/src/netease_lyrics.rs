@@ -311,7 +311,7 @@ mod imp {
             let root = self.find_cloudmusic_window_uia()?;
             
             // 网易云主窗口内的文本控件
-            let condition = unsafe { self.automation.CreatePropertyCondition(UIA_ControlTypePropertyId, &VARIANT::from(UIA_TextControlTypeId.0 as i32)).ok()? };
+            let condition = unsafe { self.automation.CreatePropertyCondition(UIA_ControlTypePropertyId, &VARIANT::from(UIA_TextControlTypeId.0)).ok()? };
             let elements = unsafe { root.FindAll(TreeScope_Descendants, &condition).ok()? };
             let count = unsafe { elements.Length().ok()? };
 
@@ -552,7 +552,7 @@ mod imp {
             if !(trimmed.ends_with('）') || trimmed.ends_with(')')) {
                 break;
             }
-            let Some(open_pos) = trimmed.rfind(|c| c == '（' || c == '(') else {
+            let Some(open_pos) = trimmed.rfind(['（', '(']) else {
                 break;
             };
             let inner = &trimmed[open_pos + 1..trimmed.len() - 1];
@@ -649,7 +649,7 @@ mod imp {
         let minutes = parts[0].parse::<i32>().ok()?;
         let seconds = parts[1].parse::<i32>().ok()?;
 
-        if minutes < 0 || seconds < 0 || seconds >= 60 {
+        if minutes < 0 || !(0..60).contains(&seconds) {
             return None;
         }
 
@@ -761,9 +761,9 @@ mod imp {
         let cipher = Aes128::new(GenericArray::from_slice(key));
         let mut buffer = input.to_vec();
         let pad_len = 16 - (buffer.len() % 16);
-        buffer.extend(std::iter::repeat(pad_len as u8).take(pad_len));
+        buffer.extend(std::iter::repeat_n(pad_len as u8, pad_len));
 
-        for chunk in buffer.chunks_exact_mut(16) {
+        for chunk in buffer.as_chunks_mut::<16>().0 {
             cipher.encrypt_block(GenericArray::from_mut_slice(chunk));
         }
 

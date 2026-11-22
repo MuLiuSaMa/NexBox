@@ -1,20 +1,20 @@
 "use client";
 
-import { Button, useColorModeValue } from "@chakra-ui/react";
+import { Button} from "@chakra-ui/react";
 import { useBackground } from "@/contexts/background-context";
 import { useThemeColor } from "@/contexts/theme-color-context";
 
 interface LiquidGlassButtonProps {
   children: React.ReactNode;
   className?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function LiquidGlassButton({ children, className, ...props }: LiquidGlassButtonProps) {
   const { liquidGlassEnabled, liquidGlassBlur } = useBackground();
   const { getActiveColor, getHoverColor, getContrastTextColor } = useThemeColor();
 
-  const glassBorderColor = useColorModeValue("rgba(255,255,255,0.3)", "rgba(255,255,255,0.15)");
+
   const glassBg = getActiveColor();
 
   // 模糊立即生效
