@@ -258,12 +258,44 @@ export function MainLayout({ children }: MainLayoutProps) {
   // 解法：在 mask 子树内再放一份与视口完全同框的「背景镜像」，玻璃有东西可采样；
   // 渐隐把镜像淡掉时露出的又是同一张底层背景，两者像素对齐，所以看不出接缝。
   // 视频 / MR(WebGL) 背景无法低成本镜像（双解码 / 双 GL 上下文），这两种模式停用渐隐。
-  const fadeMirrorUrl = showPresetBg
-    ? activePreset?.path ?? null
-    : showImageBg
-      ? activeImage
-      : null;
-  const topFadeEnabled = !showDynamicBg && !showMrBg;
+  // mask 会让子树成为 Backdrop Root：玻璃卡片只能采样子树内的「背景镜像」。
+  // 镜像没有可画内容时（没有背景图 / 图层还没就绪），玻璃采样到空背景 → 卡片发白，
+  // 因此只有镜像确实有画面时才启用 mask。
+  const mirrorHasPicture = showAnyBg && bgLayers.length > 0;
+  const topFadeEnabled = !showDynamicBg && !showMrBg && (!liquidGlassEnabled || mirrorHasPicture);
+
+  // 背景图层渲染：主背景与渐隐镜像共用同一份 bgLayers，交叉淡化的入/出场进度才能完全同步。
+  // （镜像以前直接渲染当前图片，换图是硬切，只有 mask 淡掉的那条渐隐带才露出带动画的真图层）
+  const renderBgLayers = (position: "fixed" | "absolute") =>
+    bgLayers.map((layer) => (
+      <Box
+        key={layer.id}
+        position={position}
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        zIndex={0}
+        opacity={layer.fading ? 0 : 1}
+        overflow="hidden"
+        transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
+        animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
+      >
+        <img
+          src={layer.url}
+          alt=""
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+            filter: backgroundFilter,
+            willChange: backgroundFilter ? "filter" : undefined,
+            opacity: backgroundLayerOpacity,
+          }}
+        />
+      </Box>
+    ));
 
   return (
     <Box
@@ -291,35 +323,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           to: { opacity: 1 },
         },
       }}>
-        {bgLayers.map((layer) => (
-          <Box
-            key={layer.id}
-            position="fixed"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            zIndex={0}
-            opacity={layer.fading ? 0 : 1}
-            overflow="hidden"
-            transition={layer.fading ? "opacity 0.5s ease-in-out" : undefined}
-            animation={!layer.fading ? "bgFadeIn 0.5s ease-in-out" : undefined}
-          >
-            <img
-              src={layer.url}
-              alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                display: "block",
-                filter: backgroundFilter,
-                willChange: backgroundFilter ? "filter" : undefined,
-                opacity: backgroundLayerOpacity,
-              }}
-            />
-          </Box>
-        ))}
+        {renderBgLayers("fixed")}
       </Box>
       {showDynamicBg && (
         <Box
@@ -384,21 +388,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             overflow="hidden"
             bg={showAnyBg ? bgColor : undefined}
           >
-            {fadeMirrorUrl && (
-              <img
-                src={fadeMirrorUrl}
-                alt=""
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  display: "block",
-                  filter: backgroundFilter,
-                  willChange: backgroundFilter ? "filter" : undefined,
-                  opacity: backgroundLayerOpacity,
-                }}
-              />
-            )}
+            {renderBgLayers("absolute")}
           </Box>
         )}
       <Box 

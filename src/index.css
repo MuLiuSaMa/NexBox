@@ -395,6 +395,13 @@ input.lyrics-vol-slider::-webkit-slider-thumb {
     corner-shape: round;
   }
 
+  /* 灵动岛窗口是胶囊设计：展开 / 收起 / 音乐态一律保持圆形转角 */
+  html.nexbox-island-window *,
+  html.nexbox-island-window *::before,
+  html.nexbox-island-window *::after {
+    corner-shape: round;
+  }
+
   /* 表单滑块拇指（UA 伪元素）保持正圆 */
   input[type="range"]::-webkit-slider-thumb,
   input[type="range"]::-moz-range-thumb {

@@ -1836,7 +1836,7 @@ export function DynamicIslandHost() {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         className={islandGlassClass}
-        data-corner={displayed?.kind === "music" || expanded ? undefined : "round"}
+        data-corner="round"
         style={{
           borderRadius: displayed?.kind === "music" ? 22 : (expanded ? 20 : 999),
           background: islandBg,

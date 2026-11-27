@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>NexBox · 顶部内容渐隐 效果稿</title>
+<style>
+  /* 参数取自仓库：
+     主题色 #98DDD0 (src/contexts/theme-color-context.tsx:15)
+     侧栏 96px / 标题栏 48px / 主内容 pt 56px·px 32px·pr 40px (src/components/ui/main-layout.tsx:318-332)
+     玻璃卡 rgba(0,0,0,.25) + border rgba(255,255,255,.1) + blur(10px) (src/components/special/liquid-glass-card.tsx:32-51)
+     普通卡 #111111 / #333333 / radius 24px (同文件 :41-42) */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #050506; color: #e8e8ea;
+    font-family: "MiSans", "Microsoft YaHei", system-ui, sans-serif; }
+  .page { padding: 18px 20px 22px; }
+  h1 { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+  .sub { font-size: 11.5px; color: #8b8b93; margin: 0 0 14px; line-height: 1.7; }
+  .sub code { background: #17171b; border: 1px solid #26262c; border-radius: 5px; padding: 1px 5px; color: #b9e8df; }
+
+  .stage { display: flex; gap: 14px; align-items: flex-start; }
+  .pane { flex: 1; min-width: 0; }
+  .pane-head { display: flex; align-items: baseline; gap: 6px; margin: 0 0 7px 2px; flex-wrap: wrap; }
+  .pane-head b { font-size: 12.5px; }
+  .pane-head span { font-size: 10.5px; color: #7e7e88; }
+  .tag { font-size: 9.5px; padding: 1px 7px; border-radius: 999px; border: 1px solid #2b2b33;
+    color: #9a9aa4; background: #121216; }
+  .tag.ok { border-color: #1f4a44; color: #98DDD0; background: #0e1a19; }
+  .tag.warn { border-color: #4a3a1a; color: #d9b169; background: #1d1710; }
+
+  /* 应用外框 */
+  .frame { position: relative; width: 100%; height: 460px; overflow: hidden;
+    border-radius: 14px; border: 1px solid #23232a; background: #0a0a0a; }
+
+  /* 背景层：位于滚动容器之外（模拟图片/预设背景，main-layout.tsx:249-315） */
+  .bg { position: absolute; inset: 0; z-index: 0;
+    background:
+      radial-gradient(620px 330px at 18% 4%, #1d5d63 0%, transparent 62%),
+      radial-gradient(520px 300px at 88% 22%, #3b2a63 0%, transparent 60%),
+      radial-gradient(420px 260px at 52% 96%, #123a4d 0%, transparent 62%),
+      linear-gradient(160deg, #0b1014 0%, #08090c 55%, #0a0d11 100%); }
+  .bg::after { content: ""; position: absolute; inset: 0; opacity: .5;
+    background: repeating-linear-gradient(58deg, rgba(255,255,255,.03) 0 2px, transparent 2px 8px); }
+
+  /* 侧栏 96px */
+  .sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 66px; z-index: 3;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 52px 0 10px;
+    background: rgba(0,0,0,.28); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-right: 1px solid rgba(255,255,255,.06); }
+  .nav { width: 46px; height: 42px; border-radius: 12px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px; color: #9a9aa4; font-size: 7.5px; }
+  .nav i { width: 13px; height: 13px; border-radius: 4px; background: currentColor; opacity: .85; }
+  .nav.on { color: #98DDD0; background: rgba(152,221,208,.16);
+    box-shadow: inset 0 0 0 1px rgba(152,221,208,.34); }
+
+  /* 标题栏 48px（透明，只浮着控件） */
+  .titlebar { position: absolute; left: 0; right: 0; top: 0; height: 44px; z-index: 999;
+    display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 78px; }
+  .chip { height: 26px; padding: 0 10px; border-radius: 999px; background: rgba(255,255,255,.08);
+    border: 1px solid rgba(255,255,255,.07); color: #a9a9b3; font-size: 9.5px;
+    display: flex; align-items: center; gap: 6px; }
+  .winbtns { display: flex; gap: 5px; }
+  .winbtns b { width: 26px; height: 26px; border-radius: 999px;
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.06); display: block; }
+
+  /* 主内容滚动容器 #app-main-scroll */
+  .scroller { position: absolute; left: 66px; right: 0; top: 0; bottom: 0; z-index: 1;
+    overflow-y: auto; overflow-x: hidden; padding: 52px 22px 20px 20px; }
+  .scroller::-webkit-scrollbar { width: 0; }
+
+  /* ★ 唯一改动：alpha 渐隐（改内容自身不透明度，不是遮挡层） */
+  .scroller.fade {
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,1) 44px);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,1) 44px); }
+
+  /* 渐隐带范围提示（仅效果稿用，真实实现不加这个框） */
+  .guide { position: absolute; left: 66px; right: 0; top: 0; height: 44px; z-index: 500;
+    border-bottom: 1px dashed rgba(152,221,208,.5); pointer-events: none; }
+  .guide::before { content: "渐隐带 0 → 44px"; position: absolute; right: 6px; bottom: 2px;
+    font-size: 8.5px; color: rgba(152,221,208,.9); background: rgba(0,0,0,.55);
+    padding: 1px 4px; border-radius: 3px; }
+
+  .row { display: flex; gap: 12px; align-items: flex-start; }
+  .menu { width: 100px; flex-shrink: 0; position: sticky; top: 44px; align-self: flex-start; }
+  .menu.old { top: 8px; }
+  .mi { height: 27px; border-radius: 10px; display: flex; align-items: center; gap: 6px;
+    padding: 0 7px; font-size: 9.5px; color: #a4a4ae; margin-bottom: 3px;
+    background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1); }
+  .mi i { width: 10px; height: 10px; border-radius: 3px; background: currentColor; opacity: .8; }
+  .mi.on { color: #98DDD0; background: rgba(152,221,208,.22);
+    border-color: rgba(152,221,208,.45); font-weight: 600; }
+
+  .main { flex: 1; min-width: 0; }
+  .ptitle { font-size: 14px; font-weight: 700; margin: 0 0 9px; }
+  .card { border-radius: 15px; padding: 9px 11px; margin-bottom: 8px;
+    background: rgba(0,0,0,.25); border: 1px solid rgba(255,255,255,.1);
+    backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3); }
+  .card.solid { background: #111111; border-color: #333333;
+    backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .card h3 { font-size: 10px; margin: 0 0 2px; font-weight: 650; }
+  .card p { font-size: 9px; margin: 0; color: #8f8f99; line-height: 1.55; }
+  .card .bar { height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); margin-top: 6px; }
+  .card .bar b { display: block; height: 100%; width: 62%; border-radius: 999px; background: #98DDD0; }
+
+  .ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 12px;
+    padding: 10px 13px; border: 1px solid #23232a; border-radius: 11px; background: #0d0d10; }
+  .ctrl label { font-size: 11px; color: #b3b3bd; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .ctrl input[type=range] { width: 190px; accent-color: #98DDD0; }
+  .ctrl .val { font-size: 10.5px; color: #98DDD0; font-variant-numeric: tabular-nums; min-width: 54px; }
+  .legend { font-size: 10.5px; color: #7e7e88; margin-top: 10px; line-height: 1.75; }
+  .legend b { color: #cfcfd6; }
+  .legend .k { color: #d9b169; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>页面顶部内容渐隐 · 效果稿</h1>
+  <p class="sub">
+    三栏同一界面、同一滚动位置，差别只有 <code>#app-main-scroll</code> 上有没有那行 <code>mask-image</code>。<br />
+    实现不新增任何遮挡层：mask 只改内容自身的 alpha，渐隐带固定在视口顶部（不随内容滚动）。
+  </p>
+
+  <div class="stage">
+    <div class="pane">
+      <div class="pane-head"><b>① 现在</b><span>内容被 overflow 硬切</span></div>
+      <div class="frame">
+        <div class="bg"></div>
+        <div class="sidebar">
+          <div class="nav"><i></i>首页</div><div class="nav"><i></i>硬件</div>
+          <div class="nav"><i></i>工具</div><div class="nav on"><i></i>设置</div>
+        </div>
+        <div class="titlebar"><div class="chip">🔍 搜索功能、页面…</div><div class="winbtns"><b></b><b></b><b></b></div></div>
+        <div class="scroller" data-s>
+          <div class="row"><div class="menu old" data-m></div><div class="main" data-main data-glass="1"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-head"><b>② 加 mask</b><span class="tag ok">推荐：方案 A 生效时的样子</span></div>
+      <div class="frame">
+        <div class="bg"></div>
+        <div class="sidebar">
+          <div class="nav"><i></i>首页</div><div class="nav"><i></i>硬件</div>
+          <div class="nav"><i></i>工具</div><div class="nav on"><i></i>设置</div>
+        </div>
+        <div class="titlebar"><div class="chip">🔍 搜索功能、页面…</div><div class="winbtns"><b></b><b></b><b></b></div></div>
+        <div class="guide"></div>
+        <div class="scroller fade" data-s>
+          <div class="row"><div class="menu" data-m></div><div class="main" data-main data-glass="0"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-head"><b>③ 加 mask 且玻璃开</b><span class="tag warn">会坏：玻璃卡失去背景采样</span></div>
+      <div class="frame">
+        <div class="bg"></div>
+        <div class="sidebar">
+          <div class="nav"><i></i>首页</div><div class="nav"><i></i>硬件</div>
+          <div class="nav"><i></i>工具</div><div class="nav on"><i></i>设置</div>
+        </div>
+        <div class="titlebar"><div class="chip">🔍 搜索功能、页面…</div><div class="winbtns"><b></b><b></b><b></b></div></div>
+        <div class="guide"></div>
+        <div class="scroller fade" data-s>
+          <div class="row"><div class="menu" data-m></div><div class="main" data-main data-glass="1"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctrl">
+    <label>滚动位置
+      <input type="range" id="scroll" min="0" max="260" value="110" />
+      <span class="val" id="scrollVal">110 px</span>
+    </label>
+    <label><input type="checkbox" id="guide" checked /> 显示渐隐带范围</label>
+  </div>
+
+  <p class="legend">
+    <b>看顶部第一张卡：</b>① 直边被切；② 逐渐透明、背景自然透出来；③ 玻璃卡在 mask 下拿不到容器外的背景，模糊结果为空 → 变成发黑的实心块。<br />
+    <b class="k">所以计划默认方案 A：</b>检测到液态玻璃开启时不启用渐隐（②的样子）；玻璃关闭时才生效。想两者都要，就走计划里的方案 B（在容器内放一份背景副本），仅纯色/图片/预设背景可行。
+  </p>
+</div>
+
+<script>
+  const cards = [
+    ["液态玻璃", "启用后，部分界面将使用「液态玻璃」效果", 1],
+    ["模糊程度", "调节液态玻璃的模糊半径", 0],
+    ["自定义背景图片", "支持本地图片与视频，轮播间隔可调", 0],
+    ["背景模糊", "对图片/视频背景做整体模糊", 0],
+    ["主题色", "默认 #98DDD0，可自定义任意色值", 1],
+    ["界面缩放", "调整整体 UI 密度", 0],
+    ["开机自启", "随 Windows 启动并最小化到托盘", 0],
+    ["检查更新", "当前版本 10.6.3", 0]
+  ];
+  const menuHtml = ["外观", "背景", "主题色", "性能", "关于"]
+    .map((t, i) => `<div class="mi${i === 0 ? " on" : ""}"><i></i>${t}</div>`).join("");
+
+  document.querySelectorAll("[data-m]").forEach(el => { el.innerHTML = menuHtml; });
+  document.querySelectorAll("[data-main]").forEach(el => {
+    const glass = el.dataset.glass === "1";
+    el.innerHTML = `<h2 class="ptitle">设置</h2>` + cards.map(([t, d, bar]) =>
+      `<div class="card${glass ? "" : " solid"}"><h3>${t}</h3><p>${d}</p>` +
+      (bar ? `<div class="bar"><b></b></div>` : "") + `</div>`).join("");
+  });
+
+  const scrollers = [...document.querySelectorAll("[data-s]")];
+  const $ = id => document.getElementById(id);
+  function apply() {
+    const y = +$("scroll").value;
+    $("scrollVal").textContent = y + " px";
+    scrollers.forEach(s => { s.scrollTop = y; });
+    document.querySelectorAll(".guide").forEach(g => {
+      g.style.display = $("guide").checked ? "block" : "none";
+    });
+  }
+  $("scroll").addEventListener("input", apply);
+  $("guide").addEventListener("change", apply);
+  apply();
+</script>
+</body>
+</html>

@@ -1,13 +1,14 @@
 {
   "name": "nexbox",
-  "version": "10.6.3",
+  "version": "10.6.6",
   "private": true,
   "type": "module",
   "license": "GPL-3.0",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "build:store": "tsc && vite build --mode store",
+    "build": "node scripts/build.mjs",
+    "build:store": "node scripts/build.mjs store",
+    "typecheck": "tsc -p tsconfig.json",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",

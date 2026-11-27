@@ -116,6 +116,8 @@ README.md
 # 安卓端第三方/独立源码，不随本仓库分发
 NexBox-Android/AndroidLiquidGlass-kmp/
 NexBox-Android/FlClash-main/
+# 本地参考仓库（Flutter 液态玻璃实现），不入库
+FlClash-main/
 
 # Build output (frontend)
 dist/
