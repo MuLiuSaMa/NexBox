@@ -159,22 +159,19 @@ const OptimizeCard = memo(function OptimizeCard({
     </Flex>
   );
 
-  if (liquidGlassEnabled) {
-    return (
-      <LiquidGlassCard w="full" p={4}>
-        {content}
-      </LiquidGlassCard>
-    );
-  }
+  const glassBg = useColorModeValue("rgba(255,255,255,0.25)", "rgba(0,0,0,0.25)");
+  const glassBorder = useColorModeValue("rgba(255,255,255,0.2)", "rgba(255,255,255,0.1)");
 
+  // 背景模糊交给外层玻璃面板；内层再取样会在 WebView2 快速切换时出现空白表面。
   return (
     <Box
       w="full"
-      bg={cardBg}
+      bg={liquidGlassEnabled ? glassBg : cardBg}
       borderRadius="3xl"
       border="1px solid"
-      borderColor={cardBorder}
+      borderColor={liquidGlassEnabled ? glassBorder : cardBorder}
       p={4}
+      transition={liquidGlassEnabled ? "background 0.45s, border-color 0.45s" : undefined}
     >
       {content}
     </Box>

@@ -3177,7 +3177,7 @@ function AboutSettings() {
   // 卡片图标底色（浅色/深色适配）
   const iconBg = cm("#f1f2f4", "#262626");
 
-  const currentVersion = "10.6.6";
+  const currentVersion = "10.6.7";
   const [currentRelease, setCurrentRelease] = useState<ReleaseInfo | null>(null);
   const [isLoadingChangelog, setIsLoadingChangelog] = useState(true);
 
